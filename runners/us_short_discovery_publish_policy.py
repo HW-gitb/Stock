@@ -30,12 +30,18 @@ from uuid import uuid4
 CLOCK_KEYS_ARTIFACT: tuple[str, ...] = ("generated_at",)
 CLOCK_KEYS_RECEIPT: tuple[str, ...] = ("generated_at",)
 CLOCK_KEYS_NONE: tuple[str, ...] = ()
+ZERO_TO_VALID_UPGRADE = "zero_to_valid_upgrade"
 # These are the only mutable artifact families.  Naming them here means the door - not a call
 # site - decides what may be replaced; all other decision-date artifacts remain immutable.
 MUTABLE_LEDGER_SUFFIX = "_budget.json"
 QUERY_PLAN_CONSUMPTION_SUFFIX = "_consumption.json"
 BUDGET_ABORT_DIAGNOSTIC_SUFFIX = "_budget_abort.json"
-CONFORMANCE_GUARDS = ("_serialized_payload", "_serialized_sha256")
+CONFORMANCE_GUARDS = (
+    "_serialized_payload",
+    "_serialized_sha256",
+    "_require_zero_to_valid_upgrade_lock",
+    "_zero_to_valid_upgrade_allowed",
+)
 
 
 class DiscoveryPublishPolicyError(ValueError):
@@ -189,15 +195,118 @@ def _discard(paths: Sequence[Path]) -> None:
             pass
 
 
+def _require_zero_to_valid_upgrade_lock(
+    payload: dict[str, Any], path: Path, decision_lock: Any,
+) -> str:
+    """Require the existing capstone lock for the sole immutable-slot replacement."""
+    prefix = "us_short_soft_boost_consumption_receipt_"
+    suffix = ".json"
+    target_name = path.name
+    if not target_name.startswith(prefix) or not target_name.endswith(suffix):
+        raise DiscoveryPublishPolicyError(
+            "zero-to-valid replacement requires the K4b consumption receipt slot"
+        )
+    target_decision_date = target_name[len(prefix):-len(suffix)]
+    decision_date = payload.get("decision_date")
+    lock_path = getattr(decision_lock, "path", None)
+    handle = getattr(decision_lock, "handle", None)
+    expected = path.parent / "_transaction_locks" / f"{target_decision_date}.lock"
+    try:
+        handle_path = Path(handle.name).resolve()
+    except (AttributeError, TypeError, OSError, ValueError):
+        handle_path = None
+    if (
+        type(target_decision_date) is not str
+        or len(target_decision_date) != 8
+        or not target_decision_date.isascii()
+        or not target_decision_date.isdigit()
+        or decision_date != target_decision_date
+        or handle is None
+        or getattr(handle, "closed", True)
+        or lock_path is None
+        or Path(lock_path).resolve() != expected.resolve()
+        or handle_path != expected.resolve()
+    ):
+        raise DiscoveryPublishPolicyError(
+            "zero-to-valid replacement requires the live decision-date lock"
+        )
+    return target_decision_date
+
+
+def _frozen_shadow_matches_consumption_upgrade(
+    payload: dict[str, Any], path: Path, *, decision_date: str,
+) -> bool:
+    """Bind a zero-to-valid replacement to the already frozen same-date shadow facts."""
+    shadow_path = path.parent / "shadow_compare_private" / (
+        f"us_short_soft_boost_shadow_receipt_{decision_date}.json"
+    )
+    try:
+        shadow = json.loads(shadow_path.read_text(encoding="utf-8"))
+        bindings = payload["bindings"]
+        expected = {
+            "decision_date": payload["decision_date"],
+            "stage_receipt_sha256": bindings["stage_receipt"]["sha256"],
+            "validation_artifact_sha256": bindings["validation_artifact"]["sha256"],
+        }
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        raise DiscoveryPublishPolicyError(
+            "zero-to-valid replacement requires a readable frozen K4b shadow receipt"
+        ) from exc
+    return type(shadow) is dict and all(shadow.get(key) == value for key, value in expected.items())
+
+
+def _zero_to_valid_upgrade_allowed(
+    existing: Any, payload: dict[str, Any], path: Path, *, decision_lock: Any,
+) -> bool:
+    target_decision_date = _require_zero_to_valid_upgrade_lock(payload, path, decision_lock)
+    return (
+        type(existing) is dict
+        and existing.get("decision_date") == target_decision_date
+        and existing.get("status") in {
+            "zero_valid_empty", "zero_upstream_unavailable", "zero_invalid_evidence",
+        }
+        and payload.get("status") == "consumed_valid_nonempty"
+        and _frozen_shadow_matches_consumption_upgrade(
+            payload, path, decision_date=target_decision_date,
+        )
+    )
+
+
 def write_immutable_json(
     payload: dict[str, Any], path: Path, *,
     clock_keys: Sequence[str] = CLOCK_KEYS_ARTIFACT, recursive: bool = False,
     verify: Callable[[Any], None] | None = None,
+    replacement_policy: str | None = None,
+    decision_lock: Any = None,
 ) -> bool:
     """Write once; return True when an evidence-equivalent frozen artifact was reused."""
     serialized = _serialized_payload(payload)
-    if frozen_artifact_matches(payload, path, clock_keys=clock_keys, recursive=recursive, verify=verify):
-        return True
+    try:
+        if frozen_artifact_matches(payload, path, clock_keys=clock_keys, recursive=recursive, verify=verify):
+            return True
+    except DiscoveryPublishPolicyError:
+        if replacement_policy is None:
+            raise
+        if replacement_policy != ZERO_TO_VALID_UPGRADE:
+            raise DiscoveryPublishPolicyError("unknown immutable replacement policy")
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+            if verify is not None:
+                verify(existing)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, RecursionError) as exc:
+            raise DiscoveryPublishPolicyError("refusing to replace an unreadable frozen artifact") from exc
+        if not _zero_to_valid_upgrade_allowed(
+            existing, payload, path, decision_lock=decision_lock,
+        ):
+            raise
+        tmp = _staged_temp(path, serialized)
+        try:
+            os.replace(tmp, path)
+            return False
+        except OSError as exc:
+            raise DiscoveryPublishPolicyError("cannot replace immutable decision-date artifact") from exc
+        finally:
+            _discard([tmp])
     tmp: Path | None = None
     try:
         tmp = _staged_temp(path, serialized)

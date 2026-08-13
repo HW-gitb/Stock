@@ -377,6 +377,64 @@
             { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
             { "type": "null" }
           ]
+        },
+        "soft_boost": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "requested_enabled",
+                "status",
+                "reason_code",
+                "effective_enabled",
+                "evidence_bundle_written",
+                "consumption_receipt_path",
+                "shadow_receipt_path",
+                "comparison_ledger_path",
+                "provider_calls_performed"
+              ],
+              "properties": {
+                "requested_enabled": { "const": true },
+                "status": {
+                  "enum": [
+                    "zero_valid_empty",
+                    "zero_upstream_unavailable",
+                    "zero_invalid_evidence",
+                    "consumed_valid_nonempty"
+                  ]
+                },
+                "reason_code": {
+                  "anyOf": [
+                    { "type": "string", "minLength": 1 },
+                    { "type": "null" }
+                  ]
+                },
+                "effective_enabled": { "type": "boolean" },
+                "evidence_bundle_written": { "type": "boolean" },
+                "consumption_receipt_path": {
+                  "anyOf": [
+                    { "type": "string", "pattern": "^(state/us_short|provider_samples)/.+\\.json$" },
+                    { "type": "null" }
+                  ]
+                },
+                "shadow_receipt_path": {
+                  "anyOf": [
+                    { "type": "string", "pattern": "^(state/us_short|provider_samples)/.+\\.json$" },
+                    { "type": "null" }
+                  ]
+                },
+                "comparison_ledger_path": {
+                  "anyOf": [
+                    { "type": "string", "pattern": "^(state/us_short|provider_samples)/.+\\.json$" },
+                    { "type": "null" }
+                  ]
+                },
+                "provider_calls_performed": { "const": false }
+              }
+            }
+          ]
         }
       }
     },

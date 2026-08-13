@@ -392,6 +392,31 @@ class FailClosed(unittest.TestCase):
         self.assertIn("K4C_RENDER_REJECTED", out["report_data"]["banner"]["soft_discovery_status"])
         self.assertEqual(out["report_data"]["soft_discovery_machine_record"]["state"], "invalid_evidence")
 
+    def test_current_invalid_soft_boost_state_is_visible_but_not_an_outage(self):
+        soft_paths = {
+            "stage_receipt_path": None,
+            "consumption_receipt_path": None,
+            "shadow_receipt_path": None,
+            "comparison_ledger_path": None,
+            "adjudication_receipt_path": None,
+            "artifact_state": "invalid",
+        }
+        out = _build_report(
+            _machine_record(), _lifecycle_result(),
+            report_context=_report_context(soft_discovery_receipt_paths=soft_paths),
+        )
+        self.assertIn(
+            "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID",
+            out["report_data"]["banner"]["soft_discovery_status"],
+        )
+        self.assertEqual(out["report_data"]["soft_discovery_machine_record"]["state"], "invalid_evidence")
+
+    def test_not_requested_soft_boost_is_absent_from_the_weekly_banner(self):
+        out = _build_report(
+            _machine_record(), _lifecycle_result(), report_context=_report_context(),
+        )
+        self.assertNotIn("soft_discovery_status", out["report_data"]["banner"])
+
     def test_non_closed_world_report_context_rejected(self):
         with self.assertRaises(wr.WeekendReportError):     # missing a key
             _build_report(_machine_record(), _lifecycle_result(),

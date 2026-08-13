@@ -6,6 +6,8 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 from engine import us_short_soft_boost_consumption as consumption
 from tests.schema.test_us_short_provisional_theme_validation_schema import _artifact
@@ -117,6 +119,7 @@ class SoftBoostFixture:
         _write(self.paths["stage"], self.stage)
 
     def tearDown(self):
+        self.doCleanups()
         self._fixture_dir.cleanup()
 
     def _resolve(self, **overrides):
@@ -135,6 +138,150 @@ class SoftBoostFixture:
 
 
 class SoftBoostConsumptionTest(SoftBoostFixture, unittest.TestCase):
+    def _decision_lock(self):
+        from runners import us_short_weekly_capstone as capstone
+
+        lock = capstone._acquire_decision_lock(SimpleNamespace(
+            state_dir=self.fixture_root, decision_date=DATE,
+        ))
+        self.addCleanup(capstone._release_decision_lock, lock)
+        return lock
+
+    def test_artifact_state_requires_this_runs_declared_complete_bundle(self):
+        def result(**overrides):
+            value = {
+                "requested_enabled": True,
+                "status": "zero_upstream_unavailable",
+                "reason_code": "UPSTREAM_UNAVAILABLE",
+                "effective_enabled": False,
+                "evidence_bundle_written": False,
+                "consumption_receipt_path": self.paths["consumption"].relative_to(ROOT).as_posix(),
+                "shadow_receipt_path": None,
+                "comparison_ledger_path": None,
+                "provider_calls_performed": False,
+            }
+            value.update(overrides)
+            return value
+
+        classify = consumption.classify_soft_boost_artifact_state
+        disabled = classify(
+            soft_boost_requested=False,
+            soft_boost_run_result=None,
+            consumption_receipt_path=self.paths["consumption"],
+            shadow_receipt_path=self.paths["shadow"],
+            comparison_ledger_path=self.paths["ledger"],
+        )
+        self.assertEqual(disabled, {
+            "state": "none", "reason_code": "SOFT_BOOST_COMPARISON_NOT_REQUESTED",
+        })
+
+        missing = classify(
+            soft_boost_requested=True,
+            soft_boost_run_result=None,
+            consumption_receipt_path=self.paths["consumption"],
+            shadow_receipt_path=self.paths["shadow"],
+            comparison_ledger_path=self.paths["ledger"],
+        )
+        self.assertEqual(missing, {
+            "state": "none", "reason_code": "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID",
+        })
+
+        self.paths["consumption"].parent.mkdir(parents=True, exist_ok=True)
+        self.paths["consumption"].write_text("{}", encoding="utf-8")
+        zero = classify(
+            soft_boost_requested=True,
+            soft_boost_run_result=result(),
+            consumption_receipt_path=self.paths["consumption"],
+            shadow_receipt_path=self.paths["shadow"],
+            comparison_ledger_path=self.paths["ledger"],
+        )
+        self.assertEqual(zero, {
+            "state": "consumption_only", "reason_code": "SOFT_BOOST_COMPARISON_NOT_APPLICABLE",
+        })
+
+        for path in (self.paths["shadow"], self.paths["ledger"]):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}", encoding="utf-8")
+        ready = classify(
+            soft_boost_requested=True,
+            soft_boost_run_result=result(
+                status="consumed_valid_nonempty",
+                reason_code=None,
+                effective_enabled=True,
+                evidence_bundle_written=True,
+                shadow_receipt_path=self.paths["shadow"].relative_to(ROOT).as_posix(),
+                comparison_ledger_path=self.paths["ledger"].relative_to(ROOT).as_posix(),
+            ),
+            consumption_receipt_path=self.paths["consumption"],
+            shadow_receipt_path=self.paths["shadow"],
+            comparison_ledger_path=self.paths["ledger"],
+        )
+        self.assertEqual(ready, {
+            "state": "comparison_ready", "reason_code": "SOFT_BOOST_COMPARISON_READY",
+        })
+
+        unclaimed = classify(
+            soft_boost_requested=True,
+            soft_boost_run_result=None,
+            consumption_receipt_path=self.paths["consumption"],
+            shadow_receipt_path=self.paths["shadow"],
+            comparison_ledger_path=self.paths["ledger"],
+        )
+        self.assertEqual(unclaimed, {
+            "state": "none", "reason_code": "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID",
+        })
+
+        wrong_path = classify(
+            soft_boost_requested=True,
+            soft_boost_run_result=result(
+                status="consumed_valid_nonempty",
+                reason_code=None,
+                effective_enabled=True,
+                evidence_bundle_written=True,
+                shadow_receipt_path=self.paths["shadow"].with_name(
+                    "not_this_runs_shadow.json"
+                ).relative_to(ROOT).as_posix(),
+                comparison_ledger_path=self.paths["ledger"].relative_to(ROOT).as_posix(),
+            ),
+            consumption_receipt_path=self.paths["consumption"],
+            shadow_receipt_path=self.paths["shadow"],
+            comparison_ledger_path=self.paths["ledger"],
+        )
+        self.assertEqual(wrong_path, {
+            "state": "none", "reason_code": "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID",
+        })
+
+        stale = classify(
+            soft_boost_requested=True,
+            soft_boost_run_result=result(),
+            consumption_receipt_path=self.paths["consumption"],
+            shadow_receipt_path=self.paths["shadow"],
+            comparison_ledger_path=self.paths["ledger"],
+        )
+        self.assertEqual(stale, {
+            "state": "consumption_only", "reason_code": "SOFT_BOOST_COMPARISON_NOT_APPLICABLE",
+        })
+        malformed = classify(
+            soft_boost_requested=True,
+            soft_boost_run_result={"requested_enabled": True},
+            consumption_receipt_path=self.paths["consumption"],
+            shadow_receipt_path=self.paths["shadow"],
+            comparison_ledger_path=self.paths["ledger"],
+        )
+        self.assertEqual(malformed, {
+            "state": "none", "reason_code": "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID",
+        })
+        impossible_disabled = classify(
+            soft_boost_requested=True,
+            soft_boost_run_result=result(status="zero_disabled", reason_code="SOFT_DISCOVERY_DISABLED"),
+            consumption_receipt_path=self.paths["consumption"],
+            shadow_receipt_path=self.paths["shadow"],
+            comparison_ledger_path=self.paths["ledger"],
+        )
+        self.assertEqual(impossible_disabled, {
+            "state": "none", "reason_code": "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID",
+        })
+
     def test_valid_nonempty_is_the_only_state_that_enables_scoring(self):
         resolved = self._resolve()
         self.assertTrue(resolved["effective_enabled"], resolved)
@@ -326,6 +473,82 @@ class SoftBoostConsumptionTest(SoftBoostFixture, unittest.TestCase):
             )),
         )
         self.assertFalse(saved["records"][0]["provider_calls_performed"])
+
+    def test_zero_to_valid_retry_recovers_second_step_failure_only_under_decision_lock(self):
+        zero = consumption.degrade_soft_boost_consumption(decision_date=DATE)
+        zero_receipt = consumption.build_consumption_receipt(
+            resolved=zero, generated_at="2026-06-15T08:30:00-04:00",
+            on_selection={"AAPL": 50.0}, off_selection={"AAPL": 50.0},
+            boost_records={"AAPL": {"theme_soft_boost": 0.0, "evidence_tier": None}},
+            on_top15=["AAPL"], off_top15=["AAPL"],
+        )
+        consumption.write_consumption_receipt(
+            zero_receipt, self.paths["consumption"], state_dir=self.fixture_root,
+        )
+        resolved = self._resolve()
+        receipt = consumption.build_consumption_receipt(
+            resolved=resolved, generated_at="2026-06-15T08:31:00-04:00",
+            on_selection={"AAPL": 55.0}, off_selection={"AAPL": 50.0},
+            boost_records={"AAPL": {"theme_soft_boost": 5.0, "evidence_tier": "both"}},
+            on_top15=["AAPL"], off_top15=["AAPL"],
+        )
+        shadow = consumption.build_shadow_receipt(
+            resolved=resolved, generated_at="2026-06-15T08:31:00-04:00",
+            on_top15=["AAPL"], off_top15=["AAPL"], common_input_sha256="a" * 64,
+        )
+        with self.assertRaises(consumption.SoftBoostConsumptionError):
+            consumption.write_evidence_bundle(
+                consumption_receipt=receipt, consumption_path=self.paths["consumption"],
+                shadow_receipt=shadow, shadow_path=self.paths["shadow"], ledger_path=self.paths["ledger"],
+                state_dir=self.fixture_root,
+            )
+        self.assertFalse(self.paths["shadow"].exists())
+        self.assertFalse(self.paths["ledger"].exists())
+
+        lock = self._decision_lock()
+        with mock.patch.object(
+            consumption, "write_consumption_receipt",
+            side_effect=consumption.SoftBoostConsumptionError("injected second step failure"),
+        ):
+            with self.assertRaisesRegex(consumption.SoftBoostConsumptionError, "injected second step failure"):
+                consumption.write_evidence_bundle(
+                    consumption_receipt=receipt, consumption_path=self.paths["consumption"],
+                    shadow_receipt=shadow, shadow_path=self.paths["shadow"], ledger_path=self.paths["ledger"],
+                    state_dir=self.fixture_root, decision_lock=lock,
+                )
+        self.assertTrue(self.paths["shadow"].is_file())
+        self.assertTrue(self.paths["ledger"].is_file())
+        self.assertEqual(json.loads(self.paths["consumption"].read_text(encoding="utf-8"))["status"], "zero_invalid_evidence")
+
+        retry_receipt = consumption.build_consumption_receipt(
+            resolved=resolved, generated_at="2026-06-15T08:32:00-04:00",
+            on_selection={"AAPL": 55.0}, off_selection={"AAPL": 50.0},
+            boost_records={"AAPL": {"theme_soft_boost": 5.0, "evidence_tier": "both"}},
+            on_top15=["AAPL"], off_top15=["AAPL"],
+        )
+        retry_shadow = consumption.build_shadow_receipt(
+            resolved=resolved, generated_at="2026-06-15T08:32:00-04:00",
+            on_top15=["AAPL"], off_top15=["AAPL"], common_input_sha256="a" * 64,
+        )
+        consumption.write_evidence_bundle(
+            consumption_receipt=retry_receipt, consumption_path=self.paths["consumption"],
+            shadow_receipt=retry_shadow, shadow_path=self.paths["shadow"], ledger_path=self.paths["ledger"],
+            state_dir=self.fixture_root, decision_lock=lock,
+        )
+        self.assertEqual(json.loads(self.paths["consumption"].read_text(encoding="utf-8"))["status"], "consumed_valid_nonempty")
+        self.assertEqual(json.loads(self.paths["shadow"].read_text(encoding="utf-8"))["generated_at"], "2026-06-15T08:31:00-04:00")
+        self.assertEqual(json.loads(self.paths["ledger"].read_text(encoding="utf-8"))["records"][0]["generated_at"], "2026-06-15T08:31:00-04:00")
+
+        different_shadow = consumption.build_shadow_receipt(
+            resolved=resolved, generated_at="2026-06-15T08:33:00-04:00",
+            on_top15=["AAPL"], off_top15=["AAPL"], common_input_sha256="b" * 64,
+        )
+        with self.assertRaises(consumption.SoftBoostConsumptionError):
+            consumption.write_evidence_bundle(
+                consumption_receipt=retry_receipt, consumption_path=self.paths["consumption"],
+                shadow_receipt=different_shadow, shadow_path=self.paths["shadow"], ledger_path=self.paths["ledger"],
+                state_dir=self.fixture_root, decision_lock=lock,
+            )
 
     def test_evidence_epoch_digest_is_invariant_to_tracked_json_line_endings(self):
         epoch = json.loads(consumption.EPOCH_PATH.read_text(encoding="utf-8"))

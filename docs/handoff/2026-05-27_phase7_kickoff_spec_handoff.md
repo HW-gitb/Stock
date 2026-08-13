@@ -4585,3 +4585,54 @@ git diff --check
 - `O-P9-1`：`data_context.json` 在门之前写盘，形状被拒时会留半对产物（已确认无消费者受害）；把门移到该写盘之上即可零成本消除。
 - `O-P9-5`（既有、超出本刀）：`forward_policy_shadow` 先于 `weekly_bridge`，而 bridge 会重写同一个 `context_components_path`，soft-boost 异常回落 OFF 使两次产出不保证字节相同——六头账本可能绑到正式周报没用过的 carrier。建议单独立刀。
 - 按去重顺序，下一个是**问题10（soft-boost result usability 三态）**。
+
+## 2026-08-12 追加：问题10 独立审查 FAIL（1302，未提交）
+
+### 改了什么
+
+- 审查方零代码改动。register 新建三条 Required、记 6 条 Optional 与已验成立清单；SESSION_LOG 顶部 prepend 极简 FAIL entry。**本刀交接时 `docs/` 一字未动，本节与 register 条目是它的第一份耐久记录。**
+
+### 为什么
+
+- `R-USSHORT-SOFT-BOOST-NOT-REQUESTED-MISREAD-AS-ARTIFACT-INVALID`：`--disable-soft-discovery` 与 `--disable-theme-soft-boost` 是两个独立开关；只禁前者时 `theme_soft_boost_enabled` 仍 True 而 `soft_boost_run_result` 为 None，分类器落兜底 `ARTIFACT_INVALID`。实测 `(True,None)→ARTIFACT_INVALID` / `(False,None)→NOT_REQUESTED`。方案 B 的两种 none 被反着用，且本刀自己的用例把该行为钉死。
+- `R-USSHORT-TYPED-ZERO-WRITE-POISONS-THE-SAME-WEEK-COMPARISON-SLOT`：新增的零消费回执写进写一次即冻结、按 decision_date 键控的槽位，同日后续更强解析再也发布不了，该周比较证据永久丢失。本刀测试把 typed zero 指向另一个 state dir，故全仓无「同槽位重试」覆盖。
+- `R-USSHORT-PROBLEM10-SLICE-HANDED-OFF-WITHOUT-FULL-LANE-OR-DURABLE-RECORD`：改了生产顶层 runner 与共享引擎（rule 3(a)/(b)），但账本无绑定当前代码态 `f4f952f2…` 的全量绿；且无 register/SESSION_LOG/handoff 条目。
+
+### 验证命令
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1200 tests.test_us_short_soft_boost_consumption tests.provider.test_us_short_batch5_data_context_source_packet tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.provider.test_us_short_weekly_capstone tests.test_us_short_soft_discovery_weekly_report tests.test_us_short_weekend_report tests.test_us_short_forward_policy_shadow_stage`
+- 探针：直接调 `classify_soft_boost_artifact_state` 喂 `(True,None)` / `(False,None)`；读 `write_consumption_receipt` 的冻结语义与 `write_evidence_bundle` 的 `clock_keys`。
+
+### 验证结果
+
+- 焦点超集 `Ran 235 in 57.5s OK`，`receipt:25062fc1fd9338195dc3bbdd`。
+- 分类器本体、五处消费点接线、生产者 typed-zero 分流、诚实渲染恢复、OFF 字节基线一致——全部验过成立（清单在 register）。
+- 全量：无绑定当前代码态的绿。
+
+### 失效旧结论
+
+- 「五处对象存在性误判已一网打尽」尚不成立：判据在**请求侧**又制造了一处新的误判（R1）。
+
+### 下一步注意事项
+
+- 三条 Required 同轮批量修（§16），修完补一次 full lane 与三份落盘再交复审。
+- `O-P10-1`（`clock_keys=()` 使同日重跑把有效 bundle 判坏，连带发出的 Top-15 改变）是既有根因、本刀范围外，建议单独立刀。
+- `O-P10-6`：本刀顺手把形状校验移到 mandatory 写盘之前，正好关掉了问题9 复审记的 `O-P9-1`。
+## 2026-08-12 追加：I/O inventory 精确计数基线退役——审查 FAIL（基线携带了另一刀的树态）
+
+**改了什么**：本节只记审查侧结论。被审范围恰好三个文件：`tests/provider/us_short_test_io_inventory.py`（快照瘦身，`v0.4.0 → v0.5.0`）、`tests/test_us_short_test_io_inventory.py`（删逐 key 计数与总数基线，白名单全等改成员资格，新增两条闭合用例）、`docs/us_short_test_io_inventory_20260801.json`（重建）。
+
+**为什么**：用户裁决把「逐 key 精确计数」判为过度设计——它钉的是测试代码的记账而不是有没有越界，导致问题7/8/9/10 每轮都要重建快照。
+
+**验证命令**：
+- `.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_test_io_inventory tests.test_us_short_discovery_conformance`
+- reviewer 自写探针（合成仓在系统临时目录）：新 resolved 保护根写 / 新 unresolved class-4 写 / 各自加白名单后的反向控制 / 加纯临时根模块后的快照稳定性 / 同 key 写入次数 1→3 后的快照稳定性 / `git show HEAD:` 版与工作树版同一测试文件的分类对比。
+
+**验证结果**：焦点超集 `PASS tests=51 elapsed=22.6s`、`receipt:c2d5b260eba564c3c486dce6`。退役内容本身成立：`unallowlisted_write_findings == []` 这条安全腿原样保留，且 `build_inventory` 里它同时覆盖 resolved 与 unresolved 两类，我的探针确认两类新写各命中 1 条、加白名单后归零；快照对「加临时根模块」与「同 key 写入 1→3」都不再变化；`module_path_sha256` 已删；两份白名单只减不增。
+
+**失效旧结论**：register 里「本刀与问题10 互不相干、可独立提交」的前提**不成立**——基线是扫工作树生成的，工作树里压着未提交的问题10 改动。实测：`tests/test_us_short_soft_boost_consumption.py` 在 `HEAD` 上是 `class4_unresolved_write` 并产出 `:mkdir:` 与 `:write_text:provider_samples,state/us_short:class4_unresolved_write` 两个 key，在工作树上因问题10 的改动变成 `class0`、零 key；新基线 `unresolved_allowlist` 189→187、module 行 72→71 正是这两条。只提交本刀三个文件并合入 master，会让 master 上的 `tests.test_us_short_test_io_inventory` 三处断言同时红。
+
+**下一步注意事项**：
+- 提交进 master 的基线必须能由它自己那次提交的代码态重新生成；要么从「只含本刀两处 .py 改动」的树重建（形状变、内容仍是 189 条 / 72 行），要么显式把本刀排在问题10 之后并在 register 记依赖。问题10 当前是 FAIL 未提交，后一条路暂时走不通。
+- 两刀的条目已写进同一份 register 与 SESSION_LOG，任何一刀提交时都必须逐文件挑选，不得整目录 stage。
+- 真正的门是 `unallowlisted_write_findings == []`；新加的两条 `<=` 断言与它功能重复，后续别把门误删成只剩 `<=`。

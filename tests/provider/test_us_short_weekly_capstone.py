@@ -328,6 +328,138 @@ class CapstoneDryRunTest(unittest.TestCase):
         self.assertIsNotNone(parsed.tzinfo, "observed_at must be tz-aware (status source rejects a naive clock)")
         self.assertEqual(ctx.generated_at, ctx.observed_at)
 
+    def test_default_capture_descriptor_uses_the_same_current_artifact_state(self):
+        from runners import us_short_weekly_capstone_stages as st
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ctx = capstone.resolve_capstone_context(
+                now_et=datetime(2026, 7, 9, 8, 0, 0),
+                private_root=root / "private",
+                batch4_template_path=root / "template.json",
+                account_state_path=root / "account.json",
+                state_dir=root / "state",
+                sample_root=root,
+            )
+            capture = next(stage for stage in capstone.default_pipeline()
+                           if stage.name == "soft_boost_comparison_capture")
+            disabled = replace(ctx, theme_soft_boost_enabled=False)
+            self.assertEqual(capture.inputs(disabled), [])
+            self.assertEqual(capture.outputs(disabled), [])
+            discovery_disabled = replace(ctx, soft_discovery_enabled=False)
+            self.assertEqual(st.classify_soft_boost_artifact_state(discovery_disabled), {
+                "state": "none", "reason_code": "SOFT_BOOST_COMPARISON_NOT_REQUESTED",
+            })
+            self.assertEqual(capture.inputs(discovery_disabled), [])
+            self.assertEqual(capture.outputs(discovery_disabled), [])
+            for path in (
+                ctx.soft_boost_consumption_receipt_path,
+                ctx.soft_boost_shadow_receipt_path,
+                ctx.soft_boost_comparison_ledger_path,
+            ):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("{}", encoding="utf-8")
+            ready_result = {
+                "requested_enabled": True,
+                "status": "consumed_valid_nonempty",
+                "reason_code": None,
+                "effective_enabled": True,
+                "evidence_bundle_written": True,
+                "consumption_receipt_path": str(ctx.soft_boost_consumption_receipt_path),
+                "shadow_receipt_path": str(ctx.soft_boost_shadow_receipt_path),
+                "comparison_ledger_path": str(ctx.soft_boost_comparison_ledger_path),
+                "provider_calls_performed": False,
+            }
+            ready = replace(ctx, soft_discovery_run_result={}, soft_boost_run_result=ready_result)
+            self.assertEqual(capture.inputs(ready), [
+                ctx.soft_boost_consumption_receipt_path,
+                ctx.soft_boost_shadow_receipt_path,
+            ])
+            self.assertEqual(capture.outputs(ready), [ctx.soft_boost_pairwise_ledger_path])
+
+    def test_k4b_current_run_artifact_exit_table_is_exhaustive(self):
+        """Every current-run K4b exit maps to exactly one usable state.
+
+        `pass2_preflight_only` and `legacy_checkpoint_without_soft_boost` are
+        deliberately separate rows: their source summaries differ (null versus
+        absent `soft_boost`), but the context adapter intentionally normalizes
+        both to no K4b result for this run.  A present but malformed result is
+        not that case and remains fail-closed.
+        """
+        from runners import us_short_weekly_capstone_stages as st
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ctx = capstone.resolve_capstone_context(
+                now_et=datetime(2026, 7, 9, 8, 0, 0),
+                private_root=root / "private",
+                batch4_template_path=root / "template.json",
+                account_state_path=root / "account.json",
+                state_dir=root / "state",
+                sample_root=root,
+            )
+            zero_result = {
+                "requested_enabled": True,
+                "status": "zero_upstream_unavailable",
+                "reason_code": "UPSTREAM_UNAVAILABLE",
+                "effective_enabled": False,
+                "evidence_bundle_written": False,
+                "consumption_receipt_path": str(ctx.soft_boost_consumption_receipt_path),
+                "shadow_receipt_path": None,
+                "comparison_ledger_path": None,
+                "provider_calls_performed": False,
+            }
+            ready_result = {
+                **zero_result,
+                "status": "consumed_valid_nonempty",
+                "reason_code": None,
+                "effective_enabled": True,
+                "evidence_bundle_written": True,
+                "shadow_receipt_path": str(ctx.soft_boost_shadow_receipt_path),
+                "comparison_ledger_path": str(ctx.soft_boost_comparison_ledger_path),
+            }
+            cases = (
+                (
+                    "feature_disabled",
+                    replace(ctx, theme_soft_boost_enabled=False),
+                    {"state": "none", "reason_code": "SOFT_BOOST_COMPARISON_NOT_REQUESTED"},
+                ),
+                (
+                    "soft_discovery_disabled",
+                    replace(ctx, soft_discovery_run_result=None),
+                    {"state": "none", "reason_code": "SOFT_BOOST_COMPARISON_NOT_REQUESTED"},
+                ),
+                (
+                    "pass2_preflight_only_soft_boost_is_null",
+                    replace(ctx, soft_discovery_run_result={}, soft_boost_run_result=None),
+                    {"state": "none", "reason_code": "SOFT_BOOST_COMPARISON_NOT_REQUESTED"},
+                ),
+                (
+                    "legacy_checkpoint_omits_soft_boost",
+                    replace(ctx, soft_discovery_run_result={}, soft_boost_run_result=None),
+                    {"state": "none", "reason_code": "SOFT_BOOST_COMPARISON_NOT_REQUESTED"},
+                ),
+                (
+                    "current_k4b_result_is_malformed",
+                    replace(ctx, soft_discovery_run_result={}, soft_boost_run_result={"requested_enabled": True}),
+                    {"state": "none", "reason_code": "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID"},
+                ),
+                (
+                    "typed_zero_with_declared_receipt",
+                    replace(ctx, soft_discovery_run_result={}, soft_boost_run_result=zero_result),
+                    {"state": "consumption_only", "reason_code": "SOFT_BOOST_COMPARISON_NOT_APPLICABLE"},
+                ),
+                (
+                    "valid_nonempty_with_complete_bundle",
+                    replace(ctx, soft_discovery_run_result={}, soft_boost_run_result=ready_result),
+                    {"state": "comparison_ready", "reason_code": "SOFT_BOOST_COMPARISON_READY"},
+                ),
+            )
+            with mock.patch.object(Path, "is_file", return_value=True):
+                for source_exit, case_ctx, expected in cases:
+                    with self.subTest(source_exit=source_exit):
+                        self.assertEqual(st.classify_soft_boost_artifact_state(case_ctx), expected)
+
 
 class CapstoneFakeChainTest(unittest.TestCase):
     """Prove the orchestration (ordering, per-stage output validation, fail-fast, auth gating) with INJECTED fake
@@ -529,6 +661,39 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertEqual(summary["decision_date"], "20260709")
         self.assertTrue(summary["emitted_report"].endswith("weekly_report.md"))
         self.assertNotIn("shadow_capture_failed", summary)
+
+    def test_pass2_summary_soft_boost_result_reaches_later_stage_context(self):
+        order: list[str] = []
+        stages = self._fake_stages(order)
+        pass2 = next(stage for stage in stages if stage.name == "pass2_fetch")
+        bridge = next(stage for stage in stages if stage.name == "weekly_bridge")
+        original_pass2_run = pass2.run
+        original_bridge_run = bridge.run
+        expected = {
+            "requested_enabled": True,
+            "status": "zero_upstream_unavailable",
+            "reason_code": "UPSTREAM_UNAVAILABLE",
+            "effective_enabled": False,
+            "evidence_bundle_written": False,
+            "consumption_receipt_path": "state/us_short/current_consumption.json",
+            "shadow_receipt_path": None,
+            "comparison_ledger_path": None,
+            "provider_calls_performed": False,
+        }
+        seen: dict[str, object] = {}
+
+        def pass2_run(ctx):
+            original_pass2_run(ctx)
+            return {"stage": "pass2_fetch", "source_packet": {"soft_boost": expected}}
+
+        def bridge_run(ctx):
+            seen["soft_boost_run_result"] = ctx.soft_boost_run_result
+            return original_bridge_run(ctx)
+
+        pass2.run = pass2_run
+        bridge.run = bridge_run
+        self._run(order, stages=stages)
+        self.assertEqual(seen["soft_boost_run_result"], expected)
 
     def test_typed_serenity_settlement_error_is_nonblocking(self):
         from engine.us_short_serenity_quality_forward import SerenityQualityForwardError
@@ -1493,6 +1658,69 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
              mock.patch.object(st._bridge, "run_e2e", return_value={"batch4_run": {"emitted": True}}) as m:
             st.run_weekly_bridge(self._ctx(authorized=True))
             self.assertIsNone(m.call_args.kwargs.get("_research_live_capability"))
+
+    def test_bridge_passes_only_current_soft_boost_paths(self):
+        from dataclasses import replace
+        from runners import us_short_weekly_capstone_stages as st
+
+        ctx = self._ctx(authorized=True)
+
+        zero_result = {
+            "requested_enabled": True,
+            "status": "zero_upstream_unavailable",
+            "reason_code": "UPSTREAM_UNAVAILABLE",
+            "effective_enabled": False,
+            "evidence_bundle_written": False,
+            "consumption_receipt_path": str(ctx.soft_boost_consumption_receipt_path),
+            "shadow_receipt_path": None,
+            "comparison_ledger_path": None,
+            "provider_calls_performed": False,
+        }
+        consumption_ctx = replace(
+            ctx,
+            theme_soft_boost_enabled=True,
+            soft_discovery_run_result={},
+            soft_boost_run_result=zero_result,
+        )
+        invalid_ctx = replace(
+            ctx,
+            theme_soft_boost_enabled=True,
+            soft_discovery_run_result={},
+            soft_boost_run_result={"requested_enabled": True},
+        )
+        not_requested_ctx = replace(
+            ctx,
+            theme_soft_boost_enabled=True,
+            soft_discovery_run_result=None,
+            soft_boost_run_result=None,
+        )
+
+        with mock.patch.object(st, "_write_provider_health"), \
+             mock.patch.object(st, "comparison_banner_from_private_ledger_path", return_value=""), \
+             mock.patch.object(st, "_deliver_serenity_shadow_to_official_report", return_value=None), \
+             mock.patch.object(st, "_record_serenity_report_delivery"), \
+             mock.patch.object(Path, "read_text", return_value="{}"), \
+             mock.patch.object(Path, "is_file", return_value=True), \
+             mock.patch.object(st._bridge, "run_e2e", return_value={}) as bridge:
+            st.run_weekly_bridge(consumption_ctx)
+            self.assertEqual(bridge.call_args.kwargs["soft_discovery_receipt_paths"], {
+                "stage_receipt_path": str(ctx.soft_discovery_receipt_path),
+                "consumption_receipt_path": str(ctx.soft_boost_consumption_receipt_path),
+                "shadow_receipt_path": None,
+                "comparison_ledger_path": None,
+                "adjudication_receipt_path": None,
+            })
+            st.run_weekly_bridge(invalid_ctx)
+            self.assertEqual(bridge.call_args.kwargs["soft_discovery_receipt_paths"], {
+                "stage_receipt_path": None,
+                "consumption_receipt_path": None,
+                "shadow_receipt_path": None,
+                "comparison_ledger_path": None,
+                "adjudication_receipt_path": None,
+                "artifact_state": "invalid",
+            })
+            st.run_weekly_bridge(not_requested_ctx)
+            self.assertIsNone(bridge.call_args.kwargs["soft_discovery_receipt_paths"])
 
     def test_bridge_binds_and_injects_vix_regime_without_gating_emit(self):
         from dataclasses import replace

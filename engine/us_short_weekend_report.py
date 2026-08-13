@@ -481,13 +481,22 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
         banner["forward_policy_comparison_reminder"] = reminder.strip()
     soft_paths = report_context.get("soft_discovery_receipt_paths")
     if soft_paths is not None:
-        if not (isinstance(soft_paths, dict) and set(soft_paths) == {
+        path_keys = {
             "stage_receipt_path", "consumption_receipt_path", "shadow_receipt_path",
             "comparison_ledger_path", "adjudication_receipt_path"
-        } and all(value is None or isinstance(value, str) for value in soft_paths.values())):
+        }
+        if not (isinstance(soft_paths, dict) and set(soft_paths) in (path_keys, path_keys | {"artifact_state"})
+                and all(value is None or isinstance(value, str) for key, value in soft_paths.items()
+                        if key != "artifact_state")
+                and ("artifact_state" not in soft_paths or soft_paths["artifact_state"] == "invalid")):
             # This is an advisory evidence surface.  A malformed optional packet must be
             # rejected visibly, but must never turn into a mandatory-weekly-report outage.
             soft_record = invalid_evidence_record(decision_date=flat["as_of"], reason_code="K4C_RENDER_REJECTED")
+            soft_banner = render_weekly_banner(soft_record)
+        elif soft_paths.get("artifact_state") == "invalid":
+            soft_record = invalid_evidence_record(
+                decision_date=flat["as_of"], reason_code="SOFT_BOOST_COMPARISON_ARTIFACT_INVALID",
+            )
             soft_banner = render_weekly_banner(soft_record)
         else:
             try:

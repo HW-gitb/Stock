@@ -250,8 +250,25 @@ def run_pass2_fetch(ctx) -> dict[str, Any]:
             ctx.soft_boost_comparison_ledger_path if soft_boost_enabled else None
         ),
         soft_boost_state_dir=ctx.state_dir if soft_boost_enabled else None,
+        decision_lock=getattr(ctx, "decision_lock", None),
     )
     return summary
+
+
+def classify_soft_boost_artifact_state(ctx) -> dict[str, str]:
+    """Thin context-bound adapter for the sole K4b artifact-usability contract."""
+    requested = (
+        getattr(ctx, "theme_soft_boost_enabled", None) is True
+        and getattr(ctx, "soft_discovery_run_result", None) is not None
+        and getattr(ctx, "soft_boost_run_result", None) is not None
+    )
+    return _soft_boost_consumption.classify_soft_boost_artifact_state(
+        soft_boost_requested=requested,
+        soft_boost_run_result=getattr(ctx, "soft_boost_run_result", None),
+        consumption_receipt_path=(ctx.soft_boost_consumption_receipt_path if requested else None),
+        shadow_receipt_path=(ctx.soft_boost_shadow_receipt_path if requested else None),
+        comparison_ledger_path=(ctx.soft_boost_comparison_ledger_path if requested else None),
+    )
 
 
 def run_yfinance_grades_fetch(ctx) -> dict[str, Any]:
@@ -580,6 +597,17 @@ def run_soft_boost_comparison_capture(ctx) -> dict[str, Any]:
     observations are optional local, source-bound inputs from a later maturity
     workflow; absent observations leave the capture visibly unmatured.
     """
+    artifact_state = classify_soft_boost_artifact_state(ctx)
+    if artifact_state["state"] != "comparison_ready":
+        return {
+            "status": (
+                "failed"
+                if artifact_state["reason_code"] == "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID"
+                else "not_applicable"
+            ),
+            "reason_code": artifact_state["reason_code"],
+            "comparison_capture_performed": False,
+        }
     try:
         consumption_raw = ctx.soft_boost_consumption_receipt_path.read_bytes()
         shadow_raw = ctx.soft_boost_shadow_receipt_path.read_bytes()
@@ -622,7 +650,8 @@ def run_soft_boost_comparison_capture(ctx) -> dict[str, Any]:
             if not path.exists():
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(json.dumps(receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":")), encoding="utf-8")
-        return {"status": result["status"], "captured_week_count": ledger["captured_week_count"],
+        return {"status": result["status"], "reason_code": None, "comparison_capture_performed": True,
+                "captured_week_count": ledger["captured_week_count"],
                 "matured_week_count": ledger["matured_week_count"],
                 "eligible_divergence_week_count": ledger["eligible_divergence_week_count"],
                 "formal_look": result["formal_look"]}
@@ -843,10 +872,36 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
     comparison_reminder = comparison_banner_from_private_ledger_path(
         ctx.forward_policy_comparison_ledger_path,
     )
-    soft_paths = None
-    if ctx.theme_soft_boost_enabled and ctx.soft_discovery_run_result is not None:
+    artifact_state = classify_soft_boost_artifact_state(ctx)
+    soft_paths = (
+        {
+            "stage_receipt_path": None,
+            "consumption_receipt_path": None,
+            "shadow_receipt_path": None,
+            "comparison_ledger_path": None,
+            "adjudication_receipt_path": None,
+            "artifact_state": "invalid",
+        }
+        if artifact_state["reason_code"] == "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID"
+        else None
+    )
+    if artifact_state["state"] == "consumption_only":
         soft_paths = {
-            "stage_receipt_path": str(ctx.soft_discovery_receipt_path),
+            "stage_receipt_path": (
+                str(ctx.soft_discovery_receipt_path)
+                if ctx.soft_discovery_receipt_path.is_file() else None
+            ),
+            "consumption_receipt_path": str(ctx.soft_boost_consumption_receipt_path),
+            "shadow_receipt_path": None,
+            "comparison_ledger_path": None,
+            "adjudication_receipt_path": None,
+        }
+    elif artifact_state["state"] == "comparison_ready":
+        soft_paths = {
+            "stage_receipt_path": (
+                str(ctx.soft_discovery_receipt_path)
+                if ctx.soft_discovery_receipt_path.is_file() else None
+            ),
             "consumption_receipt_path": str(ctx.soft_boost_consumption_receipt_path),
             "shadow_receipt_path": str(ctx.soft_boost_shadow_receipt_path),
             "comparison_ledger_path": str(ctx.soft_boost_pairwise_ledger_path

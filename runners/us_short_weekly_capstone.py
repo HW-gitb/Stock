@@ -271,6 +271,7 @@ class CapstoneContext:
     soft_discovery_enabled: bool = True
     theme_soft_boost_enabled: bool = True
     soft_discovery_run_result: dict[str, Any] | None = None
+    soft_boost_run_result: dict[str, Any] | None = None
     serenity_annotation_payload: dict[str, Any] | None = None
     serenity_settlement_result: dict[str, Any] | None = None
     serenity_quality_run_result: dict[str, Any] | None = None
@@ -280,6 +281,7 @@ class CapstoneContext:
     research_live_capability: Any = None   # A1: minted by run_weekly_capstone ONLY for a genuine production run — never by resolve_capstone_context / a caller
     corporate_action_live_capability: Any = None  # minted only for the real zero-event provider stage
     official_output_root: Path | None = None  # C3: run-scoped staging root; lifecycle remains under private_root
+    decision_lock: Any = None  # capability from this run's existing decision-date transaction only
 
     # --- derived artifact paths (all gitignored under state/us_short/, keyed by the canonical dates) ---
     def _s(self, name: str) -> Path:
@@ -1045,9 +1047,9 @@ def default_pipeline(
               contract_version="1.0.0", reuse_policy="never"),
         Stage("soft_boost_comparison_capture", False,
               lambda c: ([c.soft_boost_consumption_receipt_path, c.soft_boost_shadow_receipt_path]
-                         if c.theme_soft_boost_enabled and c.soft_discovery_run_result is not None else []),
+                         if st.classify_soft_boost_artifact_state(c)["state"] == "comparison_ready" else []),
               lambda c: ([c.soft_boost_pairwise_ledger_path]
-                         if c.theme_soft_boost_enabled and c.soft_discovery_run_result is not None else []),
+                         if st.classify_soft_boost_artifact_state(c)["state"] == "comparison_ready" else []),
               st.run_soft_boost_comparison_capture, best_effort=True,
               contract_version="1.0.0", reuse_policy="never"),
         Stage("weekly_bridge", False, lambda c: [c.source_packet_path], _official_output_paths, st.run_weekly_bridge),
@@ -2316,6 +2318,7 @@ def run_weekly_capstone(
     # starts; once it succeeds, every later no-emit/failure has an empty current slot. Official outputs are written
     # under a private run-scoped staging root and published only after all three siblings validate.
     transaction = _begin_current_output_transaction(ctx)
+    ctx = replace(ctx, decision_lock=transaction.decision_lock)
     results: list[dict[str, Any]] = []
     shadow_capture_failure: dict[str, str] | None = None
 
@@ -2338,6 +2341,11 @@ def run_weekly_capstone(
             "stage_observed_at": stage_observed_at,
             "result": result,
         })
+
+    def pass2_soft_boost_result(result: dict[str, Any]) -> dict[str, Any] | None:
+        source_packet = result.get("source_packet")
+        value = source_packet.get("soft_boost") if type(source_packet) is dict else None
+        return dict(value) if type(value) is dict else None
 
     def record_shadow_capture_failure(stage: Stage, exc: Exception) -> None:
         nonlocal shadow_capture_failure
@@ -2507,6 +2515,8 @@ def run_weekly_capstone(
                     )
                     if stage.name == "soft_discovery":
                         ctx = replace(ctx, soft_discovery_run_result=dict(result))
+                    if stage.name == "pass2_fetch":
+                        ctx = replace(ctx, soft_boost_run_result=pass2_soft_boost_result(result))
                     if stage.name == "serenity_quality_forward":
                         shadow = result.get("shadow_consumption")
                         ctx = replace(
@@ -2750,6 +2760,8 @@ def run_weekly_capstone(
                 ctx = replace(ctx, frozen_holding_tickers=tuple(holdings))
             if stage.name == "soft_discovery":
                 ctx = replace(ctx, soft_discovery_run_result=dict(result))
+            if stage.name == "pass2_fetch":
+                ctx = replace(ctx, soft_boost_run_result=pass2_soft_boost_result(result))
             if stage.name == "serenity_quality_forward":
                 shadow = result.get("shadow_consumption")
                 ctx = replace(

@@ -2570,3 +2570,264 @@ A4 把付费收敛成一次可对账的事务、P5 把入口绑到计划——�
 
 - `R-USSHORT-QUERY-QUALITY-SEAM-ASSESSMENT-PATH-IO-INVENTORY-DESYNC` 的执行证据已满足关闭判据，但仍为 `OPEN-NOT_VERIFIED`，交 Claude Code 独立复审后决定 `resolved`。
 - 当前工作树保留未提交 merge 与本刀未提交改动；不得由 executor 提交或完成合并。审查时先读 `AGENTS.md` 与 `docs/pre_codex_self_review_checklist.md`，先集成审查时的 master 最新指针，再复核 complete diff、两条植入证据、重新取得的 merge-aware focused/full ledger、count gate 与 protected-root manifest，最后按 reviewer/committer 流程落盘结论。
+
+## 2026-08-12 Codex executor/fixer：0810 问题10最小修复（Required + Optional，O-P10-1 除外；OPEN-NOT_VERIFIED）
+
+### 修复范围
+
+- Required R1：soft-boost 是否“本轮请求”改由 `theme_soft_boost_enabled is True` 与 `soft_discovery_run_result is not None` 共同决定；仅关闭 soft discovery 时为 `NOT_REQUESTED`，不读路径、不在周报报 artifact invalid。真实请求却缺结果/产物仍 fail-closed 为 `ARTIFACT_INVALID`。
+- Required R2：同一 decision_date 先 typed-zero、后 valid-nonempty 时，只允许 zero receipt 按已有 publish-policy 写门升级为有效 receipt；shadow、ledger、receipt 随后完整发布。valid-to-valid 冲突仍冻结，未放宽。
+- Required R3：补齐本 handoff、risk register、SESSION_LOG，并对最终代码态跑官方 full ledger。
+- Optional：invalid comparison state 在周报可见而不阻断；legacy `source_packet.soft_boost` 不再 required；不可能的 `zero_disabled + requested` fail-closed；current context shape 改用显式 `CURRENT_CONTEXT_COMPONENT_SHAPE`；P9 的写前校验仅登记。`O-P10-1` 未改。
+
+### 验收与边界
+
+- fixed Python bounded focused：`286 OK`，receipt=`receipt:473248e7692cfdc5b67466a4`。
+- official US-short full ledger：`PASS / discovered=5823 / ran=5823 / equal=True / 317 modules / 493.7s of 860s`，final fingerprint=`7bd7a7376acd`；static `diff_check=PASS`，`py_compile=14`；I/O inventory `18 OK`，allowlist 未扩大。
+- 未联网、未调用 provider、未读取 secret、未写真实 state；不代表独立审查、live、生产或 ship 放行。未提交、未 merge。
+
+### 交接结论
+
+- 本刀为 `repaired / OPEN-NOT_VERIFIED`。Claude Code 应独立复核 requested-fact 判定、zero-to-valid 受限升级及 valid-to-valid 仍冻结、周报 visible-invalid 分支、schema compatibility、最终 full ledger 与 documentation entry；通过后按项目 reviewer/committer 流程处理提交。
+
+## 2026-08-12 追加：问题10 修复轮复审 FAIL（1302，未提交）
+
+### 改了什么
+
+- 审查方零代码改动。register 记上轮三条 Required 翻 `resolved` 的实测证据、新建三条 Required、记 4 条 Optional；SESSION_LOG 顶部 prepend 极简 FAIL entry。
+
+### 为什么
+
+- 上轮三条确已闭合：分类器入参改为 `soft_boost_requested`（`enabled AND soft_discovery_run_result is not None`），只禁软发现现在得 `NOT_REQUESTED`；同日 typed-zero → `valid_nonempty` 可发布；full lane 与三份落盘齐备。
+- 但放宽写一次即冻结的门时开了三个新口：① 升级先提交 shadow+ledger 再单独替换消费回执，无回滚，半升级后因 `clock_keys=()` 把 `generated_at` 算进证据而**永久无法重试**——正是本刀要修的缺陷从修复自身的失败路径重新进来；② 新分支用无条件 `os.replace`，绕开同文件刻意使用的 `os.link` 防覆盖，读-替换窗口内并发写者的有效证据会被静默覆盖，违反模块 `:33-34` 自述的「由门而不是调用点决定什么可被替换」；③ 全仓对 `replace_existing_if` / `_can_upgrade_zero_receipt` 零测试引用，conformance mutation-guard 表未加行。
+
+### 验证命令
+
+- `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1200 tests.test_us_short_soft_boost_consumption tests.provider.test_us_short_batch5_data_context_source_packet tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.provider.test_us_short_weekly_capstone tests.test_us_short_soft_discovery_weekly_report tests.test_us_short_weekend_report tests.test_us_short_forward_policy_shadow_stage`
+- 植入：谓词去掉「新的必须 `consumed_valid_nonempty`」后单跑 soft_boost 两个模块。
+- 探针：真实 wrapper 的三格请求判定；`write_immutable_json` 七格转移表。
+
+### 验证结果
+
+- 焦点超集 `Ran 237 in 78.3s OK`，`receipt:df49101361bf3cc8b1e95f91`。
+- 植入 → `Ran 45 OK` **全绿**（应红未红，即第三条 Required 的证据）；还原后 numstat 回 `129 15`、零残留。
+- 转移表：三种 zero → valid 允许；降级 / valid→valid / zero→zero / 垃圾 / 不传谓词 全部拒绝。
+- full lane `5823/5823`、`317/317`、`493.7s`，当前代码态指纹 `7bd7a7376acd…` 与账本逐字相同。
+
+### 失效旧结论
+
+- 「同日 typed-zero 中毒已解」只在**状态转移**层面成立；在**失败路径**上它换了个形状回来（半升级 + 重试永久失败）。
+
+### 下一步注意事项
+
+- 三条 Required 同轮批量修；第三条的验收就是「上面那次植入必须转红」。
+- `O-P10-7`（shadow/ledger 槽位不校验自身 decision_date）与 `O-P10-8`（`clock_keys=()`）是既有根因，建议与非原子升级一并单独立刀。
+
+## 2026-08-12 追加：问题10 三条 Required 的修法收窄 + 防复发规则 + I/O inventory 独立刀
+
+### 改了什么
+
+- 零代码改动。把 register 里三条 Required 的 `Required repair` 按新查到的事实**收窄**（原措辞已在条目内标注作废），并补上只管「放宽」类改动的防复发规则；另新建 `R-USSHORT-TEST-IO-INVENTORY-PINS-TEST-BOOKKEEPING-NOT-SAFETY` 作为独立一刀。
+
+### 为什么（两条把工作量砍小的事实）
+
+- `_acquire_decision_lock`（`us_short_weekly_capstone.py:1711`，`:1835` 在 stage 循环前取得，按 decision_date 独占）**已经覆盖**软 boost 写盘。竞态是 agent 绕过该锁注入写者复现的，所以不必再造文件级 CAS——那属 CLAUDE.md §5 的重复防御。
+- 永久丢失的根因是 `clock_keys` 不对称：消费回执 `("generated_at",)` vs pair 发布 `()`（`engine/us_short_soft_boost_consumption.py:583/601`）。对齐即可让半升级态自愈，不必造原子三写 + 回滚。
+
+### 执行顺序（Codex）
+
+1. **问题10 三条 Required 同轮批量修**（§16）：R1 对齐 pair 的 `clock_keys`；R2 谓词收进门内具名策略 + 断言持锁；R3 补约 7 条直接用例 + conformance mutation-guard 行 + 那条「每个参数名须被测试引用」的窄断言。
+2. 修完补一次绑定最终 diff 的 full lane，并按职责落 register / SESSION_LOG / 本 handoff，再交复审。
+3. **I/O inventory 那一刀单独提交**，不与 1 混在同一次 commit。
+
+### 验证结果（本轮为落盘轮，无新测试）
+
+- 文档门：`tests.test_doc_governance_guard` + `tests.test_route_doc_ledger_status_consistency`。
+
+### 失效旧结论
+
+- R1 原写法「三份产物必须一次成功或一次都不落（原子提交或回滚）」**作废**，以 `clock_keys` 对齐为准。
+- R2 原写法「走 link / compare-and-swap」**作废**，以「谓词收进门内 + 断言持锁」为准。
+
+### 下一步注意事项
+
+- 防复发规则**只对「放宽 fail-closed 门」的改动生效**，不要扩成全仓审查税。
+- 三条 Required 的验收里，R1③ 与 R3 的闭合判据都是「植入必须转红」——不要只加断言不验红。
+
+## 2026-08-12 — 问题10复审 Required 最小修复完成（1302）
+
+### 范围与审查处置
+
+- 按用户收窄方案实施 R1/R2/R3：不执行原子三写/回滚、CAS、指纹或 sidecar 方案；既有 `_acquire_decision_lock` 是同 decision-date 的真实并发门。
+- 代码、风险登记、SESSION_LOG 与本 handoff 均仅在 1302；未提交、未 merge，状态 `repaired / OPEN-NOT_VERIFIED`。
+
+### 产物生命周期与并发
+
+- shadow、ledger、消费回执按 `decision_date` 冻结；pair 与回执统一忽略 `generated_at`，所以第二步失败留下的 pair 半状态可由同证据的新时钟重试补齐，实质证据变化仍 fail-closed。
+- zero→valid 的唯一替换策略定义在发布门内；必须持有 capstone 已取得并贯穿 pass2 的同日锁。调用点不能提交任意谓词，无锁升级拒绝。
+
+### 闭合证据
+
+- 直接转移表覆盖三种允许 zero→valid 和五类拒绝；删除 valid-nonempty 条件的植入使 `zero_to_zero` 精确转红，随后还原。
+- 固定主 Python 焦点超集 `213 OK`（`receipt:8edeb959671fbc4375afd732`）；I/O inventory `18/18`、allowlist 未扩大；full lane 当时 `PASS 5827/5827`、318 modules、`572.7s/860s`、`bd5499fb9114`。随后文档治理测试重写 singleton receipt，所以 cache 不复用旧 receipt；代码指纹未漂移，未仅为文档测试重跑 full lane。
+
+### 交接给 Claude Code
+
+- 独立审查本轮的锁透传、递归时钟等价、封闭策略与无锁拒绝；确认直接转移表和植入反控确实承重。
+- 不要把离线临时根 full lane 解释成 provider/live/ship 结论；独立 P3 I/O inventory 精确计数退役仍另刀处理。
+
+## 2026-08-12 — I/O inventory 精确计数基线 P3 整改（1302）
+
+### 实施与安全边界
+
+- 快照 v0.5 退役模块/分类/路径哈希和逐 key 次数基线，只保留已审 allowlist、未解析 allowlist、以及有受保护访问模块的身份/根；动态 `unallowlisted_write_findings == []` 与扫描器/受保护根清单不变。
+- 允许的不是「多写一次」，而是「每个实际出现的 protected/unresolved key 必须属于已审成员集合」；没有新增任何 allowlist 成员。
+
+### 闭合与证据
+
+- 合成新 `test_us_short*.py` 只写 `TemporaryDirectory` 时，快照前后相等；合成 protected `write_text` 不在 allowlist 时安全断言转红，加入同一 key 后转绿。
+- 固定主 Python 焦点 `tests.test_us_short_test_io_inventory`：`20 OK`，`receipt:a47f9101d08b9d8346eb712f`。这是孤立测试工具/快照契约，不触发 full lane。
+
+### 交接给 Claude Code
+
+- 核对 v0.5 没有保留任何精确计数钉子，且三格控制真的覆盖「新临时模块不重建、未知 key 拒绝、显式成员允许」。
+## 2026-08-12 追加：问题10 slice-complete 复审 FAIL（三条 Required 闭合，同类还剩一格）
+
+**改了什么**：本节只记审查侧结论，代码改动由 Codex 的上一节负责。审查范围按用户指令从「只审修复 delta」扩为 slice-complete，逐条对照桌面 §问题10 的五处运行时接缝与 11 条完成判据。
+
+**为什么**：`R-USSHORT-ZERO-TO-VALID-UPGRADE-IS-NOT-ATOMIC` / `R-USSHORT-REPLACE-PATH-DROPS-THE-MODULE-S-OWN-ANTI-CLOBBER-GUARANTEE` / `R-USSHORT-FREEZE-RELAXATION-HAS-NO-DIRECT-TEST` 三条均已真闭合，但同一缺陷类（正常 none 被当异常 none）还有第三个触发点未扫到，见新建 `R-USSHORT-SAME-DAY-ZERO-FLAVOUR-CHANGE-IS-REPORTED-AS-INVALID-EVIDENCE`。
+
+**验证命令**：
+- `.tools
+un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_soft_boost_consumption tests.test_us_short_discovery_publish_policy tests.test_us_short_discovery_conformance tests.test_us_short_forward_policy_shadow_stage tests.test_us_short_soft_discovery_weekly_report tests.test_us_short_weekend_report tests.provider.test_us_short_batch5_data_context_source_packet tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.provider.test_us_short_weekly_capstone tests.provider.test_us_short_llm_theme_discovery`
+- reviewer 自写探针（临时根在仓库外）：发布门转移表 7 类 + 锁能力 4 类 + 既有产物形状 4 类 + 递归时钟语义 + 未知策略；三态分类器 14 格反向控制；in-process 植入放宽谓词。
+- `python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`
+
+**验证结果**：焦点超集 `Ran 290 tests in 78.262s OK`（receipt 被拒，原因见下）；植入去掉「新证据必须 `consumed_valid_nonempty`」后 `zero_to_zero` 精确转红；`recursive=True` 经探针证明是承重的（`recursive=False` 下同证据换时间戳即被判实质差异，而单周 ledger 内嵌 `records[0].generated_at`）；doc gate `Ran 55 OK`；`py_compile` 8 文件 OK；`git diff --check` 与 BOM/FFFD/冲突标记扫描干净。
+
+**失效旧结论**：
+- 上轮 register 里「原子三写 + 回滚」「文件级 compare-and-swap」两条处方作废，已由用户收窄为 clock-key 对齐与门内具名策略 + 决策锁断言，本轮确认收窄方案有效。
+- 我在本轮一度怀疑 `zero_disabled` 会被误判为 `ARTIFACT_INVALID`，经独立对抗 agent 指出消费回执 schema 第三条 `allOf` 并由我复跑坐实（`build_consumption_receipt` 直接抛 `False was expected`，随后 degrade 成可升级的 `zero_invalid_evidence`）后**撤回**；该枚举值不可达，只余「summary schema 里是死值」与「问题12 不得解耦两个开关」两点提醒。
+
+**下一步注意事项**：
+- 本树同时有一把 I/O inventory 独立刀在写（`tests/test_us_short_test_io_inventory.py`、`tests/provider/us_short_test_io_inventory.py`、`docs/us_short_test_io_inventory_20260801.json`）。它导致：① 焦点 receipt 被 bounded runner 以 `REFUSED - code state changed during focused run` 拒发；② 账本 full lane 记录（`5827/5827`、fingerprint `bd5499fb9114`）已不覆盖当前树（我独立重算当前指纹 `271f2fa2011c`）。问题10 自身七个生产文件 mtime 均早于该 full lane，漂移与本刀无关。
+- 两把刀的条目已写进同一份 register 与 SESSION_LOG，提交时必须逐文件挑选，不得整目录 stage。
+- 问题12 开工时必须保留 `runners/us_short_weekly_capstone.py:2189` 的 `include_soft_discovery=ctx.soft_discovery_enabled` 耦合。
+
+## 2026-08-13 Codex executor/fixer：问题10 slice-complete出口与发布门最小收口（OPEN-NOT_VERIFIED）
+
+### 实施
+
+- 先把本轮K4b结果的七个出口写成直接表：feature/soft-discovery关闭、Pass2 preflight 的 null、旧 checkpoint 缺键均为 `NOT_REQUESTED`；畸形当前结果仍 `ARTIFACT_INVALID`；合法zero为 `consumption_only`，完整bundle为 `comparison_ready`。
+- 同日不同 typed-zero 的冻结写入拒绝后，只有 schema-valid 的冻结zero才可重读复用，并向周报报告磁盘事实的 status/reason；不可读槽保持无效。没有允许 zero→zero 替换。
+- zero→valid 升级门由目标回执槽名取日期，核对 payload/旧回执/真实打开的同日锁，并比新回执与 frozen shadow 的 decision-date、stage和validation共同绑定字段；无CAS、指纹、sidecar或回滚框架。
+- summary schema 移除不可达 `zero_disabled`；参数名扫描仅诊断，承重证据是出口表、转移表和植入转红。问题12必须保留 `include_soft_discovery=ctx.soft_discovery_enabled` 耦合，防止有意关闭被误讲为证据无效。
+
+### 证据与交接
+
+- fixed Python 焦点超集 `312 OK`，`receipt:c2a2aac7cd898d284eb488e7`；同时删两处冻结zero重读的植入使同日重跑精确红（`zero_invalid_evidence != zero_upstream_unavailable`），已还原。
+- 首次full只因新测试的静态I/O误分类失败；未扩allowlist/未改快照，最小改测试临时变量形状后，P3门 `23 OK`，final official US-short full `PASS 5831/5831`、318 modules、`525.5s/860s`、fingerprint=`337c7a0ce69c`。后续doc gate覆盖单例focused receipt使cache不复用，但直接重算当前非文档代码指纹仍为该值；不为纯交接文档重跑full。
+- 不代表 provider/live/production/ship 或独立审查；未提交、未merge。Claude Code须独立核对七行出口表、冻结zero只读复用、乱码拒绝、目标槽/旧回执/shadow/实际锁四项升级门，以及P12耦合未被解开。
+## 2026-08-13 追加：问题10 出口表与升级门复审 FAIL（采纳被复制到了崩溃分支）
+
+**改了什么**：本节只记审查侧结论。上轮 Required `R-USSHORT-SAME-DAY-ZERO-FLAVOUR-CHANGE-IS-REPORTED-AS-INVALID-EVIDENCE` 与 `O-P10-15/16/17/18/19` 均已闭合；新建一条 Required `R-USSHORT-DEGRADE-LEG-ADOPTS-A-FROZEN-CLEAN-ZERO-AND-ERASES-THIS-RUN-S-CRASH`。
+
+**为什么**：「写盘被冻结拒绝 → 重读该槽 → 采纳盘上那份的 status/reason」这段被同时放进了两条腿。typed-zero 腿是我要求的那条，正确；degrade 腿是**因为抛异常才进来的**，在那里采纳等于把本轮的崩溃换成上一轮那份干净的 `zero_valid_empty`，并把 `soft_consumption_receipt_written` 置真（实际没写）。A 轮空周 + B 轮崩溃是普通序列，不是构造场景。
+
+**验证命令**：
+- `.tools
+un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_soft_boost_consumption tests.test_us_short_discovery_publish_policy tests.test_us_short_discovery_conformance tests.test_us_short_forward_policy_shadow_stage tests.test_us_short_soft_discovery_weekly_report tests.test_us_short_weekend_report tests.provider.test_us_short_batch5_data_context_source_packet tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.provider.test_us_short_weekly_capstone tests.provider.test_us_short_llm_theme_discovery`
+- reviewer 探针（临时根在仓库外）：九格出口表走真 wrapper；六种锁伪造（含只读/已关闭句柄）；三种 shadow 绑定 + 缺 shadow；in-process 植入把 `read_frozen_zero_consumption_receipt` 换成恒 None。
+
+**验证结果**：焦点超集 `PASS tests=292 elapsed=173.6s`、`receipt:e7711b3d66aa20b80e0f8cbc`；植入使同日 flavour-change 断言精确转红（`Ran 34, failures=1`）；full lane 引账本 `5831/5831`、fingerprint `337c7a0ce69c`，我独立重算一致；文档门 `Ran 55 OK`；`git diff --check`、BOM/FFFD/冲突标记均干净。
+
+**失效旧结论**：
+- 我上一轮 Required 的处方措辞「写盘被拒后重读该槽…如实报告盘上冻结的那一份」**只适用于 typed-zero 腿**；照搬到 degrade 腿会吞掉崩溃。以本轮 register 条目为准。
+- 「已请求但本轮无 result 会被误判」的担心已作废：`pass2_fetch` 是 `reuse_policy="never"`，连 checkpoint 复用那一格都不可达，`us_short_weekly_capstone.py:2518-2519` 的回填是死代码。
+
+**下一步注意事项**：
+- 最小 repair 只需删 degrade 腿的采纳段；typed-zero 腿保留，上轮闭合用例走的正是那条腿，不会回退。
+- 既有回归 `tests/provider/test_us_short_batch5_data_context_source_packet.py:637-663` 的冻结槽是 `consumed_valid_nonempty`——采纳唯一不触发的状态，所以它现在是侥幸通过；Closure test ① 要求把夹具改成 typed zero。
+- 问题10 仍不能单独提交：用 HEAD 基线扫当前代码态实测 `classification_counts` 与 `module_count` 均已漂移，未退役版 I/O 测试会红；两刀各需一份与自己代码态形状一致的基线。
+
+## 2026-08-13 追加：问题10 同类扫的范围裁决（查过之后收窄，不做全 lane 扫）
+
+**改了什么**：只写范围裁决，无代码改动。回答「本轮 Required 需不需要同类扫」。
+
+**为什么**：`R-USSHORT-DEGRADE-LEG-ADOPTS-A-FROZEN-CLEAN-ZERO-AND-ERASES-THIS-RUN-S-CRASH` 是同一段「写盘被拒→重读→采纳」被复制到第二条腿造成的，直觉上像是要扫一遍同类；先查再定。
+
+**验证命令**：
+- `grep -rn "read_frozen_\|frozen_artifact_matches" --include=*.py engine/ runners/`
+- `grep -rn "except DiscoveryPublishPolicyError\|except SoftBoostConsumptionError" --include=*.py engine/ runners/`
+
+**验证结果**：`read_frozen_zero_consumption_receipt` 全仓恰有 2 个调用点，都在 `runners/us_short_batch5_data_context_source_packet.py`（`:1134` typed-zero 腿、`:1183` degrade 腿），两条我都整读过。另两处 `frozen_artifact_matches` 使用者（`runners/us_short_llm_theme_discovery_fetch_web.py:233`、`runners/us_short_weekly_capstone_soft_discovery.py:142`）用的是幂等复用语义，不是「把冻结值采纳进本轮报告」——该惯用法没有传播出去。另有 20 处 `except DiscoveryPublishPolicyError` 集中在 K3 web/X 段（`llm_theme_discovery*`、`query_plan`、`provisional_theme_validate`），属另一把刀。
+
+**失效旧结论**：「同一段代码被复制 ⇒ 必须做全 lane 同类扫」在这里不成立。窄类已穷尽（2 个成员、1 个坏），代码面**不做全 lane 扫**。
+
+**下一步注意事项**：
+- 要扫的不是 `except` 块，是**报告链**：交接前必须给出一张双向表，把「本轮 K4b 真实发生了什么」→「对外报告成什么」的每一次改写点列全（9 行，逐行注明是否合法并指向钉住它的测试）。表的正文与逐行内容是 Required 的一部分，只在 `docs/system_risk_register.md` 该条目下维护，本处不复述。
+- 依据是实证而非直觉：这个类四轮四个实例，前三次全是「正常被报成故障」，本轮方向反过来变成「故障被报成正常」。每轮只修被点名的那个方向，另一个方向下一轮就冒出来。
+- 因此两条反向控制缺一不可：**正常不得被报成故障**、**故障不得被报成正常**，各要一条把表撑宽一格后转红的实测输出。
+- 明确不做：不扫 K3 web/X 段那 20 处 catch；不新增 schema / sidecar / 指纹 / registry / 全仓 rubric。
+
+## 2026-08-13 追加：问题10 degrade 腿冻结 zero 采纳修复（1302）
+
+### 审查意见与最小处置
+
+- 最新审查意见判定合理：`read_frozen_zero_consumption_receipt` 的“写盘拒绝后重读并采纳”只适合 typed-zero 腿；degrade 腿已经代表本轮 optional 生命周期抛异常，采纳上一轮冻结的 clean zero 会把本轮崩溃从周报和 machine record 中抹掉。
+- 只删 `runners/us_short_batch5_data_context_source_packet.py::run_packet` degrade 腿的采纳段。写入被冻结拒绝时不再重读/覆盖 `soft_resolution`，也不再伪造 `soft_consumption_receipt_written=True`；因此本轮保持 `zero_invalid_evidence`、OFF baseline、无 `consumption_receipt_path`。typed-zero 腿的冻结 zero 重读与同日 flavour-change 修复原样保留。
+- 没有放宽 zero→zero immutable 门，没有新增 schema、sidecar、指纹、CAS、原子事务或回滚机器；本轮审查列出的 `O-P10-22` 至 `O-P10-26` 不在范围内。
+
+### Closure tests 与结果
+
+- 把既有 Batch5 source-packet 回归夹具的冻结槽恢复为真实 schema-valid `zero_upstream_unavailable` 后，注入 `write_evidence_bundle` publication failure；结果必须为 `zero_invalid_evidence`、`evidence_bundle_written=False`、`consumption_receipt_path=None`，且冻结槽 status 仍为 `zero_upstream_unavailable`。
+- 同日 typed-zero flavour-change、冻结 zero 乱码控制、valid-nonempty 升级路径均保留并通过。
+- 反向控制：临时把 degrade 腿的冻结 zero 采纳段植回去，新增回归精确转红（实际 `zero_upstream_unavailable`，期望 `zero_invalid_evidence`）；植入已移除。
+
+### 验证与边界
+
+- 固定主 Python 焦点超集 `292 OK`，`receipt:0f535b71a0549c5814571d22`。
+- 官方 US-short full ledger `PASS`：`discovered=5831`、`ran=5831`、`318 modules`、`419.7s/860s`、fingerprint=`9697e338970c`；文档门重写 singleton focused receipt 后账本 check 不复用缓存，但固定主 Python 直接重算的非文档代码指纹仍为 `9697e338970c...`，按 rule 4 未因纯文档/receipt 变化重跑 full。
+- 文档治理与 route-ledger 一致性门 `55 OK`，`receipt:6c4f4b398b77ede0a42adac6`；仅因交接文档更新未重跑 full，代码指纹未变。
+- full lane 的首个外层调用曾因工具 70 秒上限返回，但其已启动的授权 full-pack 进程随后自然完成并写入上述 PASS；中间并发隔离首红不作为最终 verdict。无 provider/network/live/production/ship 结论。
+- 本轮仍未提交、未 merge；下一步由 Claude Code 独立审查。问题10 与 I/O inventory 仍分开审查、分开提交。
+## 2026-08-13 追加：问题10 degrade 腿收口——审查 PASS，提交仍被基线耦合挡住
+
+**改了什么**：本节只记审查侧结论。`R-USSHORT-DEGRADE-LEG-ADOPTS-A-FROZEN-CLEAN-ZERO-AND-ERASES-THIS-RUN-S-CRASH` 已按最小方案闭合：只删 degrade 腿的采纳段，typed-zero 腿原样保留。
+
+**为什么**：degrade 腿是异常兜底出口，在那里采纳冻结的干净 zero 等于把本轮崩溃换成上一轮的正常结论；typed-zero 腿没有异常，采纳冻结值才是诚实的。
+
+**验证命令**：
+- `.tools
+un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_soft_boost_consumption tests.test_us_short_discovery_publish_policy tests.test_us_short_discovery_conformance tests.test_us_short_forward_policy_shadow_stage tests.test_us_short_soft_discovery_weekly_report tests.test_us_short_weekend_report tests.provider.test_us_short_batch5_data_context_source_packet tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.provider.test_us_short_weekly_capstone tests.provider.test_us_short_llm_theme_discovery`
+- reviewer 源码级植入：把删掉的采纳段原样写回 degrade 腿，跑 `tests.provider.test_us_short_batch5_data_context_source_packet`，`finally` 按字节还原并核 sha256 + `git diff --numstat`。
+- `grep -rn "read_frozen_zero_consumption_receipt" --include=*.py engine/ runners/`
+
+**验证结果**：焦点超集 `PASS tests=292 elapsed=155.8s`、`receipt:bdea33d27afdea217a83084f`；植入使新回归精确转红（`'zero_upstream_unavailable' != 'zero_invalid_evidence'`，`Ran 34, failures=1`），还原后 sha256 与植入前相同、numstat 回 `93 23`；采纳惯用法全仓只剩 1 个调用点（typed-zero 腿）；full lane 引账本 `5831/5831`、`318/318 modules`、`count_gate_equal=True`，独立重算指纹 `9697e338970c` 一致。
+
+**失效旧结论**：上一轮「degrade 腿也需要重读采纳」的写法作废——那段是我上上轮 Required 措辞被照搬到异常分支造成的，现已只保留 typed-zero 腿一处。
+
+**下一步注意事项**：
+- 问题10 **仍不能单独提交**：重新实测，用 HEAD 基线扫当前代码态，`classification_counts` 为 `class0=247/class4=62`（HEAD 基线是 `245/63`）、`module_count` 318（HEAD 317），未退役版 I/O 测试两条基线断言会红；把当前那份已退役形状的基线一起提交也不行（缺 `protected_write_finding_counts`，未退役版测试导入期即 `KeyError`）。安全腿干净（`unallowlisted_write_findings=0`）。
+- 用户已定「I/O 先不动」，故解锁问题10 的最小动作只有一件：**按未退役规则（含 counts）从当前代码态重建一份基线，随问题10 一并提交**；之后 I/O 刀落地时再把同一文件换成退役形状。
+- 上轮 `O-P10-22`~`O-P10-26` 仍 pending，留 register。
+## 2026-08-13 追加：问题10 提交单元收口——审查 PASS，已合入 master
+
+**改了什么**：本轮零代码改动。唯一变化的 tracked 产物是 `docs/us_short_test_io_inventory_20260801.json`：I/O 退役刀被停进 `stash@{0}` 后，树里的 scanner 与 io 测试回到 master 的未退役版，基线由它自己重建成未退役形状。
+
+**为什么**：问题10 单独落地时，master 上的 io 测试仍是未退役版；提交单元必须自带一份能由它自己代码态重新生成的基线，否则合入即红。停刀是为了让这棵树在同一时刻只有一把刀，基线才有唯一正确形状。
+
+**验证命令**：
+- `.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 <问题10 十模块焦点超集>`
+- `python -m unittest tests.test_us_short_test_io_inventory`（rule-1 直测，针对本轮唯一变化的产物）
+- reviewer 植入：把基线 `module_count` 318→317 后重跑同一测试，`finally` 按字节还原并核 sha256 + `git diff --numstat`
+- `python -c` 逐字节比对当前文件与 `stash@{1}`（同步前、即上轮 PASS 时的内容）
+
+**验证结果**：焦点超集 `PASS tests=292 elapsed=150.9s`、`receipt:c18d86281d92f655670cc7d0`；rule-1 直测 `Ran 18 tests in 16.199s OK`；植入使该测试精确转红（`failures=2`，`317 != 318`），还原后 sha256 与植入前相同、numstat 回 `13 27`。代码未改动的证据：主文件 numstat 仍 `93 23`，与 `stash@{1}` 去掉 CR 后逐字节相同（差的 1340 字节全是 CRLF 翻转）。基线六项验收全中：未退役形状 / `module_count 318` / `classification_counts 247·1·3·5·62` / `unresolved_allowlist 187` / `allowlist 20` 不变 / `modules 71` 行 / `unallowlisted_write_findings=[]`。full lane 引账本 `5829/5829`、`318/318 modules`、gate True，独立重算指纹 `f2d3df40862e` 与记录及 `prepared_fingerprint` 一致。
+
+**失效旧结论**：「问题10 因基线耦合无法单独提交」已解除——停刀 + 重建基线之后提交单元自洽，本轮已提交并合入 master。此前两轮记录的 `9697e338970c` / `bdea33d27afdea217a83084f` 等指纹与 receipt 全部作废，不得再引用。
+
+**下一步注意事项**：
+- `stash@{0}`（`io-inventory-retirement-parked`）里是 I/O 退役刀的三个文件，**不要在问题10 合入前 pop**。合入并同步后再 pop，届时基线用它自己的退役版 generator 自然生成，验收数字是 187 / 71（见 register `R-USSHORT-IO-INVENTORY-BASELINE-CARRIES-ANOTHER-KNIFE-S-TREE-STATE` 的 `2026-08-13 更新` 节）。
+- 全量用例数 5831→5829 是停刀带来的（退役版新增的两条闭合用例暂时不在扫描面内），pop 之后会回到 5831 量级，不要误当回归。
+- `O-P10-22`~`O-P10-26` 仍 pending，留待后续刀。
