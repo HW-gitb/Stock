@@ -7245,3 +7245,51 @@ P3-10 的代码面已经独立审查 PASS；唯一保留的 `NOT_VERIFIED` 原�
 **未覆盖维度与诚实边界**：全部结论建立在离线假 provider 上。方案 §2.1 的真实验收判据（修好后约 1000 只主板股重新进池、Tier1 名单应明显不同；若几乎一样反而说明没生效）我无法代劳，必须由获授权的真实无缓存胶囊跑出来；桌面里那些 134 组 / 25 只 / 残留 17 只的数字同样是你的实测而非我的运行。
 
 **下一步**：N-5、P1-4 各自另起；真实无缓存周跑仍是唯一能同时收口 P0-1、P1-4 和本刀验收判据的一件事。
+
+## 2026-08-13 追加：N-5 SW 失败诊断截断最小修复（Codex executor/fixer；c405；OPEN-NOT_VERIFIED）
+
+### 用途、问题与桌面方案
+
+本条继续追加到 A-short 主 handoff，不新建平行交接。唯一问题入口是桌面 `C:\Users\cnhea\Desktop\3a_testrun0813.md` `4/4.1`；本轮严格只执行 N-5。N-5 与 N-3/N-4 的 SW 成员获取修复独立；P2-7 主体已关闭，本轮只收口失败诊断 message 的显示截断。
+
+### 根因与最小改动
+
+- 原 `_bounded_sw_reason(reason, limit=256)` 在 whitespace normalization 后直接 `text[:limit]`，长的 N-3/N-4 批摘要会从 token、计数或 sample item 中间切断，且没有截断标记。
+- 只修改 `A-EGS/egs_main.py::_bounded_sw_reason()`：保留 whitespace normalization；短文本保持原有 normalized 文本且不加 marker；长文本预留固定 `...[truncated]`，优先落在空格/逗号/分号边界，找不到时才用冒号，无边界时只返回 marker，默认总长不超过 256。
+- 只修改现有 `tests/phase6/test_egs_sw_industry_and_watch_pool_health.py`，加入短文本、批摘要边界和 `_record_sw_failure` 消费一致性测试。未修改 `_record_sw_failure` 失败行为、source、flags、schema、cache、provider、runner 或 launcher。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+`weekly_screening.ps1 → A-EGS/egs_main.py → get_sw_industry_map 失败路径 → _record_sw_failure → _bounded_sw_reason → _current_sw_industry_source_observation()["message"] → data-health/RuntimeError/log 消费者。`
+
+message 仍为原有字符串字段；SW2021 source-binding、status、`fast_path`/`fallback_used` flags、schema 和 cache 写盘边界均不变。N-5 不会把显示截断误做成功、不会把失败改成放行，也没有新增写盘或迁移路径。
+
+### 负向控制、自审与精确测试
+
+- 旧代码先跑新增负向测试：现有 SW 模块 38 tests 中 2 项按预期因无 marker 失败；修复后该模块 `38/38 OK`。
+- 最终固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）运行：
+  `& '.tools\run_unittest_with_repo_pythonpath.cmd' tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.phase6.test_egs_sw_industry_and_watch_pool_health`，`115/115 OK`，receipt `receipt:0e5a3286f058d376cae0972f`。
+- `-m py_compile A-EGS/egs_main.py`、`git diff --check` 通过。因顶层生产入口变更，按方案以该 receipt 仅执行一次离线 `a_short` 全量 lane：`discovered=2823`、`ran=2823`、`2823/2823 PASS`、104.1s、parallel，fingerprint `34c2d59584fb`；ledger/sidecar 原始指针见 `docs/system_risk_register.md` 本条。
+- A-F 自审已核对：生产入口、完整调用链、全部 SW failure 消费、短文本和长摘要边界、固定 suffix、无半 token、消费者一致性、schema/source-binding/写盘边界、负向控制和 scope。未起 sub-agent，未启动 provider/live、真实 weekly 或真实 capsule。
+
+### 原始终态与角色边界
+
+原始终态为 **`repaired / OPEN-NOT_VERIFIED`**：代码与离线 focused/full-lane 证据已完成，但 Claude Code 独立审查、提交和用户授权的真实无缓存胶囊仍未完成。当前代码 diff 仅含 `A-EGS/egs_main.py` 与现有 SW 健康测试；N-3/N-4、P1-4、P0-3、P3-10 和其他桌面线索未修改。Codex executor/fixer 不 stage/commit/push/merge。
+
+后续如再修复，只能在本 handoff 继续追加问题、根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审、精确测试命令和原始终态，并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；不得新建平行 handoff。
+
+## 2026-08-13 追加：N-5 诊断截断的独立审查 = PASS（Claude Code；c405，已合入 master）
+
+**判定**：PASS，零 Required，`R-ASHORT-N5-BOUNDED-SW-REASON-MID-TOKEN-TRUNCATION` 转 resolved。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**：整读改动后的 `_bounded_sw_reason()`（marker 预算、三级边界回退、尾部 `rstrip(" ,;")`、无边界兜底）与它唯一的调用点 `_record_sw_failure()`，并清点全仓只有这一处调用、没有第二条分叉。执行方自报的 `115 OK` 未采信，自己重跑了 175 用例焦点超集。
+
+**决定性对照**：直接对着 N-5 报的症状构造一条 415 字符的真实形态 batch summary——旧写法 `text[:256]` 末尾停在 `'801916.SI:unconfirmed_emp`（半个 token、没有收尾引号、没有任何提示），新实现末尾是 `'801907.SI:unconfirmed_empty'...[truncated]`，长度 242、最后一项完整、六个总量字段全部保留。向后兼容也验了：短文本逐字等于旧行为且不带 marker，长度边界 255/256/257 分别为 255/256（不加 marker）/255（加 marker）。兜底两格（全无分隔符、只有冒号）与方案 §4.1.2 第 5、7 条一致。
+
+**接线证明**（方案 §4.1.4 点名不能只单测字符串函数）：把长 reason 喂给 `_record_sw_failure()`，其返回值与 observation 的 `message` 完全相等、≤256、带 marker，而 `status=fail` / `source=index_member_all_l2_history` / flags / `classification_standard` 全部未变——显示修复没有碰到 fail-closed 语义。
+
+**full lane 的处理**：这次执行方真的跑了并记了账（`2823/2823 PASS`、fingerprint `34c2d59584fb`）。按 rule 4 与方案 §4.1.7 第 5 条我不重跑，改为独立重算当前代码态指纹（得同一值）并核对账本 `recorded_at` 晚于两个被审文件的 mtime——确认那次全量跑在最终代码上。
+
+**未覆盖 / 边界**：极小 `limit`（<14）返回的 marker 会超过该 limit，方案明确不为非生产参数组合防御，不判缺陷。本刀不依赖 provider/日期/行情，关闭不需要真实胶囊。P1-4 与 §6 文档收口不在本刀。
+
+**下一步**：P1-4 另起；真实无缓存周跑仍是 P0-1/P1-4 与 N-3 验收判据的唯一出口。
