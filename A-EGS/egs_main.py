@@ -1727,7 +1727,7 @@ def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity
     return out_path
 
 
-DATA_HEALTH_SCHEMA_VERSION = "1.11.0"
+DATA_HEALTH_SCHEMA_VERSION = "1.12.0"
 DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
 LAST_SELECTION_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "a_short_last_selection.schema.json")
 
@@ -2353,15 +2353,21 @@ def validate_data_health_consistency(health):
         ):
             raise ValueError("data_health unobserved SW source carries observed values")
     elif status in {"pass", "fail"}:
-        if classification_standard != SW_INDUSTRY_CLASSIFICATION_STANDARD:
-            raise ValueError("data_health SW classification standard is not SW2021")
         if not isinstance(observed_sources, list) or any(
             not isinstance(value, str) or not value.strip() for value in observed_sources
         ) or observed_sources != sorted(set(observed_sources)):
             raise ValueError("data_health SW observed sources must be a sorted unique string list")
         normalized_sources = {value.strip().upper() for value in observed_sources}
-        if normalized_sources and normalized_sources != {SW_INDUSTRY_CLASSIFICATION_STANDARD}:
-            raise ValueError("data_health SW observed source binding is not SW2021")
+        if status == "pass":
+            if classification_standard != SW_INDUSTRY_CLASSIFICATION_STANDARD:
+                raise ValueError("data_health SW classification standard is not SW2021")
+            if normalized_sources != {SW_INDUSTRY_CLASSIFICATION_STANDARD}:
+                raise ValueError("data_health passing SW observed source binding is not SW2021")
+        elif classification_standard is not None:
+            if not isinstance(classification_standard, str) or not classification_standard.strip():
+                raise ValueError("data_health failed SW classification standard is invalid")
+            if not normalized_sources or classification_standard.strip().upper() not in normalized_sources:
+                raise ValueError("data_health failed SW classification standard is not observed")
         if status == "pass":
             active_count = int(sw.get("active_count"))
             min_active = int(sw.get("min_active"))
@@ -3057,8 +3063,8 @@ def _record_sw_industry_source_observation(**details):
     global _LAST_SW_INDUSTRY_SOURCE_OBSERVATION
     payload = _sw_industry_source_not_observed()
     payload.update(details)
-    if payload["status"] in {"pass", "fail"} and payload["classification_standard"] is None:
-        raise ValueError("observed SW source requires an explicit classification standard")
+    if payload["status"] == "pass" and payload["classification_standard"] is None:
+        raise ValueError("passing SW source requires an explicit classification standard")
     _LAST_SW_INDUSTRY_SOURCE_OBSERVATION = payload
     return dict(payload)
 
@@ -3117,6 +3123,13 @@ def _record_sw_failure(
     cache_hit=False,
 ):
     reason = _bounded_sw_reason(reason)
+    observed_sources = sorted({
+        str(value).strip()
+        for value in (observed_sources or [])
+        if str(value).strip()
+    })
+    normalized_sources = {value.upper() for value in observed_sources}
+    failure_standard = next(iter(normalized_sources)) if len(normalized_sources) == 1 else None
     _record_sw_industry_source_observation(
         status="fail",
         source=source,
@@ -3126,8 +3139,8 @@ def _record_sw_failure(
         fast_path_used=bool(fast_path_used),
         fallback_used=bool(fallback_used),
         cache_hit=bool(cache_hit),
-        classification_standard=SW_INDUSTRY_CLASSIFICATION_STANDARD,
-        observed_sources=sorted(set(observed_sources or [])),
+        classification_standard=failure_standard,
+        observed_sources=observed_sources,
         message=reason,
     )
     return reason
@@ -3200,11 +3213,21 @@ def _validate_sw_classification_frame(df, level):
         raise RuntimeError(
             f"SW {level} industry classification missing required columns: {missing}"
         )
-    sources = {
-        str(value).strip()
-        for value in df["src"].dropna().tolist()
-        if str(value).strip()
-    }
+    source_values = df["src"].tolist()
+    missing_source_count = 0
+    for value in source_values:
+        try:
+            missing = bool(pd.isna(value))
+        except (TypeError, ValueError):
+            missing = False
+        if missing or not str(value).strip():
+            missing_source_count += 1
+    if missing_source_count:
+        raise RuntimeError(
+            f"SW {level} industry classification source binding invalid: "
+            f"missing_source_count={missing_source_count}"
+        )
+    sources = {str(value).strip() for value in source_values}
     normalized_sources = {value.upper() for value in sources}
     if normalized_sources != {SW_INDUSTRY_CLASSIFICATION_STANDARD}:
         raise RuntimeError(
@@ -3225,6 +3248,25 @@ def _observed_sw_classification_sources(*frames):
             if str(value).strip()
         )
     return sorted(observed)
+
+
+def _resolve_sw_l1_name(l1_map, parent_code):
+    normalized_parent = _normalize_sw_code(parent_code)
+    if normalized_parent is None:
+        return None
+    base = normalized_parent.split(".", 1)[0]
+    candidates = [normalized_parent]
+    if base not in candidates:
+        candidates.append(base)
+    for suffix in (".SI", ".SZ", ".SH"):
+        candidate = base + suffix
+        if candidate not in candidates:
+            candidates.append(candidate)
+    for candidate in candidates:
+        name = l1_map.get(candidate)
+        if name is not None:
+            return name
+    return None
 
 
 def _classification_standard_from_observed_sources(observed_sources):
@@ -3281,8 +3323,8 @@ def get_sw_industry_map():
                 fallback_used=False,
                 cache_hit=True,
                 classification_standard=SW_INDUSTRY_CLASSIFICATION_STANDARD,
-                observed_sources=[],
-                message=None,
+                observed_sources=[SW_INDUSTRY_CLASSIFICATION_STANDARD],
+                message="cache_key_source_binding",
             )
             return cached
         cached_size = len(cached) if isinstance(cached, dict) else "invalid"
@@ -3312,6 +3354,7 @@ def get_sw_industry_map():
             reason = _record_sw_failure(
                 source="index_classify",
                 reason=f"index_classify:{level}:invalid={exc}",
+                observed_sources=_observed_sw_classification_sources(frame),
             )
             raise RuntimeError(reason) from exc
 
@@ -3344,17 +3387,10 @@ def get_sw_industry_map():
         if normalized_code is not None:
             l2_info[normalized_code] = row
 
-    l1_parent_keys = set()
-    for value in l1_map:
-        normalized_code = _normalize_sw_code(str(value).split(".", 1)[0])
-        if normalized_code is not None:
-            l1_parent_keys.add(normalized_code)
     unresolved_parents = []
     for l2_code, row in l2_info.items():
         raw_parent = row.get("parent_code")
-        parent_code = _normalize_sw_code(raw_parent)
-        parent_key = parent_code.split(".", 1)[0] if parent_code else None
-        if not parent_key or parent_key not in l1_parent_keys:
+        if _resolve_sw_l1_name(l1_map, raw_parent) is None:
             unresolved_parents.append((l2_code, raw_parent))
     if unresolved_parents:
         reason = _record_sw_failure(
@@ -3379,8 +3415,11 @@ def get_sw_industry_map():
         l2_code_list = list(l2_info)
         counts = {"ok": 0, "exception": 0, "empty": 0, "bad_shape": 0}
         failures = []
+        if not l2_code_list:
+            return pd.DataFrame(), 0, "l2_batch:no_l2_groups", True
         for l2_code in tqdm(l2_code_list, desc="SW industry L2 batching"):
             errors = []
+            failure_detail = None
             t = safe_api(
                 pro.index_member,
                 index_code=l2_code,
@@ -3393,6 +3432,9 @@ def get_sw_industry_map():
                 category = "empty"
             elif not isinstance(t, pd.DataFrame):
                 category = "bad_shape"
+            elif len(t) >= SW_INDEX_MEMBER_ALL_ROW_LIMIT:
+                category = "bad_shape"
+                failure_detail = f"{l2_code}:row_limit_hit:{len(t)}"
             else:
                 normalized = _normalize_sw_member_columns(t, "index_member")
                 if normalized.empty:
@@ -3402,7 +3444,7 @@ def get_sw_industry_map():
                     frames.append(normalized)
                     continue
             counts[category] += 1
-            failures.append(f"{l2_code}:{category}")
+            failures.append(failure_detail or f"{l2_code}:{category}")
         summary = (
             "l2_batch:"
             + ",".join(
@@ -3538,15 +3580,7 @@ def get_sw_industry_map():
         raw_parent = l2_row.get("parent_code")
         parent_code = _normalize_sw_code(raw_parent)
 
-        # parent_code 与 l1_map key 格式可能不一致，尝试多种匹配
-        l1_name = l1_map.get(parent_code)
-        if l1_name is None:
-            stripped = parent_code.split(".")[0] if parent_code else ""
-            l1_name = l1_map.get(stripped)
-        if l1_name is None:
-            for suffix in [".SI", ".SZ", ".SH"]:
-                l1_name = l1_map.get((parent_code or "") + suffix)
-                if l1_name: break
+        l1_name = _resolve_sw_l1_name(l1_map, raw_parent)
         if l1_name is None:
             reason = _record_sw_failure(
                 source=member_source,
