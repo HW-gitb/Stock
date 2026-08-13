@@ -103,6 +103,64 @@ class SwIndustrySourceTest(unittest.TestCase):
             "empty-default",
         )
 
+    def test_bounded_sw_reason_marks_truncation_at_complete_sample_boundary(self) -> None:
+        self.assertEqual(
+            self.egs_main._bounded_sw_reason("  short\n  reason  "),
+            "short reason",
+        )
+
+        samples = [f"L2-{index}:unconfirmed_empty" for index in range(1, 10)]
+        reason = (
+            "  decision_as_of_requires_pit_history;  "
+            "l2_batch:ok=120,confirmed_empty=2,unconfirmed_empty=4,"
+            "exception=0,bad_shape=0,failed_count=4,sample="
+            f"{samples}"
+        )
+
+        bounded = self.egs_main._bounded_sw_reason(reason)
+        marker = "...[truncated]"
+
+        self.assertLessEqual(len(bounded), 256)
+        self.assertTrue(bounded.endswith(marker))
+        self.assertIn(
+            "ok=120,confirmed_empty=2,unconfirmed_empty=4,exception=0,bad_shape=0,failed_count=4",
+            bounded,
+        )
+        sample_prefix = bounded[:-len(marker)].split("sample=[", 1)[1]
+        self.assertTrue(sample_prefix.endswith("'"))
+        self.assertTrue(
+            all(
+                fragment.startswith("'") and fragment.endswith("'")
+                for fragment in sample_prefix.split(", ")
+            )
+        )
+
+    def test_record_sw_failure_consumes_bounded_reason_in_observation(self) -> None:
+        samples = [f"L2-{index}:unconfirmed_empty" for index in range(1, 10)]
+        reason = (
+            "decision_as_of_requires_pit_history;"
+            "l2_batch:ok=120,confirmed_empty=2,unconfirmed_empty=4,"
+            "exception=0,bad_shape=0,failed_count=4,sample="
+            f"{samples}"
+        )
+
+        returned = self.egs_main._record_sw_failure(
+            source="index_member_all_l2_history",
+            reason=reason,
+            observed_sources=["SW2021"],
+            request_group_count=12,
+            fallback_used=True,
+        )
+        observation = self.egs_main._current_sw_industry_source_observation()
+
+        self.assertEqual(returned, observation["message"])
+        self.assertLessEqual(len(returned), 256)
+        self.assertTrue(returned.endswith("...[truncated]"))
+        self.assertEqual(observation["status"], "fail")
+        self.assertEqual(observation["source"], "index_member_all_l2_history")
+        self.assertFalse(observation["fast_path_used"])
+        self.assertTrue(observation["fallback_used"])
+
     def test_non_sw_stock_consumers_share_nonempty_universe_guard(self) -> None:
         empty = pd.DataFrame(columns=["ts_code"])
         valid = pd.DataFrame({"ts_code": ["600000.SH"]})

@@ -3130,7 +3130,23 @@ def _normalize_sw_code(value):
 
 def _bounded_sw_reason(reason, limit=256):
     text = " ".join(str(reason).split())
-    return text[:limit]
+    if len(text) <= limit:
+        return text
+
+    marker = "...[truncated]"
+    prefix_limit = limit - len(marker)
+    if prefix_limit <= 0:
+        return marker
+
+    prefix = text[:prefix_limit]
+    boundary = max(prefix.rfind(" "), prefix.rfind(","), prefix.rfind(";"))
+    if boundary < 0:
+        boundary = prefix.rfind(":")
+    if boundary < 0:
+        return marker
+
+    bounded = prefix[:boundary].rstrip(" ,;")
+    return f"{bounded}{marker}" if bounded else marker
 
 
 def _record_sw_failure(
