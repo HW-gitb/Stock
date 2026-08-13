@@ -173,6 +173,13 @@ class CapstoneDryRunTest(unittest.TestCase):
         self.assertEqual(plan["mode"], "dry_run")
         self.assertEqual(plan["decision_date"], "20260709")
         self.assertEqual(plan["price_basis_date"], "20260708")   # latest settled session
+        self.assertEqual(plan["stage_outcomes"], [])
+        self.assertEqual(plan["stage_outcome_counts"], {
+            "completed_work": 0,
+            "no_work_expected": 0,
+            "waiting_dependency": 0,
+            "failed_nonblocking": 0,
+        })
         self.assertEqual([s["name"] for s in plan["stages"]], _STAGE_NAMES)
         self.assertEqual(plan["gated_stages_need_authorization"],
                          ["universe_fetch", "momentum_fetch", "sic_fetch", "yfinance_grades_fetch", "pass2_fetch",
@@ -461,6 +468,99 @@ class CapstoneDryRunTest(unittest.TestCase):
                         self.assertEqual(st.classify_soft_boost_artifact_state(case_ctx), expected)
 
 
+class CapstoneStageOutcomeNormalizerTest(unittest.TestCase):
+    def test_typed_stage_exit_table_is_closed_world(self):
+        cases = (
+            ("forward_policy_shadow", {}, "completed_work", "FORWARD_POLICY_SHADOW_CAPTURED"),
+            ("forward_policy_corporate_actions", {"status": "complete"}, "completed_work", "CORPORATE_ACTIONS_CAPTURED"),
+            ("forward_policy_corporate_actions", {"status": "no_eligible_mature_capture"}, "no_work_expected", "NO_ELIGIBLE_MATURE_CAPTURE"),
+            ("forward_policy_corporate_actions", {"status": "incomplete_no_count"}, "failed_nonblocking", "CORPORATE_ACTIONS_INCOMPLETE_NO_COUNT"),
+            ("forward_policy_maturity", {
+                "ready_weeks_appended_or_confirmed": 0, "whole_week_no_count": 0,
+                "already_ready_weeks_untouched": 0, "awaiting_adjustment_evidence_untouched": 0,
+            }, "no_work_expected", "FORWARD_POLICY_MATURITY_NOT_DUE"),
+            ("forward_policy_maturity", {
+                "ready_weeks_appended_or_confirmed": 1, "whole_week_no_count": 0,
+                "already_ready_weeks_untouched": 0, "awaiting_adjustment_evidence_untouched": 0,
+            }, "completed_work", "FORWARD_POLICY_MATURITY_ADVANCED"),
+            ("soft_boost_comparison_maturity", {"matured_observations_written": 0, "whole_week_no_count": 1}, "no_work_expected", "SOFT_BOOST_MATURITY_NO_COUNT"),
+            ("soft_boost_comparison_maturity", {"matured_observations_written": 1, "whole_week_no_count": 0}, "completed_work", "SOFT_BOOST_MATURITY_ADVANCED"),
+            ("soft_boost_comparison_capture", {
+                "status": "not_applicable", "reason_code": "SOFT_BOOST_COMPARISON_NOT_REQUESTED",
+                "comparison_capture_performed": False,
+            }, "no_work_expected", "SOFT_BOOST_COMPARISON_NOT_REQUESTED"),
+            ("soft_boost_comparison_capture", {
+                "status": "failed", "reason_code": "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID",
+                "comparison_capture_performed": False,
+            }, "failed_nonblocking", "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID"),
+            ("soft_discovery", {"status": "valid_nonempty"}, "completed_work", "SOFT_DISCOVERY_VALID_NONEMPTY"),
+            ("soft_discovery", {"status": "valid_empty"}, "completed_work", "SOFT_DISCOVERY_VALID_EMPTY"),
+            ("soft_discovery", {"status": "disabled"}, "no_work_expected", "SOFT_DISCOVERY_DISABLED"),
+            ("soft_discovery", {"status": "upstream_unavailable", "reason_code": "MERGE_PAIR_UNAVAILABLE"}, "waiting_dependency", "MERGE_PAIR_UNAVAILABLE"),
+            ("soft_discovery", {"status": "invalid_evidence", "reason_code": "INGEST_EVIDENCE_INVALID"}, "failed_nonblocking", "INGEST_EVIDENCE_INVALID"),
+            ("serenity_quality_forward", {"status": "eligible"}, "completed_work", "SERENITY_QUALITY_ELIGIBLE"),
+            ("serenity_quality_forward", {"status": "sleeping"}, "no_work_expected", "SERENITY_QUALITY_SLEEPING"),
+            ("serenity_quality_forward", {
+                "status": "not_evaluable", "observation": {"settlement_status": "pending_review"},
+            }, "waiting_dependency", "SERENITY_REVIEW_PENDING"),
+            ("serenity_quality_forward", {"status": "invalid_evidence"}, "failed_nonblocking", "SERENITY_INVALID_EVIDENCE"),
+            ("market_diagnostic_fetch", {"fetch_status": "captured"}, "completed_work", "MARKET_DIAGNOSTIC_FETCH_CAPTURED"),
+            ("market_diagnostic_fetch", {"fetch_status": "dormant"}, "no_work_expected", "MARKET_DIAGNOSTIC_DORMANT"),
+            ("market_diagnostic_fetch", {"fetch_status": "waiting_for_paper_week"}, "waiting_dependency", "WAITING_FOR_PAPER_WEEK"),
+            ("market_diagnostic_fetch", {"fetch_status": "capture_failed"}, "failed_nonblocking", "MARKET_DIAGNOSTIC_FETCH_FAILED"),
+            ("market_diagnostic_settle", {"settle_status": "settled"}, "completed_work", "MARKET_DIAGNOSTIC_SETTLED"),
+            ("market_diagnostic_settle", {"settle_status": "published"}, "completed_work", "MARKET_DIAGNOSTIC_SETTLED"),
+            ("market_diagnostic_settle", {"settle_status": "idempotent"}, "completed_work", "MARKET_DIAGNOSTIC_SETTLED"),
+            ("market_diagnostic_settle", {"settle_status": "recovered"}, "completed_work", "MARKET_DIAGNOSTIC_SETTLED"),
+            ("market_diagnostic_settle", {"settle_status": "waiting_for_paper_week"}, "waiting_dependency", "WAITING_FOR_PAPER_WEEK"),
+            ("market_diagnostic_settle", {"settle_status": "waiting_for_inputs"}, "waiting_dependency", "WAITING_FOR_INPUTS"),
+            ("market_diagnostic_settle", {"settle_status": "stalled_on_a_finished_week"}, "waiting_dependency", "STALLED_ON_A_FINISHED_WEEK"),
+            ("market_diagnostic_settle", {"settle_status": "dormant"}, "no_work_expected", "MARKET_DIAGNOSTIC_DORMANT"),
+            ("market_diagnostic_settle", {"settle_status": "broken"}, "failed_nonblocking", "MARKET_DIAGNOSTIC_SETTLE_FAILED"),
+            ("market_diagnostic_settle", {"settle_status": "failed"}, "failed_nonblocking", "MARKET_DIAGNOSTIC_SETTLE_FAILED"),
+            ("market_diagnostic", {"clock_status": "not_started"}, "no_work_expected", "MARKET_DIAGNOSTIC_NOT_STARTED"),
+            ("market_diagnostic", {"clock_status": "fresh"}, "waiting_dependency", "MARKET_DIAGNOSTIC_FIRST_WEEK_PENDING"),
+            ("market_diagnostic", {"clock_status": "running", "report_lines": ["x"], "report_lines_delivered": True}, "completed_work", "MARKET_DIAGNOSTIC_REPORTED"),
+            ("market_diagnostic", {"clock_status": "running", "report_lines": ["x"], "report_lines_delivered": False}, "failed_nonblocking", "MARKET_DIAGNOSTIC_REPORT_DELIVERY_FAILED"),
+            ("market_diagnostic", {"clock_status": "running", "v1_1_status": "attribution_faulted", "report_lines": ["x"], "report_lines_delivered": True}, "failed_nonblocking", "MARKET_DIAGNOSTIC_FAULTED"),
+            ("weekly_bridge", {"batch4_run": {"emitted": False, "no_emit_reason": "out_of_window"}}, "completed_work", "WEEKLY_REPORT_NOT_EMITTED_OUT_OF_WINDOW"),
+            ("weekly_bridge", {"batch4_run": {"emitted": False, "no_emit_reason": "provider_health_blocked"}}, "waiting_dependency", "WEEKLY_REPORT_PROVIDER_HEALTH_BLOCKED"),
+        )
+        for stage_name, result, expected_class, expected_reason in cases:
+            with self.subTest(stage_name=stage_name, result=result):
+                self.assertEqual(
+                    capstone._normalize_stage_outcome(stage_name, result),
+                    {"outcome_class": expected_class, "reason_code": expected_reason},
+                )
+
+    def test_unknown_or_invalid_typed_result_fails_closed(self):
+        for stage_name, result in (
+            ("market_diagnostic_settle", {"settle_status": ["waiting_for_inputs"]}),
+            ("market_diagnostic_settle", []),
+            ("soft_discovery", {"status": "future_status"}),
+            ("forward_policy_maturity", {"ready_weeks_appended_or_confirmed": 0}),
+            ("soft_boost_comparison_capture", {"comparison_capture_performed": False, "status": "future_status"}),
+            ("market_diagnostic", {"clock_status": "running", "report_lines": []}),
+        ):
+            with self.subTest(stage_name=stage_name):
+                self.assertEqual(
+                    capstone._normalize_stage_outcome(stage_name, result),
+                    {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"},
+                )
+
+    def test_failure_boundary_reasons_are_stable_and_do_not_include_exception_text(self):
+        for failure_kind, reason_code in (
+            ("input_gate", "STAGE_INPUT_UNREADABLE"),
+            ("stage_run", "STAGE_EXECUTION_EXCEPTION"),
+            ("fresh_output_missing", "FRESH_OUTPUT_MISSING"),
+        ):
+            with self.subTest(failure_kind=failure_kind):
+                self.assertEqual(
+                    capstone._normalize_stage_outcome("forward_policy_shadow", {}, failure_kind=failure_kind),
+                    {"outcome_class": "failed_nonblocking", "reason_code": reason_code},
+                )
+
+
 class CapstoneFakeChainTest(unittest.TestCase):
     """Prove the orchestration (ordering, per-stage output validation, fail-fast, auth gating) with INJECTED fake
     stages that write canned outputs — no real runner, no network. state_dir is a tempdir so nothing touches the repo."""
@@ -473,9 +573,12 @@ class CapstoneFakeChainTest(unittest.TestCase):
         shutil.rmtree(self.state_dir, ignore_errors=True)
         shutil.rmtree(self.private_root, ignore_errors=True)
 
-    def _fake_stages(self, order_sink, *, break_stage=None, skip_output_stage=None, bridge_batch4=None,
+    def _fake_stages(self, order_sink, *, break_stage=None, break_stages=None, skip_output_stage=None,
+                     skip_output_stages=None, bridge_batch4=None,
                      missing_input_stage=None, present_input_stage=None, preflight_result=None,
                      omit_ohlcv_output=False):
+        break_stages = set(break_stages or ())
+        skip_output_stages = set(skip_output_stages or ())
         def outs_for(name):
             def momentum_outputs(c):
                 outputs = [c.series_packet_path]
@@ -530,9 +633,9 @@ class CapstoneFakeChainTest(unittest.TestCase):
             def make_run(nm, outfn):
                 def run(ctx):
                     order_sink.append(nm)
-                    if nm == break_stage:
+                    if nm == break_stage or nm in break_stages:
                         raise ValueError("boom in " + nm)
-                    if nm != skip_output_stage:
+                    if nm != skip_output_stage and nm not in skip_output_stages:
                         for p in outfn(ctx):
                             Path(p).parent.mkdir(parents=True, exist_ok=True)
                             Path(p).write_text("{}", encoding="utf-8")
@@ -552,6 +655,33 @@ class CapstoneFakeChainTest(unittest.TestCase):
                         }
                     if nm == "pass2_preflight" and preflight_result is not None:
                         return preflight_result
+                    if nm == "soft_discovery":
+                        return {"status": "disabled", "reason_code": "SOFT_DISCOVERY_DISABLED"}
+                    if nm == "serenity_quality_forward":
+                        return {"status": "sleeping"}
+                    if nm == "forward_policy_corporate_actions":
+                        return {"status": "no_eligible_mature_capture"}
+                    if nm == "forward_policy_maturity":
+                        return {
+                            "ready_weeks_appended_or_confirmed": 0,
+                            "whole_week_no_count": 0,
+                            "already_ready_weeks_untouched": 0,
+                            "awaiting_adjustment_evidence_untouched": 0,
+                        }
+                    if nm == "soft_boost_comparison_maturity":
+                        return {"matured_observations_written": 0, "whole_week_no_count": 0}
+                    if nm == "soft_boost_comparison_capture":
+                        return {
+                            "status": "not_applicable",
+                            "reason_code": "SOFT_BOOST_COMPARISON_NOT_REQUESTED",
+                            "comparison_capture_performed": False,
+                        }
+                    if nm == "market_diagnostic_fetch":
+                        return {"fetch_status": "dormant"}
+                    if nm == "market_diagnostic_settle":
+                        return {"settle_status": "dormant"}
+                    if nm == "market_diagnostic":
+                        return {"clock_status": "not_started", "report_lines": []}
                     return {"stage": nm}
                 return run
 
@@ -795,6 +925,12 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertEqual(summary["pass2_target_count"], 2)
         self.assertEqual(summary["operational_use"], "not_authorized")
         self.assertIn("--pass2-call-budget 11", summary["next_required"])
+        self.assertEqual(
+            [row["stage"] for row in summary["stage_outcomes"]],
+            [row["name"] for row in summary["stages"]],
+        )
+        self.assertTrue(all(row["execution_mode"] == "executed_budget_preview" for row in summary["stage_outcomes"]))
+        self.assertEqual(sum(summary["stage_outcome_counts"].values()), len(summary["stage_outcomes"]))
         self.assertFalse((self.private_root / "weekly_private" / "20260709").exists())
 
     def test_one_click_production_shape_derives_and_threads_massive_physical_cap(self):
@@ -870,14 +1006,17 @@ class CapstoneFakeChainTest(unittest.TestCase):
             )
         self.assertEqual(order, _STAGE_NAMES)
         self.assertTrue(summary["emitted"])
-        self.assertEqual(summary["shadow_capture_failed"]["stage"], "forward_policy_shadow")
-        self.assertEqual(summary["shadow_capture_failed"]["error_type"], "ValueError")
-        self.assertIn("boom in forward_policy_shadow", summary["shadow_capture_failed"]["error"])
+        self.assertNotIn("shadow_capture_failed", summary)
+        shadow_outcome = next(item for item in summary["stage_outcomes"] if item["stage"] == "forward_policy_shadow")
+        self.assertEqual(shadow_outcome["outcome_class"], "failed_nonblocking")
+        self.assertEqual(shadow_outcome["reason_code"], "STAGE_EXECUTION_EXCEPTION")
         shadow_result = next(item for item in summary["stages"] if item["name"] == "forward_policy_shadow")
         self.assertTrue(shadow_result["best_effort"])
-        self.assertEqual(shadow_result["result"]["shadow_capture_failed"], summary["shadow_capture_failed"])
+        self.assertEqual(shadow_result["result"], {
+            "failure_kind": "stage_run", "error_type": "ValueError",
+        })
         self.assertTrue(any(
-            "US-SHORT SHADOW CAPTURE FAILED" in str(call.args[0])
+            "US-SHORT STAGE FAILED" in str(call.args[0])
             for call in printed.call_args_list
         ))
 
@@ -894,13 +1033,16 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertTrue(summary["emitted"])
         self.assertNotIn("forward_policy_shadow", order)          # skipped at the input gate, before its run body
         self.assertIn("weekly_bridge", order)                     # the real report still ran
-        self.assertEqual(summary["shadow_capture_failed"]["stage"], "forward_policy_shadow")
-        self.assertEqual(summary["shadow_capture_failed"]["error_type"], "WeeklyCapstoneError")
-        self.assertIn("input", summary["shadow_capture_failed"]["error"].lower())
+        shadow_outcome = next(item for item in summary["stage_outcomes"] if item["stage"] == "forward_policy_shadow")
+        self.assertEqual(shadow_outcome["outcome_class"], "failed_nonblocking")
+        self.assertEqual(shadow_outcome["reason_code"], "STAGE_INPUT_UNREADABLE")
         shadow_result = next(item for item in summary["stages"] if item["name"] == "forward_policy_shadow")
         self.assertTrue(shadow_result["best_effort"])
+        self.assertEqual(shadow_result["result"], {
+            "failure_kind": "input_gate", "error_type": "WeeklyCapstoneError",
+        })
         self.assertTrue(any(
-            "US-SHORT SHADOW CAPTURE FAILED" in str(call.args[0])
+            "US-SHORT STAGE FAILED" in str(call.args[0])
             for call in printed.call_args_list
         ))
 
@@ -913,12 +1055,154 @@ class CapstoneFakeChainTest(unittest.TestCase):
             )
         self.assertTrue(summary["emitted"])
         self.assertEqual(order, _STAGE_NAMES)
-        self.assertEqual(summary["shadow_capture_failed"]["stage"], "forward_policy_maturity")
+        maturity_outcome = next(item for item in summary["stage_outcomes"] if item["stage"] == "forward_policy_maturity")
+        self.assertEqual(maturity_outcome["outcome_class"], "failed_nonblocking")
+        self.assertEqual(maturity_outcome["reason_code"], "STAGE_EXECUTION_EXCEPTION")
         maturity_result = next(item for item in summary["stages"] if item["name"] == "forward_policy_maturity")
         self.assertTrue(maturity_result["best_effort"])
         self.assertTrue(any(
-            "US-SHORT SHADOW CAPTURE FAILED" in str(call.args[0])
+            "US-SHORT STAGE FAILED" in str(call.args[0])
             for call in printed.call_args_list
+        ))
+
+    def test_multiple_nonblocking_failures_are_retained_in_stage_order_and_later_stages_continue(self):
+        order: list[str] = []
+        summary = self._run(
+            order,
+            stages=self._fake_stages(
+                order,
+                missing_input_stage="forward_policy_shadow",
+                break_stages={"forward_policy_corporate_actions"},
+                skip_output_stages={"soft_boost_comparison_capture"},
+            ),
+        )
+        self.assertTrue(summary["emitted"])
+        self.assertIn("weekly_bridge", order)
+        failed = [
+            row for row in summary["stage_outcomes"]
+            if row["outcome_class"] == "failed_nonblocking"
+        ]
+        self.assertEqual(
+            [(row["stage"], row["reason_code"]) for row in failed],
+            [
+                ("forward_policy_shadow", "STAGE_INPUT_UNREADABLE"),
+                ("forward_policy_corporate_actions", "STAGE_EXECUTION_EXCEPTION"),
+                ("soft_boost_comparison_capture", "FRESH_OUTPUT_MISSING"),
+            ],
+        )
+        self.assertNotIn("shadow_capture_failed", summary)
+        self.assertEqual(
+            [row["name"] for row in summary["stages"] if row["name"] in {
+                "forward_policy_shadow", "forward_policy_corporate_actions", "soft_boost_comparison_capture",
+            }],
+            ["forward_policy_shadow", "forward_policy_corporate_actions", "soft_boost_comparison_capture"],
+        )
+        self.assertEqual(
+            sum(summary["stage_outcome_counts"].values()), len(summary["stage_outcomes"])
+        )
+
+    def test_stage_outcome_conservation_covers_executed_reused_and_refreshed_modes(self):
+        for reuse_policy, expected_mode in (
+            ("never", "executed"),
+            ("frozen_inputs", "reused"),
+            ("refresh_then_reuse_if_equivalent", "refreshed_equivalent"),
+        ):
+            with self.subTest(reuse_policy=reuse_policy):
+                order: list[str] = []
+                stage = Stage(
+                    "outcome_probe", False, lambda _ctx: [], lambda _ctx: [],
+                    lambda _ctx: order.append("outcome_probe") or {},
+                    reuse_policy=reuse_policy,
+                )
+                with mock.patch.object(capstone, "default_pipeline", return_value=[stage]), \
+                     mock.patch.object(capstone.checkpoint_store, "create_manifest", return_value=(self.state_dir / "checkpoint.json", {})), \
+                     mock.patch.object(capstone.checkpoint_store, "load_manifest", return_value={}), \
+                     mock.patch.object(capstone.checkpoint_store, "validate_resume_header"), \
+                     mock.patch.object(capstone.checkpoint_store, "record_stage", return_value={}), \
+                     mock.patch.object(capstone.checkpoint_store, "restore_stage", return_value=({}, "g", "o")), \
+                     mock.patch.object(capstone.checkpoint_store, "refresh_output_from_equivalent_checkpoint", return_value=True), \
+                     mock.patch.object(
+                         capstone, "_publish_current_output_transaction",
+                         side_effect=lambda _ctx, txn: capstone._abort_current_output_transaction(txn),
+                     ):
+                    summary = self._run(
+                        order,
+                        resume_from=self.state_dir / "resume.json",
+                        authorized_pass2_call_budget=1,
+                        model_paper_store_root=self.private_root / "model_paper_private",
+                        model_paper_run_account_mode="paper_only",
+                    )
+                self.assertEqual(summary["stage_outcomes"], [{
+                    "stage": "outcome_probe",
+                    "execution_mode": expected_mode,
+                    "outcome_class": "completed_work",
+                    "reason_code": "STAGE_COMPLETED",
+                }])
+                self.assertEqual(sum(summary["stage_outcome_counts"].values()), 1)
+                if expected_mode == "reused":
+                    self.assertEqual(order, [])
+                else:
+                    self.assertEqual(order, ["outcome_probe"])
+
+    def test_reused_stage_checkpoint_precedes_terminal_event(self):
+        sequence: list[str] = []
+        stage = Stage(
+            "reused_order_probe", False, lambda _ctx: [], lambda _ctx: [],
+            lambda _ctx: (_ for _ in ()).throw(AssertionError("reused stage must not run")),
+            reuse_policy="frozen_inputs",
+        )
+
+        def record_stage(**_kwargs):
+            sequence.append("checkpoint")
+            return {}
+
+        def diagnostic_event(event):
+            if event.get("event") == "stage_completed":
+                sequence.append("terminal")
+
+        with mock.patch.object(capstone, "default_pipeline", return_value=[stage]), \
+             mock.patch.object(capstone.checkpoint_store, "create_manifest", return_value=(self.state_dir / "checkpoint.json", {})), \
+             mock.patch.object(capstone.checkpoint_store, "load_manifest", return_value={}), \
+             mock.patch.object(capstone.checkpoint_store, "validate_resume_header"), \
+             mock.patch.object(capstone.checkpoint_store, "record_stage", side_effect=record_stage), \
+             mock.patch.object(capstone.checkpoint_store, "restore_stage", return_value=({}, "g", "o")), \
+             mock.patch.object(
+                 capstone, "_publish_current_output_transaction",
+                 side_effect=lambda _ctx, txn: capstone._abort_current_output_transaction(txn),
+             ):
+            self._run(
+                [],
+                resume_from=self.state_dir / "resume.json",
+                authorized_pass2_call_budget=1,
+                model_paper_store_root=self.private_root / "model_paper_private",
+                model_paper_run_account_mode="paper_only",
+                diagnostic_event=diagnostic_event,
+            )
+        self.assertEqual(sequence, ["checkpoint", "terminal"])
+
+    def test_best_effort_output_enumeration_is_recorded_nonblocking(self):
+        order: list[str] = []
+        events: list[dict] = []
+        stages = self._fake_stages(order)
+        shadow = next(stage for stage in stages if stage.name == "forward_policy_shadow")
+        shadow.outputs = lambda _ctx: (_ for _ in ()).throw(ValueError("enumeration probe"))
+        summary = self._run(order, stages=stages, diagnostic_event=events.append)
+        self.assertTrue(summary["emitted"])
+        self.assertNotIn("forward_policy_shadow", order)
+        self.assertEqual(
+            next(row for row in summary["stage_outcomes"] if row["stage"] == "forward_policy_shadow"),
+            {
+                "stage": "forward_policy_shadow",
+                "execution_mode": "executed",
+                "outcome_class": "failed_nonblocking",
+                "reason_code": "STAGE_OUTPUT_ENUMERATION_FAILED",
+            },
+        )
+        self.assertTrue(any(
+            event.get("event") == "stage_failed"
+            and event.get("stage") == "forward_policy_shadow"
+            and event.get("failure_kind") == "output_enumeration"
+            for event in events
         ))
 
     def test_only_comparison_capture_stages_may_be_best_effort(self):
@@ -1014,9 +1298,8 @@ class CapstoneFakeChainTest(unittest.TestCase):
              if item["event"] == "stage_failed"],
         )
 
-    def test_bridge_no_emit_is_honest_success_not_failure(self):
-        # design §3.2: a non-clean provider_health (e.g. free-tier FMP-429) → the bridge honestly writes NO
-        # weekly_report.md. That must be a clean no-emit result, NOT a "missing output" hard failure.
+    def test_bridge_provider_health_no_emit_is_waiting_dependency_not_no_work(self):
+        # A blocked provider-health dependency honestly writes NO weekly_report.md, but it is not a no-work week.
         order: list[str] = []
         summary = self._run(order, stages=self._fake_stages(
             order, skip_output_stage="weekly_bridge",
@@ -1026,6 +1309,26 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertEqual(order, _PRE_BRIDGE_THROUGH_BRIDGE)
         self.assertFalse(summary["emitted"])
         self.assertEqual(summary["no_emit_reason"], "provider_health_blocked")
+        self.assertEqual(summary["stage_outcomes"][-1], {
+            "stage": "weekly_bridge",
+            "execution_mode": "executed",
+            "outcome_class": "waiting_dependency",
+            "reason_code": "WEEKLY_REPORT_PROVIDER_HEALTH_BLOCKED",
+        })
+        self.assertGreater(summary["stage_outcome_counts"]["waiting_dependency"], 0)
+        self.assertEqual(sum(summary["stage_outcome_counts"].values()), len(summary["stage_outcomes"]))
+
+    def test_bridge_out_of_window_no_emit_is_completed_work(self):
+        order: list[str] = []
+        summary = self._run(order, stages=self._fake_stages(
+            order,
+            skip_output_stage="weekly_bridge",
+            bridge_batch4={"emitted": False, "no_emit_reason": "out_of_window"},
+        ))
+        self.assertFalse(summary["emitted"])
+        self.assertEqual(summary["no_emit_reason"], "out_of_window")
+        self.assertEqual(summary["stage_outcomes"][-1]["outcome_class"], "completed_work")
+        self.assertEqual(summary["stage_outcomes"][-1]["reason_code"], "WEEKLY_REPORT_NOT_EMITTED_OUT_OF_WINDOW")
 
     def test_bridge_emitted_true_but_missing_report_still_fails(self):
         # an emit=True bridge that did NOT actually write the report is a real failure — the no-emit tolerance must

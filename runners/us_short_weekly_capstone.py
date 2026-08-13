@@ -544,6 +544,214 @@ _OFFICIAL_ARTIFACT_STAGES = frozenset({
 })
 
 
+_STAGE_OUTCOME_CLASSES = (
+    "completed_work",
+    "no_work_expected",
+    "waiting_dependency",
+    "failed_nonblocking",
+)
+_STAGE_OUTCOME_EVENT_NAMES = {
+    "completed_work": "stage_completed",
+    "no_work_expected": "stage_no_work",
+    "waiting_dependency": "stage_waiting",
+    "failed_nonblocking": "stage_failed",
+}
+_REASON_CODE_RE = re.compile(r"^[A-Z][A-Z0-9_]{1,95}$")
+
+
+def _outcome_reason(value: Any, fallback: str) -> str:
+    """Accept only the existing privacy-safe reason-code vocabulary."""
+    return value if isinstance(value, str) and _REASON_CODE_RE.fullmatch(value) else fallback
+
+
+def _nonnegative_int(value: Any) -> bool:
+    return type(value) is int and value >= 0
+
+
+def _normalize_stage_outcome(
+    stage_name: str,
+    result: Any,
+    *,
+    failure_kind: str | None = None,
+) -> dict[str, str]:
+    """Map one typed stage result to the four-state capstone outcome contract.
+
+    This is deliberately the only stage-outcome mapping.  It consumes producer
+    status/summary fields; it never infers a waiting or no-work state from a
+    missing result, missing output, or exception.
+    """
+
+    if failure_kind is not None:
+        return {
+            "outcome_class": "failed_nonblocking",
+            "reason_code": {
+                "input_gate": "STAGE_INPUT_UNREADABLE",
+                "stage_run": "STAGE_EXECUTION_EXCEPTION",
+                "fresh_output_missing": "FRESH_OUTPUT_MISSING",
+                "output_enumeration": "STAGE_OUTPUT_ENUMERATION_FAILED",
+            }.get(failure_kind, "STAGE_FAILURE"),
+        }
+    if not isinstance(result, dict):
+        return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+
+    if stage_name == "soft_discovery":
+        status = result.get("status")
+        if isinstance(status, str) and status in {"valid_nonempty", "valid_empty"}:
+            return {"outcome_class": "completed_work", "reason_code": f"SOFT_DISCOVERY_{status.upper()}"}
+        if status == "disabled":
+            return {"outcome_class": "no_work_expected", "reason_code": "SOFT_DISCOVERY_DISABLED"}
+        if status == "upstream_unavailable":
+            return {"outcome_class": "waiting_dependency", "reason_code": _outcome_reason(result.get("reason_code"), "UPSTREAM_UNAVAILABLE")}
+        if status == "invalid_evidence":
+            return {"outcome_class": "failed_nonblocking", "reason_code": _outcome_reason(result.get("reason_code"), "INVALID_EVIDENCE")}
+        return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+
+    if stage_name == "serenity_quality_forward":
+        status = result.get("status")
+        if status == "eligible":
+            return {"outcome_class": "completed_work", "reason_code": "SERENITY_QUALITY_ELIGIBLE"}
+        if status == "sleeping":
+            return {"outcome_class": "no_work_expected", "reason_code": "SERENITY_QUALITY_SLEEPING"}
+        if status == "not_evaluable":
+            observation = result.get("observation")
+            settlement_status = observation.get("settlement_status") if isinstance(observation, dict) else None
+            producer = result.get("annotation_producer")
+            if settlement_status == "pending_review" or (
+                isinstance(producer, dict) and producer.get("status") == "pending"
+            ):
+                return {"outcome_class": "waiting_dependency", "reason_code": "SERENITY_REVIEW_PENDING"}
+            return {"outcome_class": "no_work_expected", "reason_code": "SERENITY_NO_COUNT"}
+        if status == "invalid_evidence":
+            error = result.get("error")
+            reason = error.get("code") if isinstance(error, dict) else None
+            return {"outcome_class": "failed_nonblocking", "reason_code": _outcome_reason(reason, "SERENITY_INVALID_EVIDENCE")}
+        return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+
+    if stage_name == "forward_policy_shadow":
+        return {"outcome_class": "completed_work", "reason_code": "FORWARD_POLICY_SHADOW_CAPTURED"}
+
+    if stage_name == "forward_policy_corporate_actions":
+        status = result.get("status")
+        if status == "complete":
+            return {"outcome_class": "completed_work", "reason_code": "CORPORATE_ACTIONS_CAPTURED"}
+        if status == "no_eligible_mature_capture":
+            return {"outcome_class": "no_work_expected", "reason_code": "NO_ELIGIBLE_MATURE_CAPTURE"}
+        if isinstance(status, str) and status in {"incomplete_no_count", "incomplete"}:
+            return {"outcome_class": "failed_nonblocking", "reason_code": _outcome_reason(result.get("failure_reason"), "CORPORATE_ACTIONS_INCOMPLETE_NO_COUNT")}
+        return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+
+    if stage_name == "forward_policy_maturity":
+        fields = (
+            "ready_weeks_appended_or_confirmed",
+            "whole_week_no_count",
+            "already_ready_weeks_untouched",
+            "awaiting_adjustment_evidence_untouched",
+        )
+        if any(not _nonnegative_int(result.get(field)) for field in fields):
+            return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+        if result["ready_weeks_appended_or_confirmed"] > 0:
+            return {"outcome_class": "completed_work", "reason_code": "FORWARD_POLICY_MATURITY_ADVANCED"}
+        if result["awaiting_adjustment_evidence_untouched"] > 0:
+            reason = "H20_WINDOW_OR_ADJUSTMENT_UNAVAILABLE"
+        elif result["whole_week_no_count"] > 0:
+            reason = "FORWARD_POLICY_MATURITY_NO_COUNT"
+        else:
+            reason = "FORWARD_POLICY_MATURITY_NOT_DUE"
+        return {"outcome_class": "no_work_expected", "reason_code": reason}
+
+    if stage_name == "soft_boost_comparison_maturity":
+        if not _nonnegative_int(result.get("matured_observations_written")) or not _nonnegative_int(result.get("whole_week_no_count")):
+            return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+        if result["matured_observations_written"] > 0:
+            return {"outcome_class": "completed_work", "reason_code": "SOFT_BOOST_MATURITY_ADVANCED"}
+        return {"outcome_class": "no_work_expected", "reason_code": "SOFT_BOOST_MATURITY_NO_COUNT" if result["whole_week_no_count"] else "SOFT_BOOST_MATURITY_NOT_DUE"}
+
+    if stage_name == "soft_boost_comparison_capture":
+        performed = result.get("comparison_capture_performed")
+        status = result.get("status")
+        reason_code = result.get("reason_code")
+        if type(performed) is not bool:
+            return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+        if performed:
+            return {"outcome_class": "completed_work", "reason_code": "SOFT_BOOST_COMPARISON_CAPTURED"}
+        if reason_code == "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID" or status == "failed":
+            return {"outcome_class": "failed_nonblocking", "reason_code": _outcome_reason(reason_code, "SOFT_BOOST_COMPARISON_FAILED")}
+        if (
+            isinstance(status, str)
+            and status in {"not_applicable", "disabled", "no_op"}
+            and (reason_code is None or isinstance(reason_code, str))
+            and reason_code in {
+                None, "SOFT_BOOST_COMPARISON_NOT_REQUESTED", "SOFT_BOOST_COMPARISON_NOT_APPLICABLE",
+            }
+        ):
+            return {"outcome_class": "no_work_expected", "reason_code": _outcome_reason(reason_code, "SOFT_BOOST_COMPARISON_NOT_REQUESTED")}
+        return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+
+    if stage_name == "market_diagnostic_fetch":
+        status = result.get("fetch_status")
+        if status == "captured":
+            return {"outcome_class": "completed_work", "reason_code": "MARKET_DIAGNOSTIC_FETCH_CAPTURED"}
+        if status == "dormant":
+            return {"outcome_class": "no_work_expected", "reason_code": "MARKET_DIAGNOSTIC_DORMANT"}
+        if status == "waiting_for_paper_week":
+            return {"outcome_class": "waiting_dependency", "reason_code": "WAITING_FOR_PAPER_WEEK"}
+        if isinstance(status, str) and status in {"broken", "failed", "capture_failed"}:
+            return {"outcome_class": "failed_nonblocking", "reason_code": "MARKET_DIAGNOSTIC_FETCH_FAILED"}
+        return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+
+    if stage_name == "market_diagnostic_settle":
+        status = result.get("settle_status")
+        if isinstance(status, str) and status in {"settled", "published", "idempotent", "recovered"}:
+            return {"outcome_class": "completed_work", "reason_code": "MARKET_DIAGNOSTIC_SETTLED"}
+        if status == "dormant":
+            return {"outcome_class": "no_work_expected", "reason_code": "MARKET_DIAGNOSTIC_DORMANT"}
+        if isinstance(status, str) and status in {"waiting_for_paper_week", "waiting_for_inputs", "stalled_on_a_finished_week"}:
+            return {"outcome_class": "waiting_dependency", "reason_code": status.upper()}
+        if isinstance(status, str) and status in {"broken", "failed"}:
+            return {"outcome_class": "failed_nonblocking", "reason_code": "MARKET_DIAGNOSTIC_SETTLE_FAILED"}
+        return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+
+    if stage_name == "market_diagnostic":
+        status = result.get("clock_status")
+        if status == "not_started":
+            return {"outcome_class": "no_work_expected", "reason_code": "MARKET_DIAGNOSTIC_NOT_STARTED"}
+        if status == "fresh":
+            return {"outcome_class": "waiting_dependency", "reason_code": "MARKET_DIAGNOSTIC_FIRST_WEEK_PENDING"}
+        if status == "broken" or result.get("v1_1_status") == "attribution_faulted":
+            return {"outcome_class": "failed_nonblocking", "reason_code": "MARKET_DIAGNOSTIC_FAULTED"}
+        if status == "running" and result.get("report_lines_delivered") is True:
+            return {"outcome_class": "completed_work", "reason_code": "MARKET_DIAGNOSTIC_REPORTED"}
+        if status == "running" and result.get("report_lines") and result.get("report_lines_delivered") is False:
+            return {"outcome_class": "failed_nonblocking", "reason_code": "MARKET_DIAGNOSTIC_REPORT_DELIVERY_FAILED"}
+        return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+
+    if stage_name == "weekly_bridge" and _bridge_emitted(result) is False:
+        no_emit_reason = _bridge_no_emit_reason(result)
+        if no_emit_reason == "out_of_window":
+            return {"outcome_class": "completed_work", "reason_code": "WEEKLY_REPORT_NOT_EMITTED_OUT_OF_WINDOW"}
+        provider_health_reason_codes = {
+            "provider_health_restricted": "WEEKLY_REPORT_PROVIDER_HEALTH_RESTRICTED",
+            "provider_health_blocked": "WEEKLY_REPORT_PROVIDER_HEALTH_BLOCKED",
+        }
+        if no_emit_reason in provider_health_reason_codes:
+            return {
+                "outcome_class": "waiting_dependency",
+                "reason_code": provider_health_reason_codes[no_emit_reason],
+            }
+        return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+    return {"outcome_class": "completed_work", "reason_code": "STAGE_COMPLETED"}
+
+
+def _stage_outcome_counts(outcomes: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {key: 0 for key in _STAGE_OUTCOME_CLASSES}
+    for outcome in outcomes:
+        outcome_class = outcome.get("outcome_class")
+        if outcome_class not in counts:
+            raise WeeklyCapstoneError("stage outcome list contains an unknown outcome class")
+        counts[outcome_class] += 1
+    return counts
+
+
 def _deliver_diagnostic_report_lines(ctx: CapstoneContext, result: dict[str, Any]) -> dict[str, Any]:
     """Hand this stage's lines to the weekly report, or record why they did not land.
 
@@ -1126,6 +1334,8 @@ def _plan(ctx: CapstoneContext, stages: list[Stage], *, resume_from: Path | None
         "gated_stages_need_authorization": [s.name for s in stages if s.gated],
         "authorized": ctx.confirm_user_authorization,
         "resume_from": str(Path(resume_from).resolve()) if resume_from is not None else None,
+        "stage_outcomes": [],
+        "stage_outcome_counts": _stage_outcome_counts([]),
         "stages": [
             {
                 "name": s.name,
@@ -2074,6 +2284,14 @@ def _run_pass2_budget_preview(ctx: CapstoneContext, pipeline: list[Stage]) -> di
         raise WeeklyCapstoneError(
             "pass2_preflight budget preview must remain explicitly blocked until the exact call budget is independently authorized"
         )
+    stage_outcomes = [
+        {
+            "stage": item["name"],
+            "execution_mode": item["execution_mode"],
+            **_normalize_stage_outcome(item["name"], item["result"]),
+        }
+        for item in results
+    ]
     return {
         "mode": "pass2_budget_preview",
         "execution_mode": "live_preflight_provider_fetch",
@@ -2087,6 +2305,8 @@ def _run_pass2_budget_preview(ctx: CapstoneContext, pipeline: list[Stage]) -> di
             f"--pass2-call-budget {forecast}"
         ),
         "stages": results,
+        "stage_outcomes": stage_outcomes,
+        "stage_outcome_counts": _stage_outcome_counts(stage_outcomes),
     }
 
 
@@ -2320,7 +2540,7 @@ def run_weekly_capstone(
     transaction = _begin_current_output_transaction(ctx)
     ctx = replace(ctx, decision_lock=transaction.decision_lock)
     results: list[dict[str, Any]] = []
-    shadow_capture_failure: dict[str, str] | None = None
+    stage_outcomes: list[dict[str, str]] = []
 
     def stage_clocks(result: dict[str, Any], *, fallback_generated_at: str) -> tuple[str, str | None]:
         generated = result.get("generated_at") if isinstance(result.get("generated_at"), str) else fallback_generated_at
@@ -2342,32 +2562,57 @@ def run_weekly_capstone(
             "result": result,
         })
 
+    def record_stage_terminal(
+        stage: Stage,
+        result: dict[str, Any],
+        *,
+        execution_mode: str,
+        stage_generated_at: str,
+        stage_observed_at: str | None,
+        failure_kind: str | None = None,
+    ) -> None:
+        append_stage_result(
+            stage, result, execution_mode=execution_mode,
+            stage_generated_at=stage_generated_at, stage_observed_at=stage_observed_at,
+        )
+        normalized = _normalize_stage_outcome(stage.name, result, failure_kind=failure_kind)
+        outcome = {
+            "stage": stage.name,
+            "execution_mode": execution_mode,
+            **normalized,
+        }
+        stage_outcomes.append(outcome)
+        event = {
+            "stage": stage.name,
+            "execution_mode": execution_mode,
+            **normalized,
+        }
+        if failure_kind is not None:
+            event["failure_kind"] = failure_kind
+            event["error_type"] = result.get("error_type")
+        _emit_diagnostic_event(
+            diagnostic_event,
+            _STAGE_OUTCOME_EVENT_NAMES[normalized["outcome_class"]],
+            **event,
+        )
+
     def pass2_soft_boost_result(result: dict[str, Any]) -> dict[str, Any] | None:
         source_packet = result.get("source_packet")
         value = source_packet.get("soft_boost") if type(source_packet) is dict else None
         return dict(value) if type(value) is dict else None
 
-    def record_shadow_capture_failure(stage: Stage, exc: Exception) -> None:
-        nonlocal shadow_capture_failure
-        message = str(exc) or type(exc).__name__
-        shadow_capture_failure = {
-            "stage": stage.name,
-            "error_type": type(exc).__name__,
-            "error": message,
-        }
+    def record_nonblocking_failure(stage: Stage, exc: Exception, *, failure_kind: str) -> None:
+        result = {"failure_kind": failure_kind, "error_type": type(exc).__name__}
         print(
-            f"[US-SHORT SHADOW CAPTURE FAILED] {stage.name}: {type(exc).__name__}: {message}",
+            f"[US-SHORT STAGE FAILED] stage={stage.name} failure_kind={failure_kind} "
+            f"error_type={type(exc).__name__}",
             file=sys.stderr,
         )
-        results.append({
-            "name": stage.name,
-            "gated": stage.gated,
-            "best_effort": True,
-            "execution_mode": "executed",
-            "stage_generated_at": ctx.generated_at,
-            "stage_observed_at": ctx.observed_at,
-            "result": {"shadow_capture_failed": shadow_capture_failure},
-        })
+        record_stage_terminal(
+            stage, result, execution_mode="executed",
+            stage_generated_at=ctx.generated_at, stage_observed_at=ctx.observed_at,
+            failure_kind=failure_kind,
+        )
 
     try:
         for stage in pipeline:
@@ -2426,14 +2671,7 @@ def run_weekly_capstone(
                     f"stage '{stage.name}' cannot start: declared input(s) missing or unreadable this run: "
                     f"{[_rel(p) for p in unreadable_inputs]}")
                 if stage.best_effort:
-                    record_shadow_capture_failure(stage, unreadable)
-                    _emit_diagnostic_event(
-                        diagnostic_event,
-                        "stage_failed",
-                        stage=stage.name,
-                        failure_kind="input_gate",
-                        error_type=type(unreadable).__name__,
-                    )
+                    record_nonblocking_failure(stage, unreadable, failure_kind="input_gate")
                     continue
                 if _stage_is_optional(stage):
                     input_paths = []
@@ -2458,6 +2696,9 @@ def run_weekly_capstone(
             try:
                 expected_outputs = [Path(p) for p in stage.outputs(stage_ctx)]
             except Exception as exc:  # noqa: BLE001 - optional lifecycle boundary
+                if stage.best_effort:
+                    record_nonblocking_failure(stage, exc, failure_kind="output_enumeration")
+                    continue
                 if not _stage_is_optional(stage):
                     raise WeeklyCapstoneError(
                         f"stage '{stage.name}' output enumeration failed: {type(exc).__name__}: {exc}"
@@ -2509,10 +2750,6 @@ def run_weekly_capstone(
                             exact_pass2_calls=approval.exact_pass2_calls,
                             approval_fingerprint=approval.fingerprint,
                         )
-                    append_stage_result(
-                        stage, result, execution_mode="reused",
-                        stage_generated_at=stage_generated_at, stage_observed_at=stage_observed_at,
-                    )
                     if stage.name == "soft_discovery":
                         ctx = replace(ctx, soft_discovery_run_result=dict(result))
                     if stage.name == "pass2_fetch":
@@ -2538,11 +2775,9 @@ def run_weekly_capstone(
                         )
                     except checkpoint_store.CapstoneCheckpointError as exc:
                         raise WeeklyCapstoneError(f"cannot persist reused stage '{stage.name}': {exc}") from exc
-                    _emit_diagnostic_event(
-                        diagnostic_event,
-                        "stage_completed",
-                        stage=stage.name,
-                        execution_mode="reused",
+                    record_stage_terminal(
+                        stage, result, execution_mode="reused",
+                        stage_generated_at=stage_generated_at, stage_observed_at=stage_observed_at,
                     )
                     continue
             before = {str(path.resolve()): _output_fingerprint(path) for path in expected_outputs}
@@ -2550,14 +2785,7 @@ def run_weekly_capstone(
                 result = result if soft_degraded else stage.run(stage_ctx)
             except Exception as exc:  # noqa: BLE001 — re-wrap with the stage label so a failure is never anonymous
                 if stage.best_effort:
-                    record_shadow_capture_failure(stage, exc)
-                    _emit_diagnostic_event(
-                        diagnostic_event,
-                        "stage_failed",
-                        stage=stage.name,
-                        failure_kind="stage_run",
-                        error_type=type(exc).__name__,
-                    )
+                    record_nonblocking_failure(stage, exc, failure_kind="stage_run")
                     continue
                 if not _stage_is_optional(stage):
                     _emit_diagnostic_event(
@@ -2596,15 +2824,9 @@ def run_weekly_capstone(
             bridge_emitted = _bridge_emitted(result) if stage.name == "weekly_bridge" else None
             if stage.name == "weekly_bridge" and bridge_emitted is False:
                 stage_generated_at, stage_observed_at = stage_clocks(result, fallback_generated_at=ctx.generated_at)
-                append_stage_result(
+                record_stage_terminal(
                     stage, result, execution_mode="executed",
                     stage_generated_at=stage_generated_at, stage_observed_at=stage_observed_at,
-                )
-                _emit_diagnostic_event(
-                    diagnostic_event,
-                    "stage_completed",
-                    stage=stage.name,
-                    execution_mode="executed",
                 )
                 _abort_current_output_transaction(transaction)
                 summary = {
@@ -2621,10 +2843,10 @@ def run_weekly_capstone(
                         "moved": [_rel(path) for path in transaction.archived_paths],
                     },
                     "stages": results,
+                    "stage_outcomes": stage_outcomes,
+                    "stage_outcome_counts": _stage_outcome_counts(stage_outcomes),
                     "checkpoint_manifest": str(checkpoint_manifest_path) if checkpoint_manifest_path else None,
                 }
-                if shadow_capture_failure is not None:
-                    summary["shadow_capture_failed"] = shadow_capture_failure
                 return summary
             if stage.name == "weekly_bridge" and bridge_emitted is not True:
                 raise WeeklyCapstoneError(
@@ -2673,12 +2895,13 @@ def run_weekly_capstone(
                 missing = []
             if missing:
                 if stage.best_effort:
-                    record_shadow_capture_failure(
+                    record_nonblocking_failure(
                         stage,
                         WeeklyCapstoneError(
                             f"stage '{stage.name}' completed but did not produce a fresh output this run: "
                             f"{[_rel(p) for p in missing]}"
                         ),
+                        failure_kind="fresh_output_missing",
                     )
                     continue
                 raise WeeklyCapstoneError(
@@ -2789,15 +3012,9 @@ def run_weekly_capstone(
                         f"resume equivalence refresh failed at stage '{stage.name}': {exc}"
                     ) from exc
             stage_generated_at, stage_observed_at = stage_clocks(result, fallback_generated_at=ctx.generated_at)
-            append_stage_result(
+            record_stage_terminal(
                 stage, result, execution_mode=execution_mode,
                 stage_generated_at=stage_generated_at, stage_observed_at=stage_observed_at,
-            )
-            _emit_diagnostic_event(
-                diagnostic_event,
-                "stage_completed",
-                stage=stage.name,
-                execution_mode=execution_mode,
             )
             if checkpoint_manifest_path is not None and stage.name != "weekly_bridge":
                 try:
@@ -2854,10 +3071,10 @@ def run_weekly_capstone(
         "emitted": True,
         "emitted_report": _rel(ctx.private_root / "weekly_private" / ctx.decision_date / "weekly_report.md"),
         "stages": results,
+        "stage_outcomes": stage_outcomes,
+        "stage_outcome_counts": _stage_outcome_counts(stage_outcomes),
         "checkpoint_manifest": str(checkpoint_manifest_path) if checkpoint_manifest_path else None,
     }
-    if shadow_capture_failure is not None:
-        summary["shadow_capture_failed"] = shadow_capture_failure
     return summary
 
 

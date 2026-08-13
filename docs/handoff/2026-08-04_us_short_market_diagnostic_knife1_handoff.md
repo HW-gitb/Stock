@@ -1393,7 +1393,8 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.provider.test_u
 **为什么**：此前任何 focused 运行都写 receipt，于是「跑焦点包 → 跑两道文档门 → 提交」这个正常顺序会让文档门那次把代码 receipt 覆盖掉，pre-commit 报 `focused acceptance receipt does not match the current code state`。本会话我为此多跑过两次焦点包。
 
 **验证命令**：
-- `.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_bounded_unittest tests.test_verification_receipt tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`
+- `.tools
+un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_bounded_unittest tests.test_verification_receipt tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`
 - reviewer 直跑真 `_is_document_only_focused_run` 的七格识别表
 - reviewer 两次源码级植入（放宽成超集 / 删去重守卫），`finally` 按字节还原并核 sha256 + `git diff --numstat`
 
@@ -1405,3 +1406,45 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.provider.test_u
 - 该改动只能**不写** receipt、不能**伪造**；pre-commit 侧仍按当前代码指纹校验，旧 receipt 不会因此变得可用。
 - 刀11+13 本轮零改动，`runners/us_short_weekly_capstone.py` sha 仍是上轮 FAIL 时的 `86e50ba3d9d9d5ee`；`R-USSHORT-MARKET-DIAGNOSTIC-SETTLE-SUCCESS-VALUE-IS-NOT-IN-THE-OUTCOME-TABLE` 与 `R-USSHORT-WEEKLY-BRIDGE-NO-EMIT-COLLAPSES-TWO-DIFFERENT-REASONS` 两条 Required 及 6 条 Optional 全部原样 open，是下一刀的内容。
 - 1302 当前落后 master 4 个提交，刀11+13 修复轮开工前先 ff-only 同步。
+
+## 2026-08-13 追加：刀11+13 producer/consumer outcome 对齐（1302，repaired / OPEN-NOT_VERIFIED）
+
+### 开工与十格双向差集
+
+- 开工前在 1302 执行 `git merge --ff-only master`，`b4109a2a..e2d24856`；既有未提交改动原样保留。桌面文档未改，主树未碰。
+- 改代码前按 producer 真实返回值与 normalizer 消费值做双向差集：`soft_discovery`、`serenity_quality_forward`、`forward_policy_corporate_actions`、`forward_policy_maturity`、`soft_boost_comparison_maturity`、`market_diagnostic_fetch`、`market_diagnostic` 的 P-C/C-P 均为空；`soft_boost_comparison_capture` 的 C-P 只有兼容值 `disabled/no_op`；`forward_policy_shadow` 是当前无 status 的 shape-only producer，consumer 的 any-dict fallback 比 producer 形状更宽；`market_diagnostic_settle` 的 P-C 为 `published/idempotent/recovered`，C-P 为空。
+- `weekly_bridge` 不在十个 special stage 中，另列 producer no-emit=`out_of_window/provider_health_restricted/provider_health_blocked`；修前统一为 `no_work_expected/WEEKLY_REPORT_NOT_EMITTED`，修后分别为 completed、waiting、waiting。
+
+### 实现
+
+- `runners/us_short_weekly_capstone.py`：settle 成功表对齐 `settled/published/idempotent/recovered`；weekly bridge 按 `out_of_window` 与 provider-health 分流，未知 reason fail-closed；所有 status 集合入口先做字符串守卫；pass2 budget preview 补 `stage_outcomes`/`stage_outcome_counts`；reused stage 先 checkpoint 后 terminal；best-effort output enumeration 进入既有 nonblocking recorder。
+- `tests/provider/test_us_short_weekly_capstone.py`：真实 settle 三值及 fallback、三种 waiting/失败反控；out-of-window 与 provider-health no-emit 双向控制；preview projection；非 dict 与 unhashable status；reused checkpoint→terminal 次序；best-effort output enumeration。
+- Optional 处置：O-K13-1、2、5、6 resolved（待独立审查）；O-K13-3 的 dead output-enumeration 分支 resolved，shadow shape-only future typed-skip 风险 accepted；O-K13-4 以 privacy-first reason-code 取舍 accepted。完整 disposition 见 `docs/system_risk_register.md` 顶部本轮条目。
+
+### 验证与交接
+
+- 固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；焦点超集 `300 OK`，receipt=`receipt:4384e5e6b774f92e1f4f32db`。
+- full lane fingerprint=`b23a47504e0d6fc21f0c772e117e3b66c82aaae40e626a49c1ca1cc9eb1dac4a`；`modules=318/318`、`discovered=5841 ran=5841 equal=True`、`5841 OK`、406.8s/860s、ledger PASS。诊断/checkpoint/one-click 回归包 `127 OK`；两道文档门 `55 OK` 且 receipt 保持不变；静态 `py_compile=4`、`git diff --check=PASS`。
+- 未调用 provider/live/paper，未写真实 `state/us_short`，未提交。状态保持 `repaired / OPEN-NOT_VERIFIED`；请 Claude Code 独立核对 producer 差集、no-emit 三分流、复用事件次序、preview projection 和六条 Optional 后按项目流程提交，本 Codex 不提交。
+## 2026-08-13 追加：刀11+13 两格分类对齐产出端——审查 PASS，已合入 master
+
+**改了什么**：本节只记审查侧结论。`runners/us_short_weekly_capstone.py`（累计 +280/−63）把 `market_diagnostic_settle` 的成功集合改成 `{settled, published, idempotent, recovered}`，把 `weekly_bridge` 的 no-emit 按 `_bridge_no_emit_reason` 分流成 `out_of_window → completed_work` 与 `provider_health_restricted|blocked → waiting_dependency`，并给集合入口加了字符串类型守卫；六条 Optional 一并处置。
+
+**为什么**：上一轮 FAIL 的两条 Required——真实结算成功被判失败、no-emit 把「盘中死区」和「数据源被挡」压成同一格。
+
+**验证命令**：
+- `.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 <刀11+13 七模块焦点超集>`
+- reviewer 四次源码级植入（settle 退回单值 / bridge out_of_window 退回 / bridge provider_health 退回 / 非 dict 兜底），`finally` 按字节还原并核 sha256 + `git diff --numstat`
+- reviewer 自做 `no_emit_reason` 词表双向差集：`_SEVERITY` 键 ⊖ `EMIT_ALLOWED_RUN_STATES` vs 表内覆盖
+
+**验证结果**：焦点超集 `PASS tests=300 elapsed=103.7s`、`receipt:9f1a9ed780ab17241d172ffa`；四次植入全部精确转红（3/2/2/1 failures），还原后 sha `84babc9097f6bcaa`、numstat 回 `280 63`；双向差集两个方向均为空集；full lane 引账本 `5841/5841`、`318/318`、gate True，独立重算指纹 `b23a47504e0d` 一致；文档门经 bounded runner `55 OK` 并打印 `DOC_ONLY - acceptance receipt left untouched`。
+
+**失效旧结论**：
+- 上一轮「十格表有两格把真相说反」已解除，两条 Required 均 `resolved`。
+- 我上一轮记的 `O-K13-6`（非 dict 兜底无人钉）也已关闭——同一处植入上轮仍绿、本轮转红。
+- 「`RUN_STATES` 有五个值而表只覆盖两个 ⇒ 又漏了 `disabled_unapproved`」这个怀疑**不成立**：`overall_run_state` 只取 `_SEVERITY` 的四个键，`disabled_unapproved` 从不参与 worst-of，真正可达的 no-emit 原因就是那两个。别再重复这个怀疑。
+
+**下一步注意事项**：
+- `forward_policy_shadow` 目前是无 status 的 shape-only 产出，故仍无条件判 `completed_work`（`O-K13-3` 的 accepted 半边）。将来若给它加 typed status，必须先更新契约测试，否则会变成「加了状态但表读不到」的同一类洞。
+- `O-K13-4`（`fresh_output_missing` 只留异常类型、不回写路径文本）是有意的隐私优先取舍，已写进 register，不要当成漏记再修一遍。
+- 按 0810 去重后的顺序，下一刀是**问题15**（四处文档事实纠偏，docs-only），其后 16-A → 问题14 → 16-B。
