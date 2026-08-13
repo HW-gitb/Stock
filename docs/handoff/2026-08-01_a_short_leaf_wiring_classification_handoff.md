@@ -7087,3 +7087,39 @@ This entry records only §15A in `D:\\cnhea\\Codex\\worktrees\\43fe\\Stock`; the
 **未覆盖维度与诚实边界**：agent 的另一条线索（HTTP 4xx/5xx 被折成空表使 `_fetch_l2_batch` 的 `exception` 计数对主流故障形态失效）本轮未修也未复现，按方案 §3.1.4 的边界保持 open——方向仍是中止而非放行。P1-4 / P0-1 仍须获授权的真实无缓存胶囊；本轮全部结论建立在离线假 provider 上。
 
 **下一步**：等用户授权跑真实无缓存胶囊收口 P0-1/P1-4。
+
+## 2026-08-13 追加：Optional 三项与 P3-10 最小修复（Codex executor/fixer；c405；OPEN-NOT-VERIFIED）
+
+### 用途、问题与方案
+
+本条继续追加到当前 handoff，不新建平行文档。按用户命令处理当前风险登记的 `O-EU-1`、`O-EU-2`、`O-SW1-5`，并严格执行桌面 `a_testrun0813.md` 的 P3-10 方案；不触及 HTTP 状态伪诊断、provider/live、真实 runtest、full lane 或其他问题。
+
+- `O-EU-1`：新增 `_require_nonempty_stock_universe()`，接入 `get_daily_basic`、`get_suspend_info` 两个读取点和 `run_egs`；SW map 保留已有专用目标主板门，五个已知生产消费点均 fail-closed。
+- `O-EU-2`：坏 stock-list 空 cache 维持直接抛错作为统一策略，不增加 warning/re-fetch 或新的 retry 状态机。
+- `O-SW1-5`：在现有测试 helper 上补 `empty DataFrame → default` 明确断言，生产 `safe_api` 不变。
+- P3-10：两个 launcher 将 `$SourceRoot` 参数默认值改为空字符串，在既有确认/ExtraArgs 闸门后用各自 `$RuntimeRoot` 只对空白值回填；显式 SourceRoot、Resolve-Path、capsule manager、固定 Python resolver 和 worker 参数保持不变。
+
+### 调用链、消费者、schema/source-binding/写盘边界
+
+Optional 调用链为 `stock_basic → get_stock_list → _require_nonempty_stock_universe → daily_basic/suspend/run_egs`，SW 目标链不变；空 universe 在各消费者读取/写 cache/继续评分前被拒。P3-10 调用链为 `powershell.exe -File → launcher 参数绑定 → ConfirmRuntest/ExtraArgs 闸门 → RuntimeRoot/SourceRoot → runtest_capsule.py → 现有 worker`；修复不新增产物、schema 或写盘路径，未改变 explicit SourceRoot ownership。
+
+### 负向控制、自审、精确测试与原始终态
+
+- Optional 负向：helper 空表回 default、非空 universe 门拒绝空表、有效帧保持原对象、坏 cache 仍 fail-closed。
+- P3-10 负向：A-short/US-short 各一次真实 Windows PowerShell `-File` 调用，省略 SourceRoot 与 ConfirmRuntest，均抵达确认错误、不出现空 `Split-Path` 错误、不创建 capsule；既有显式 SourceRoot/worker 命名绑定测试继续通过。
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，Python 3.13.8。精确焦点原始终态：`Ran 63 tests ... OK`；未运行 provider/live、真实 runtest、full lane 或 sub-agent；未 stage/commit/push/merge。
+- 当前代码/测试终态：`repaired / OPEN-NOT-VERIFIED`；固定 Python `py_compile`、两个 launcher 的 PowerShell parser、`git diff --check`、文档治理 `66 OK` 均通过，交 Claude Code 独立复审。
+
+后续如再修复，只能在本 handoff 继续追加问题/根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审、精确测试命令和原始终态，并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；不得新建平行 handoff。
+
+## 2026-08-13 追加：空 universe 门下沉与 P3-10 启动器的独立审查 = PASS（Claude Code；c405，已合入 master）
+
+**判定**：PASS，零 Required。`O-EU-1` 转 resolved；P3-10 代码面成立但原症状未复现，标 NOT_VERIFIED。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**：整读新增的 `_require_nonempty_stock_universe` 与它在 `get_daily_basic`、`get_suspend_info`（两处）、`run_egs` 的四个接入点，并静态清点全仓裸 `get_stock_list()` 只剩 2 处（helper 自身 + 已有独立门的 SW map）。跑了 helper 四格（空表 / 缺 `ts_code` 列 / 非 DataFrame / 正常）与两个消费点的实际报错标签。启动器侧读了两处闸门顺序，确认兜底之前没人读 `$SourceRoot`。执行方的自报计数未采信，自己重跑 183 用例超集并按 rule 6 补跑一次 a_short 全量。
+
+**P3-10 的诚实边界**：我用 bash 调 `powershell.exe -File`（绝对路径）、`cmd /c powershell.exe -File`、相对路径 `-File` 三种方式跑最小复现脚本，**都没能让参数默认值里的 `$PSScriptRoot` 变空**——桌面记录的失败形态在我这边没重现。因此我只能认定：把计算挪出参数默认值是严格更稳的写法，且两个真启动器在 `-File` 下现在都干净地停在 `-ConfirmRuntest` 闸门上。「这次改动正是 P3-10 的解」这句话没有我的独立证据，最终关闭要靠用户用当初失败的那条命令复跑。
+
+**未覆盖维度**：P1-4 的真实 `fast_path_used=true` 与 P0-1 的整周产物闭环仍须获授权的真实无缓存胶囊；本轮及此前 SW 侧全部结论都建立在离线假 provider 上。`O-EU-2`、`O-SW1-5` 与 agent 的 `exception`-计数线索仍 open。
+
+**下一步**：唯一还缺的是那次真实无缓存周跑——它同时收口 P0-1、P1-4，并给 P3-10 一个真实调用现场。

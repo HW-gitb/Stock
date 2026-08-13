@@ -9,7 +9,7 @@ param(
     [ValidatePattern('^(\d{8})?$')]
     [string]$AsOf = $null,
     [string]$Account = $null,
-    [string]$SourceRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$SourceRoot = '',
     [string]$CapsuleRoot = 'D:\cnhea\Stock_runtest_private',
     [string]$Commit = 'HEAD',
     [string]$RunId = '',
@@ -24,6 +24,9 @@ if (-not $ConfirmRuntest) {
 }
 
 $RuntimeRoot = Split-Path -Parent $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($SourceRoot)) {
+    $SourceRoot = $RuntimeRoot
+}
 $SourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
 $Manager = Join-Path $SourceRoot 'runners\runtest_capsule.py'
 if (-not (Test-Path -LiteralPath $Manager -PathType Leaf)) {
