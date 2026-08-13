@@ -9,6 +9,11 @@ param(
     [string]$PrivateRoot = "",
     [int]$MomentumTopK = 200,
     [double]$ProviderPaceSeconds = 1.0,
+    [Nullable[int]]$MaxRetriesPerCall = $null,
+    [Nullable[double]]$RetryBackoffSeconds = $null,
+    [Nullable[int]]$MaxTotalHttpAttempts = $null,
+    [switch]$DisableSoftDiscovery,
+    [switch]$DisableThemeSoftBoost,
     [string]$PythonExe = ""
 )
 
@@ -32,6 +37,21 @@ $cliArgs = @(
     "--momentum-top-k", "$MomentumTopK",
     "--provider-pace-seconds", "$ProviderPaceSeconds"
 )
+if ($null -ne $MaxRetriesPerCall) {
+    $cliArgs += @("--max-retries-per-call", "$MaxRetriesPerCall")
+}
+if ($null -ne $RetryBackoffSeconds) {
+    $cliArgs += @("--retry-backoff-seconds", "$RetryBackoffSeconds")
+}
+if ($null -ne $MaxTotalHttpAttempts) {
+    $cliArgs += @("--max-total-http-attempts", "$MaxTotalHttpAttempts")
+}
+if ($DisableSoftDiscovery) {
+    $cliArgs += "--disable-soft-discovery"
+}
+if ($DisableThemeSoftBoost) {
+    $cliArgs += "--disable-theme-soft-boost"
+}
 if (-not [string]::IsNullOrWhiteSpace($PrivateRoot)) {
     $cliArgs += @("--private-root", $PrivateRoot)
 }
