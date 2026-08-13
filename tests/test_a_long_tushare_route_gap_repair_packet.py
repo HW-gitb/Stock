@@ -16,7 +16,13 @@ from runners import a_long_tushare_route_gap_repair_packet as runner
 class FakeTusharePro:
     def index_classify(self, **kwargs):
         return pd.DataFrame(
-            [{"index_code": "801010.SI", "industry_name": "fixture L2", "level": "L2", "parent_code": "801000.SI"}]
+            [{
+                "index_code": "801010.SI",
+                "industry_name": "fixture L2",
+                "level": "L2",
+                "parent_code": "801000.SI",
+                "src": "SW2021",
+            }]
         )
 
     def index_member_all(self, **kwargs):
@@ -109,6 +115,15 @@ class ALongTushareRouteGapRepairPacketTest(unittest.TestCase):
             member = by_call["index_member_all_current_field_mapping"]
             self.assertEqual(member["mapped_field_roles"]["member_symbol"], "ts_code")
             self.assertEqual(member["mapped_field_roles"]["industry_code"], "l2_code")
+            classification = by_call["index_classify_sw_L2_repair_context"]
+            self.assertEqual(
+                classification["request_shape_without_token"]["src"],
+                runner.base.SW_INDUSTRY_CLASSIFICATION_STANDARD,
+            )
+            self.assertIn(
+                "src",
+                classification["request_shape_without_token"]["fields"].split(","),
+            )
 
             daily = by_call["daily_older_delisted_terminal_window"]
             self.assertEqual(daily["request_shape_without_token"]["ts_code"], "000003.SZ")

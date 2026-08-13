@@ -6916,3 +6916,92 @@ This entry records only §15A in `D:\\cnhea\\Codex\\worktrees\\43fe\\Stock`; the
 **诚实边界**：本处置不改任何生产链路，因此它保证的只是「现在不会被计入」；将来若有人在没有设计完成授权、或拿四个旧日期之一去启动冻结，属于新问题，必须 fail-closed，不能靠这条历史裁决兜底。P0-3 的关闭不代表 P0-1 或 P0-2 的真实运行验收已完成。
 
 **下一步**：无（随本轮提交）；未来 epoch 起点必须是 P0-2 真实验收通过后的首个全新合格周。
+
+## 2026-08-13 追加：a_testrun0813 SW first-blade + Optional 修复（Codex executor/fixer；c405；OPEN-NOT_VERIFIED）
+
+### Verdict / Action
+
+按 `C:\Users\cnhea\Desktop\a_testrun0813.md` 的方案完成本轮用户授权范围：O-P02-5、O-P02-6、P1-4、P1-5、P1-6、P2-7，以及三项未编号 SW 漏洞 SW-1 parent closure、SW-2 cache semantic gate、SW-3 classification failure observation。P2-8/P2-9 不在本轮命令内，未触及。实现保持最小改动、fail-closed、按类修复；不改变评分、Tier、历史产物或 provider 选择。
+
+### 根因、调用链与边界
+
+- O-P02-5：A-long `index_classify` L2 gap-repair call 已显式绑定 `src=SW2021`、统一 fields，并把 `parent_code`/`src` 纳入 required fields。
+- O-P02-6：classification-standard helper 保留明确的 invalid/mixed/empty source fail-closed 防御，并增加直接边界测试；没有把不可达分支改成放宽输入。
+- P1-4：current L1 fast path 保留 all-or-none、empty/bad-shape/exception/row-cap fallback；真实无缓存 fast-path 尚未执行，故保持未验证边界。
+- P1-5：L2 batch 每组记录 `ok`、`exception`、`empty`、`bad_shape`，汇总失败数和最多 10 个样本；任一失败整批中止，禁止 partial map/cache。
+- P1-6：继续使用 `engine/a_short_tushare_client.py` 已固定的 endpoint/version contract；SW calls 只使用受限 `retries=1`，empty/error 明确失败，不增加 alternate endpoint/probe/library。
+- P2-7：target-board failure 现在记录 `missing_count`、`target_count`、`missing_ratio`、最多 10 个 sample；zero-missing gate 保持不变。
+- SW-1：所有 L2 parent 在 member call 前必须解析到 L1；失败记录 `unresolved_parent_count`、L2 total、最多 10 个 sample，不再回退到 `未知`。
+- SW-2：cache read/new save 之前验证所有 mapping entry 的 `l1_name/l1_code/l2_name/l2_code` 均为非空字符串，名称不为 `未知`；没有新增 hash/schema migration。
+- SW-3：classification call/validation/source derivation failure 在抛出前写 `data_health` observation：`status=fail`、`source=index_classify`、`as_of`、bounded reason、observed sources。
+
+调用链保持：`weekly_screening.ps1 → run_egs → get_sw_industry_map → index_classify(SW2021) → parent closure → current L1 fast path 或 L2 PIT fallback → semantic/coverage gate → cache → build_master → score/heat/Tier → analysis_input/candidates/weekly`。producer 在 mapping/cache write 之前闭合 source、parent、semantic、coverage；consumer 只收到通过 gate 的 mapping。`data_health` schema/version 同步为 `1.11.0`，新增 `index_classify` source 枚举。
+
+### 修复文件与验证
+
+- `A-EGS/egs_main.py`：SW classification failure recording、parent closure、L2 per-group settlement、current fallback shape/error handling、target-board metrics、semantic cache/mapping gate。
+- `runners/a_long_tushare_route_gap_repair_packet.py`：A-long L2 classification request source/fields/required fields。
+- `schemas/data_health.schema.json` 与对应 suspend-guard test：schema `1.11.0` 和 `index_classify` source。
+- `tests/phase6/test_egs_sw_industry_and_watch_pool_health.py` 与 `tests/test_a_long_tushare_route_gap_repair_packet.py`：正向、反向、调用前置和 cache-write boundary 覆盖。
+- 固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `3.13.8`。
+- 精确测试 pack：`Ran 122 tests in 11.384s / OK`；`py_compile PASS 5`；`runners/weekly_screening.ps1` PowerShell parser `PASS`。这些是离线/模拟证据，不等于真实 provider、live、独立 review、commit 或 ship。
+
+### 自审、终态与交接规则
+
+自审已核对：source-binding（classification 与 A-long packet）、schema/lineage（1.11.0）、consumer（build_master/weekly）、cache write boundary、partial-batch 禁止、parent closure、zero-missing、bounded diagnostics、invalid source/cache/mapping 负向控制，以及 P2-8/P2-9 未触及。未运行 provider/live/network、真实无缓存 A-short、全量 lane、sub-agent；未 stage/commit/push/merge。
+
+当前唯一工作树为 `D:\cnhea\Codex\worktrees\c405\Stock`，HEAD 起点 `73ac0cc5`。代码修复状态为 `repaired / OPEN-NOT_VERIFIED`：下一步由 Claude Code 独立审查；真实无缓存验收须用户单独授权并满足桌面方案前置条件。未来任何进一步修复必须在本 handoff 追加：问题与根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审项目、精确测试命令与原始终态；并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`，不新建平行 handoff。
+
+## 2026-08-13 追加：a_testrun0813 SW 抓取第一刀的独立审查 = FAIL（Claude Code；c405）
+
+**判定**：FAIL，两条 Required（null 撞键错分 L1；retries 降级把瞬时故障变整周中止），五条 Optional。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方与子 agent 的转述）**：整读改动后的 `get_sw_industry_map` 全体（`_fetch_classification`、父级闭包段、`_fetch_l2_batch`、`_fetch_current_by_l1`、mapping 循环、三道终态门）与新增的 `_record_sw_failure` / `_bounded_sw_reason` / 加严后的 `_sw_mapping_is_usable`，并逐字回核 `safe_api` 的重试与 `errors` 语义。执行方自报的 `122 OK` 一条没采信，自己重跑了覆盖改动符号的 218 用例超集。
+
+**两条 Required 各自的决定性实验**：① null 撞键——L1 的 `industry_code` 与 L2 的 `parent_code` 各放一个 NaN，`get_sw_industry_map()` 不抛异常、把 `000001.SZ` 挂成 `l1_name='银行' / l1_code='nan'`，`save_cache` 被调用、observation `status=pass`；`str(np.nan)=='nan'` 是非空真值串，所以闭包门与「不得为未知」两道新门同时被绕过。② retries——本刀六条新测试全把 `safe_api` patch 掉，且 helper 里 `kwargs.pop("retries", None)` 直接丢弃该参数，故我改用真的 `safe_api` 做对照：先抛一次瞬时异常再成功的 provider，在 `retries=1` 下返回 `None`、在 `retries=3` 下第二次即成功。
+
+**独立对抗 agent（§6a）**：null 撞键这条是它先发现的，我复现后才落 register；`retries` 降级是我们各自独立得到、结论一致。它另报两条我本轮未复现的线索（tushare 把 HTTP 5xx 折成空表使 `exception` 计数对主流故障形态失效；同一路径会让 `get_stock_list()` 空表化从而架空目标主板零遗漏门），已在 register 标 NOT_VERIFIED、不作 PASS 依据。它列出的 HELD 不变式与我的探针互相印证。
+
+**未覆盖维度与诚实边界**：未跑 full lane（Required 已坐实，按 rule ③ 先出结论）。P1-4 的真实 `fast_path_used=true` 仍须一次获授权的当前日无缓存胶囊。第二刀 P2-8/P2-9 本轮未实现（那 4 个文件只有换行差），未审。
+
+**下一步**：Codex 按 register 两条 Required repair 修复，并补上会让真 `safe_api` 参与、且覆盖 null/空格四格的 closure 测试。
+
+## 2026-08-13 追加：修复 SW 第一刀独立审查 FAIL 的两项 Required（Codex executor/fixer；c405；OPEN-NOT_VERIFIED）
+
+### Verdict / Action
+
+按上一条独立审查 FAIL 与 `docs/system_risk_register.md` 的明确要求做最小修复，仅处理两项 Required：`NaN/null` 代码值字符串化为 `nan` 后撞入错误 L1，以及 `retries=1` 降级既有瞬时异常重试。P2-8/P2-9、P3-10 和其他 Optional 未触及。
+
+### 根因与最小改动
+
+- 在 `A-EGS/egs_main.py` 增加单一 `_normalize_sw_code()`，过滤 `pd.isna`、`None`、空串、`nan`/`none`/`null`/`<na>` 和首尾空格非规范值；L1 构键、L2 构图、parent closure 和 mapping 使用同一规范化。无效 parent 在任何 member 调用、mapping 和 cache 写入前按既有 `unresolved_parent_count` 门 fail-closed，彻底阻止 `nan` 撞键与 closure/mapping 空格不一致。
+- 移除分类调用和 L2 batch 调用中新增的 `retries=1`，恢复 `safe_api` 既有默认 3 次异常重试；`errors=[]`、四类 L2 settle、整批 fail-closed 不变。current L1 fast path 的既有 `retries=1` 保留，因为它失败后只进入 PIT fallback，不把瞬时错误直接变成整周终止。
+- 没有修改全局 `safe_api`、Tushare client/endpoint、评分/Tier、P2-8/P2-9 健康链、缓存代际或新增 runner/schema。
+
+### 调用链、消费者与写盘边界
+
+调用链保持：`weekly_screening.ps1 → run_egs → get_sw_industry_map → SW2021 classification → parent closure → current L1 fast path 或 L2 PIT fallback → semantic/coverage gate → cache → build_master → score/heat/Tier → analysis_input/candidates/weekly`。修复只位于 `get_sw_industry_map()` 紧邻 helper；错误代码在 member/provider 结果进入 mapping 前被拒绝，有效 mapping 仍由原有 `build_master` 和评分消费者使用；cache 只有通过语义、覆盖和 parent gate 后才写入。
+
+### 精确测试、自审与原始终态
+
+- 新增真实 `safe_api` 参与的 closure 四格：L1 `index_code` null、L1 `industry_code` null、L2 `parent_code` null、parent 带首尾空格；均在 member/cache 前失败并包含 `unresolved_parent_count`/bounded sample。
+- 新增真实 `safe_api` 的分类与 L2 member 瞬时异常后成功、持续异常重试后失败回归；仅 patch `time.sleep`，不调用网络、不改变 retry 实现。
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，Python 3.13.8。
+- SW 模块：`23 OK`；桌面方案合并焦点集：`117 OK`；扩展直接影响集：`130 OK`；`py_compile`、`runners/weekly_screening.ps1` PowerShell parser、`git diff --check` 通过。
+- 未运行 provider/live、真实无缓存 A-short、full lane 或 sub-agent；未 stage/commit/push/merge。当前终态为 `repaired / OPEN-NOT_VERIFIED`，等待 Claude Code 独立复审；P1-4 的真实 `fast_path_used=true` 仍需用户另行授权的无缓存验收。
+
+后续若再修复，只能在本 handoff 追加问题/根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审、精确测试命令和原始终态，并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；不得新建平行 handoff。
+
+## 2026-08-13 追加：SW 抓取第一刀两条 Required 的独立复审 = PASS（Claude Code；c405，已提交并合入 master）
+
+**判定**：PASS，零 Required。两条 Required 均转 `resolved`；五条 Optional 仍 open。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方转述）**：整读新增的 `_normalize_sw_code()` 与它的五个使用点（`l1_map` 建键、`l2_info` 建键、`l1_parent_keys` 派生、父级闭包、mapping 循环的 parent 解析），确认「同一套规范化」这条 Required 要求真的落到了两侧而不是只补一处；再逐处核 `retries=` 现状（全仓只剩 `_fetch_current_by_l1` 一处 1）。执行方自报的 `130 OK`/`23 OK` 一条没采信，自己重跑了覆盖改动符号的 223 用例超集，并按 rule 6 补跑一次 a_short 全量。
+
+**决定性对照**：把上一轮坐实缺陷的那组输入原样再跑——现在抛 `sw_parent_closure:unresolved_parent_count=1;sample=[('801783.SI', nan)]`、不写缓存、`status=fail`；上轮那份「挂成银行 / `l1_code='nan'` / 写缓存 / status=pass」不再出现。加严的反方向也验了：`L1 index_code=NaN` 与 `L1 industry_code=NaN` 两格仍正常建图并 pass（另一个标识仍提供键），没有把合法数据误杀。retries 侧同样两向：瞬时异常现在被重试治好（L2 组与分类调用各实测被调用 2 次），持续失败仍整批 fail-closed 不写缓存。
+
+**测试质量**：本轮新增的五条测试（null/空格闭包 + 四条真-`safe_api` 重试）都**不 patch `safe_api`**，正是上一轮 Required 点名要求的形态；上轮那个把 `retries` 直接 `pop` 掉的 helper 不再参与这几条，所以这两类缺陷此后能被测试自己抓住。
+
+**未覆盖维度与诚实边界**：P1-4 的真实 `fast_path_used=true`、P0-1 的运行闭环仍须一次获授权的当前日无缓存胶囊；本轮全部结论建立在离线假 provider 上。第二刀 P2-8/P2-9 未实现（那 4 个文件仍只有换行差）、未审。上一轮独立 agent 报告的两条线索（HTTP 5xx 被折成空表使 `exception` 计数失效；`get_stock_list()` 空表化架空目标主板门）我至今未独立复现，仍标 NOT_VERIFIED。
+
+**下一步**：等用户单独授权后跑真实无缓存胶囊收口 P0-1/P1-4；第二刀另起。

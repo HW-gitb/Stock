@@ -406,8 +406,12 @@ def execute_route_gap_repair(
         component_id="industry_taxonomy_history",
         api_family="index_classify",
         method="index_classify",
-        kwargs={"level": "L2", "fields": "index_code,industry_name,level,parent_code"},
-        required_fields=["index_code", "level"],
+        kwargs={
+            "level": "L2",
+            "src": base.SW_INDUSTRY_CLASSIFICATION_STANDARD,
+            "fields": base.SW_INDUSTRY_CLASSIFICATION_FIELDS,
+        },
+        required_fields=["index_code", "level", "parent_code", "src"],
         raw_root=raw_root,
     )
     results.append(result)
