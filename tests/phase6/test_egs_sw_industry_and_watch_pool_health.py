@@ -40,11 +40,13 @@ def _classifications():
         "index_code": ["801000.SI"],
         "industry_code": ["801000"],
         "industry_name": ["一级行业"],
+        "src": ["SW2021"],
     })
     l2 = pd.DataFrame({
-        "index_code": ["801010.SI", "801020.SI"],
-        "industry_name": ["二级甲", "二级乙"],
+        "index_code": ["801783.SI", "801780.SI"],
+        "industry_name": ["股份制银行Ⅱ", "银行"],
         "parent_code": ["801000", "801000"],
+        "src": ["SW2021", "SW2021"],
     })
     return l1, l2
 
@@ -52,7 +54,7 @@ def _classifications():
 def _canonical_members():
     return pd.DataFrame({
         "con_code": ["000001.SZ", "000002.SZ"],
-        "index_code": ["801010.SI", "801020.SI"],
+        "index_code": ["801783.SI", "801780.SI"],
         "in_date": ["20200101", "20200101"],
         "out_date": ["", ""],
     })
@@ -76,16 +78,18 @@ class SwIndustrySourceTest(unittest.TestCase):
 
     def test_current_run_uses_l1_fast_path_and_normalizes_official_aliases(self) -> None:
         l1, l2 = _classifications()
+        classify_calls = []
         calls = []
 
-        def index_classify(*, level):
+        def index_classify(*, level, src, fields):
+            classify_calls.append({"level": level, "src": src, "fields": fields})
             return l1 if level == "L1" else l2
 
         def index_member_all(**kwargs):
             calls.append(kwargs)
             return pd.DataFrame({
                 "ts_code": ["000001.SZ", "000002.SZ"],
-                "l2_code": ["801010.SI", "801020.SI"],
+                "l2_code": ["801783.SI", "801780.SI"],
                 "in_date": ["20200101", "20200101"],
                 "out_date": ["", ""],
                 "is_new": ["Y", "Y"],
@@ -106,6 +110,35 @@ class SwIndustrySourceTest(unittest.TestCase):
             mapping = self.egs_main.get_sw_industry_map()
 
         self.assertEqual(set(mapping), {"000001.SZ", "000002.SZ"})
+        self.assertEqual(mapping["000001.SZ"]["l2_code"], "801783.SI")
+        self.assertNotEqual(mapping["000001.SZ"]["l1_name"], "未知")
+        master = self.egs_main.build_master(
+            pd.DataFrame({
+                "ts_code": ["000001.SZ", "000002.SZ"],
+                "pct_20d": [1.0, 1.0],
+            }),
+            pd.DataFrame({
+                "ts_code": ["000001.SZ", "000002.SZ"],
+                "qfq_close": [10.0, 10.0],
+                "qfq_source_trade_date": ["20260812", "20260812"],
+                "pct_20d": [1.0, 1.0],
+            }),
+            pd.DataFrame({
+                "ts_code": ["000001.SZ", "000002.SZ"],
+                "close": [10.0, 10.0],
+                "source_trade_date": ["20260812", "20260812"],
+            }),
+            pd.DataFrame(),
+            mapping,
+            {"deduct_30d": set()},
+        )
+        self.assertEqual(
+            master.loc[master["ts_code"] == "000001.SZ", "l2_name"].item(),
+            "股份制银行Ⅱ",
+        )
+        self.assertEqual([call["level"] for call in classify_calls], ["L2", "L1"])
+        self.assertTrue(all(call["src"] == "SW2021" for call in classify_calls))
+        self.assertTrue(all("src" in call["fields"].split(",") for call in classify_calls))
         self.assertEqual(calls[0]["l1_code"], "801000.SI")
         self.assertEqual(calls[0]["is_new"], "Y")
         observation = self.egs_main._current_sw_industry_source_observation()
@@ -114,6 +147,7 @@ class SwIndustrySourceTest(unittest.TestCase):
         self.assertEqual(observation["request_group_count"], 1)
         self.assertTrue(observation["fast_path_used"])
         self.assertFalse(observation["fallback_used"])
+        self.assertEqual(observation["classification_standard"], "SW2021")
 
     def test_fast_path_limit_hit_falls_back_instead_of_accepting_truncation(self) -> None:
         l1, l2 = _classifications()
@@ -124,7 +158,7 @@ class SwIndustrySourceTest(unittest.TestCase):
             "out_date": [""] * 2000,
         })
 
-        def index_classify(*, level):
+        def index_classify(*, level, src, fields):
             return l1 if level == "L1" else l2
 
         def index_member_all(**_kwargs):
@@ -155,7 +189,7 @@ class SwIndustrySourceTest(unittest.TestCase):
     def test_historical_run_skips_current_only_fast_path(self) -> None:
         l1, l2 = _classifications()
 
-        def index_classify(*, level):
+        def index_classify(*, level, src, fields):
             return l1 if level == "L1" else l2
 
         def index_member_all(**_kwargs):
@@ -183,6 +217,82 @@ class SwIndustrySourceTest(unittest.TestCase):
         self.assertFalse(observation["fast_path_used"])
         self.assertTrue(observation["fallback_used"])
         self.assertEqual(observation["message"], "decision_as_of_requires_pit_history")
+        self.assertEqual(observation["classification_standard"], "SW2021")
+
+    def test_wrong_classification_source_fails_before_members_and_cache_write(self) -> None:
+        for source_shape in ("SW2014", "mixed", "missing"):
+            with self.subTest(source_shape=source_shape):
+                l1, l2 = _classifications()
+                if source_shape == "SW2014":
+                    l1["src"] = "SW2014"
+                    l2["src"] = "SW2014"
+                elif source_shape == "mixed":
+                    l2.loc[1, "src"] = "SW2014"
+                else:
+                    l1 = l1.drop(columns=["src"])
+                    l2 = l2.drop(columns=["src"])
+
+                member_calls = []
+
+                def index_classify(*, level, src, fields):
+                    return l1 if level == "L1" else l2
+
+                def index_member_all(**kwargs):
+                    member_calls.append(("index_member_all", kwargs))
+                    return pd.DataFrame()
+
+                def index_member(**kwargs):
+                    member_calls.append(("index_member", kwargs))
+                    return pd.DataFrame()
+
+                self.egs_main.pro = SimpleNamespace(
+                    index_classify=index_classify,
+                    index_member_all=index_member_all,
+                    index_member=index_member,
+                )
+                with patch.object(self.egs_main, "load_cache", return_value=None), \
+                     patch.object(self.egs_main, "save_cache") as save_cache, \
+                     patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+                    with self.assertRaisesRegex(RuntimeError, "source binding|missing required"):
+                        self.egs_main.get_sw_industry_map()
+
+                self.assertEqual(member_calls, [])
+                save_cache.assert_not_called()
+
+    def test_sw2021_cache_generation_does_not_read_v6(self) -> None:
+        l1, l2 = _classifications()
+        loaded_keys = []
+
+        def index_classify(*, level, src, fields):
+            return l1 if level == "L1" else l2
+
+        def index_member_all(**_kwargs):
+            return pd.DataFrame({
+                "ts_code": ["000001.SZ", "000002.SZ"],
+                "l2_code": ["801783.SI", "801780.SI"],
+                "in_date": ["20200101", "20200101"],
+                "out_date": ["", ""],
+                "is_new": ["Y", "Y"],
+            })
+
+        self.egs_main.TODAY = self.egs_main.datetime.now().strftime("%Y%m%d")
+        self.egs_main.pro = SimpleNamespace(
+            index_classify=index_classify,
+            index_member_all=index_member_all,
+            index_member=lambda **_kwargs: pd.DataFrame(),
+        )
+
+        def load_cache(key):
+            loaded_keys.append(key)
+            return None
+
+        with patch.object(self.egs_main, "load_cache", side_effect=load_cache), \
+             patch.object(self.egs_main, "save_cache"), \
+             patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+            self.egs_main.get_sw_industry_map()
+
+        self.assertEqual(loaded_keys, [f"sw_industry_map_sw2021_v7_{self.egs_main.TODAY}"])
+        self.assertNotIn("sw_industry_map_v6", loaded_keys[0])
 
 
 class WatchPoolHealthTest(unittest.TestCase):
@@ -331,6 +441,7 @@ class WatchPoolHealthTest(unittest.TestCase):
             "fallback_used": False,
             "cache_hit": False,
             "message": None,
+            "classification_standard": "SW2021",
         }
 
         with self.assertRaisesRegex(ValueError, "minimum coverage"):

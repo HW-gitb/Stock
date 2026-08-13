@@ -1077,3 +1077,55 @@ python runners\a_short_account_state_from_manual_tables.py --input-dir state\a_s
 **已知不做**：同批落的两份 `iv_feed.json` 也是 CRLF（Python 文本模式所致），但不在任何 pin 内、无提交字节绑定；改 Python 写盘口会改变将来每份 feed 的字节，属独立刀。
 
 **下一步**：无（随本轮提交）。
+
+## 2026-08-13 追加：a_testrun0813 P0-2 SW2021 source-binding repair（Codex executor/fixer）
+
+### 改了什么
+
+- 在 `A-EGS/egs_main.py::get_sw_industry_map` 绑定 `SW_INDUSTRY_CLASSIFICATION_STANDARD="SW2021"` 和显式 classification fields；L1/L2 `index_classify` 均传入同一 `src`/`fields`，并在成员遍历、缓存写入前校验返回非空、必需字段和严格单一 `src`。
+- 行业缓存改用 `sw_industry_map_sw2021_v7_<as_of>`；旧 `sw_industry_map_v6_<as_of>` 不读取、不迁移、不删除。
+- `data_health` 从 `1.8.0` 升到 `1.9.0`，`sw_industry_membership.classification_standard` 在实际 pass/fail 为 `SW2021`、未观测为 `null`；只补直接受影响的 health fixture。
+- 原地扩充 `tests/phase6/test_egs_sw_industry_and_watch_pool_health.py`：`801783.SI → 000001.SZ` 正向 PIT/mapping/`build_master` 消费、显式 source、错误 source fail-closed、缓存代际隔离；同步 `test_egs_main_suspend_guard.py` 和 `test_egs_margin_coverage.py` 的 schema fixture。
+
+### 为什么改
+
+`a_testrun0813.md` P0-2 证明原调用未绑定 `src`，使用已停用 SW2014 目录遍历成员，而当前成员归属是 SW2021，导致 SW2021 独有 L2（包括 `801783.SI`）从未被询问。该修复只关闭 source-binding 根因；不处理 P0-1 的真实全量闭环、不重算 P0-3 历史产物，也不承接 P1-4/P1-5/P1-6 或 P2/P3 方案。
+
+### 验证命令
+
+```powershell
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.phase6.test_egs_sw_industry_and_watch_pool_health
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.phase6.test_egs_sw_industry_and_watch_pool_health tests.phase6.test_egs_main_suspend_guard tests.phase6.test_egs_margin_coverage
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m py_compile 'A-EGS\egs_main.py'
+git diff --check
+```
+
+### 验证结果
+
+- 最终 P0-2 focused：`Ran 11 tests in 0.388s` / `OK`。
+- 直接受影响三模块：`Ran 46 tests in 3.065s` / `OK`。
+- 固定 Python `3.13.8`、`py_compile` exit 0、`git diff --check` exit 0（仅换行转换提示）。
+- 负向控制确认 SW2014、混合 source、缺 source 在成员接口和 `save_cache` 前失败；静态回扫确认生产源码只保留两次显式 SW2021 `index_classify`，旧 v6 键不可达。
+- 未调用 provider/live，未启动 runtest/full lane/sub-agent，未写历史运行产物，未 stage/commit/push/merge；当前状态为 **working-tree repair implemented / OPEN-NOT_VERIFIED**，等待 Claude Code 独立审查。
+
+### 失效旧结论
+
+- 旧 `sw_industry_map_v6_<as_of>` 缓存不能作为 SW2021 标准证据；本修复不读取或迁移这些缓存。
+- 本条不使 P0-1 全量运行、P0-3 历史四周污染或此前任何真实产物自动变为 resolved；此前 handoff/register 中不属于该 source-binding 根因的结论保持原边界。
+
+### 下一步注意事项
+
+- Claude Code 只按当前 R-ID 独立审查实现、schema、消费者接线和负向控制；PASS 后由 reviewer/committer 决定提交。
+- 真实无缓存 runtest 胶囊必须另获用户明确执行命令；成功后才可讨论 P0-1 的运行闭环。任何后续修复仍须把命令、问题、根因、最小改动、调用链、schema/source-binding/write boundary、负控、自审、精确测试和原始终态追加到正确 handoff，并同步 risk register/SESSION_LOG。
+
+## 2026-08-13 追加：a_testrun0813 P0-2 的独立审查 = PASS（Claude Code；c405 工作树，已提交并合入 master）
+
+**判定**：PASS，零 Required，四条 Optional（`O-P02-1`~`O-P02-4`）。R-ID 正文与边界只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方与其自述）**：整读 `get_sw_industry_map` 全函数体（含 `_fetch_current_by_l1` / `_fetch_l2_batch` / `_apply_pit_window` / 主板零遗漏门 / 三处 `_record_sw_industry_source_observation`）、新增的 `_validate_sw_classification_frame`、改动后的 `validate_data_health_consistency`，并逐字确认 `safe_api` 的 `**kw` 会把 `src`/`fields` 透传、空返回与异常都退化成 `None`。执行方自报的 `11 OK` / `46 OK` 我一条都没采信，自己重跑了覆盖改动符号的焦点超集；执行方没跑全量而 rule 3(a) 点名了 `A-EGS/egs_main.py`，故我按 rule 6 escalation 自跑一次 a_short 全量。
+
+**植入 / 反向对照**：不改生产代码，改用一个忠实模拟 Tushare 双口径的 provider（不传 `src` 回 SW2014、传 `SW2021` 回 SW2021），在同一 harness 上跑三格——正向拿到 `000001.SZ → 801783.SI 股份制银行Ⅱ / 银行` 且写盘键为 v7；反向（provider 忽略 `src`，等价于修复前行为）在成员接口与 `save_cache` 之前抛 `source binding invalid: got ['SW2014']`；第三格让 provider 内容用 SW2014 而 `src` 列伪造成 SW2021，source 门放行但既有主板零遗漏门仍硬中止 `target-board coverage incomplete: 000001.SZ`。三格合起来证明：这道门承重，且即使标签被伪造，失败也永远是响的、不会退回静默漏股。
+
+**未覆盖维度与诚实边界**：没有做真实无缓存 runtest 胶囊，因此「SW2021 在真 Tushare 上是否真回 134 组、主板是否真零遗漏」仍是 NOT_VERIFIED——本轮所有正向结论都建立在模拟 provider 上，真实性来自桌面 `a_testrun0813` 的用户实测而非我的运行。P0-1 的运行闭环、P0-3 已污染的四周历史产物、P1-4 / P1-5 / P1-6 / P2-7 / P2-8 / P2-9 / P3-10 均不在本刀内，也没有因本刀而 resolved。
+
+**下一步**：真实无缓存 runtest 胶囊需用户单独授权；`O-P02-2` 的 A-long 兄弟出口在重启 A-long 数据线时必须一并绑定。
