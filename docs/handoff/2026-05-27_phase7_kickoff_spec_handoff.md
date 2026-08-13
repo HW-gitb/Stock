@@ -4792,3 +4792,12 @@ Claude Code：独立审查本节对应 Required/Additional；PASS 后按项目�
 **失效旧结论**：上一轮 FAIL 的两条 Required 均 `resolved`；`O-16B-1`（batch4 except 元组抓不到实际异常）与 `O-16B-2`（`validate_prior_run_dir` 拿候选自己父目录当 root）也已修掉。注意 `_PACKET_KEYS` 仍是 20 键、schema `required` 20、example 20 键、`:109` 的「20-key」文案同步——`prior_runs_private_root` 是函数参数不是 packet 键，别误当契约扩张。
 
 **下一步注意事项**：新记 `O-16B-6`——扣留周发首值之后的恢复**只在账户对账保留历史时才无损**（`build_next_symbol_cooldown_state` docstring 是「**may** retain full history」）；且 guard 若 prior 恰为 `cooldown` 而当周扣留发出 `caution`，下一周会少走一档 `recovery` 过渡。这是拿「永久锁死」换来的「略偏宽松」，真开钟前按实际对账口径复核一次。另：排队中的 `R-DOCGOV-DOC-EDITS-INVALIDATE-THE-CODE-RECEIPT`（改文档不该作废代码回执）现在可以做了——16-B 已合入，方案见 `docs/handoff/2026-08-04_us_short_market_diagnostic_knife1_handoff.md` 末节与 register。
+
+### O-16B-6 触发修复的明确条件
+
+本轮不修 O-16B-6。仅在真开 US-short clock 前的实际对账/状态迁移复核中出现以下任一情况时重新触发修复：
+
+- 实际 `symbol_cooldown_reconciliation` 只保留当周新事件、不能保留并重建既有完整 cooldown 历史；或实测扣留周发出的首值导致下一周更早的 cooldown 记录消失。此时必须在开钟前修复，不能把账户对账缺口当作已解决。
+- 实际 guard 契约要求严格经过 `cooldown → caution → recovery → normal`，且测试或运行规则证明扣留周首值会让下一周从 `caution` 直接到 `normal` 不可接受。此时必须在开钟前补回 recovery 过渡。
+
+若实际对账保留完整历史，且业务明确接受该直接放宽路径，则 O-16B-6 不触发；仅因 docstring 使用 `may` 或离线代码存在该路径，不单独开修复刀。
