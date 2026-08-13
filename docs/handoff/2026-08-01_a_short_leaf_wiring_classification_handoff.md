@@ -7332,3 +7332,32 @@ OK (skipped=1)
 4. **不删除、不重写、不补 SHA、不重新发布** `20260810` 及另外三周产物；四周仍是 `pre-design audit-only artifacts`。
 
 **为什么只改这一处**：`docs/system_risk_register.md` 的当前有效条目**不带**这句过时失败事实（我 grep 过，零命中），按 §6.2「当前有效 register 已有 `Ran 4 tests / OK` 时不重复造条目」，故本轮不动 register。同理按 §6.2「不得仅为该 Optional 单独新增 SESSION_LOG 周期」，本轮**不新增 SESSION_LOG 评审循环 entry**；留痕由本节与提交本身承担。
+## 2026-08-13 追加：daily_basic 同日停牌缺行覆盖门最小修复（Codex executor/fixer；c405；repaired / OPEN-NOT_VERIFIED）
+
+### 用途、问题与方案
+
+本节记录桌面 `C:\Users\cnhea\Desktop\4a_testrun.md` 本轮唯一问题入口中 daily_basic 阻塞的执行结果。全量测试胶囊在 `get_daily_basic()` 以 `daily_basic target coverage incomplete for 20260813` 中止，现场三只缺行代码为 `300176.SZ`、`600984.SH`、`603221.SH`。根因是原调用顺序先要求 as-of 目标股票全集在 `daily_basic` 零遗漏，再取得同日 `daily` 停牌证据；同日停牌票没有 `daily_basic` 行时被误判为 provider 漏数。
+
+### 最小改动
+
+- 只改 `A-EGS/egs_main.py` 与 `tests/test_a_short_review1_knives_6_10.py`。
+- `run_egs()` 先调用既有 `get_suspend_info(trade_dates)`，读取 `_LAST_HARD_VETO_SOURCE_HEALTH["suspension"]["observed_at"]`，再将 `suspended_codes` 与 `suspended_observed_at` 传给 `get_daily_basic()`。
+- 缓存命中和新拉取共用同一覆盖判定：仅当 `daily_basic source_trade_date == suspension observed_at` 时，目标集合中属于同日确认停牌的缺行可解释；其他缺行仍 `RuntimeError` fail-closed。未写现场代码 allowlist，不合成 `daily_basic` 行，不改 fallback、provider/request、cache key、schema、data-health 或其他问题。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+调用链为 `weekly_screening.ps1 / a_short_runtest.ps1 → run_egs → get_suspend_info → _LAST_HARD_VETO_SOURCE_HEALTH.suspension.observed_at → get_daily_basic → get_unlock_future/filter_l0 → build_master → candidates/analysis_input/weekly pipeline`。停牌票仍由 `filter_l0()` 排除；活跃候选仍受 `build_master()` 的 raw/qfq 同日 source binding 保护；未解释缺失在 cache、candidate 和正式输出写入前中止。没有新增 schema 或数据源绑定形状。
+
+### 负向控制与验证
+
+- A/B 同日停牌缺行：放行并写 cache。
+- A/B/C 仅 B 可解释：C 仍触发 `target coverage incomplete`，且不写 cache。
+- 跨日停牌证据：仍中止；同日缓存可复用，跨日缓存强制重拉。
+- 测试使用 A/B/C 假代码，不固化现场三只股票。
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 3.13.8。红测先因旧签名缺少 `suspended_codes` 参数失败；修复后精确方案包 `37 OK`，最终 focused 超集 `114 OK`，receipt=`receipt:e12d9e0d0e805d88a608d912`；`py_compile`、`git diff --check` 和文档守卫通过；一次规定的 A-short 离线 full lane 为 `2827/2827 PASS`，`discovered=ran`，115.9s，parallel。第一次 full-lane 请求因 focused receipt 缺少 effect-contract bundle 被门拒绝，未启动 lane；补齐 bundle 后仅运行一次正式 full lane。
+
+### 原始终态与角色边界
+
+本轮原始终态为 **`repaired / OPEN-NOT_VERIFIED`**：Codex 只完成最小实现、测试和文档记录，未启动 provider/live/真实无缓存 capsule，未 stage/commit/push/merge，也未修改 P1-4、N-3、N-4、N-5、P0-3、P3-10。下一步由 Claude Code 独立审查；只有 reviewer PASS 并提交后，用户另行授权的无缓存真实胶囊实际命中同日停牌缺行、`unexplained_missing=0`、停牌源非 unknown/low coverage，且 candidates/analysis_input/weekly 产物和退出码均正常，才可关闭本条/P0-1。
+
+后续若再修复，只能继续在本主 A-short handoff 追加问题、根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审、精确命令和原始终态，并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；不得新建平行 handoff。

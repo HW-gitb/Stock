@@ -4027,7 +4027,8 @@ def get_daily_all(trade_dates, price_as_of=None):
     return result
 
 # ── [崩溃修复①] ─────────────────────────────────────────────────────────────
-def get_daily_basic(trade_date, fallback_dates=None):
+def get_daily_basic(trade_date, fallback_dates=None, suspended_codes=None,
+                    suspended_observed_at=None):
     """
     拉取每日行情基本面。
     若 trade_date 当日无数据（午夜运行 / 非交易日），
@@ -4036,14 +4037,54 @@ def get_daily_basic(trade_date, fallback_dates=None):
     requested_trade_date = trade_date
     key = f"daily_basic_{trade_date}_source_v2"
     target_codes = None
+    suspended_codes = {
+        str(code) for code in (suspended_codes or set()) if pd.notna(code)
+    }
+    suspension_source_date = str(suspended_observed_at or "")
+
+    def _coverage_parts(frame, source_trade_date):
+        if target_codes is None:
+            return set(), set(), set()
+        observed_codes = (
+            set(frame["ts_code"].dropna().astype(str))
+            if "ts_code" in frame.columns else set()
+        )
+        all_missing = target_codes - observed_codes
+        source_date = str(source_trade_date or "")
+        same_date = bool(source_date) and bool(suspension_source_date) and (
+            source_date == suspension_source_date
+        )
+        explained_suspended = (
+            all_missing & suspended_codes if same_date else set()
+        )
+        unexplained_missing = all_missing - explained_suspended
+        return all_missing, explained_suspended, unexplained_missing
+
+    def _cached_source_date(frame):
+        source_dates = set(frame["source_trade_date"].dropna().astype(str))
+        return next(iter(source_dates)) if len(source_dates) == 1 else None
+
     if callable(getattr(pro, "stock_basic", None)):
         target_frame = _require_nonempty_stock_universe("daily_basic")
         target_codes = set(target_frame["ts_code"].dropna().astype(str))
     if (cached := load_cache(key)) is not None:
         if "source_trade_date" not in cached.columns:
             raise RuntimeError("daily_basic cache lacks source_trade_date provenance")
-        cached_codes = set(cached["ts_code"].dropna().astype(str)) if "ts_code" in cached.columns else set()
-        if target_codes is None or target_codes.issubset(cached_codes):
+        _, _, unexplained_missing = _coverage_parts(
+            cached, _cached_source_date(cached)
+        )
+        if target_codes is None or not unexplained_missing:
+            if target_codes is not None:
+                _, explained_suspended, _ = _coverage_parts(
+                    cached, _cached_source_date(cached)
+                )
+                if explained_suspended:
+                    log.info(
+                        "daily_basic coverage explained by same-date suspension: "
+                        "source_trade_date=%s explained_count=%s sample=%s",
+                        _cached_source_date(cached), len(explained_suspended),
+                        sorted(explained_suspended)[:10],
+                    )
             return cached
 
     df = safe_api(pro.daily_basic, trade_date=trade_date,
@@ -4069,12 +4110,18 @@ def get_daily_basic(trade_date, fallback_dates=None):
         if col in df.columns: df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df.copy()
     if target_codes is not None:
-        observed_codes = set(df["ts_code"].dropna().astype(str))
-        missing_target = sorted(target_codes - observed_codes)
-        if missing_target:
+        _, explained_suspended, unexplained_missing = _coverage_parts(df, trade_date)
+        if unexplained_missing:
             raise RuntimeError(
                 f"daily_basic target coverage incomplete for {requested_trade_date}: "
-                + ",".join(missing_target[:10])
+                + ",".join(sorted(unexplained_missing)[:10])
+            )
+        if explained_suspended:
+            log.info(
+                "daily_basic coverage explained by same-date suspension: "
+                "source_trade_date=%s explained_count=%s sample=%s",
+                trade_date, len(explained_suspended),
+                sorted(explained_suspended)[:10],
             )
     df["source_trade_date"] = trade_date
     save_cache(key, df)
@@ -7348,9 +7395,16 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
             "a versioned prior as_of snapshot is required"
         )
 
-    df_db = get_daily_basic(latest_td, trade_dates)
-
     suspended_set = get_suspend_info(trade_dates)
+    suspension_observed_at = (
+        _LAST_HARD_VETO_SOURCE_HEALTH.get("suspension", {}).get("observed_at")
+    )
+    df_db = get_daily_basic(
+        latest_td,
+        trade_dates,
+        suspended_codes=suspended_set,
+        suspended_observed_at=suspension_observed_at,
+    )
     relisted_set  = get_relisted_stocks(trade_dates)
 
     # [崩溃修复②] get_unlock_future 内置前置防御

@@ -91,6 +91,130 @@ class HardVetoSourceAndCalendarTest(unittest.TestCase):
         self.assertEqual(calls, ["20260105", "20251231"])
         self.assertEqual(set(frame["source_trade_date"]), {"20251231"})
 
+    def test_daily_basic_allows_same_date_confirmed_suspension_gap(self) -> None:
+        em = self.em
+        universe = pd.DataFrame({"ts_code": ["600000.SH", "000001.SZ"]})
+        daily_basic = pd.DataFrame([{
+            "ts_code": "600000.SH", "close": 10.0, "pe": 8.0,
+            "pe_ttm": 9.0, "pb": 1.0, "roe": 10.0,
+            "turnover_rate": 1.0, "total_mv": 1000.0, "circ_mv": 800.0,
+        }])
+        em.pro = SimpleNamespace(
+            stock_basic=lambda **kwargs: None,
+            daily_basic=lambda **kwargs: None,
+        )
+        with patch.object(em, "get_stock_list", return_value=universe), \
+             patch.object(em, "load_cache", return_value=None), \
+             patch.object(em, "save_cache") as save_cache, \
+             patch.object(em, "safe_api", return_value=daily_basic):
+            frame = em.get_daily_basic(
+                "20260105", ["20260105"],
+                suspended_codes={"000001.SZ"},
+                suspended_observed_at="20260105",
+            )
+
+        self.assertEqual(set(frame["ts_code"]), {"600000.SH"})
+        self.assertEqual(set(frame["source_trade_date"]), {"20260105"})
+        self.assertNotIn("000001.SZ", set(frame["ts_code"]))
+        save_cache.assert_called_once()
+
+    def test_daily_basic_keeps_unexplained_missing_fail_closed(self) -> None:
+        em = self.em
+        universe = pd.DataFrame({"ts_code": ["600000.SH", "000001.SZ", "000002.SZ"]})
+        daily_basic = pd.DataFrame([{
+            "ts_code": "600000.SH", "close": 10.0, "pe": 8.0,
+            "pe_ttm": 9.0, "pb": 1.0, "roe": 10.0,
+            "turnover_rate": 1.0, "total_mv": 1000.0, "circ_mv": 800.0,
+        }])
+        em.pro = SimpleNamespace(
+            stock_basic=lambda **kwargs: None,
+            daily_basic=lambda **kwargs: None,
+        )
+        with patch.object(em, "get_stock_list", return_value=universe), \
+             patch.object(em, "load_cache", return_value=None), \
+             patch.object(em, "save_cache") as save_cache, \
+             patch.object(em, "safe_api", return_value=daily_basic):
+            with self.assertRaisesRegex(RuntimeError, "target coverage incomplete.*000002.SZ"):
+                em.get_daily_basic(
+                    "20260105", ["20260105"],
+                    suspended_codes={"000001.SZ"},
+                    suspended_observed_at="20260105",
+                )
+
+        save_cache.assert_not_called()
+
+    def test_daily_basic_rejects_cross_date_suspension_explanation(self) -> None:
+        em = self.em
+        universe = pd.DataFrame({"ts_code": ["600000.SH", "000001.SZ"]})
+        daily_basic = pd.DataFrame([{
+            "ts_code": "600000.SH", "close": 10.0, "pe": 8.0,
+            "pe_ttm": 9.0, "pb": 1.0, "roe": 10.0,
+            "turnover_rate": 1.0, "total_mv": 1000.0, "circ_mv": 800.0,
+        }])
+        em.pro = SimpleNamespace(
+            stock_basic=lambda **kwargs: None,
+            daily_basic=lambda **kwargs: None,
+        )
+        with patch.object(em, "get_stock_list", return_value=universe), \
+             patch.object(em, "load_cache", return_value=None), \
+             patch.object(em, "save_cache") as save_cache, \
+             patch.object(em, "safe_api", return_value=daily_basic):
+            with self.assertRaisesRegex(RuntimeError, "target coverage incomplete.*000001.SZ"):
+                em.get_daily_basic(
+                    "20260105", ["20260105"],
+                    suspended_codes={"000001.SZ"},
+                    suspended_observed_at="20260104",
+                )
+
+        save_cache.assert_not_called()
+
+    def test_daily_basic_cache_uses_same_date_suspension_rule(self) -> None:
+        em = self.em
+        universe = pd.DataFrame({"ts_code": ["600000.SH", "000001.SZ"]})
+        cached = pd.DataFrame([{
+            "ts_code": "600000.SH", "close": 10.0, "pe": 8.0,
+            "pe_ttm": 9.0, "pb": 1.0, "roe": 10.0,
+            "turnover_rate": 1.0, "total_mv": 1000.0, "circ_mv": 800.0,
+            "source_trade_date": "20260105",
+        }])
+        refreshed = cached.copy()
+        refreshed.loc[len(refreshed)] = {
+            "ts_code": "000001.SZ", "close": 11.0, "pe": 9.0,
+            "pe_ttm": 10.0, "pb": 1.1, "roe": 11.0,
+            "turnover_rate": 1.1, "total_mv": 1100.0, "circ_mv": 900.0,
+            "source_trade_date": "20260105",
+        }
+        em.pro = SimpleNamespace(
+            stock_basic=lambda **kwargs: None,
+            daily_basic=lambda **kwargs: None,
+        )
+
+        with self.subTest("same-date cache is reusable"):
+            with patch.object(em, "get_stock_list", return_value=universe), \
+                 patch.object(em, "load_cache", return_value=cached), \
+                 patch.object(em, "safe_api") as safe_api:
+                frame = em.get_daily_basic(
+                    "20260105", ["20260105"],
+                    suspended_codes={"000001.SZ"},
+                    suspended_observed_at="20260105",
+                )
+            self.assertEqual(set(frame["ts_code"]), {"600000.SH"})
+            safe_api.assert_not_called()
+
+        with self.subTest("cross-date cache must refresh"):
+            with patch.object(em, "get_stock_list", return_value=universe), \
+                 patch.object(em, "load_cache", return_value=cached), \
+                 patch.object(em, "save_cache") as save_cache, \
+                 patch.object(em, "safe_api", return_value=refreshed) as safe_api:
+                frame = em.get_daily_basic(
+                    "20260105", ["20260105"],
+                    suspended_codes={"000001.SZ"},
+                    suspended_observed_at="20260104",
+                )
+            self.assertEqual(set(frame["ts_code"]), {"600000.SH", "000001.SZ"})
+            safe_api.assert_called_once()
+            save_cache.assert_called_once()
+
     def test_missing_suspend_source_blocks_run(self) -> None:
         em = self.em
         em.pro = SimpleNamespace(daily=lambda **kwargs: None)
