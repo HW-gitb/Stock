@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import io
 import json
 import os
 import shutil
@@ -8,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -69,6 +71,84 @@ def _assert_state_dir_literal_children_are_gitignored(
 
 
 class USShortPaperOneClickTest(unittest.TestCase):
+    @mock.patch(
+        "runners.us_short_paper_one_click.resolve_capstone_context",
+        return_value=SimpleNamespace(decision_date="20260723", price_basis_date="20260722"),
+    )
+    @mock.patch(
+        "runners.us_short_paper_one_click.run_weekly_capstone",
+        return_value={
+            "mode": "live",
+            "execution_mode": "injected_pipeline",
+            "report_mode": "offline_test",
+            "operational_use": "not_authorized",
+            "decision_date": "20260723",
+            "price_basis_date": "20260722",
+            "emitted": True,
+            "stages": [],
+            "stage_outcomes": [
+                {
+                    "stage": "soft_discovery",
+                    "execution_mode": "executed",
+                    "outcome_class": "no_work_expected",
+                    "reason_code": "SOFT_DISCOVERY_DISABLED",
+                },
+                {
+                    "stage": "serenity_quality_forward",
+                    "execution_mode": "reused",
+                    "outcome_class": "waiting_dependency",
+                    "reason_code": "SERENITY_REVIEW_PENDING",
+                },
+                {
+                    "stage": "weekly_bridge",
+                    "execution_mode": "refreshed_equivalent",
+                    "outcome_class": "completed_work",
+                    "reason_code": "STAGE_COMPLETED",
+                },
+            ],
+            "stage_outcome_counts": {
+                "completed_work": 1,
+                "no_work_expected": 1,
+                "waiting_dependency": 1,
+                "failed_nonblocking": 0,
+            },
+        },
+    )
+    def test_main_prints_stage_outcome_counts_and_rows_from_same_stdout_summary(
+        self, _run_capstone, _context,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                rc = one_click.main([
+                    "--now-et", "2026-07-23T08:00:00",
+                    "--private-root", str(Path(td) / "private"),
+                ])
+            self.assertEqual(rc, 0, stderr.getvalue())
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["stage_outcome_counts"], {
+                "completed_work": 1,
+                "no_work_expected": 1,
+                "waiting_dependency": 1,
+                "failed_nonblocking": 0,
+            })
+            rendered = stderr.getvalue()
+            self.assertIn("completed_work=1 no_work_expected=1 waiting_dependency=1 failed_nonblocking=0", rendered)
+            self.assertIn("stage=soft_discovery outcome=no_work_expected reason=SOFT_DISCOVERY_DISABLED", rendered)
+            self.assertIn("stage=serenity_quality_forward outcome=waiting_dependency reason=SERENITY_REVIEW_PENDING", rendered)
+            self.assertNotIn("all success", rendered.lower())
+
+            diagnostics_root = Path(td) / "private" / "weekly_private" / "_run_diagnostics"
+            session = next(diagnostics_root.iterdir())
+            events = [json.loads(line) for line in (session / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+            capstone_completed = [event for event in events if event["event"] == "capstone_completed"]
+            runner_completed = [event for event in events if event["event"] == "runner_completed"]
+            self.assertEqual(len(capstone_completed), 1)
+            self.assertNotIn("stage_outcome_counts", capstone_completed[0])
+            self.assertEqual(len(runner_completed), 1)
+            self.assertEqual(runner_completed[0]["stage_outcome_counts"], payload["stage_outcome_counts"])
+
     def test_prepares_only_a_pending_adapter_slot_without_reinitializing_capital(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             template_path, account_path = _prepare_paper_inputs(

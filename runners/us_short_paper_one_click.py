@@ -322,6 +322,29 @@ def run_one_click(
     }
 
 
+def _print_stage_outcome_summary(summary: dict[str, Any]) -> None:
+    """Print the capstone's persisted outcome contract without reclassifying it."""
+    counts = summary.get("stage_outcome_counts")
+    outcomes = summary.get("stage_outcomes")
+    if not isinstance(counts, dict) or not isinstance(outcomes, list):
+        return
+    keys = ("completed_work", "no_work_expected", "waiting_dependency", "failed_nonblocking")
+    print(
+        "[US-SHORT STAGE OUTCOMES] "
+        + " ".join(f"{key}={counts.get(key, 0)}" for key in keys),
+        file=sys.stderr,
+    )
+    for outcome in outcomes:
+        if not isinstance(outcome, dict) or outcome.get("outcome_class") == "completed_work":
+            continue
+        print(
+            "[US-SHORT STAGE OUTCOME] "
+            f"stage={outcome.get('stage')} outcome={outcome.get('outcome_class')} "
+            f"reason={outcome.get('reason_code')}",
+            file=sys.stderr,
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="US-short weekly one-click paper-account runner")
     parser.add_argument("--now-et", type=_parse_now_et, default=None)
@@ -377,7 +400,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {type(exc).__name__}: {_redact_text(str(exc) or type(exc).__name__)}", file=sys.stderr)
         return 130 if isinstance(exc, KeyboardInterrupt) else (2 if isinstance(exc, (PaperOneClickError, WeeklyCapstoneError)) else 1)
     else:
-        diagnostics.emit({"event": "runner_completed"})
+        _print_stage_outcome_summary(summary)
+        diagnostics.emit({
+            "event": "runner_completed",
+            "stage_outcome_counts": summary.get("stage_outcome_counts"),
+        })
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         return 0
     finally:
