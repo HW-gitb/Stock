@@ -744,6 +744,47 @@ class SwIndustrySourceTest(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     self.egs_main._classification_standard_from_observed_sources(observed)
 
+    def test_empty_stock_basic_universe_aborts_before_cache_write(self) -> None:
+        old_pro = self.egs_main.pro
+        self.egs_main.pro = SimpleNamespace(
+            stock_basic=lambda **_kwargs: pd.DataFrame(),
+        )
+        try:
+            with patch.object(self.egs_main, "load_cache", return_value=None), \
+                 patch.object(self.egs_main, "save_cache") as save_cache, \
+                 patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+                with self.assertRaisesRegex(RuntimeError, "returned no rows"):
+                    self.egs_main.get_stock_list()
+            save_cache.assert_not_called()
+        finally:
+            self.egs_main.pro = old_pro
+
+    def test_empty_stock_list_cache_aborts_before_sw_coverage_gate(self) -> None:
+        old_pro = self.egs_main.pro
+        self.egs_main.pro = SimpleNamespace(stock_basic=lambda **_kwargs: pd.DataFrame())
+        try:
+            with patch.object(self.egs_main, "load_cache", return_value=pd.DataFrame()), \
+                 patch.object(self.egs_main, "save_cache") as save_cache:
+                with self.assertRaisesRegex(RuntimeError, "stock list cache is empty"):
+                    self.egs_main.get_stock_list()
+            save_cache.assert_not_called()
+        finally:
+            self.egs_main.pro = old_pro
+
+    def test_empty_target_board_universe_aborts_before_zero_missing_cache_pass(self) -> None:
+        old_pro = self.egs_main.pro
+        self.egs_main.pro = SimpleNamespace(stock_basic=lambda **_kwargs: pd.DataFrame())
+        try:
+            with patch.object(
+                self.egs_main,
+                "get_stock_list",
+                return_value=pd.DataFrame({"ts_code": []}),
+            ), patch.object(self.egs_main, "load_cache", return_value={}):
+                with self.assertRaisesRegex(RuntimeError, "target-board universe is empty"):
+                    self.egs_main.get_sw_industry_map()
+        finally:
+            self.egs_main.pro = old_pro
+
     def test_target_board_failure_reports_full_counts_ratio_and_bounded_sample(self) -> None:
         l1, l2 = _classifications()
         target_codes = [f"000{i:03d}.SZ" for i in range(1, 14)]

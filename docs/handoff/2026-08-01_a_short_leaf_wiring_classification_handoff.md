@@ -7050,3 +7050,40 @@ This entry records only §15A in `D:\\cnhea\\Codex\\worktrees\\43fe\\Stock`; the
 **未覆盖维度与诚实边界**：PowerShell 侧只做静态核对，没真跑 launcher；仓内那几条 PS 断言比对的是源码字符串而非运行行为（既有模式，照现状接受）。P1-4 的真实 `fast_path_used=true` 与 P0-1 运行闭环仍须获授权的无缓存胶囊。上一轮 agent 的两条线索仍未独立复现，其中 `get_stock_list()` 空表化会架空目标主板零遗漏门那条建议单独排一刀。
 
 **下一步**：等用户授权跑真实无缓存胶囊收口 P0-1/P1-4；`get_stock_list` 那条另起。
+
+## 2026-08-13 追加：get_stock_list 空 universe / 目标主板门最小修复（Codex executor/fixer；c405；OPEN-NOT-VERIFIED）
+
+### 用途、问题与方案
+
+本条是同一 handoff 的后续追加，承接用户指定的第二条线索；不新建平行交接。问题是 `safe_api` 会把空响应（含 Tushare 故障折叠为空 DataFrame）返回为 `default=None`，`get_stock_list()` 在三次 `stock_basic` 都无行时原先可返回/缓存空表，`get_sw_industry_map()` 随后把空目标集合的差集当成零遗漏。本轮只做最小 fail-closed 修复，不触及 O-SW1-5、PowerShell launcher、Tushare client/endpoint、provider/live、full lane 或其他问题。
+
+- `get_stock_list()` 命中空 DataFrame cache 立即拒绝；L/D/P 三次调用均无原始行时立即拒绝，不构造/写入空 universe。
+- `get_sw_industry_map()` 投影严格主板后的 `target_codes` 为空时立即拒绝，避免空差集通过 coverage gate。
+- 合法历史 `as_of` 过滤后为空的既有行为保留，最终空结果直接返回且不写空 cache；未改 HTTP 状态诊断、全局 `safe_api`、schema、SW mapping 消费者或 cache 代际。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+调用链为 `stock_basic → get_stock_list → get_sw_industry_map → target-board coverage gate → SW2021 classification/member mapping → cache → build_master/score`。错误在目标集合/空 universe 进入 SW cache、classification/member 调用及下游消费前被拒；有效 SW2021 source-binding 和下游 mapping 不变。没有新增产物或写盘路径，空状态不写 cache。
+
+### 负向控制、自审、精确测试与原始终态
+
+- 负向控制：三次 `stock_basic` 空响应、空 stock-list cache、空目标主板集合均 fail-closed 且不通过零遗漏门；正向控制：既有合法历史 delisting/as-of 空结果仍能通过，避免过度收紧。
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，Python 3.13.8。
+- 精确验证：固定解释器运行 `tests.phase6.test_egs_sw_industry_and_watch_pool_health tests.phase6.test_egs_main_board_and_holder_pit tests.test_a_short_tushare_runtime_contract`，原始终态 `Ran 54 tests ... OK`；`py_compile` 与 `git diff --check` 通过。未运行 provider/live、真实 weekly、full lane 或 sub-agent；未 stage/commit/push/merge。
+- 结论：代码 `repaired / OPEN-NOT_VERIFIED`，等待 Claude Code 独立复审/提交边界。HTTP 4xx/5xx 的原始状态仍不可从空 DataFrame 恢复，本轮只保证其在 universe/目标主板边界不再 fail-open。
+
+后续若再修复，只能继续在本 handoff 追加问题/根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审、精确测试命令和原始终态，并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；不得新建平行 handoff。
+
+## 2026-08-13 追加：空 universe 门的独立审查 = PASS（Claude Code；c405，已合入 master）
+
+**判定**：PASS，零 Required。`R-ASHORT-EMPTY-UNIVERSE-DISARMS-THE-TARGET-BOARD-GATE` 转 resolved，新记 `O-EU-1`/`O-EU-2`。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方与上一轮 agent 的转述）**：整读改动后的 `get_stock_list()` 全函数体（含 `safe_api` 的 `errors` 判据、三次 `list_status` 的 `frames` 收集条件、状态去重与 as-of 过滤、写缓存边界）以及 `get_sw_industry_map()` 里新的 target 门。上一轮 agent 只是报告了这个缺口、我当时标 NOT_VERIFIED；本轮我用「三次调用都成功但都返回空表」的假 provider 亲自把原缺口的形态跑了出来，再确认现在它抛 `stock_basic returned no rows across list_status=L,D,P`。执行方自报的 `54 OK` 一条没采信，自己重跑了 168 用例超集，并按 rule 6 补跑一次 a_short 全量。
+
+**六格正反**：全空三格 → 抛且不写缓存；空缓存 → 抛；正常 → 1 行且写缓存；过滤后为空 → 返回空但不写缓存（保住历史 replay 的合法语义，同时不把空态固化）；universe 有行但无主板 → SW 目标门抛且 **provider 调用实测 0 次**；主板正控 → 端到端建图 `status=pass`。加严没有把合法路径误杀。
+
+**消费链**：`get_stock_list()` 全仓 5 个生产调用点，生产顺序里 SW map 先执行，所以空 universe 会在新门处先中止。但这层保护依赖调用顺序而非各自把门，已记为 `O-EU-1`。
+
+**未覆盖维度与诚实边界**：agent 的另一条线索（HTTP 4xx/5xx 被折成空表使 `_fetch_l2_batch` 的 `exception` 计数对主流故障形态失效）本轮未修也未复现，按方案 §3.1.4 的边界保持 open——方向仍是中止而非放行。P1-4 / P0-1 仍须获授权的真实无缓存胶囊；本轮全部结论建立在离线假 provider 上。
+
+**下一步**：等用户授权跑真实无缓存胶囊收口 P0-1/P1-4。
