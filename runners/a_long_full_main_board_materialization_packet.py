@@ -402,16 +402,24 @@ def base_call_plan() -> list[dict[str, Any]]:
             "table_id": "industry_classification",
             "api_family": "index_classify",
             "method": "index_classify",
-            "kwargs": {"level": "L1", "fields": "index_code,industry_name,level,parent_code"},
-            "minimum_fields": ["index_code", "industry_name", "level", "parent_code"],
+            "kwargs": {
+                "level": "L1",
+                "src": route_base.SW_INDUSTRY_CLASSIFICATION_STANDARD,
+                "fields": route_base.SW_INDUSTRY_CLASSIFICATION_FIELDS,
+            },
+            "minimum_fields": ["index_code", "industry_name", "level", "parent_code", "src"],
         },
         {
             "call_id": "index_classify_sw_L2",
             "table_id": "industry_classification",
             "api_family": "index_classify",
             "method": "index_classify",
-            "kwargs": {"level": "L2", "fields": "index_code,industry_name,level,parent_code"},
-            "minimum_fields": ["index_code", "industry_name", "level", "parent_code"],
+            "kwargs": {
+                "level": "L2",
+                "src": route_base.SW_INDUSTRY_CLASSIFICATION_STANDARD,
+                "fields": route_base.SW_INDUSTRY_CLASSIFICATION_FIELDS,
+            },
+            "minimum_fields": ["index_code", "industry_name", "level", "parent_code", "src"],
         },
         {
             "call_id": "index_member_all_sw_membership",

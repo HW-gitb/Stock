@@ -24,7 +24,7 @@
       "const": "data_health"
     },
     "schema_version": {
-      "const": "1.9.0"
+      "const": "1.10.0"
     },
     "generated_at": {
       "type": "string"
@@ -197,6 +197,7 @@
           "required": [
             "status",
             "classification_standard",
+            "observed_sources",
             "source",
             "as_of",
             "active_count",
@@ -210,6 +211,11 @@
           "properties": {
             "status": {"enum": ["pass", "fail", "not_observed"]},
             "classification_standard": {"enum": [null, "SW2021"]},
+            "observed_sources": {
+              "type": ["array", "null"],
+              "items": {"type": "string", "minLength": 1},
+              "uniqueItems": true
+            },
             "source": {
               "enum": [null, "cache", "index_member_all_l1_current", "index_member_l2_history"]
             },
@@ -235,7 +241,16 @@
               "if": {"properties": {"status": {"const": "not_observed"}}},
               "then": {
                 "properties": {
-                  "classification_standard": {"const": null}
+                  "classification_standard": {"const": null},
+                  "observed_sources": {"const": null}
+                }
+              }
+            },
+            {
+              "if": {"properties": {"status": {"enum": ["pass", "fail"]}}},
+              "then": {
+                "properties": {
+                  "observed_sources": {"type": "array"}
                 }
               }
             },

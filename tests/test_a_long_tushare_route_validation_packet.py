@@ -54,10 +54,10 @@ class FakeTusharePro:
         level = kwargs.get("level")
         if level == "L2":
             return pd.DataFrame(
-                [{"index_code": "801010.SI", "industry_name": "fixture L2", "level": "L2", "parent_code": "801000.SI"}]
+                [{"index_code": "801010.SI", "industry_name": "fixture L2", "level": "L2", "parent_code": "801000.SI", "src": "SW2021"}]
             )
         return pd.DataFrame(
-            [{"index_code": "801000.SI", "industry_name": "fixture L1", "level": "L1", "parent_code": ""}]
+            [{"index_code": "801000.SI", "industry_name": "fixture L1", "level": "L1", "parent_code": "", "src": "SW2021"}]
         )
 
     def index_member(self, **kwargs):
@@ -229,6 +229,16 @@ class ALongTushareRouteValidationPacketTest(unittest.TestCase):
         self.assertLessEqual(len(calls), runner.MAX_TOTAL_CALLS)
         self.assertIn("daily_first_delisted_terminal_window", {item["call_id"] for item in calls})
         self.assertIn("adj_factor_first_delisted_terminal_window", {item["call_id"] for item in calls})
+        classification_calls = [call for call in calls if call["api_family"] == "index_classify"]
+        self.assertEqual(len(classification_calls), 2)
+        self.assertTrue(
+            all(
+                call["kwargs"]["src"] == runner.SW_INDUSTRY_CLASSIFICATION_STANDARD
+                and "src" in call["kwargs"]["fields"].split(",")
+                and "src" in call["required_fields"]
+                for call in classification_calls
+            )
+        )
 
     def _contains_key(self, payload, needle: str) -> bool:
         if isinstance(payload, dict):

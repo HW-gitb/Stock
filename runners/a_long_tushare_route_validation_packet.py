@@ -25,6 +25,8 @@ PRICE_START_DATE = "20240102"
 PRICE_END_DATE = "20240105"
 BENCHMARK_INDEX = "000300.SH"
 MAX_TOTAL_CALLS = 24
+SW_INDUSTRY_CLASSIFICATION_STANDARD = "SW2021"
+SW_INDUSTRY_CLASSIFICATION_FIELDS = "index_code,industry_name,parent_code,level,src"
 
 COMPONENTS = [
     "calendar_schedule",
@@ -249,9 +251,10 @@ def call_plan() -> list[dict[str, Any]]:
             "method": "index_classify",
             "kwargs": {
                 "level": "L1",
-                "fields": "index_code,industry_name,level,parent_code",
+                "src": SW_INDUSTRY_CLASSIFICATION_STANDARD,
+                "fields": SW_INDUSTRY_CLASSIFICATION_FIELDS,
             },
-            "required_fields": ["index_code", "level"],
+            "required_fields": ["index_code", "level", "src"],
         },
         {
             "call_id": "index_classify_sw_L2",
@@ -260,9 +263,10 @@ def call_plan() -> list[dict[str, Any]]:
             "method": "index_classify",
             "kwargs": {
                 "level": "L2",
-                "fields": "index_code,industry_name,level,parent_code",
+                "src": SW_INDUSTRY_CLASSIFICATION_STANDARD,
+                "fields": SW_INDUSTRY_CLASSIFICATION_FIELDS,
             },
-            "required_fields": ["index_code", "level", "parent_code"],
+            "required_fields": ["index_code", "level", "parent_code", "src"],
             "save_context": "first_l2_index_code",
         },
     ]
