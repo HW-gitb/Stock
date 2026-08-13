@@ -983,8 +983,10 @@ def _build_corporate_action_capture(
 ) -> dict[str, Any]:
     by_key = _record_map(records)
     by_ticker: dict[str, Any] = {}
-    split_calls = 0
-    dividend_calls = 0
+    split_successes = 0
+    split_errors = 0
+    dividend_successes = 0
+    dividend_errors = 0
     split_events = 0
     dividend_events = 0
     for symbol in selected_symbols:
@@ -992,8 +994,16 @@ def _build_corporate_action_capture(
         dividend_rec = by_key.get(("massive", "dividends", symbol))
         split_count = _event_count(split_rec)
         dividend_count = _event_count(dividend_rec)
-        split_calls += 1 if split_rec is not None else 0
-        dividend_calls += 1 if dividend_rec is not None else 0
+        if split_rec is not None:
+            if split_rec.ok:
+                split_successes += 1
+            else:
+                split_errors += 1
+        if dividend_rec is not None:
+            if dividend_rec.ok:
+                dividend_successes += 1
+            else:
+                dividend_errors += 1
         split_events += split_count
         dividend_events += dividend_count
         by_ticker[symbol] = {
@@ -1004,7 +1014,7 @@ def _build_corporate_action_capture(
         }
     return {
         "schema_name": "us_short_batch5_corporate_action_live_capture",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "generated_at": generated_at,
         "decision_clock": {
             "expected_decision_date": expected_decision_date,
@@ -1021,8 +1031,12 @@ def _build_corporate_action_capture(
         },
         "aggregate_counts": {
             "ticker_count": len(selected_symbols),
-            "split_endpoint_call_count": split_calls,
-            "dividend_endpoint_call_count": dividend_calls,
+            "split_endpoint_call_count": split_successes + split_errors,
+            "split_endpoint_success_count": split_successes,
+            "split_endpoint_error_count": split_errors,
+            "dividend_endpoint_call_count": dividend_successes + dividend_errors,
+            "dividend_endpoint_success_count": dividend_successes,
+            "dividend_endpoint_error_count": dividend_errors,
             "split_event_count": split_events,
             "dividend_event_count": dividend_events,
         },

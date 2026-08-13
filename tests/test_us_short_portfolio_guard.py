@@ -32,6 +32,12 @@ class FailSafeTests(unittest.TestCase):
             self.assertEqual(out["state"], "caution", (stops, dd))
             self.assertTrue(out["fail_safe"], (stops, dd))
 
+    def test_missing_evaluable_metrics_have_dedicated_reason(self):
+        out = pg.classify_portfolio_guard(True, consecutive_stops=None, paper_drawdown_frac=None)
+        self.assertEqual(out["state"], "caution")
+        self.assertTrue(out["fail_safe"])
+        self.assertEqual(out["reason"], "paper_metrics_not_available")
+
     def test_fractional_or_nonint_stop_count_fails_closed(self):
         # a consecutive-stop COUNT is an integer event tally — fractional / bool / integer-valued float
         # must NOT pass as a live metric (2.9 -> normal or 3.1 -> cooldown both wrong); fail closed

@@ -77,7 +77,10 @@ class USShortPaperOneClickTest(unittest.TestCase):
             private_root = root / "private"
             activation_root = private_root / "market_diagnostic_private"
             with (
-                mock.patch.object(one_click, "MODEL_PAPER_ACTIVATION_ROOT", activation_root, create=True),
+                mock.patch(
+                    "engine.us_short_model_paper_activation.MODEL_PAPER_ACTIVATION_ROOT",
+                    activation_root,
+                ),
                 mock.patch.object(one_click, "resolve_capstone_context", side_effect=AssertionError("context reached")),
                 mock.patch.object(one_click, "_prepare_paper_inputs", side_effect=AssertionError("inputs reached")),
                 mock.patch.object(one_click, "run_weekly_capstone", side_effect=AssertionError("capstone reached")),
@@ -99,16 +102,38 @@ class USShortPaperOneClickTest(unittest.TestCase):
     def test_broken_activation_is_not_downgraded_to_dormant(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             with mock.patch.object(
-                one_click, "resolve_model_paper_activation", side_effect=ValueError("damaged receipt")
+                one_click,
+                "resolve_model_paper_activation",
+                side_effect=ValueError("C:\\private\\diagnostic_start_receipt.json"),
             ), mock.patch.object(one_click, "resolve_capstone_context") as resolve_context:
-                with self.assertRaisesRegex(PaperOneClickError, "activation_gate_broken"):
+                with self.assertRaises(PaperOneClickError) as raised:
                     run_one_click(
                         now_et=datetime(2026, 7, 20, 8, 0, 0),
                         private_root=Path(td) / "private",
                         state_dir=DEFAULT_STATE_DIR,
                         provider_pace_seconds=0.0,
                     )
+                self.assertIn("activation_gate_broken", str(raised.exception))
+                self.assertNotIn("diagnostic_start_receipt.json", str(raised.exception))
                 resolve_context.assert_not_called()
+
+    def test_broken_activation_does_not_write_private_path_to_failure_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            private_root = Path(td) / "private"
+            with mock.patch.object(
+                one_click,
+                "resolve_model_paper_activation",
+                side_effect=ValueError(str(private_root / "diagnostic_start_receipt.json")),
+            ):
+                rc = one_click.main([
+                    "--now-et", "2026-07-20T08:00:00",
+                    "--private-root", str(private_root),
+                ])
+            self.assertEqual(rc, 2)
+            sessions = list((private_root / "weekly_private" / "_run_diagnostics").iterdir())
+            self.assertEqual(len(sessions), 1)
+            failure = (sessions[0] / "failure.json").read_text(encoding="utf-8")
+            self.assertNotIn("diagnostic_start_receipt.json", failure)
 
     @mock.patch(
         "runners.us_short_paper_one_click.resolve_model_paper_activation",

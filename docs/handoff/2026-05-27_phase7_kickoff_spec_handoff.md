@@ -4697,3 +4697,41 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_t
 **失效旧结论**：上一节「one-click 和 direct capstone 在正式执行前重验同一设计完成 receipt……零 provider」按实际面需收窄——capstone `main()` 没有 `--model-paper-store-root`，capstone CLI 进不了 model-paper 路径，那道门在 CLI 上不可达（Python 调用方可达，one-click 即是）；capstone CLI 的 `-Live` 跑仍会真取 provider，它受的是既有 `--confirm-user-authorization` 而非本刀休眠门。另：register 里「有效 receipt 不替代 provider 授权」一句在 one-click 路径上不成立——`runners/us_short_paper_one_click.py:312/341` 把 `confirm_user_authorization` 硬编码为 `True`（既有行为，非本刀引入），该路径上 receipt 事实上是唯一的门。两处均记为 `O-16A-2`，未阻断 PASS。
 
 **下一步注意事项**：`O-16A-1` 是本刀引入的唯一新可观测落差——`build_paper_track` 的 `consecutive_stops` / `paper_drawdown_frac` 恒 `None`（reducer 按方案有意不建），一旦 `paper_evaluable=True`，`classify_portfolio_guard` 会从 `paper_track_not_evaluable` 变成 `malformed_paper_metrics`；state 与 fail_safe 完全不变、不影响仓位，但周报会出现一个读起来像「数据损坏」的原因码。真开钟后的第一周必现，届时给个专门 reason 或在报告侧注明即可，不必实现 reducer。`O-16A-4`（一张 receipt 可授权任意多个 `-PrivateRoot` 下新播种的 paper 账户）留到真开钟时再决定，收紧它需要新增绑定件而方案明令不新增。按 0810 §去重顺序，下一刀是问题 14，须从本刀已合入的 master 起。
+
+## 2026-08-13 追加：16-A Optional 最小修复 + 问题14 corporate-action capture（1302，`repaired / OPEN-NOT-VERIFIED`）
+
+### 16-A Optional 收口
+
+本节 supersede 上一节的未修复描述，保留 `O-16A-4` open：
+
+- `O-16A-1`：`classify_portfolio_guard` 对 `paper_evaluable=True` 且 stops/drawdown 同时为 `None` 返回专用 `paper_metrics_not_available`；不实现 reducer，不改变 `caution`、`fail_safe` 或 result-effects。
+- `O-16A-2`：正式能力边界改为：Python direct capstone 可进 model-paper seam；capstone CLI 没有 `--model-paper-store-root`，其 `-Live` 仍由既有 `--confirm-user-authorization` 控制并会调用 provider；one-click 既有代码把授权设为 `True`，所以 receipt 是该路径唯一启动门，但 receipt 不普遍替代 provider 授权。
+- `O-16A-3`：activation adapter 不再接受 `root` kwarg，只读取 canonical `MODEL_PAPER_ACTIVATION_ROOT`；`market_diagnostic_root` 仍只服务诊断 stage。
+- `O-16A-4`：本轮明确不改 receipt 与 `model_paper_store_root` 绑定，不新增字段/token/fingerprint/SHA；待 design-completion/clock-open 前另行决策。
+- `O-16A-5`：删除不可达的 model-paper adapter checkpoint 重复 context 更新；activation 错误只输出异常类型，避免私密 receipt 路径进入 stderr/failure.json。
+
+### 问题14实现
+
+只改 `runners/us_short_batch5_full_candidate_live_source_packet.py::_build_corporate_action_capture` 与既有测试：split/dividend 分别从最终 `FetchRecord.ok` 派生 success/error，call=count(success+error)，event 仍按成功 payload 事件数；capture 版本从 `1.0.0` 升为 `1.1.0`。成功空结果为 `success=1/events=0`；429 恢复仍为一个 logical call；最终429/普通错误为 `error=1`。没有改问题6 health/receipt/emit/report、问题8 retry/physical budget、问题13 outcome、provider、SEC SIC 或其他排除对象。
+
+### 证据与边界
+
+- 问题14 测试先红后绿：缺字段阶段 `31` 用例 `3 failures + 1 error`；最小实现后 `31 OK`。Optional 直接包 `39 OK`（含 failure.json 私密路径负向用例）；最终 focused `48 OK`，receipt=`receipt:0b243fe0d5613d2c42ad1a24`。
+- 固定主 Python 静态门：`py_compile=9`、`git diff --check`、BOM/FFFD/冲突标记扫描 PASS。首次 full lane 的测试 literal 被 inventory 判为未白名单写入，改为普通 `capture_test/...` 引用且未扩 allowlist；随后补齐 activation traceback `from None` 后，最终 full lane `5852/5852 PASS`、`318/318`、404.7s，fingerprint=`f137c37487d8386ac54566ec2f474532baab8f5a7d0a77bc3007231213714dfb`。
+- 测试只用 fake client/临时根；未调用真实 provider/live/paper，未写真实 `state/us_short` 或账户根。状态 `repaired / OPEN-NOT-VERIFIED`，等 Claude Code 独立审查；Codex 不提交。
+
+## 2026-08-13 追加：问题14 + 16-A Optional 独立审查收口（PASS，已提交并合入 master）
+
+**改了什么**：本节只记审查收口，实现见上一节。PASS 后只 stage 本刀 12 个文件并合入 master。
+
+**为什么**：本轮唯一的放松类改动是 `classify_portfolio_guard` 新增的早返回，插在 malformed 判定之前，所以必须证明它没吞掉原来的强制腿；问题14 则要证守恒不是靠事后校验、而是按构造成立。两点都由我直跑真函数确认，未采信转述。
+
+**验证命令**：
+- 焦点超集（十二模块，含两道文档门与 authorization-conformance）：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1300 tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.test_us_short_provider_health tests.test_us_short_portfolio_guard tests.test_us_short_result_effects tests.test_us_short_model_paper_capstone_wiring tests.test_us_short_paper_one_click tests.provider.test_us_short_weekly_capstone tests.provider.test_us_short_batch5_to_batch4_e2e tests.test_us_short_weekend_orchestrator tests.test_us_short_market_diagnostic_authorization_conformance tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`
+- 独立重算全量指纹（在动任何文档之前跑）：`python -c "import sys; sys.path.insert(0,'.tools'); import full_pack_ledger as f; print(f.fingerprint(f.collect_code_state()))"`
+
+**验证结果**：焦点 `PASS tests=326 elapsed=99.2s receipt:c9aae16dd5cde07dda45cf8e`。full lane 引执行方账本 `5852 OK` / `318/318` / `404.7s`，fingerprint `f137c37487d8386ac54566ec2f474532baab8f5a7d0a77bc3007231213714dfb`，我独立重算得同一值。`classify_portfolio_guard` 13 格实测：`(True,None,None)` 落 `paper_metrics_not_available`；只缺 stops、只缺 drawdown、两个坏类型、小数 stops、负 stops、负 drawdown、bool stops 共 7 格全部仍是 `malformed_paper_metrics`；`paper_evaluable` 非 True 仍先短路；`(True,0,0.0)/(True,3,0.0)/(True,0,0.08)` 仍是 normal/cooldown/drawdown_caution；省略两个参数仍走默认 0/0.0。真 track 喂 `build_portfolio_guard_result` 得 `caution / fail_safe=True / effects{reduce_position_size:True, reduce_weekly_new_count:True}`，与改前 `malformed_paper_metrics` 那一格逐字段相同。问题14 侧：`_event_count` 源码首行即 `if record is None or not record.ok: return 0`，故失败 record 必然 `error=1/event=0`、200 空结果必然 `success=1/event=0`；全仓 grep 无任何 schema 引用 `split_endpoint_call_count` 或 `us_short_batch5_corporate_action_live_capture`。
+
+**失效旧结论**：本轮 register 与本 handoff 上一节里「`O-16A-4` 留待 design-completion/clock-open 前的独立决策」的措辞已失效——用户 2026-08-13 已裁决它是**开钟后必修**，触发点与修法约束（不要把绝对 store 路径钉进 receipt）见 register 同日更早那条。
+
+**下一步注意事项**：新记 `O-16A-3b`——`run_weekly_capstone(market_diagnostic_root=…)` 是上一刀为 activation 门加的形参，现在门已不读它、生产无调用方传它（只剩两处测试），但它仍能经 `ctx.market_diagnostic_root` 让调用方选诊断私密 store；「根由调用方选」这一类只收紧了 activation 那半，诊断那半还开着，建议顺手收掉。按 0810 §去重顺序，下一刀是 16-B，须从本刀已合入的 master 起，且 16-B 会碰 capstone context / weekly bridge / private writer 同一 seam，不得与别的未提交刀并行叠加。

@@ -2490,11 +2490,11 @@ def run_weekly_capstone(
         try:
             from engine.us_short_model_paper_activation import resolve_model_paper_activation
 
-            activation = resolve_model_paper_activation(root=ctx.market_diagnostic_root)
+            activation = resolve_model_paper_activation()
         except Exception as exc:  # noqa: BLE001 - activation is a fail-closed boundary
             raise WeeklyCapstoneError(
-                f"activation_gate_broken: {type(exc).__name__}: {exc}"
-            ) from exc
+                f"activation_gate_broken: {type(exc).__name__}"
+            ) from None
         if not isinstance(activation, dict) or activation.get("status") not in {"dormant", "authorized"}:
             raise WeeklyCapstoneError("activation_gate_broken: model-paper activation result is invalid")
         if activation["status"] == "dormant":
@@ -2820,8 +2820,6 @@ def run_weekly_capstone(
                         ctx = replace(ctx, soft_discovery_run_result=dict(result))
                     if stage.name == "pass2_fetch":
                         ctx = replace(ctx, soft_boost_run_result=pass2_soft_boost_result(result))
-                    if stage.name == "model_paper_adapter" and _model_paper_enabled(ctx):
-                        ctx = _update_model_paper_context(ctx, result)
                     if stage.name == "serenity_quality_forward":
                         shadow = result.get("shadow_consumption")
                         ctx = replace(
