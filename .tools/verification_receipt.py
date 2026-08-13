@@ -57,9 +57,8 @@ def _normalise(rel_path: str) -> str:
 
 
 def is_code_path(rel_path: str) -> bool:
-    """Match the full-pack ledger boundary: docs-only edits do not invalidate code."""
-    rel = _normalise(rel_path)
-    return not (rel.startswith("docs/") or rel.endswith(".md"))
+    """Keep prose out of the seal while retaining machine-consumed artifacts."""
+    return not _normalise(rel_path).lower().endswith(".md")
 
 
 def _git(*args: str) -> str:

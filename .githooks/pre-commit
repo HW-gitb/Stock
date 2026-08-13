@@ -49,7 +49,7 @@ fi
 # carry the other side's code into this tree, and that pairing has been tested
 # by nobody. verification_receipt widens the required bundles across both sides.
 merging="$(git rev-parse -q --verify MERGE_HEAD 2>/dev/null || true)"
-code_changed="$(git diff --cached --name-only | grep -vE '^(docs/|.*\\.md$)' || true)"
+code_changed="$(git diff --cached --name-only | grep -viE '.*\.md$' || true)"
 if [ -n "$code_changed" ] || [ -n "$merging" ]; then
   "$PY" .tools/verification_receipt.py 1>&2
   if [ "$?" -ne 0 ]; then

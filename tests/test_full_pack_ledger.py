@@ -114,7 +114,13 @@ class FullPackLedgerTests(unittest.TestCase):
         # rule 4: a docs/register/SESSION_LOG-only correction must NOT invalidate a code full-pack.
         for doc in ("docs/SESSION_LOG.md", "docs/system_risk_register.md", "AGENTS.md", "README.md"):
             self.assertFalse(fpl._is_code_path(doc), doc)
-        for code in ("engine/us_short_core_score.py", "presets/x.json", "schemas/y.schema.json", "tests/test_z.py"):
+        for code in (
+            "engine/us_short_core_score.py",
+            "presets/x.json",
+            "schemas/y.schema.json",
+            "tests/test_z.py",
+            "docs/runtime_contract.json",
+        ):
             self.assertTrue(fpl._is_code_path(code), code)
 
     def test_fingerprint_is_deterministic_and_state_sensitive(self):

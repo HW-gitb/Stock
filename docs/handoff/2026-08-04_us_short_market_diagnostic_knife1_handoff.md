@@ -1464,3 +1464,13 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_bounded_un
 **验证要点**：正向——只改 docs 后指纹不变、回执仍 PASS、能提交；**反向控制不能松**——改任一 `.py` 或 `schemas/` 下 json 后指纹必须变、回执必须失效。全量账本同形状各一条。
 
 **生效范围（已查证，别再重推）**：`core.hooksPath` 是共享 config 里的绝对路径指向主树 `.githooks`，所以钩子脚本全局共享；但钩子会 `cd` 进正在提交的那棵树并用相对路径调 `.tools/verification_receipt.py`，所以**指纹逻辑用的是各树自己的副本**——本修复须**每棵树各自 `git merge --ff-only`** 才生效，一条命令推不全。新开工作树自动带上修好的代码；但 `.tools/state/` 被 `.gitignore:155` 整体忽略，回执与全量账本是本地状态、不随 checkout 走，**新树第一次提交前仍要跑一遍焦点包**——那一遍是对的，本刀只消掉多余的第二遍。
+
+## 2026-08-13 追加：O-TOOLING-5 docs JSON 指纹边界修复（1302，repaired / OPEN-NOT_VERIFIED）
+
+**结论**：原排队刀的 Markdown 重跑税已由既有实现消除；本轮补上其最重要的剩余边界 `O-TOOLING-5`。当前规则只把 Markdown 当纯文档，`docs/*.json` 等非 Markdown 路径进入 receipt 与 full-ledger 的同一内容封印。
+
+**最小实现**：`.tools/verification_receipt.py::is_code_path` 收窄为大小写不敏感的 `*.md` 排除；`.tools/full_pack_ledger.py` 继续复用该单一权威；`.githooks/pre-commit` 同步只跳过 Markdown。未增加 allowlist、配置开关、sidecar 或第二份路径分类器。
+
+**闭合证据**：新增 docs JSON 工作副本与提交两格反控、Markdown 保持格、full-ledger 共享边界和 hook 静态接线。旧实现运行精确 `3 failures`；旧 hook 排除式单独植回时点名用例精确 `1 failure`，还原后 receipt PASS；修后两模块 `45 OK`。正式 fixed-Python focused 为 `17 OK`，receipt=`receipt:055c08fa0f86fbf0126b7cfb`；full lane 因零 production 面 `not_triggered`。
+
+**边界/下一步**：未改 bundle widening、860s/ledger 语义、生产 runner 或业务代码；未调用 provider/network/live/paper，未写真实 state，未改主树或桌面文档。交 Claude Code 独立审查，Codex 不提交。

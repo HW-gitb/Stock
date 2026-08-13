@@ -22,6 +22,9 @@ def build_receipt_repo(repo: Path) -> None:
     (repo / "docs").mkdir(parents=True, exist_ok=True)
     (repo / "engine" / "logic.py").write_text("VALUE = 1\n", encoding="utf-8")
     (repo / "docs" / "note.md").write_text("base\n", encoding="utf-8")
+    (repo / "docs" / "runtime_contract.json").write_text(
+        '{"value": 1}\n', encoding="utf-8"
+    )
     (repo / "设计说明.md").write_text("base\n", encoding="utf-8")
     (repo / ".gitignore").write_text(".tools/\n", encoding="utf-8")
     _run_git(repo, "init", "-b", "main")
@@ -233,6 +236,33 @@ class VerificationReceiptTests(unittest.TestCase):
                 )
                 self.assertIn("current code state", reason)
 
+    def test_docs_json_mutation_invalidates_receipt_before_and_after_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            build_receipt_repo(repo)
+            with patch.object(receipts, "ROOT", repo):
+                before = receipts.collect_code_state()
+                receipt_path = repo / ".tools" / "state" / "receipt.json"
+                receipt = self._receipt(before, receipt_path, ["tests.test_example"])
+                token = receipts.receipt_token(receipt)
+
+                contract = repo / "docs" / "runtime_contract.json"
+                contract.write_text('{"value": 2}\n', encoding="utf-8")
+                changed = receipts.collect_code_state()
+                self.assertNotEqual(receipts.fingerprint(before), receipts.fingerprint(changed))
+                _, reason = receipts.validate_focused_evidence(
+                    token, state=changed, path=receipt_path,
+                )
+                self.assertIn("current code state", reason)
+
+                _run_git(repo, "add", "docs/runtime_contract.json")
+                _run_git(repo, "commit", "-m", "change machine-consumed docs json")
+                committed = receipts.collect_code_state()
+                self.assertNotEqual(
+                    receipts.fingerprint(before), receipts.fingerprint(committed)
+                )
+
     def test_staging_and_committing_the_tested_bytes_keeps_the_receipt_valid(self):
         """The seal answers "same bytes?", never "same git status?".
 
@@ -427,12 +457,14 @@ class VerificationReceiptTests(unittest.TestCase):
                 self.assertIn("receipt            : missing/unreadable", missing)
 
     def test_receipt_boundary_and_pre_commit_gate_keep_docs_out_but_code_in(self):
-        self.assertFalse(receipts.is_code_path("docs/note.py"))
+        self.assertTrue(receipts.is_code_path("docs/runtime_contract.json"))
+        self.assertTrue(receipts.is_code_path("docs/note.py"))
         self.assertFalse(receipts.is_code_path("notes/readme.md"))
         self.assertFalse(receipts.is_code_path("设计说明.md"))
         self.assertTrue(receipts.is_code_path("engine/logic.py"))
         hook = (receipts.ROOT / ".githooks" / "pre-commit").read_text(encoding="utf-8")
-        self.assertIn("git diff --cached --name-only | grep -vE", hook)
+        self.assertIn("git diff --cached --name-only | grep -viE '.*\\.md$'", hook)
+        self.assertNotIn("grep -vE '^(docs/|.*\\\\.md$)'", hook)
         self.assertIn('if [ -n "$code_changed" ] || [ -n "$merging" ]; then', hook)
         self.assertIn('"$PY" .tools/verification_receipt.py', hook)
 
