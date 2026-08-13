@@ -2977,6 +2977,8 @@ def get_stock_list():
     key = f"stock_list_{TODAY}_v4_{mode}"
     cached = load_cache(key)
     if cached is not None:
+        if isinstance(cached, pd.DataFrame) and cached.empty:
+            raise RuntimeError("stock list cache is empty; refusing empty stock universe")
         return cached
     log.info("拉取股票基础信息(L+D+P,按as_of过滤)...")
     fields = "ts_code,symbol,name,list_date,delist_date,market,list_status"
@@ -3002,7 +3004,12 @@ def get_stock_list():
         )
     if len(successful_statuses) != 3:
         raise RuntimeError("stock_basic coverage incomplete")
-    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=fields.split(","))
+    if not frames:
+        raise RuntimeError(
+            "stock_basic returned no rows across list_status=L,D,P; "
+            "refusing empty stock universe"
+        )
+    df = pd.concat(frames, ignore_index=True)
     required_columns = {"ts_code", "name", "list_date", "delist_date", "list_status"}
     missing_columns = sorted(required_columns - set(df.columns))
     if missing_columns:
@@ -3030,6 +3037,8 @@ def get_stock_list():
     if mode == "hist":
         historical_names = _historical_name_map(df)
         df["name"] = df["ts_code"].map(historical_names)
+    if df.empty:
+        return df
     save_cache(key, df)
     return df
 
@@ -3307,6 +3316,10 @@ def get_sw_industry_map():
             str(code) for code in target_frame["ts_code"].dropna().astype(str)
             if is_a_share_main_board(code)
         }
+        if not target_codes:
+            raise RuntimeError(
+                "SW industry target-board universe is empty; refusing zero-missing coverage gate"
+            )
     cached = load_cache(key)
     if cached is not None:
         cached_codes = set(cached) if isinstance(cached, dict) else set()
