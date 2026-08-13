@@ -7307,3 +7307,28 @@ message 仍为原有字符串字段；SW2021 source-binding、status、`fast_pat
 **保留的诚实边界**：我先后四种调用方式都没能复现**修复前**的症状，所以「本次改动正是那次崩溃的解」仍无我的独立证据。关闭依据是我自己当初写下的判据——「原命令形态现在能正常起来」——这是可验证事实，不是因果推断。同形态若再崩应重开新条目，不是翻本条。
 
 **下一步**：P1-4 与那次真实无缓存周跑仍未动。
+
+## 2026-08-13 追加：EOL-pin 旧失败描述的事实更正（文档②；Optional 经用户点名执行；状态位不变）
+
+本节只做一件事：更正本文件**上方历史条目**（`OPEN-NOT_VERIFIED` 那条）里一句已经过时的失败描述。按项目惯例与 `3a_testrun0813` §6.2 的约束，**不回写、不删除、不重排任何历史 entry**，只在此追加。
+
+**被更正的那句**：旧条目写「旧 A-short full lane 的 `test_a_short_published_bundle_eol_pin` 仍因保留的 20260810 pre-design dirty record/source SHA 而未闭」。
+
+**该句现已不成立（我自己跑的，不是转述）**：在当前 c405 代码态（HEAD `1154c5e3`，与 master `6c0b1d2e` 内容同源）上跑 `tests.test_a_short_published_bundle_eol_pin` ——
+
+```
+test_recorded_source_sha_still_matches_a_tracked_bundle ... skipped 'pre-freeze: recorded SHA membership is audit-only'
+Ran 4 tests in 0.141s
+OK (skipped=1)
+```
+
+即那条 source-binding 断言**不是失败，而是被 pre-freeze 分支显式 skip 接住**，与本文件顶部 O32/O33 记录的显式 `skipTest` 语义一致。
+
+**这条更正不代表什么（四条边界，逐条写死）**：
+
+1. 它只证明**旧句过时**；`OPEN-NOT_VERIFIED` 那条的**状态位继续保持 `OPEN-NOT_VERIFIED`**，本节不改它。
+2. 它是 **pre-freeze audit-only 分支正确生效**的证据，**不是** design completion、freeze-start 或 durable evidence 已获授权的证据。测试绿 ≠ 该线已关闭。
+3. **关闭条件不变**：仍须用户明确宣布 A-short 系统设计完成，并按既有授权 / 冻结流程建立新 epoch；在此之前 registry 保持 `not_authorized`、所有 track 保持 pre-freeze。
+4. **不删除、不重写、不补 SHA、不重新发布** `20260810` 及另外三周产物；四周仍是 `pre-design audit-only artifacts`。
+
+**为什么只改这一处**：`docs/system_risk_register.md` 的当前有效条目**不带**这句过时失败事实（我 grep 过，零命中），按 §6.2「当前有效 register 已有 `Ran 4 tests / OK` 时不重复造条目」，故本轮不动 register。同理按 §6.2「不得仅为该 Optional 单独新增 SESSION_LOG 周期」，本轮**不新增 SESSION_LOG 评审循环 entry**；留痕由本节与提交本身承担。
