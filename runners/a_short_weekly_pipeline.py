@@ -5827,9 +5827,59 @@ def _p2_shadow_candidates(candidates: list[dict], provider, as_of: str,
     return shadow_candidates
 
 
+def _entry_funnel_sample_thresholds() -> tuple[int | None, int | None]:
+    """Read the two sample thresholds from their single source: the active report schema."""
+    try:
+        with open(ENTRY_FUNNEL_CALIBRATION_SCHEMA_PATH, "r", encoding="utf-8") as handle:
+            policy = json.load(handle)["properties"]["decision_policy"]["properties"]
+        weeks, candidates = policy["minimum_distinct_weeks"]["const"], policy["minimum_diagnostic_candidates"]["const"]
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return None, None
+    return (weeks if isinstance(weeks, int) else None,
+            candidates if isinstance(candidates, int) else None)
+
+
+def _entry_funnel_iv_ready_progress(selection_bucket: str | Path | None) -> str:
+    """Count IV-ready weeks beside this run's selection bucket; never raise into the weekly run.
+
+    The calibration replay can only use a week whose IV projection carries real M0.5 facts,
+    so ``iv_feed_status=ready`` plus a non-``unknown`` Rule3 state is the accumulation unit.
+    The candidate figure is an UPPER bound: Rule6/hard-veto still removes candidates from the
+    diagnostic denominator, and only the replay itself knows how many survive.
+    """
+    if not selection_bucket:
+        return ""
+    try:
+        root = Path(selection_bucket).resolve().parent
+        weeks = candidates = 0
+        for entry in sorted(root.iterdir()):
+            if not entry.is_dir() or not re.fullmatch(r"[0-9]{8}", entry.name):
+                continue
+            path = entry / "analysis_input.json"
+            if not path.is_file():
+                continue
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+            volatility = ((payload.get("market_context") or {}).get("volatility") or {})
+            if volatility.get("iv_feed_status") != "ready":
+                continue
+            if volatility.get("rule3_status") in (None, "unknown"):
+                continue
+            weeks += 1
+            candidates += len(payload.get("candidates") or [])
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        return ""
+    need_weeks, need_candidates = _entry_funnel_sample_thresholds()
+    week_text = f"{weeks}/{need_weeks}" if need_weeks else str(weeks)
+    candidate_text = f"{candidates}/{need_candidates}" if need_candidates else str(candidates)
+    return (f"已攒 IV-ready 周 {week_text}，其中候选 {candidate_text}"
+            "（候选为上限，仍需通过 Rule6/hard-veto 才计入诊断分母）。")
+
+
 def _load_entry_funnel_calibration_reminder(
-        report_path: str | Path = ENTRY_FUNNEL_CALIBRATION_REPORT_PATH) -> dict:
+        report_path: str | Path = ENTRY_FUNNEL_CALIBRATION_REPORT_PATH,
+        selection_bucket: str | Path | None = None) -> dict:
     """Load one aggregate calibration conclusion without touching historical inputs."""
+    progress = _entry_funnel_iv_ready_progress(selection_bucket)
     try:
         payload = json.loads(Path(report_path).read_text(encoding="utf-8"))
         if not isinstance(payload, dict):
@@ -5843,13 +5893,13 @@ def _load_entry_funnel_calibration_reminder(
         return {
             "track": "entry_funnel_calibration",
             "status": "unavailable",
-            "message": "Entry-funnel calibration is unavailable; official M6.7 remains unchanged.",
+            "message": ("入场漏斗校准暂不可用；正式 M6.7 不变。" + progress),
         }
     if readiness == "source_missing":
         return {
             "track": "entry_funnel_calibration",
             "status": "unavailable",
-            "message": "Entry-funnel calibration source is unavailable; official M6.7 remains unchanged.",
+            "message": ("入场漏斗校准的历史数据源暂不可用；正式 M6.7 不变。" + progress),
         }
     status_map = {
         "insufficient_sample": "accumulating",
@@ -5863,12 +5913,13 @@ def _load_entry_funnel_calibration_reminder(
         return {
             "track": "entry_funnel_calibration",
             "status": "unavailable",
-            "message": "Entry-funnel calibration conclusion is unavailable; official M6.7 remains unchanged.",
+            "message": ("入场漏斗校准结论暂不可用；正式 M6.7 不变。" + progress),
         }
     return {
         "track": "entry_funnel_calibration",
         "status": reminder_status,
-        "message": f"Entry-funnel calibration: {conclusion_status}; next evidence: {next_evidence}.",
+        "message": (f"入场漏斗校准：{conclusion_status}；下一步证据：{next_evidence}。"
+                    + (progress if reminder_status == "accumulating" else "")),
     }
 
 
@@ -7065,7 +7116,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         weekly["target_policy_comparison"] = target_policy_comparison
     if overlay_adjudication is not None:
         weekly["overlay_adjudication"] = overlay_adjudication
-    entry_funnel_calibration = _load_entry_funnel_calibration_reminder()
+    entry_funnel_calibration = _load_entry_funnel_calibration_reminder(
+        selection_bucket=os.path.dirname(args.analysis_input))
     evidence_reminders = _build_evidence_reminders(args.as_of, target_policy_comparison, final_action_validation,
                                                     overlay_adjudication, entry_funnel_calibration)
     if evidence_reminders is not None:

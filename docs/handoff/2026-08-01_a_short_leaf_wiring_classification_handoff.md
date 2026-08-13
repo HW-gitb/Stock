@@ -6853,3 +6853,24 @@ This entry records only §15A in `D:\\cnhea\\Codex\\worktrees\\43fe\\Stock`; the
 - 15C 未执行，第 15 刀保持 OPEN；探针里的价格是合成的，只验结构、不构成任何校准结论。
 
 **下一步**：`Codex：执行`
+
+## 2026-08-13 追加：**上方「剩余 8 刀」队列表已过期，不要照它派活**
+
+**结论先行**：2026-08-05 那张「剩余 8 刀的当前真实状态」表（本文件 `### 剩余 8 刀的当前真实状态` 一节）**已被后续执行推翻**。用户 2026-08-13 当面点破「以上表格应该都已经完成」，我据此**逐条读当前 master 代码**复核，确认这 8 项基本都已落地。表格本身按本仓惯例不改写历史行，以本节为准。
+
+**逐条代码证据**（全部取自 master 当前代码，不是交接文档记忆）：
+
+| 序 | 表里旧状态 | 代码里的真实状态（证据） |
+|---|---|---|
+| 19 全市场融资过热接线 | ✅ 可，下一刀 | **已接**：`runners/a_short_weekly_pipeline.py` 的 `_CASH_FACTOR_CONTROL_ORDER = ("pre_holiday_control", "margin_overheat_control")` 已把它放进 `_allocate_cash` 现金系数栈；另有 `_normalise_margin_overheat_control` 与 `margin_overheat.MARGIN_OVERHEAT_PRODUCTION_EFFECT_ENABLED` / `MARGIN_OVERHEAT_PERCENTILE_THRESHOLD` 治理常量；EGS 侧 `A-EGS/egs_main.py` 产 `margin_overheat_facts` 与 predicate |
+| 16 market_regime 接线 | ⛔ 被序 14/15 卡住 | **已接**：`runners/a_short_phase5_engine.py` 用 regime 取 `RR_FLOOR` / `ATR_MULT` / 单票仓位上限，并有 `market_regime unknown→按震荡期保守处理` 的回退 |
+| 15 volatility 接线 | ✅ 可开 | **已接**：IV feed → M0.5 全链已在第 14B 刀完成（含「IV 非 ready 禁止新建仓」硬门） |
+| 14 breadth 接线 | ⚠ 部分 | **已接**：`engine/a_short_market_breadth.py` 产全市场涨跌停/连板，`engine/a_short_regime_classifier.py`、`engine/a_short_regime_features.py` 消费其信号 |
+| 13 liquidity 接线 | ⛔ 待用户确认「删除式不接」 | **已接**：phase5 有 `liquidity_execution` 风险族 → `hard_veto`，`avg_amount_5d` 进仓位计算 |
+| 8 `price_as_of` 双口径 | ✅ 可开 | **已接**：`A-EGS/egs_main.py::set_asof(price_as_of)` / `get_trade_dates(price_as_of)` |
+| 7 汇总/账本事务性 | ✅ 可开 | **已接**：第 14A 刀把 JSON/Markdown/receipt/ratchet 做成同一事务（原子替换 + `outputs_digest` 绑定） |
+| 11 反悬空守卫粒度 | ✅ 可但放最后 | **机制已建**：`engine/a_short_effect_contract.py` 的 `true_dangling` / `unclassified_pending_audit` 分类与基线对账（Knife 12 批次） |
+
+**为什么会过期**：这正是本仓反复出现的 route-doc drift——表**写时正确**，随后被逐刀执行推翻，而没人回扫。教训与 `AGENTS.md` route-doc 约定一致：**队列/进度类表格不作为派活依据，派活前一律回代码核**。
+
+**用户 2026-08-13 明确裁决：`unclassified_pending_audit_baseline` 剩余 222 条叶子的裁定「明确不做」。** 详见 `docs/system_risk_register.md` 同日条目；后续任何人不得以「队列里还剩这一项」为由重新提起，除非用户另行改口。

@@ -1645,6 +1645,66 @@ class MainWiringTests(unittest.TestCase):
                     if row["track"] == "entry_funnel_calibration")
         self.assertEqual(item["status"], "unavailable")
 
+    def _iv_ready_bucket(self, root: Path, weeks) -> str:
+        """Write sibling selection buckets; return this run's bucket path."""
+        for as_of, volatility, candidate_count in weeks:
+            week_dir = root / as_of
+            week_dir.mkdir(parents=True)
+            (week_dir / "analysis_input.json").write_text(json.dumps({
+                "trade_date": as_of,
+                "market_context": {"volatility": volatility},
+                "candidates": [{"ts_code": f"60000{index}.SH"} for index in range(candidate_count)],
+            }), encoding="utf-8")
+        return str(root / weeks[0][0])
+
+    def test_entry_funnel_reminder_counts_only_iv_ready_weeks(self):
+        from runners.a_short_weekly_pipeline import _entry_funnel_sample_thresholds
+
+        ready = {"iv_feed_status": "ready", "rule3_status": "normal", "awakening_status": "inactive"}
+        not_ready = {"iv_feed_status": "build_failed", "rule3_status": "unknown",
+                     "awakening_status": "unknown"}
+        legacy = {"rule3_status": "unknown", "awakening_status": "unknown"}
+        need_weeks, need_candidates = _entry_funnel_sample_thresholds()
+        self.assertEqual((need_weeks, need_candidates), (12, 120))
+        with tempfile.TemporaryDirectory() as td:
+            bucket = self._iv_ready_bucket(Path(td) / "res", [
+                ("20260810", ready, 15), ("20260817", ready, 13),
+                ("20260803", not_ready, 15), ("20260727", legacy, 15),
+            ])
+            reminder = _load_entry_funnel_calibration_reminder(
+                Path(td) / "missing.json", selection_bucket=bucket)
+        self.assertEqual(reminder["status"], "unavailable")
+        # 只数 IV-ready 周;非 ready 与 08-08 前老形状都不计入。
+        self.assertIn(f"{2}/{need_weeks}", reminder["message"])
+        self.assertIn(f"{28}/{need_candidates}", reminder["message"])
+        self.assertIn("上限", reminder["message"])
+
+    def test_entry_funnel_reminder_progress_is_optional_and_never_raises(self):
+        with tempfile.TemporaryDirectory() as td:
+            without = _load_entry_funnel_calibration_reminder(Path(td) / "missing.json")
+            broken = _load_entry_funnel_calibration_reminder(
+                Path(td) / "missing.json", selection_bucket=str(Path(td) / "absent" / "20260810"))
+        for reminder in (without, broken):
+            self.assertEqual(reminder["status"], "unavailable")
+            self.assertNotIn("已攒", reminder["message"])
+
+    def test_entry_funnel_settled_conclusion_carries_no_accumulation_noise(self):
+        from runners.a_short_entry_funnel_calibration import _historical_source_missing_report
+
+        ready = {"iv_feed_status": "ready", "rule3_status": "normal", "awakening_status": "inactive"}
+        with tempfile.TemporaryDirectory() as td:
+            report = _historical_source_missing_report("2026-08-13T00:00:00+00:00")
+            report["source_readiness"]["status"] = "ready"
+            report["calibration_conclusion"]["status"] = "within_calibration_band"
+            report["calibration_conclusion"]["next_evidence"] = (
+                "retain_production_baseline_and_seek_forward_confirmation")
+            report_path = Path(td) / "calibration_report.json"
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+            bucket = self._iv_ready_bucket(Path(td) / "res", [("20260810", ready, 15)])
+            reminder = _load_entry_funnel_calibration_reminder(report_path, selection_bucket=bucket)
+        self.assertEqual(reminder["status"], "retain_baseline")
+        self.assertNotIn("已攒", reminder["message"])
+
     def test_entry_funnel_valid_report_reaches_weekly_json_and_markdown_as_advisory_only(self):
         from runners.a_short_entry_funnel_calibration import _historical_source_missing_report
 
