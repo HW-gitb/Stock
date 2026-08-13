@@ -61,6 +61,9 @@ class UsShortAccountStateSchema(unittest.TestCase):
     def test_additional_property_rejected(self):
         self._reject(lambda d: d.__setitem__("rule12", {"status": "inactive"}))
 
+    def test_symbol_cooldown_reconciliation_is_required(self):
+        self._reject(lambda d: d.pop("symbol_cooldown_reconciliation"))
+
     def test_negative_shares_rejected(self):
         self._reject(lambda d: d["positions"][0].__setitem__("shares", -1))
 

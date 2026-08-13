@@ -95,10 +95,12 @@ def build_portfolio_guard_result(paper_track, *, prior_state, as_of):
     return {**result, "evidence_ref": evidence_ref}
 
 
-def load_portfolio_guard_state(path, *, decision_date):
-    """Load the minimal private guard-memory record; a missing record is the explicit first-run state."""
+def load_portfolio_guard_state(path, *, decision_date, require_present=False):
+    """Load the minimal private guard-memory record; selected-history callers may reject absence."""
     path = Path(path)
     if not path.exists():
+        if require_present:
+            raise ResultEffectsError("portfolio guard state is missing")
         return {"schema_name": "us_short_portfolio_guard_state", "schema_version": "1.0.0",
                 "as_of": decision_date, "state": "normal"}
     try:

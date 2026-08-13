@@ -310,5 +310,6 @@
   "lifecycle_register_path": "<ABSOLUTE_PRIVATE_DIR>/lifecycle/lifecycle_register.json",
   "lifecycle_readiness_out_path": null,
   "runs_private_root": "<ABSOLUTE_PRIVATE_DIR>/runs_private",
+  "prior_run_dir": null,
   "weekly_private_root": "<ABSOLUTE_PRIVATE_DIR>/weekly_private"
 }

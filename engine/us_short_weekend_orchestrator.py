@@ -58,6 +58,12 @@ from engine.us_short_result_effects import (
     load_portfolio_guard_state,
     unavailable_cooldown_records,
 )
+from engine.us_short_regime import (
+    MARKET_REGIME_STATE_FILENAME,
+    MarketRegimeStateError,
+    load_market_regime_state,
+    build_market_regime_state,
+)
 from engine.us_short_result_source_linkage import (  # Cut4 source facts → the existing Cut2 effect reducer
     ResultSourceLinkageError,
     bind_result_source_facts,
@@ -73,10 +79,12 @@ from engine.us_short_symbol_cooldown_state import (
     STATE_FILENAME as SYMBOL_COOLDOWN_STATE_FILENAME,
     SymbolCooldownStateError,
     build_next_symbol_cooldown_state,
+    empty_symbol_cooldown_state,
     load_symbol_cooldown_state,
     resolve_symbol_cooldowns,
 )
 from engine.us_short_market_calendar import sessions_for_window, validate_market_calendar
+from engine.us_short_private_paths import PrivatePathError
 from engine.us_short_provider_health import EMIT_ALLOWED_RUN_STATES, classify_provider_health
 from engine.us_short_run_origin import (
     RunOriginError,
@@ -96,7 +104,10 @@ from engine.us_short_weekend_decision import decide_actions
 from engine.us_short_weekend_lifecycle_stage import run_lifecycle_eval_stage
 from engine.us_short_weekend_machine_record import assemble_machine_record
 from engine.us_short_weekend_pipeline import run_selection
-from engine.us_short_weekend_private_write import write_run_private
+from engine.us_short_weekend_private_write import (
+    validate_prior_run_dir,
+    write_run_private,
+)
 from engine.us_short_weekend_report import build_weekly_report
 
 # the closed-world injected context for one weekend run (batch4 offline fixture; batch5 fills from provider).
@@ -105,7 +116,7 @@ _PIPELINE_CONTEXT_KEYS = frozenset({
     "per_ticker_analysis",                             # selection→4d-ii-a seam (per admitted candidate + holding)
     "run_provenance",                                  # §2.1 PIT 来源对账（消费输入族 as_of/observed_at/price-basis/session/adjustment）
     "provider_health", "calendar",                     # §3.7 跑前健康门 + §2.1/§3.5 live 须 authoritative 日历 artifact
-    "market_axis_regimes", "prior_regime", "prior_upgrade_count",   # 4d-ii-a regime
+    "market_axis_regimes", "prior_regime", "prior_upgrade_count", "prior_run_dir", "prior_runs_private_root",   # 4d-ii-a regime
     "sizing_context", "basket_context", "cost_inputs", "available_cash", "account_state", "paper_track",   # 4d-ii-c..i
     "report_context",                                  # m2
     "lifecycle_register_path", "lifecycle_readiness_out_path",   # L
@@ -395,6 +406,24 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
     # (1b) §3.7 provider-health gate: critical SEC health degraded/down/missing NO-EMITs. Advisory FMP grades stays
     # visible as usable_with_fallback and may emit with its §4.2 catalyst contribution neutral-filled. The classifier
     # structurally refuses unauthorized sources; restricted/blocked still fail closed.
+    # Cross-week state is selected by the capstone/e2e boundary. A direct offline packet may also carry the
+    # already-selected dated child, but this orchestrator never treats a root-level sidecar or a missing selected
+    # file as a first run. The market state is the source of the anti-chatter pair; template values are ignored.
+    prior_run_dir = pc["prior_run_dir"]
+    prior_regime, prior_upgrade_count = None, 0
+    if prior_run_dir is not None:
+        try:
+            prior_run_dir = validate_prior_run_dir(
+                pc["prior_runs_private_root"], prior_run_dir, decision_date=decision_date)
+            prior_market_state = load_market_regime_state(
+                prior_run_dir / MARKET_REGIME_STATE_FILENAME, decision_date=decision_date)
+            if prior_market_state["as_of"] != prior_run_dir.name:
+                raise MarketRegimeStateError("prior market regime state date does not match its dated directory")
+            prior_regime = prior_market_state["market_risk_regime"]
+            prior_upgrade_count = prior_market_state["upgrade_count"]
+        except (MarketRegimeStateError, PrivatePathError, ValueError, OSError) as exc:
+            raise WeekendOrchestratorError("selected prior market-regime state is unavailable") from exc
+
     provider_health = classify_provider_health(pc["provider_health"])
     if provider_health["overall_run_state"] not in EMIT_ALLOWED_RUN_STATES:
         return {"out_of_window": False, "emitted": False,
@@ -420,8 +449,15 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
     # state is never overwritten; the planner emits observe until the manual/private state is repaired.
     state_writable = True
     try:
-        prior_holding_state = load_holding_action_state(
-            Path(pc["runs_private_root"]) / STATE_FILENAME, decision_date=decision_date)
+        prior_holding_state = (
+            None if prior_run_dir is None else load_holding_action_state(
+                prior_run_dir / STATE_FILENAME,
+                decision_date=decision_date,
+                require_present=True,
+            )
+        )
+        if prior_holding_state is not None and prior_holding_state["as_of"] != prior_run_dir.name:
+            raise HoldingActionError("prior holding-action state date does not match its dated directory")
         holding_contexts = build_holding_action_context(pc["account_state"], prior_holding_state)
     except HoldingActionError:
         holding_contexts, state_writable = {}, False
@@ -445,33 +481,48 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
     # Second-cut account guard: the run-level status is classified from a source-bound model-paper record, not
     # copied from basket_context.  A corrupt previous private state never yields normal; the classifier receives
     # an invalid prior and therefore fails closed to caution, while the corrupt file is not overwritten.
-    guard_state_writable = True
     try:
-        prior_guard_state = load_portfolio_guard_state(
-            Path(pc["runs_private_root"]) / PORTFOLIO_GUARD_STATE_FILENAME, decision_date=decision_date)
-        prior_guard = prior_guard_state["state"]
+        prior_guard_state = (
+            None if prior_run_dir is None else load_portfolio_guard_state(
+                prior_run_dir / PORTFOLIO_GUARD_STATE_FILENAME,
+                decision_date=decision_date,
+                require_present=True,
+            )
+        )
+        if prior_guard_state is not None and prior_guard_state["as_of"] != prior_run_dir.name:
+            raise ResultEffectsError("prior portfolio-guard state date does not match its dated directory")
+        prior_guard = "normal" if prior_guard_state is None else prior_guard_state["state"]
     except ResultEffectsError:
-        prior_guard, guard_state_writable = "__malformed__", False
+        prior_guard = "__malformed__"
     portfolio_guard_result = build_portfolio_guard_result(
         pc["paper_track"], prior_state=prior_guard, as_of=decision_date)
 
     # Symbol cooldowns are private, manual-reconciliation-backed state.  Absence/corruption is conservative
     # ``in_cooldown`` rather than the previous injected ``none`` business placeholder; no new build can pass it.
-    cooldown_state_writable = True
     try:
-        prior_cooldown_state = load_symbol_cooldown_state(
-            Path(pc["runs_private_root"]) / SYMBOL_COOLDOWN_STATE_FILENAME, decision_date=decision_date)
+        prior_cooldown_state = (
+            empty_symbol_cooldown_state(decision_date)
+            if prior_run_dir is None else load_symbol_cooldown_state(
+                prior_run_dir / SYMBOL_COOLDOWN_STATE_FILENAME,
+                decision_date=decision_date,
+                require_present=True,
+            )
+        )
+        if prior_run_dir is not None and prior_cooldown_state["as_of"] != prior_run_dir.name:
+            raise SymbolCooldownStateError("prior symbol-cooldown state date does not match its dated directory")
         next_cooldown_state = build_next_symbol_cooldown_state(
             prior_cooldown_state, pc["account_state"]["symbol_cooldown_reconciliation"], decision_date=decision_date)
         cooldown_by_ticker = resolve_symbol_cooldowns(next_cooldown_state, rows, decision_date=decision_date)
     except (KeyError, SymbolCooldownStateError):
-        next_cooldown_state, cooldown_state_writable = None, False
+        # Preserve the conservative current-week decision, but publish an explicit empty first-value state so a
+        # later valid account reconciliation can recover instead of remaining permanently unavailable.
+        next_cooldown_state = empty_symbol_cooldown_state(decision_date)
         cooldown_by_ticker = unavailable_cooldown_records(rows, as_of=decision_date)
     portfolio_capacity = _portfolio_capacity_context(
         selection, rows, account_state=pc["account_state"],
         sizing_context=pc["sizing_context"], available_cash=pc["available_cash"], decision_date=decision_date)
     analysis = analyze_rows(rows, market_axis_regimes=pc["market_axis_regimes"],
-                            prior_regime=pc["prior_regime"], prior_upgrade_count=pc["prior_upgrade_count"])
+                            prior_regime=prior_regime, prior_upgrade_count=prior_upgrade_count)
     decided = decide_actions(analysis)
     effected = apply_result_effects(decided, portfolio_guard_result=portfolio_guard_result,
                                     cooldown_by_ticker=cooldown_by_ticker, as_of=decision_date)
@@ -514,8 +565,11 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
         except HoldingActionError:
             # Do not replace a private TP state unless it was rebuilt from fully reconciled facts.
             holding_action_state = None
-    portfolio_guard_state = (build_next_portfolio_guard_state(portfolio_guard_result, decision_date=decision_date)
-                             if guard_state_writable else None)
+    if holding_action_state is None:
+        # A withheld week still publishes a valid first-value state so the next week can recover in-band.
+        holding_action_state = build_next_holding_action_state(decision_date, [])
+    portfolio_guard_state = build_next_portfolio_guard_state(portfolio_guard_result, decision_date=decision_date)
+    market_regime_state = build_market_regime_state(decision_date, analysis)
 
     # batch4 honesty provenance: the immutable run-origin fact (offline fixture, fully provider-derived research, or
     # receipt-bound mixed source; all operational_use=not_authorized), threaded through K/m2/N so no source mix
@@ -555,7 +609,8 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
         runs_private_root=pc["runs_private_root"],
         weekly_private_root=pc["weekly_private_root"], holding_action_state=holding_action_state,
         portfolio_guard_state=portfolio_guard_state,
-        symbol_cooldown_state=(next_cooldown_state if cooldown_state_writable else None),
+        symbol_cooldown_state=next_cooldown_state,
+        market_regime_state=market_regime_state,
         run_origin=run_origin,
         research_live_capability=research_live_capability)
 

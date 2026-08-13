@@ -1448,3 +1448,19 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_bounded_un
 - `forward_policy_shadow` 目前是无 status 的 shape-only 产出，故仍无条件判 `completed_work`（`O-K13-3` 的 accepted 半边）。将来若给它加 typed status，必须先更新契约测试，否则会变成「加了状态但表读不到」的同一类洞。
 - `O-K13-4`（`fresh_output_missing` 只留异常类型、不回写路径文本）是有意的隐私优先取舍，已写进 register，不要当成漏记再修一遍。
 - 按 0810 去重后的顺序，下一刀是**问题15**（四处文档事实纠偏，docs-only），其后 16-A → 问题14 → 16-B。
+
+## 2026-08-13 追加：排队一刀——改文档不该作废代码回执（用户指示写入交接，交 Codex 执行）
+
+**这是什么**：本 handoff 是回执/bounded-runner 这条工具线的 owner（见本文 `:1385-1387` 的 `DOC_ONLY` 那一刀）。今天用户问「回执为什么一直挡执行、能不能绕/删」，排查结论是**不能绕、也不该删，但当前封条封错了范围**，因此排一刀收窄它。完整正文（机制、实测指纹、两条腿的 Required change、Closure tests、边界、生效范围）在 `docs/system_risk_register.md` 的 **`R-DOCGOV-DOC-EDITS-INVALIDATE-THE-CODE-RECEIPT`**，本节只留指针与排期，不复述。
+
+**为什么**：焦点验收回执的「代码指纹」把 `docs/` 也算进去了，而项目强制顺序是「跑焦点包 → 写审查/交接记录 → 提交」。写记录必然改 markdown，指纹必变，pre-commit 必拒，焦点包必须再跑一遍。**每刀固定两次多余重跑（reviewer 一次、executor 一次）**，本会话三轮各中一次，实测重跑量级 33.7s / 99.2s / 105.7s。这是 AGENTS rule 8 说的「过度验证本身是流程缺陷」。
+
+**它是今早那一刀的另一半**：`R-DOCGOV-BOUNDED-DOCUMENT-GATE-CLOBBERS-CODE-RECEIPT` 解决了「跑文档门会覆盖回执」；本刀解决「改文档会作废回执」。两半合起来「跑焦点 → 跑文档门 → 写记录 → 提交」才是一遍走完。
+
+**执行时机（重要）**：**不阻断问题16-B 的修复**。等 16-B 修完、独立审查 PASS、合入 master 之后，**另起一刀单独做**。不要在 16-B 那棵脏树里顺手改验证工具——那会让 16-B 自己那次的回执口径跟着一起动，审查时说不清。
+
+**必须两条腿一起改**：`verification_receipt.py::collect_code_state()` 的枚举与聚合两个输入都要排除 `docs/**`；且 `full_pack_ledger.py:134/139` 另有一份平行的 `collect_code_state`/`fingerprint`，先确认是同一实现还是两份复制，**若是两份则两处都改并优先收敛成单一权威**。只修一条腿等于把税换个地方交。
+
+**验证要点**：正向——只改 docs 后指纹不变、回执仍 PASS、能提交；**反向控制不能松**——改任一 `.py` 或 `schemas/` 下 json 后指纹必须变、回执必须失效。全量账本同形状各一条。
+
+**生效范围（已查证，别再重推）**：`core.hooksPath` 是共享 config 里的绝对路径指向主树 `.githooks`，所以钩子脚本全局共享；但钩子会 `cd` 进正在提交的那棵树并用相对路径调 `.tools/verification_receipt.py`，所以**指纹逻辑用的是各树自己的副本**——本修复须**每棵树各自 `git merge --ff-only`** 才生效，一条命令推不全。新开工作树自动带上修好的代码；但 `.tools/state/` 被 `.gitignore:155` 整体忽略，回执与全量账本是本地状态、不随 checkout 走，**新树第一次提交前仍要跑一遍焦点包**——那一遍是对的，本刀只消掉多余的第二遍。

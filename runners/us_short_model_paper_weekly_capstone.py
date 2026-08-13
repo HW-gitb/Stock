@@ -196,6 +196,10 @@ def account_state_from_paper_adapter(adapter: dict) -> dict:
                     for row in adapter["positions"]
                 ],
             },
+            "symbol_cooldown_reconciliation": {
+                "schema_name": "us_short_symbol_cooldown_reconciliation", "schema_version": "1.0.0",
+                "as_of": adapter["decision_date"], "events": [],
+            },
             "manual_order_only": True,
             "broker_connection_allowed": False,
         }

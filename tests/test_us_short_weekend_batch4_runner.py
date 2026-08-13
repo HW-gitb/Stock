@@ -22,6 +22,7 @@ def _packet(base: Path, *, with_register=True):
     cal_path = base / "calendar.json"
     cal_path.write_text(json.dumps(_cal()), encoding="utf-8")
     pc = _pipeline_context(reg_path, runs_root, weekly_root)
+    pc.pop("prior_runs_private_root")  # runner derives the internal history root from its output root by default
     sizing_per_ticker = pc.pop("sizing_context")["per_ticker"]
     pc.pop("available_cash")
     pc.pop("account_state")  # runner consumes the private account_state_path, then injects account_state internally
@@ -131,6 +132,18 @@ class RunnerTests(unittest.TestCase):
             with self.assertRaises(Exception):
                 runner.run_packet(packet, now_et=_now("20260613", 10, 0))
             self.assertFalse((ROOT / "docs" / "_batch4_runner_probe").exists())
+
+    def test_selected_prior_must_belong_to_history_root(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as outside:
+            packet, _, _, _ = _packet(Path(d))
+            prior = Path(outside) / "20260601"
+            prior.mkdir()
+            (prior / "machine_record.json").write_text("{}", encoding="utf-8")
+            payload = json.loads(packet.read_text(encoding="utf-8"))
+            payload["prior_run_dir"] = str(prior)
+            packet.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaises(runner.Batch4RunnerError):
+                runner.run_packet(packet, now_et=_now("20260613", 10, 0))
 
 
 if __name__ == "__main__":

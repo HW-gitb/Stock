@@ -5,7 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_name", "schema_version", "as_of", "us_market_equity", "us_short_bucket_capital",
-               "us_short_available_cash", "positions", "manual_order_only", "broker_connection_allowed"],
+               "us_short_available_cash", "positions", "symbol_cooldown_reconciliation", "manual_order_only", "broker_connection_allowed"],
   "properties": {
     "schema_name": {"const": "us_short_account_state"},
     "schema_version": {"const": "1.0.0"},

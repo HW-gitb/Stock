@@ -21,7 +21,10 @@ trend/breadth lines) are §13.1 #3 forward priors, NOT frozen const. Pure/offlin
 sizing / new-entry permission, NEVER a hard veto, NEVER replaces per-stock analysis. No
 A-share crossing.
 """
+import datetime as _dt
+import json
 import math
+from pathlib import Path
 
 # Frozen regime identity, severity ASCENDING (进攻 least defensive … 极度防御 most), §7.
 REGIMES = ("进攻", "震荡", "防御", "极度防御")
@@ -38,6 +41,74 @@ UPGRADE_CONFIRM_RUNS = 2            # frozen anti-chatter: an upgrade needs this
 
 # §13.1 #3 forward priors (design-hinted VIX cut points 18/25/35), NOT frozen const.
 VIX_CUTS = ((18.0, "进攻"), (25.0, "震荡"), (35.0, "防御"))  # value < cut → that regime; ≥ last bound → 极度防御
+
+
+MARKET_REGIME_STATE_FILENAME = "market_regime_state.json"
+MARKET_REGIME_STATE_SCHEMA_NAME = "us_short_market_regime_state"
+MARKET_REGIME_STATE_SCHEMA_VERSION = "1.0.0"
+_MARKET_REGIME_STATE_KEYS = frozenset({"schema_name", "schema_version", "as_of", "market_risk_regime", "upgrade_count"})
+
+
+class MarketRegimeStateError(ValueError):
+    """The dated private market-regime state is missing or malformed."""
+
+
+def _real_date(value, where):
+    if not (isinstance(value, str) and len(value) == 8 and value.isascii() and value.isdigit()):
+        raise MarketRegimeStateError(f"{where} must be strict YYYYMMDD")
+    try:
+        _dt.datetime.strptime(value, "%Y%m%d")
+    except ValueError as exc:
+        raise MarketRegimeStateError(f"{where} is not a real date") from exc
+    return value
+
+
+def validate_market_regime_state(state, *, decision_date):
+    """Validate the fixed five-key dated state used by the cross-week anti-chatter policy."""
+    _real_date(decision_date, "decision_date")
+    if not isinstance(state, dict) or set(state) != _MARKET_REGIME_STATE_KEYS:
+        raise MarketRegimeStateError("market regime state top-level keys are invalid")
+    if state["schema_name"] != MARKET_REGIME_STATE_SCHEMA_NAME \
+            or state["schema_version"] != MARKET_REGIME_STATE_SCHEMA_VERSION:
+        raise MarketRegimeStateError("market regime state schema is invalid")
+    as_of = _real_date(state["as_of"], "market_regime_state.as_of")
+    if as_of > decision_date:
+        raise MarketRegimeStateError("market_regime_state.as_of cannot be future-dated")
+    if state["market_risk_regime"] not in REGIMES:
+        raise MarketRegimeStateError("market_regime_state.market_risk_regime is invalid")
+    if type(state["upgrade_count"]) is not int or state["upgrade_count"] < 0:
+        raise MarketRegimeStateError("market_regime_state.upgrade_count must be a nonnegative exact int")
+    return state
+
+
+def build_market_regime_state(decision_date, analysis):
+    """Build the next dated state from the formal analysis result, not from a template or call-site override."""
+    _real_date(decision_date, "decision_date")
+    regime = analysis.get("regime") if isinstance(analysis, dict) else None
+    if not isinstance(regime, dict):
+        raise MarketRegimeStateError("formal analysis has no regime result")
+    state = {
+        "schema_name": MARKET_REGIME_STATE_SCHEMA_NAME,
+        "schema_version": MARKET_REGIME_STATE_SCHEMA_VERSION,
+        "as_of": decision_date,
+        "market_risk_regime": regime.get("market_risk_regime"),
+        "upgrade_count": regime.get("upgrade_count"),
+    }
+    validate_market_regime_state(state, decision_date=decision_date)
+    return state
+
+
+def load_market_regime_state(path, *, decision_date):
+    """Load one selected prior dated state; absence is not a first-run signal."""
+    path = Path(path)
+    if not path.is_file():
+        raise MarketRegimeStateError("market regime state is missing")
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise MarketRegimeStateError("market regime state is unreadable") from exc
+    validate_market_regime_state(state, decision_date=decision_date)
+    return state
 
 
 def classify_vix(value):

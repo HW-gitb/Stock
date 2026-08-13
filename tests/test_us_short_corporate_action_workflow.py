@@ -163,6 +163,9 @@ def account_state(ticker: str = "TWTR") -> dict:
             "current_stop": None,
             "notes": None,
         }],
+        "symbol_cooldown_reconciliation": {
+            "schema_name": "us_short_symbol_cooldown_reconciliation", "schema_version": "1.0.0",
+            "as_of": "20260713", "events": []},
         "manual_order_only": True,
         "broker_connection_allowed": False,
     }
