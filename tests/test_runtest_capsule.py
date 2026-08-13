@@ -255,6 +255,37 @@ class RuntestCapsuleTest(unittest.TestCase):
         self.assertIn("PYTHONUTF8", weekly)
         self.assertIn("[Console]::OutputEncoding", weekly)
 
+    def test_file_mode_launchers_reach_confirmation_gate_without_source_root(self) -> None:
+        powershell = shutil.which("powershell.exe") or shutil.which("powershell")
+        if powershell is None:
+            self.skipTest("Windows PowerShell executable not available")
+
+        for market in ("a_short", "us_short"):
+            with self.subTest(market=market):
+                script = ROOT / "runners" / f"{market}_runtest.ps1"
+                capsule_root = self.base / f"{market}_file_mode_capsule"
+                result = subprocess.run(
+                    [
+                        powershell,
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                        str(script),
+                        "-CapsuleRoot",
+                        str(capsule_root),
+                    ],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    errors="replace",
+                )
+                output = result.stdout + result.stderr
+                self.assertNotEqual(result.returncode, 0, output)
+                self.assertIn("Runtest is intentionally explicit", output)
+                self.assertNotIn("Split-Path", output)
+                self.assertFalse(capsule_root.exists())
+
     def test_us_weekly_launcher_auto_derives_budget_and_rejects_manual_budget_flags(self) -> None:
         weekly_capstone = (ROOT / "runners" / "us_short_weekly_capstone.ps1").read_text(encoding="utf-8")
         self.assertIn('@("--live", "--confirm-user-authorization", "--auto-pass2-budget")', weekly_capstone)

@@ -89,6 +89,24 @@ class SwIndustrySourceTest(unittest.TestCase):
         self.egs_main.SW_INDUSTRY_MIN_ACTIVE = self.old_min
         self.egs_main._LAST_SW_INDUSTRY_SOURCE_OBSERVATION = None
 
+    def test_test_safe_call_maps_empty_response_to_default(self) -> None:
+        self.assertEqual(
+            _safe_call(lambda: pd.DataFrame(), default="empty-default"),
+            "empty-default",
+        )
+
+    def test_non_sw_stock_consumers_share_nonempty_universe_guard(self) -> None:
+        empty = pd.DataFrame(columns=["ts_code"])
+        valid = pd.DataFrame({"ts_code": ["600000.SH"]})
+        with patch.object(self.egs_main, "get_stock_list", return_value=empty):
+            with self.assertRaisesRegex(RuntimeError, "daily_basic.*non-empty stock universe"):
+                self.egs_main._require_nonempty_stock_universe("daily_basic")
+        with patch.object(self.egs_main, "get_stock_list", return_value=valid):
+            self.assertIs(
+                self.egs_main._require_nonempty_stock_universe("suspend"),
+                valid,
+            )
+
     def test_current_run_uses_l1_fast_path_and_normalizes_official_aliases(self) -> None:
         l1, l2 = _classifications()
         classify_calls = []

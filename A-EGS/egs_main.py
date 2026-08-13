@@ -3042,6 +3042,14 @@ def get_stock_list():
     save_cache(key, df)
     return df
 
+
+def _require_nonempty_stock_universe(consumer):
+    frame = get_stock_list()
+    if not isinstance(frame, pd.DataFrame) or "ts_code" not in frame.columns or frame.empty:
+        raise RuntimeError(f"{consumer} requires a non-empty stock universe")
+    return frame
+
+
 SW_INDUSTRY_CLASSIFICATION_STANDARD = "SW2021"
 SW_INDUSTRY_CLASSIFICATION_FIELDS = (
     "index_code,industry_name,parent_code,level,industry_code,src"
@@ -3955,9 +3963,8 @@ def get_daily_basic(trade_date, fallback_dates=None):
     key = f"daily_basic_{trade_date}_source_v2"
     target_codes = None
     if callable(getattr(pro, "stock_basic", None)):
-        target_frame = get_stock_list()
-        if isinstance(target_frame, pd.DataFrame) and "ts_code" in target_frame.columns:
-            target_codes = set(target_frame["ts_code"].dropna().astype(str))
+        target_frame = _require_nonempty_stock_universe("daily_basic")
+        target_codes = set(target_frame["ts_code"].dropna().astype(str))
     if (cached := load_cache(key)) is not None:
         if "source_trade_date" not in cached.columns:
             raise RuntimeError("daily_basic cache lacks source_trade_date provenance")
@@ -4060,7 +4067,9 @@ def get_suspend_info(trade_dates):
         observed_at = str(cached.get("observed_at") or "")
         target_date = str(trade_dates[0])
         if observed_at != target_date:
-            all_codes = set(get_stock_list()["ts_code"].dropna().astype(str))
+            all_codes = set(
+                _require_nonempty_stock_universe("suspend")["ts_code"].dropna().astype(str)
+            )
             target_daily = safe_api(pro.daily, trade_date=target_date, fields="ts_code")
             try:
                 target_traded = _validated_suspend_traded_codes(
@@ -4090,7 +4099,9 @@ def get_suspend_info(trade_dates):
             message="suspend set loaded from cache; no fresh daily coverage measurement in this run",
         )
         return members
-    all_codes = set(get_stock_list()["ts_code"].dropna().astype(str))
+    all_codes = set(
+        _require_nonempty_stock_universe("suspend")["ts_code"].dropna().astype(str)
+    )
 
     for td in trade_dates[:3]:
         daily_td = safe_api(pro.daily, trade_date=td, fields="ts_code")
@@ -7156,7 +7167,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
     run_date = a_share_market_date()
     trade_calendar_context = get_trade_calendar_context(decision_as_of)
 
-    df_stocks  = get_stock_list()
+    df_stocks  = _require_nonempty_stock_universe("EGS")
     sw_map     = get_sw_industry_map()
     csi300_ret = get_csi300_return(trade_dates)
     all_daily  = get_daily_all(trade_dates, price_as_of=price_data_through)
