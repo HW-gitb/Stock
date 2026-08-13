@@ -1,5 +1,5 @@
 {
-  "inventory_version": "us_short_test_io_inventory.v0.4.0",
+  "inventory_version": "us_short_test_io_inventory.v0.5.0",
   "scope": {
     "glob": "tests/**/test_us_short*.py",
     "protected_roots": [
@@ -7,16 +7,7 @@
       "state/us_short"
     ]
   },
-  "module_count": 318,
-  "classification_counts": {
-    "class0_no_direct_protected_io": 247,
-    "class1_read_real_root": 1,
-    "class2_write_real_root": 3,
-    "class3_global_sentinel": 5,
-    "class4_unresolved_write": 62
-  },
   "class0_modules_omitted": true,
-  "module_path_sha256": "29868d77fd5299ed5c5f90ed2d9ba394d100e7bdef0e9c491c71d187dd479978",
   "allowlist": [
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short",
     "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short",
@@ -228,228 +219,6 @@
     "tests/test_us_short_weekend_orchestrator.py:open:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_weekend_report.py:kwarg:soft_discovery_receipt_paths:provider_samples,state/us_short:class4_unresolved_write"
   ],
-  "unallowlisted_write_findings": [],
-  "unresolved_write_finding_counts": {
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_resume_scan.py:helper:_write_json:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_scan.py:kwarg:consumer_summary_path:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_scan.py:kwarg:summary_path:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:helper:_write_json:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:summary_path:provider_samples:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:summary_path:provider_samples,state/us_short:class4_unresolved_write": 5,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:kwarg:consumer_summary_path:provider_samples,state/us_short:class4_unresolved_write": 5,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:kwarg:output_source_packet_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:kwarg:summary_path:provider_samples,state/us_short:class4_unresolved_write": 5,
-    "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:kwarg:batch4_template_path:provider_samples,state/us_short:class4_unresolved_write": 8,
-    "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:kwarg:source_packet_path:provider_samples,state/us_short:class4_unresolved_write": 9,
-    "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_capstone_offline_e2e.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_data_context.py:kwarg:source_artifact_paths:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_data_context.py:kwarg:source_ref_paths:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/provider/test_us_short_batch5_data_context_source_packet.py:helper:_write_json:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_data_context_source_packet.py:kwarg:state_dir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:helper:_write_json:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:kwarg:candidate_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:kwarg:path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:kwarg:preflight_summary_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:rmdir:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:ohlcv_series_packet_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py:kwarg:series_packet_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:kwarg:output_projection_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:kwarg:output_projection_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:kwarg:series_packet_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py:kwarg:summary_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_universe_sec_sic_classification_fetch.py:helper:_write_json:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:kwarg:output_projection_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/provider/test_us_short_batch5_full_universe_theme_producer.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:TemporaryDirectory:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:kwarg:incident_root:provider_samples,state/us_short:class4_unresolved_write": 13,
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/provider/test_us_short_batch5_incident_log_writer.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/provider/test_us_short_batch5_live_source_packet.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_live_source_packet.py:rmdir:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/provider/test_us_short_batch5_live_source_packet.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/provider/test_us_short_batch5_live_source_packet.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_momentum_price_source.py:kwarg:output_projection_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:rmdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_momentum_price_source_packet.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_neutral_projection_inputs.py:kwarg:momentum_projection_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_provider_live_probe.py:kwarg:packet_path:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/provider/test_us_short_batch5_to_batch4_e2e.py:kwarg:batch4_template_path:provider_samples,state/us_short:class4_unresolved_write": 8,
-    "tests/provider/test_us_short_batch5_to_batch4_e2e.py:kwarg:official_output_root:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_to_batch4_e2e.py:kwarg:private_root:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_to_batch4_e2e.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_batch5_to_batch4_e2e.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_corporate_action_source_intake.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/provider/test_us_short_forward_policy_corporate_action_fetch.py:kwarg:private_root:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_forward_policy_corporate_action_fetch.py:kwarg:sample_root:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_forward_universe_snapshot.py:kwarg:output_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_llm_theme_discovery.py:kwarg:output_path:provider_samples,state/us_short:class4_unresolved_write": 16,
-    "tests/provider/test_us_short_llm_theme_discovery_build_parent_plan.py:kwarg:state_dir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_llm_theme_discovery_fetch_web.py:replace:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:helper:rehash:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:rename:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 10,
-    "tests/provider/test_us_short_llm_theme_discovery_plan_bound_offline_closure.py:kwarg:source_refs:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_llm_theme_discovery_plan_bound_offline_closure.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_llm_theme_discovery_plan_bound_offline_closure.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_offline_production_entry_guard.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_pass2_budget_approval.py:helper:_prepare:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_pass2_budget_approval.py:kwarg:batch4_template_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_pass2_budget_approval.py:kwarg:manifest_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_pass2_budget_approval.py:kwarg:output_logical_paths:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_pass2_budget_approval.py:kwarg:output_paths:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_pass2_budget_approval.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/provider/test_us_short_pass2_budget_approval.py:replace:provider_samples,state/us_short:class4_unresolved_write": 5,
-    "tests/provider/test_us_short_pass2_budget_approval.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 5,
-    "tests/provider/test_us_short_provisional_theme_validate.py:helper:_write:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/provider/test_us_short_provisional_theme_validate.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_provisional_theme_validate.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py:helper:_write_json:provider_samples,state/us_short:class4_unresolved_write": 31,
-    "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_universe_fetch.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_universe_fetch.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_weekly_capstone.py:kwarg:account_state_path:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/provider/test_us_short_weekly_capstone.py:kwarg:batch4_template_path:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/provider/test_us_short_weekly_capstone.py:kwarg:private_root:provider_samples,state/us_short:class4_unresolved_write": 8,
-    "tests/provider/test_us_short_weekly_capstone.py:kwarg:source_packet_path:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/provider/test_us_short_weekly_capstone.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 11,
-    "tests/provider/test_us_short_weekly_capstone.py:mkdir:state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_weekly_capstone.py:replace:provider_samples,state/us_short:class4_unresolved_write": 24,
-    "tests/provider/test_us_short_weekly_capstone.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 17,
-    "tests/provider/test_us_short_weekly_capstone.py:write_text:state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_weekly_capstone_soft_discovery.py:helper:_assert_conflict_transition:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_weekly_capstone_soft_discovery.py:helper:_write_json:provider_samples,state/us_short:class4_unresolved_write": 25,
-    "tests/provider/test_us_short_weekly_capstone_soft_discovery.py:kwarg:candidate_path:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/provider/test_us_short_weekly_capstone_soft_discovery.py:kwarg:classification_path:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/provider/test_us_short_weekly_capstone_soft_discovery.py:kwarg:raw_root:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/provider/test_us_short_weekly_capstone_soft_discovery.py:kwarg:root:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_weekly_capstone_soft_discovery.py:kwarg:state_dir:provider_samples,state/us_short:class4_unresolved_write": 6,
-    "tests/provider/test_us_short_weekly_capstone_soft_discovery.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/provider/test_us_short_weekly_capstone_soft_discovery.py:replace:provider_samples,state/us_short:class4_unresolved_write": 8,
-    "tests/provider/test_us_short_weekly_capstone_soft_discovery.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 11,
-    "tests/provider/test_us_short_weekly_capstone_soft_discovery.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_weekly_capstone_soft_discovery.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/provider/test_us_short_yfinance_grades_fetch.py:rmdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/provider/test_us_short_yfinance_grades_fetch.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/schema/test_us_short_llm_theme_discovery_fetch_x_schema.py:replace:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/schema/test_us_short_soft_discovery_query_quality_probe_packet_schema.py:kwarg:path:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_action_table_renderer.py:open:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_capstone_checkpoint.py:helper:_write:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/test_us_short_capstone_checkpoint.py:kwarg:manifest_path:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/test_us_short_capstone_checkpoint.py:kwarg:source_manifest_path:provider_samples,state/us_short:class4_unresolved_write": 6,
-    "tests/test_us_short_capstone_checkpoint.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_capstone_checkpoint.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_decision_exposure.py:helper:write_decision_exposure:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/test_us_short_decision_exposure.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_decision_exposure.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_discovery_class_guards.py:kwarg:root:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_discovery_conformance.py:helper:blind_write:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_discovery_conformance.py:kwarg:file:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_discovery_conformance.py:kwarg:path:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/test_us_short_discovery_conformance.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_discovery_conformance.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_forward_policy_shadow_stage.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/test_us_short_lifecycle_store.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_lifecycle_store.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/test_us_short_llm_theme_discovery_query_policy.py:replace:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_market_diagnostic_authorization_conformance.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/test_us_short_market_diagnostic_lifecycle.py:helper:_orphan:provider_samples,state/us_short:class4_unresolved_write": 5,
-    "tests/test_us_short_market_diagnostic_start_receipt.py:kwarg:root:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_market_diagnostic_start_receipt.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_market_diagnostic_start_receipt.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_market_diagnostic_weekly_advance.py:helper:write_decision_exposure:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_market_diagnostic_weekly_advance.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_market_diagnostic_weekly_advance.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_market_diagnostic_weekly_runner.py:helper:_record:provider_samples,state/us_short:class4_unresolved_write": 9,
-    "tests/test_us_short_market_diagnostic_weekly_runner.py:kwarg:root:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_model_paper_capstone_wiring.py:helper:write_json:provider_samples,state/us_short:class4_unresolved_write": 5,
-    "tests/test_us_short_model_paper_capstone_wiring.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_model_paper_capstone_wiring.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/test_us_short_paper_ledger.py:rmdir:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/test_us_short_paper_ledger.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/test_us_short_paper_ledger.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_paper_one_click.py:kwarg:private_root:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_paper_one_click.py:kwarg:state_dir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_paper_one_click.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_serenity_structural_theme_annotation.py:replace:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_serenity_structural_theme_annotation.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_shadow_compare_store.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/test_us_short_shadow_compare_store.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 5,
-    "tests/test_us_short_soft_discovery_weekly_report.py:helper:_write:provider_samples,state/us_short:class4_unresolved_write": 7,
-    "tests/test_us_short_soft_discovery_weekly_report.py:kwarg:adjudication_receipt_path:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/test_us_short_soft_discovery_weekly_report.py:kwarg:comparison_ledger_path:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/test_us_short_soft_discovery_weekly_report.py:kwarg:consumption_path:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/test_us_short_soft_discovery_weekly_report.py:kwarg:consumption_receipt_path:provider_samples,state/us_short:class4_unresolved_write": 5,
-    "tests/test_us_short_soft_discovery_weekly_report.py:kwarg:ledger_path:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_soft_discovery_weekly_report.py:kwarg:shadow_path:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/test_us_short_soft_discovery_weekly_report.py:kwarg:shadow_receipt_path:provider_samples,state/us_short:class4_unresolved_write": 5,
-    "tests/test_us_short_soft_discovery_weekly_report.py:kwarg:soft_boost_consumption_receipt_path:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/test_us_short_soft_discovery_weekly_report.py:kwarg:soft_boost_shadow_receipt_path:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/test_us_short_soft_discovery_weekly_report.py:kwarg:stage_receipt_path:provider_samples,state/us_short:class4_unresolved_write": 5,
-    "tests/test_us_short_soft_discovery_weekly_report.py:kwarg:state_dir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_soft_discovery_weekly_report.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/test_us_short_soft_discovery_weekly_report.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_soft_discovery_weekly_report.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write": 6,
-    "tests/test_us_short_soft_discovery_weekly_report.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 9,
-    "tests/test_us_short_upgrade_obs_discover.py:kwarg:buckets_dir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_weekend_batch4_context_builder.py:helper:_build:provider_samples,state/us_short:class4_unresolved_write": 12,
-    "tests/test_us_short_weekend_batch4_context_builder.py:helper:_fixture_from:provider_samples,state/us_short:class4_unresolved_write": 5,
-    "tests/test_us_short_weekend_batch4_context_builder.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 3,
-    "tests/test_us_short_weekend_batch4_runner.py:mkdir:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_weekend_batch4_runner.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 5,
-    "tests/test_us_short_weekend_lifecycle_stage.py:kwarg:register_path:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_weekend_lifecycle_stage.py:unlink:provider_samples,state/us_short:class4_unresolved_write": 1,
-    "tests/test_us_short_weekend_lifecycle_stage.py:write_text:provider_samples,state/us_short:class4_unresolved_write": 2,
-    "tests/test_us_short_weekend_orchestrator.py:open:provider_samples,state/us_short:class4_unresolved_write": 4,
-    "tests/test_us_short_weekend_report.py:kwarg:soft_discovery_receipt_paths:provider_samples,state/us_short:class4_unresolved_write": 2
-  },
-  "protected_write_finding_keys": [
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short",
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short",
-    "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_sample_ref:provider_samples",
-    "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples",
-    "tests/provider/test_us_short_llm_theme_discovery_fetch_web.py:kwarg:artifact_path:state/us_short",
-    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:kwarg:artifact_path:state/us_short",
-    "tests/provider/test_us_short_weekly_capstone.py:kwarg:account_state_path:state/us_short",
-    "tests/provider/test_us_short_weekly_capstone.py:kwarg:batch4_template_path:state/us_short",
-    "tests/provider/test_us_short_weekly_capstone.py:kwarg:private_root:state/us_short",
-    "tests/schema/test_us_short_soft_discovery_query_quality_probe_packet_schema.py:kwarg:state_dir:state/us_short",
-    "tests/test_us_short_capstone_checkpoint.py:kwarg:input_logical_paths:state/us_short",
-    "tests/test_us_short_capstone_checkpoint.py:kwarg:output_logical_paths:state/us_short",
-    "tests/test_us_short_forward_policy_private_week.py:kwarg:private_output_path:state/us_short",
-    "tests/test_us_short_llm_theme_discovery_plan_budget.py:kwarg:artifact_path:state/us_short"
-  ],
-  "protected_write_finding_counts": {
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:packet_ref:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py:kwarg:screen_path:state/us_short": 1,
-    "tests/provider/test_us_short_batch5_live_source_packet.py:kwarg:raw_sample_ref:provider_samples": 1,
-    "tests/provider/test_us_short_batch5_theme_source_packet.py:kwarg:raw_sample_ref:provider_samples": 1,
-    "tests/provider/test_us_short_llm_theme_discovery_fetch_web.py:kwarg:artifact_path:state/us_short": 1,
-    "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py:kwarg:artifact_path:state/us_short": 1,
-    "tests/provider/test_us_short_weekly_capstone.py:kwarg:account_state_path:state/us_short": 1,
-    "tests/provider/test_us_short_weekly_capstone.py:kwarg:batch4_template_path:state/us_short": 1,
-    "tests/provider/test_us_short_weekly_capstone.py:kwarg:private_root:state/us_short": 1,
-    "tests/schema/test_us_short_soft_discovery_query_quality_probe_packet_schema.py:kwarg:state_dir:state/us_short": 2,
-    "tests/test_us_short_capstone_checkpoint.py:kwarg:input_logical_paths:state/us_short": 4,
-    "tests/test_us_short_capstone_checkpoint.py:kwarg:output_logical_paths:state/us_short": 9,
-    "tests/test_us_short_forward_policy_private_week.py:kwarg:private_output_path:state/us_short": 1,
-    "tests/test_us_short_llm_theme_discovery_plan_budget.py:kwarg:artifact_path:state/us_short": 2
-  },
   "modules": [
     {
       "module": "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_resume_scan.py",
@@ -457,9 +226,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 1
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_bankruptcy_8k_candidate_scan.py",
@@ -467,18 +234,14 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 8
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_bankruptcy_8k_preflight.py",
       "classification": "class3_global_sentinel",
       "protected_roots": [
         "provider_samples"
-      ],
-      "read_count": 4,
-      "write_count": 0
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet.py",
@@ -486,9 +249,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 1,
-      "write_count": 9
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py",
@@ -496,9 +257,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 11
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_capstone_offline_e2e.py",
@@ -506,9 +265,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 20
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_data_context.py",
@@ -516,9 +273,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 5
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_data_context_source_packet.py",
@@ -526,9 +281,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 2
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py",
@@ -536,9 +289,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 11
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_full_universe_momentum_fetch.py",
@@ -546,9 +297,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 2
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_full_universe_momentum_producer.py",
@@ -556,9 +305,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 5
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_full_universe_overextension_producer.py",
@@ -566,9 +313,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 3
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_full_universe_sec_sic_classification_fetch.py",
@@ -576,9 +321,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 2
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_full_universe_theme_producer.py",
@@ -586,9 +329,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 5
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_incident_log_writer.py",
@@ -596,9 +337,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 15,
-      "write_count": 19
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_live_source_packet.py",
@@ -606,9 +345,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 10
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_momentum_price_source.py",
@@ -616,9 +353,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 1
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_momentum_price_source_packet.py",
@@ -626,9 +361,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 2
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_neutral_projection_inputs.py",
@@ -636,18 +369,14 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 1
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_provider_live_preflight.py",
       "classification": "class3_global_sentinel",
       "protected_roots": [
         "provider_samples"
-      ],
-      "read_count": 4,
-      "write_count": 0
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_provider_live_probe.py",
@@ -655,27 +384,21 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 4
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_status_source_preflight.py",
       "classification": "class3_global_sentinel",
       "protected_roots": [
         "provider_samples"
-      ],
-      "read_count": 4,
-      "write_count": 0
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_theme_source_packet.py",
       "classification": "class2_write_real_root",
       "protected_roots": [
         "provider_samples"
-      ],
-      "read_count": 0,
-      "write_count": 1
+      ]
     },
     {
       "module": "tests/provider/test_us_short_batch5_to_batch4_e2e.py",
@@ -683,9 +406,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 12
+      ]
     },
     {
       "module": "tests/provider/test_us_short_corporate_action_source_intake.py",
@@ -693,9 +414,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 1
+      ]
     },
     {
       "module": "tests/provider/test_us_short_cut5_pass2_feasibility_probe.py",
@@ -703,9 +422,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 4
+      ]
     },
     {
       "module": "tests/provider/test_us_short_forward_policy_corporate_action_fetch.py",
@@ -713,9 +430,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 2
+      ]
     },
     {
       "module": "tests/provider/test_us_short_forward_universe_snapshot.py",
@@ -723,9 +438,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 1
+      ]
     },
     {
       "module": "tests/provider/test_us_short_llm_theme_discovery.py",
@@ -733,9 +446,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 16
+      ]
     },
     {
       "module": "tests/provider/test_us_short_llm_theme_discovery_build_parent_plan.py",
@@ -743,9 +454,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 1
+      ]
     },
     {
       "module": "tests/provider/test_us_short_llm_theme_discovery_fetch_web.py",
@@ -753,9 +462,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 2
+      ]
     },
     {
       "module": "tests/provider/test_us_short_llm_theme_discovery_fetch_x_merge.py",
@@ -763,9 +470,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 22
+      ]
     },
     {
       "module": "tests/provider/test_us_short_llm_theme_discovery_plan_bound_offline_closure.py",
@@ -773,9 +478,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 3
+      ]
     },
     {
       "module": "tests/provider/test_us_short_offline_production_entry_guard.py",
@@ -783,9 +486,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 1
+      ]
     },
     {
       "module": "tests/provider/test_us_short_pass2_budget_approval.py",
@@ -793,9 +494,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 19
+      ]
     },
     {
       "module": "tests/provider/test_us_short_provisional_theme_validate.py",
@@ -803,9 +502,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 5
+      ]
     },
     {
       "module": "tests/provider/test_us_short_soft_discovery_query_quality_probe_assess.py",
@@ -813,9 +510,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 35
+      ]
     },
     {
       "module": "tests/provider/test_us_short_universe_fetch.py",
@@ -823,9 +518,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 2
+      ]
     },
     {
       "module": "tests/provider/test_us_short_weekly_capstone.py",
@@ -833,9 +526,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 1,
-      "write_count": 73
+      ]
     },
     {
       "module": "tests/provider/test_us_short_weekly_capstone_soft_discovery.py",
@@ -843,9 +534,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 66
+      ]
     },
     {
       "module": "tests/provider/test_us_short_yfinance_grades_fetch.py",
@@ -853,9 +542,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 2
+      ]
     },
     {
       "module": "tests/schema/test_us_short_llm_theme_discovery_fetch_x_schema.py",
@@ -863,9 +550,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 1
+      ]
     },
     {
       "module": "tests/schema/test_us_short_soft_discovery_query_quality_probe_packet_schema.py",
@@ -873,9 +558,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 4
+      ]
     },
     {
       "module": "tests/test_us_short_action_table_renderer.py",
@@ -883,9 +566,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 1
+      ]
     },
     {
       "module": "tests/test_us_short_capstone_checkpoint.py",
@@ -893,9 +574,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 1,
-      "write_count": 29
+      ]
     },
     {
       "module": "tests/test_us_short_decision_exposure.py",
@@ -903,9 +582,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 7
+      ]
     },
     {
       "module": "tests/test_us_short_discovery_class_guards.py",
@@ -913,9 +590,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 2
+      ]
     },
     {
       "module": "tests/test_us_short_discovery_conformance.py",
@@ -923,18 +598,14 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 8
+      ]
     },
     {
       "module": "tests/test_us_short_forward_policy_private_week.py",
       "classification": "class2_write_real_root",
       "protected_roots": [
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 1
+      ]
     },
     {
       "module": "tests/test_us_short_forward_policy_shadow_stage.py",
@@ -942,9 +613,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 3
+      ]
     },
     {
       "module": "tests/test_us_short_lifecycle_store.py",
@@ -952,18 +621,14 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 5
+      ]
     },
     {
       "module": "tests/test_us_short_llm_theme_discovery_plan_budget.py",
       "classification": "class2_write_real_root",
       "protected_roots": [
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 2
+      ]
     },
     {
       "module": "tests/test_us_short_llm_theme_discovery_query_policy.py",
@@ -971,9 +636,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 2
+      ]
     },
     {
       "module": "tests/test_us_short_market_diagnostic_authorization_conformance.py",
@@ -981,9 +644,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 3
+      ]
     },
     {
       "module": "tests/test_us_short_market_diagnostic_lifecycle.py",
@@ -991,9 +652,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 5
+      ]
     },
     {
       "module": "tests/test_us_short_market_diagnostic_rehearsal.py",
@@ -1001,9 +660,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 2,
-      "write_count": 0
+      ]
     },
     {
       "module": "tests/test_us_short_market_diagnostic_start_receipt.py",
@@ -1011,9 +668,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 3
+      ]
     },
     {
       "module": "tests/test_us_short_market_diagnostic_weekly_advance.py",
@@ -1021,9 +676,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 6
+      ]
     },
     {
       "module": "tests/test_us_short_market_diagnostic_weekly_runner.py",
@@ -1031,9 +684,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 10
+      ]
     },
     {
       "module": "tests/test_us_short_model_paper_capstone_wiring.py",
@@ -1041,9 +692,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 10
+      ]
     },
     {
       "module": "tests/test_us_short_paper_ledger.py",
@@ -1051,9 +700,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 9
+      ]
     },
     {
       "module": "tests/test_us_short_paper_one_click.py",
@@ -1061,9 +708,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 3
+      ]
     },
     {
       "module": "tests/test_us_short_serenity_structural_theme_annotation.py",
@@ -1071,9 +716,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 2
+      ]
     },
     {
       "module": "tests/test_us_short_shadow_compare_store.py",
@@ -1081,9 +724,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 8
+      ]
     },
     {
       "module": "tests/test_us_short_soft_discovery_weekly_report.py",
@@ -1091,9 +732,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 67
+      ]
     },
     {
       "module": "tests/test_us_short_upgrade_obs_discover.py",
@@ -1101,9 +740,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 1
+      ]
     },
     {
       "module": "tests/test_us_short_weekend_batch4_context_builder.py",
@@ -1111,9 +748,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 20
+      ]
     },
     {
       "module": "tests/test_us_short_weekend_batch4_runner.py",
@@ -1121,9 +756,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 6
+      ]
     },
     {
       "module": "tests/test_us_short_weekend_lifecycle_stage.py",
@@ -1131,9 +764,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 5
+      ]
     },
     {
       "module": "tests/test_us_short_weekend_orchestrator.py",
@@ -1141,9 +772,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 4
+      ]
     },
     {
       "module": "tests/test_us_short_weekend_report.py",
@@ -1151,9 +780,7 @@
       "protected_roots": [
         "provider_samples",
         "state/us_short"
-      ],
-      "read_count": 0,
-      "write_count": 2
+      ]
     }
   ]
 }

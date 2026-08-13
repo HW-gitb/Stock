@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
-import hashlib
 import json
 from pathlib import Path
 from typing import Iterable
@@ -883,7 +882,7 @@ def build_inventory(
     unresolved_findings = [access for access in findings if access["unresolved"]]
     protected_findings = [access for access in findings if not access["unresolved"]]
     return {
-        "inventory_version": "us_short_test_io_inventory.v0.4.0",
+        "inventory_version": "us_short_test_io_inventory.v0.5.0",
         "scope": {"glob": "tests/**/test_us_short*.py", "protected_roots": list(PROTECTED_ROOTS)},
         "module_count": len(modules),
         "classification_counts": {
@@ -917,11 +916,10 @@ def build_inventory(
 def snapshot_from_inventory(full: dict[str, object]) -> dict[str, object]:
     """Return a compact tracked snapshot from one already-built inventory.
 
-    Class-0 modules have no direct protected-root I/O, so the snapshot records their count and a
-    canonical path-list digest rather than repeating 245 empty rows.  Every module with a direct
-    protected read/write or an explicit global sentinel remains listed with its access details.
+    The snapshot is a reviewed membership policy, not a fingerprint of test volume.  Class-0
+    modules are omitted, while every module with protected-root access or a global sentinel keeps
+    its identity and roots.  Per-key and aggregate counts intentionally stay out of this artifact.
     """
-    names = [module["module"] for module in full["modules"]]
     modules = []
     for module in full["modules"]:
         if module["classification"] == "class0_no_direct_protected_io":
@@ -935,28 +933,13 @@ def snapshot_from_inventory(full: dict[str, object]) -> dict[str, object]:
             "module": module["module"],
             "classification": module["classification"],
             "protected_roots": roots,
-            "read_count": module["read_count"],
-            "write_count": module["write_count"],
         })
-    write_keys = sorted({
-        access["key"]
-        for module in full["modules"]
-        for access in module["accesses"]
-        if access["mode"] != "read" and not access["unresolved"]
-    })
     return {
         "inventory_version": full["inventory_version"],
         "scope": full["scope"],
-        "module_count": full["module_count"],
-        "classification_counts": full["classification_counts"],
         "class0_modules_omitted": True,
-        "module_path_sha256": hashlib.sha256("\n".join(names).encode("utf-8")).hexdigest(),
         "allowlist": full["allowlist"],
         "unresolved_allowlist": full["unresolved_allowlist"],
-        "unallowlisted_write_findings": full["unallowlisted_write_findings"],
-        "unresolved_write_finding_counts": full["unresolved_write_finding_counts"],
-        "protected_write_finding_keys": write_keys,
-        "protected_write_finding_counts": full["protected_write_finding_counts"],
         "modules": modules,
     }
 
