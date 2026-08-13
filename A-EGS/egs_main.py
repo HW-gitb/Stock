@@ -1727,7 +1727,7 @@ def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity
     return out_path
 
 
-DATA_HEALTH_SCHEMA_VERSION = "1.12.0"
+DATA_HEALTH_SCHEMA_VERSION = "1.13.0"
 DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
 LAST_SELECTION_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "a_short_last_selection.schema.json")
 
@@ -2376,7 +2376,7 @@ def validate_data_health_consistency(health):
             expected_flags = {
                 "cache": (False, False, True),
                 "index_member_all_l1_current": (True, False, False),
-                "index_member_l2_history": (False, True, False),
+                "index_member_all_l2_history": (False, True, False),
             }
             if source not in expected_flags or (
                 fast_path_used,
@@ -3309,10 +3309,10 @@ def _classification_standard_from_observed_sources(observed_sources):
 def get_sw_industry_map():
     """As-of-aware SW industry membership.
 
-    Tushare's pro.index_member exposes in_date / out_date per (con_code, index_code).
-    We fetch the full membership history and pick the row whose interval contains
-    TODAY, so each as_of date sees the industry assignment that was active at the
-    time (instead of today's snapshot with is_new=1).
+    The current-members endpoint exposes in_date / out_date per
+    (ts_code, l2_code).  The slow path fetches those history rows one L2 at a
+    time and picks the interval containing TODAY, so historical runs do not use
+    today's current-only snapshot.
     """
     # v4 caches written before SW_INDUSTRY_MIN_ACTIVE safeguard had ~75-stock
     # coverage (mostly l2_name="未知"). v5 fixed L2 coverage but missed L1
@@ -3432,37 +3432,85 @@ def get_sw_industry_map():
         raise RuntimeError(reason)
 
     member_fields = "con_code,index_code,in_date,out_date"
+    member_all_fields = "ts_code,l2_code,in_date,out_date,is_new"
     l2_codes = set(l2_info.keys())
+    index_member_all = getattr(pro, "index_member_all", None)
 
     def _fetch_l2_batch():
-        """L2-by-L2 batching fallback. Slow but covers when full-market endpoints
-        return incomplete data. Returns a concat'd raw DataFrame (unfiltered)."""
+        """Fetch SW2021 member history one L2 at a time.
+
+        The current-members endpoint is the formal source.  The legacy member
+        endpoint is used only to confirm an empty current response, never to
+        populate the returned mapping.
+        """
         frames = []
         l2_code_list = list(l2_info)
-        counts = {"ok": 0, "exception": 0, "empty": 0, "bad_shape": 0}
+        counts = {
+            "ok": 0,
+            "confirmed_empty": 0,
+            "unconfirmed_empty": 0,
+            "exception": 0,
+            "bad_shape": 0,
+        }
         failures = []
         if not l2_code_list:
             return pd.DataFrame(), 0, "l2_batch:no_l2_groups", True
+        if not callable(index_member_all):
+            return pd.DataFrame(), 0, "l2_batch:index_member_all_unavailable", True
         for l2_code in tqdm(l2_code_list, desc="SW industry L2 batching"):
             errors = []
             failure_detail = None
             t = safe_api(
-                pro.index_member,
-                index_code=l2_code,
-                fields=member_fields,
+                index_member_all,
+                l2_code=l2_code,
+                fields=member_all_fields,
                 errors=errors,
             )
             if errors:
                 category = "exception"
             elif t is None or (isinstance(t, pd.DataFrame) and t.empty):
-                category = "empty"
+                legacy_errors = []
+                legacy_api = getattr(pro, "index_member", None)
+                legacy = (
+                    safe_api(
+                        legacy_api,
+                        index_code=l2_code,
+                        fields=member_fields,
+                        errors=legacy_errors,
+                    )
+                    if callable(legacy_api)
+                    else None
+                )
+                if not callable(legacy_api):
+                    category = "unconfirmed_empty"
+                    failure_detail = f"{l2_code}:unconfirmed_empty:legacy_unavailable"
+                elif legacy_errors:
+                    category = "unconfirmed_empty"
+                    failure_detail = (
+                        f"{l2_code}:unconfirmed_empty:legacy_exception="
+                        f"{type(legacy_errors[-1]).__name__}"
+                    )
+                elif legacy is None or (isinstance(legacy, pd.DataFrame) and legacy.empty):
+                    counts["confirmed_empty"] += 1
+                    continue
+                else:
+                    category = "unconfirmed_empty"
+                    failure_detail = f"{l2_code}:unconfirmed_empty:legacy_nonempty"
             elif not isinstance(t, pd.DataFrame):
                 category = "bad_shape"
+                failure_detail = f"{l2_code}:bad_shape:not_dataframe"
             elif len(t) >= SW_INDEX_MEMBER_ALL_ROW_LIMIT:
                 category = "bad_shape"
                 failure_detail = f"{l2_code}:row_limit_hit:{len(t)}"
             else:
-                normalized = _normalize_sw_member_columns(t, "index_member")
+                missing = sorted({"ts_code", "l2_code", "in_date", "out_date"} - set(t.columns))
+                if missing:
+                    category = "bad_shape"
+                    failure_detail = f"{l2_code}:bad_shape:missing_columns={missing}"
+                    counts[category] += 1
+                    failures.append(failure_detail)
+                    continue
+                normalized = _normalize_sw_member_columns(t, "index_member_all")
                 if normalized.empty:
                     category = "bad_shape"
                 else:
@@ -3475,7 +3523,13 @@ def get_sw_industry_map():
             "l2_batch:"
             + ",".join(
                 f"{name}={counts[name]}"
-                for name in ("ok", "exception", "empty", "bad_shape")
+                for name in (
+                    "ok",
+                    "confirmed_empty",
+                    "unconfirmed_empty",
+                    "exception",
+                    "bad_shape",
+                )
             )
             + f",failed_count={len(failures)},sample={failures[:10]}"
         )
@@ -3534,7 +3588,6 @@ def get_sw_industry_map():
     # Current production run: query the official endpoint by L1 group.  Never
     # trust the capped unfiltered response, and never use current-only rows for
     # a historical PIT replay.
-    index_member_all = getattr(pro, "index_member_all", None)
     wall_date = a_share_market_date()
     if TODAY == wall_date and callable(index_member_all):
         candidate, request_group_count, fallback_reason = _fetch_current_by_l1(index_member_all)
@@ -3559,21 +3612,21 @@ def get_sw_industry_map():
     if df_mem.empty:
         log.warning(
             "SW industry L1 current fast path unavailable or incomplete "
-            f"({fallback_reason}); fetching PIT history by L2 index_code"
+            f"({fallback_reason}); fetching PIT history by L2 index_member_all"
         )
         batched, l2_group_count, batch_summary, batch_failed = _fetch_l2_batch()
         request_group_count += l2_group_count
         if batch_failed:
             reason = _record_sw_failure(
-                source="index_member_l2_history",
+                source="index_member_all_l2_history",
                 reason=f"{fallback_reason or 'l2_fallback'};{batch_summary}",
                 observed_sources=observed_sources,
                 request_group_count=request_group_count,
                 fallback_used=True,
             )
             raise RuntimeError(reason)
-        df_mem = _apply_pit_window(batched, l2_codes, TODAY, source="index_member")
-        member_source = "index_member_l2_history"
+        df_mem = _apply_pit_window(batched, l2_codes, TODAY, source="index_member_all")
+        member_source = "index_member_all_l2_history"
 
     active_count = df_mem["con_code"].nunique()
     if active_count < SW_INDUSTRY_MIN_ACTIVE:
@@ -3584,7 +3637,7 @@ def get_sw_industry_map():
             active_count=int(active_count),
             request_group_count=request_group_count,
             fast_path_used=member_source == "index_member_all_l1_current",
-            fallback_used=member_source == "index_member_l2_history",
+            fallback_used=member_source == "index_member_all_l2_history",
             classification_standard=classification_standard,
             observed_sources=observed_sources,
             message=fallback_reason,
@@ -3618,7 +3671,7 @@ def get_sw_industry_map():
                 active_count=int(len(mapping)),
                 request_group_count=request_group_count,
                 fast_path_used=member_source == "index_member_all_l1_current",
-                fallback_used=member_source == "index_member_l2_history",
+                fallback_used=member_source == "index_member_all_l2_history",
             )
             raise RuntimeError(reason)
 
@@ -3644,7 +3697,7 @@ def get_sw_industry_map():
             active_count=int(len(mapping)),
             request_group_count=request_group_count,
             fast_path_used=member_source == "index_member_all_l1_current",
-            fallback_used=member_source == "index_member_l2_history",
+            fallback_used=member_source == "index_member_all_l2_history",
         )
         raise RuntimeError(f"SW industry map target-board coverage incomplete: {reason}")
     if not _sw_mapping_is_usable(mapping):
@@ -3658,7 +3711,7 @@ def get_sw_industry_map():
             active_count=int(len(mapping)),
             request_group_count=request_group_count,
             fast_path_used=member_source == "index_member_all_l1_current",
-            fallback_used=member_source == "index_member_l2_history",
+            fallback_used=member_source == "index_member_all_l2_history",
         )
         raise RuntimeError(reason)
     _record_sw_industry_source_observation(
@@ -3669,7 +3722,7 @@ def get_sw_industry_map():
         min_active=int(SW_INDUSTRY_MIN_ACTIVE),
         request_group_count=int(request_group_count),
         fast_path_used=member_source == "index_member_all_l1_current",
-        fallback_used=member_source == "index_member_l2_history",
+        fallback_used=member_source == "index_member_all_l2_history",
         classification_standard=classification_standard,
         observed_sources=observed_sources,
         cache_hit=False,

@@ -7137,3 +7137,111 @@ Optional 调用链为 `stock_basic → get_stock_list → _require_nonempty_stoc
 **有意不动**：`exception` 计数对 HTTP 折叠故障失效那条，方案 §3.1.4 明令不伪造 HTTP 诊断、不改第三方库；P3-10 按用户指示不动。
 
 **下一步**：仍是那次获授权的真实无缓存周跑。
+
+## 2026-08-13 追加：`3a_testrun0813` 文档收口校准方案（实为一笔 Required + 一项 Optional；待执行；docs-only）
+
+### Verdict / 方案来源判断
+
+同意桌面 `C:\Users\cnhea\Desktop\3a_testrun0813.md` §6 的两条原则：旧产物不重跑、不改写；P3-10 只凭原失败命令的修复前后对照关闭。按桌面 2026-08-13 最新更正，原“三笔”实际只剩一笔 Required 和一项低价值 Optional：
+
+1. §6.1 四周范围裁决已在本 handoff 的“P0-3 四周历史产物统一处置”及其 Claude 独立审查 PASS 条目完成，并已在 `docs/system_risk_register.md::R-ASHORT-P0-3-PRE-DESIGN-HISTORICAL-ARTIFACTS` 落盘；本项改判为 **NO-OP / ALREADY_SETTLED**，禁止重复追加第二份 disposition。
+2. §6.2 的过时失败描述可选择追加事实更正，但 register 已有 `Ran 4 tests / OK` 的权威事实，因此本项为 **Optional / LOW_VALUE**，默认不执行；若执行，`OPEN-NOT_VERIFIED` 状态和 design-completion 关闭条件必须保持不变。
+3. §6.3 已出现满足既有关闭判据的修复前后**字面同形完整命令**证据，是唯一仍须执行的纯文档 P3-10 收口。
+
+正确 owner 是本文件：`docs/handoff/README.md` 已把本文件指定为 A-short“序 N”工程队列主 handoff，并要求默认追加现有阶段 handoff、不新建平行文档。桌面 §6 是问题与原始处置方向，不是当前状态真相源；未来执行以当前 handoff、risk register、SESSION_LOG 和证据本身为准。
+
+### 文档①：P0-3 四周范围裁决——只确认已完成，不重复执行
+
+当前已有的正式裁决覆盖 `20260720`、`20260727`、`20260803`、`20260810` 四周：全部为 `pre-design audit-only artifacts`，只可只读审计，永不计入正式 forward evidence、12/24/36-week clock、promote/retire/ready、strategy replacement、ship gate 或 design-completion baseline；原始 JSON/Markdown/receipt 保持原样。
+
+执行本收口方案时，本项只做一致性核对：确认上述 handoff 条目、Claude PASS 条目和 register R-ID 仍存在且没有后续反转。若一致，记录 `NO-OP / ALREADY_SETTLED` 后结束；不得再次写同一裁决、不得新建 R-ID、不得修改 registry、历史产物、消费者、schema、日期黑名单或 invalidation marker。P0-1、P0-2 的真实运行验收继续保持独立边界。
+
+### 文档②（Optional / LOW_VALUE）：EOL-pin 旧失败描述的事实更正——状态不变
+
+问题仅是本 handoff 上方旧条目仍写着：`test_a_short_published_bundle_eol_pin` 因保留的 `20260810` pre-design dirty record/source SHA 而未闭。当前证据已经表明该句过时：在 `c6632437` 上相关四例终态为 `Ran 4 tests in 0.148s ... OK (skipped=1)`，其中 source-binding 断言明确走 `skipped 'pre-freeze: recorded SHA membership is audit-only'`；这与本文件顶部 O32/O33 条目记录的显式 pre-freeze skip 语义一致。
+
+本项默认不执行；register 已经保存该测试绿色事实，不补不会造成当前权威状态错误。只有用户明确选择补充，或执行文档③时希望顺带消除旧 handoff 的阅读噪声，才在本 handoff 末尾追加一条“事实更正”；不得回写或删除旧历史 entry。更正必须同时写清：
+
+- 旧句“该测试仍因 20260810 而未闭”在 `c6632437` 已不成立；
+- 这是 pre-freeze audit-only 分支正确生效的证据，不是 design completion、freeze-start 或 durable evidence 已获授权；
+- 原条目状态继续保持 **`OPEN-NOT_VERIFIED`**；关闭条件仍是用户明确宣布 A-short 设计完成，并按既有授权/冻结流程建立新 epoch；
+- 不删除、重写、补 SHA 或重新发布 `20260810` 及其他三周产物。
+
+若 `docs/system_risk_register.md` 的当前有效条目仍携带同一过时失败事实，才在对应 owner 条目追加同样的事实更正；当前有效 register 已有 `Ran 4 tests / OK` 时不重复造条目。不得仅为该 Optional 单独新增 SESSION_LOG 周期；若它与文档③同批执行，只在 P3-10 的 SESSION_LOG 极简 entry 内附带一句“EOL-pin 旧失败事实已更正、状态不变”。不得把测试绿色写成该线已关闭。
+
+### 文档③：P3-10 按既有关闭判据收口
+
+P3-10 的代码面已经独立审查 PASS；唯一保留的 `NOT_VERIFIED` 原因是审查者在修复后无法复现修复前 `$PSScriptRoot` 为空的现场，并明确把最终关闭判据定为“用当初失败的命令再跑一次”。桌面 §6.3 已给出**字面同形、包含完整参数表**的前后两半证据：
+
+- 修复前 `31a360fb`：`cmd /c powershell.exe -ExecutionPolicy Bypass -File <绝对路径> -ConfirmRuntest -Commit <sha> -Account <path>` 在 `a_short_runtest.ps1:12 char:47` 以 `Split-Path : Cannot bind argument ...` 崩溃；
+- 修复后 `c6632437`：使用字面同形完整命令（`-Account` 故意指向不存在路径），参数默认值绑定通过，`-ConfirmRuntest` 闸门通过，随后在 `a_short_runtest.ps1:43` 的 `Resolve-Path` 因该路径不存在而停止；胶囊创建位于 `:47`，没有发生，因此该验证零副作用；
+- 修复后补充证据：`-File` 不带参数时，A-short / US-short 两个 launcher 均干净停在确认闸门。此项只证明无参数入口行为，不替代上一条完整原命令的关闭证据。
+
+未来执行不再改代码、不启动真实 runtest、不加测试。只做以下文档动作：
+
+1. 在 `docs/system_risk_register.md` 顶部当前区域追加 P3-10 closure，逐字记录上述完整命令形状、修复前 `:12` 绑定崩溃、修复后通过绑定和确认门并在 `:43` 因故意不存在的 Account 路径停止、`:47` 胶囊创建未发生，据此把 P3-10 从 `NOT_VERIFIED` 转为 `resolved`；无参数 A-short / US-short 结果只列为补充。保留旧审查者“修复后无法复现修复前症状”的历史记录，不回写历史段落。
+2. 在本 handoff 末尾追加对应 closeout，明确“时序差异”解释：原审查发生在修复后，所以它无法制造修复前现场；本次前后对照补齐了因果证据。
+3. 在 `docs/SESSION_LOG.md` 顶部按项目极简模板记录该 docs-only 收口及 reviewer/committer 下一步；不得把 P3-10 关闭扩大为 P0-1、P1-4、真实 capsule、provider/live、full-system 或 ship PASS。
+
+### 固定范围、验证和角色边界
+
+本方案未来执行的 Required 允许修改范围只有：
+
+- `docs/handoff/2026-08-01_a_short_leaf_wiring_classification_handoff.md`；
+- `docs/system_risk_register.md`；
+- `docs/SESSION_LOG.md`。
+
+不改桌面原始证据、代码、测试、schema、registry、runner、launcher、历史/当前运行产物或 Git 配置；不运行 provider/live、runtest capsule、full lane 或全量系统。因为这是纯文档状态校准，不触发生产 full lane，也不为它新增测试、fingerprint、SHA 或哈希。执行方只用固定 Python运行项目既有文档治理/route 门，并运行 `git diff --check`；记录精确命令与原始终态。executor/fixer 不提交，由独立 reviewer/committer 核对“①未重复、②若不执行则没有多余状态；若执行则状态未翻、③完整原命令前后证据成对且胶囊未创建”后提交。
+
+### 成稿前“方案规则”审查（写入前已完成）
+
+- **规则 1：PASS。** 第①笔改为 NO-OP，第②笔降为默认不执行的低价值 Optional，第③笔只追加关闭事实和状态；不改代码/产物，不新增测试、指纹、SHA、哈希、迁移器或防御层。
+- **规则 2：PASS。** 已核对桌面 §6 最新更正、本 handoff 的 P0-3 disposition + Claude PASS、O32/O33、P3-10 reviewer 边界及当前 register；方案消除了桌面“第①笔未做”与当前仓库“已完成”的冲突，也没有把低价值第②笔伪装成 Required。
+- **规则 3：PASS。** 三笔都是治理文档收口，其真实消费者是后续 executor/reviewer/epoch 与风险路由；方案把事实分别接入主 handoff、risk register 和 SESSION_LOG，并保持 registry/正式 evidence consumer 边界不变，不会形成只写桌面、项目内无人读取的悬空结论。
+
+## 2026-08-13 追加：N-3/N-4 SW2021 L2 历史成员路径最小修复（Codex executor/fixer；c405；OPEN-NOT_VERIFIED）
+
+### 用途、问题与桌面方案
+
+本条继续追加到 A-short 主 handoff，不新建平行交接。唯一问题入口是桌面 `C:\Users\cnhea\Desktop\3a_testrun0813.md`；本轮严格只执行 N-3/N-4：N-3 对应 P0-2 尚未完成的成员源半边，N-4 对应 P1-5 对“合法为空”与“未确认为空”的状态分类修复。N-5、P1-4、P0-3、P3-10 和其他桌面线索不在本轮范围。
+
+### 根因与最小改动
+
+- N-3 根因是分类目录已改为 SW2021，但历史/非当前日慢路径仍调用旧 `index_member`；这会让 source-binding 与 PIT 成员字段不一致。慢路径现在按 L2 逐组调用：
+  `pro.index_member_all(l2_code=l2_code, fields="ts_code,l2_code,in_date,out_date,is_new", errors=errors)`。
+- 该调用**不传 `is_new`**；`is_new="Y"` 仍只属于当前日 L1 快路径。历史非空帧必须含 `ts_code/l2_code/in_date/out_date`，经 `_normalize_sw_member_columns(..., "index_member_all")` 后走 `_apply_pit_window(..., source="index_member_all")`，已退出成员不会流入 mapping。
+- N-4 根因是主接口 `index_member_all` 空响应被过度当成失败。现在主接口明确为空后才探测旧 `index_member`：旧接口明确为空 → `confirmed_empty`（该组无 mapping 行但不使整批失败）；旧接口非空、异常、坏形状或不可用 → `unconfirmed_empty`，整批 fail-closed。主接口异常、非 DataFrame、既有 row-limit、缺 PIT 列或规范化空帧仍分别归 `exception`/`bad_shape` 并整批失败。
+- 批摘要区分 `ok/confirmed_empty/unconfirmed_empty/exception/bad_shape`；只有 confirmed-empty 不进入 failures。任一其他失败，或全部组 confirmed-empty 且没有 frame，均不拼 partial mapping、不写 cache；minimum-active、semantic、target-board zero-missing 门保持原样。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+`weekly_screening.ps1 → run_egs → get_sw_industry_map → index_classify(src=SW2021) → L2 parent closure → index_member_all L1 current 或 index_member_all L2 history → _apply_pit_window → semantic/target-board gates → SW cache → build_master/score/Tier`。
+
+旧 `index_member` 只在新接口明确为空时作为一次确认调用；旧返回行永不进入 `frames`、正式 source-binding、mapping 或 cache。健康 source 改为 `index_member_all_l2_history`，当前快路径仍为 `index_member_all_l1_current`；`schemas/data_health.schema.json`、producer 与 consistency validator 升至 `1.13.0`，旧 `index_member_l2_history` 被 schema/测试拒绝。没有新增 runner、provider、迁移器或写盘边界。
+
+### 负向控制、自审与精确测试
+
+- 正向：历史帧的退出日/活动日 PIT 过滤；confirmed-empty 与有效 L2 并存时只保留有效行；正常 mapping 仍可被 `build_master` 消费。
+- 反向：主接口异常、坏 shape、row-limit、缺 PIT 列、空规范化帧；旧接口非空/异常/不可用；L2 全部 confirmed-empty；既有分类/L2 持续异常、无 L2 组、目标主板缺口和 zero-missing 门，均保留 fail-closed 且不写 partial cache。
+- 精确测试：固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）运行 `& '.tools\\run_unittest_with_repo_pythonpath.cmd' tests.phase6.test_egs_sw_industry_and_watch_pool_health tests.phase6.test_egs_main_suspend_guard`，`Ran 41 tests in 0.658s ... OK`，receipt `receipt:c41f7202c42d6d21faf8b2fc`。为满足现有 effect-contract bundle，最终 bounded focused 超集加 `tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe`，`Ran 118 tests in 51.376s ... OK`，receipt `receipt:69bdf1cd155ea2d49abef76f`。
+- 固定 Python `-m py_compile A-EGS/egs_main.py` 与 `git diff --check` 通过。因 `A-EGS/egs_main.py` 是 top-level 生产入口，按规则 3 用 receipt `69bdf1cd155ea2d49abef76f` 执行一次 `a_short` 全量离线 lane：`discovered=2823`、`ran=2823`、`2823/2823 PASS`、129.2s、parallel；ledger fingerprint `5fa44c3860c3`，ledger/sidecar 指针见 `docs/system_risk_register.md` 本条。
+
+### 原始终态与角色边界
+
+原始终态为 **`repaired / OPEN-NOT_VERIFIED`**：离线 focused/full-lane 证据通过，但尚未有 Claude Code 独立审查、提交或用户授权的真实无缓存胶囊；没有 provider/live、真实 weekly、sub-agent、stage/commit/push/merge。P0-1 不因本轮离线全量通过而关闭；N-5、P1-4、P0-3、P3-10 未修改。
+
+后续如再修复，只能在本 handoff 继续追加问题、根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审、精确测试命令和原始终态，并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；不得新建平行 handoff。
+
+## 2026-08-13 追加：N-3 / N-4 同刀的独立审查 = PASS（Claude Code；c405，已合入 master）
+
+**判定**：PASS，零 Required，N-3 与 N-4 均 resolved。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方转述）**：整读改动后的 `_fetch_l2_batch()` 全体（主源调用、五档分类、旧接口核验分支、计数与摘要拼装）、`get_sw_industry_map()` 里换 source 后的六处 `fallback_used` 判断、`validate_data_health_consistency` 的 `expected_flags`，以及 schema 的三处 source 枚举/条件。执行方自报计数未采信，自己重跑覆盖改动符号的 193 用例超集，并按 rule 6 补跑一次 a_short 全量。
+
+**八组探针**：① 慢路径实际调用参数为 `{'l2_code': ...}` + 五字段，**无 `is_new`**；② as-of 前已退出的成员被 PIT 滤掉，没退化成当前快照；③ 双空组 `confirmed_empty` 放行且旧接口只对该组调一次；④ 未确认空三格（legacy 有成员 / 抛异常 / 接口不存在）全部整批失败、不写缓存；⑤ 双空放行后目标主板零遗漏门仍能抓出缺股并中止；⑥ 主源缺 PIT 日期列 → bad_shape 整批失败；⑦ 主接口不可用 → 一次性失败且 member_all 零调用；⑧ 契约正反：新 source 放行、旧 source 与错 flags 组合均被拒。
+
+**与方案的逐条对齐**：改动文件与 §3.2.6 清单完全一致；§3.2.2 的三态表、不传 `is_new`、旧接口不得回填 mapping、双空只是组内放行条件、六道最终硬门——逐条核过成立。方案「明确不做」的四项（N-5 截断器、P1-4 条件、`safe_api`/client/重试、缓存代际）确实一处未动。
+
+**未覆盖维度与诚实边界**：全部结论建立在离线假 provider 上。方案 §2.1 的真实验收判据（修好后约 1000 只主板股重新进池、Tier1 名单应明显不同；若几乎一样反而说明没生效）我无法代劳，必须由获授权的真实无缓存胶囊跑出来；桌面里那些 134 组 / 25 只 / 残留 17 只的数字同样是你的实测而非我的运行。
+
+**下一步**：N-5、P1-4 各自另起；真实无缓存周跑仍是唯一能同时收口 P0-1、P1-4 和本刀验收判据的一件事。
