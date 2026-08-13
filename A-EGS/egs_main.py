@@ -1727,7 +1727,7 @@ def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity
     return out_path
 
 
-DATA_HEALTH_SCHEMA_VERSION = "1.9.0"
+DATA_HEALTH_SCHEMA_VERSION = "1.10.0"
 DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
 LAST_SELECTION_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "a_short_last_selection.schema.json")
 
@@ -2340,6 +2340,7 @@ def validate_data_health_consistency(health):
         raise ValueError("data_health missing sw_industry_membership")
     status = sw.get("status")
     classification_standard = sw.get("classification_standard")
+    observed_sources = sw.get("observed_sources")
     source = sw.get("source")
     fast_path_used = bool(sw.get("fast_path_used"))
     fallback_used = bool(sw.get("fallback_used"))
@@ -2347,13 +2348,20 @@ def validate_data_health_consistency(health):
     if sum((fast_path_used, fallback_used, cache_hit)) > 1:
         raise ValueError("data_health SW source flags are mutually exclusive")
     if status == "not_observed":
-        if classification_standard is not None or source is not None or sw.get("active_count") is not None or any(
+        if classification_standard is not None or observed_sources is not None or source is not None or sw.get("active_count") is not None or any(
             (fast_path_used, fallback_used, cache_hit)
         ):
             raise ValueError("data_health unobserved SW source carries observed values")
     elif status in {"pass", "fail"}:
         if classification_standard != SW_INDUSTRY_CLASSIFICATION_STANDARD:
             raise ValueError("data_health SW classification standard is not SW2021")
+        if not isinstance(observed_sources, list) or any(
+            not isinstance(value, str) or not value.strip() for value in observed_sources
+        ) or observed_sources != sorted(set(observed_sources)):
+            raise ValueError("data_health SW observed sources must be a sorted unique string list")
+        normalized_sources = {value.strip().upper() for value in observed_sources}
+        if normalized_sources and normalized_sources != {SW_INDUSTRY_CLASSIFICATION_STANDARD}:
+            raise ValueError("data_health SW observed source binding is not SW2021")
         if status == "pass":
             active_count = int(sw.get("active_count"))
             min_active = int(sw.get("min_active"))
@@ -3032,6 +3040,7 @@ def _sw_industry_source_not_observed():
     return {
         "status": "not_observed",
         "classification_standard": None,
+        "observed_sources": None,
         "source": None,
         "as_of": None,
         "active_count": None,
@@ -3048,8 +3057,8 @@ def _record_sw_industry_source_observation(**details):
     global _LAST_SW_INDUSTRY_SOURCE_OBSERVATION
     payload = _sw_industry_source_not_observed()
     payload.update(details)
-    if payload["status"] in {"pass", "fail"}:
-        payload["classification_standard"] = SW_INDUSTRY_CLASSIFICATION_STANDARD
+    if payload["status"] in {"pass", "fail"} and payload["classification_standard"] is None:
+        raise ValueError("observed SW source requires an explicit classification standard")
     _LAST_SW_INDUSTRY_SOURCE_OBSERVATION = payload
     return dict(payload)
 
@@ -3136,12 +3145,40 @@ def _validate_sw_classification_frame(df, level):
         for value in df["src"].dropna().tolist()
         if str(value).strip()
     }
-    if sources != {SW_INDUSTRY_CLASSIFICATION_STANDARD}:
+    normalized_sources = {value.upper() for value in sources}
+    if normalized_sources != {SW_INDUSTRY_CLASSIFICATION_STANDARD}:
         raise RuntimeError(
             f"SW {level} industry classification source binding invalid: "
             f"expected {SW_INDUSTRY_CLASSIFICATION_STANDARD}, got {sorted(sources)}"
         )
     return df
+
+
+def _observed_sw_classification_sources(*frames):
+    observed = set()
+    for frame in frames:
+        if not isinstance(frame, pd.DataFrame) or "src" not in frame.columns:
+            continue
+        observed.update(
+            str(value).strip()
+            for value in frame["src"].dropna().tolist()
+            if str(value).strip()
+        )
+    return sorted(observed)
+
+
+def _classification_standard_from_observed_sources(observed_sources):
+    normalized_sources = {
+        str(value).strip().upper()
+        for value in observed_sources
+        if str(value).strip()
+    }
+    if normalized_sources != {SW_INDUSTRY_CLASSIFICATION_STANDARD}:
+        raise RuntimeError(
+            "SW industry classification standard cannot be derived from observed sources: "
+            f"{sorted(normalized_sources)}"
+        )
+    return next(iter(normalized_sources))
 
 
 def get_sw_industry_map():
@@ -3181,6 +3218,8 @@ def get_sw_industry_map():
                 fast_path_used=False,
                 fallback_used=False,
                 cache_hit=True,
+                classification_standard=SW_INDUSTRY_CLASSIFICATION_STANDARD,
+                observed_sources=[],
                 message=None,
             )
             return cached
@@ -3201,6 +3240,8 @@ def get_sw_industry_map():
     )
     df_l2 = _validate_sw_classification_frame(df_l2, "L2")
     df_l1 = _validate_sw_classification_frame(df_l1, "L1")
+    observed_sources = _observed_sw_classification_sources(df_l2, df_l1)
+    classification_standard = _classification_standard_from_observed_sources(observed_sources)
 
     l1_map = {}
     if df_l1 is not None and not df_l1.empty:
@@ -3302,6 +3343,8 @@ def get_sw_industry_map():
                 as_of=TODAY,
                 request_group_count=request_group_count,
                 fallback_used=True,
+                classification_standard=classification_standard,
+                observed_sources=observed_sources,
                 message=fallback_reason,
             )
             raise RuntimeError("SW industry member fetch failed; cannot build reliable L2 map")
@@ -3318,6 +3361,8 @@ def get_sw_industry_map():
             request_group_count=request_group_count,
             fast_path_used=member_source == "index_member_all_l1_current",
             fallback_used=member_source == "index_member_l2_history",
+            classification_standard=classification_standard,
+            observed_sources=observed_sources,
             message=fallback_reason,
         )
         raise RuntimeError(
@@ -3362,6 +3407,8 @@ def get_sw_industry_map():
             request_group_count=request_group_count,
             fast_path_used=member_source == "index_member_all_l1_current",
             fallback_used=member_source == "index_member_l2_history",
+            classification_standard=classification_standard,
+            observed_sources=observed_sources,
             message=f"target_board_missing:{missing_target[:10]}",
         )
         raise RuntimeError(
@@ -3381,6 +3428,8 @@ def get_sw_industry_map():
         request_group_count=int(request_group_count),
         fast_path_used=member_source == "index_member_all_l1_current",
         fallback_used=member_source == "index_member_l2_history",
+        classification_standard=classification_standard,
+        observed_sources=observed_sources,
         cache_hit=False,
         message=fallback_reason,
     )

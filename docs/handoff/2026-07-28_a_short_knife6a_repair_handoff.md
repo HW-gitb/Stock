@@ -1129,3 +1129,54 @@ git diff --check
 **未覆盖维度与诚实边界**：没有做真实无缓存 runtest 胶囊，因此「SW2021 在真 Tushare 上是否真回 134 组、主板是否真零遗漏」仍是 NOT_VERIFIED——本轮所有正向结论都建立在模拟 provider 上，真实性来自桌面 `a_testrun0813` 的用户实测而非我的运行。P0-1 的运行闭环、P0-3 已污染的四周历史产物、P1-4 / P1-5 / P1-6 / P2-7 / P2-8 / P2-9 / P3-10 均不在本刀内，也没有因本刀而 resolved。
 
 **下一步**：真实无缓存 runtest 胶囊需用户单独授权；`O-P02-2` 的 A-long 兄弟出口在重启 A-long 数据线时必须一并绑定。
+
+## 2026-08-13 追加：a_testrun0813 P0-2 Optional 收口（Codex executor/fixer；OPEN-NOT_VERIFIED）
+
+### Verdict / Action
+
+四条 Optional 均已按最小改动落地；离线精确验证通过，但尚未经过 Claude Code 独立审查，故保留 `OPEN-NOT_VERIFIED`。本段只记录实现与验证，不把真实 provider/live、P0-1 无缓存周跑或 P0-3 历史证据状态升级为已验证。
+
+### 问题、根因与最小修复
+
+- `O-P02-1`：`classification_standard` 原是进程内常量回声。`data_health` schema 从 `1.9.0` 升到 `1.10.0`，新增必填 `observed_sources`；拉取路径记录 provider 返回的原始 `src` 集合，规范字段由已校验的观测集合归一化推导；cache-only 路径显式写 `observed_sources=[]`，不伪称当前 provider 已观测。
+- `O-P02-2`：三个 A-long `index_classify` 未来调用计划统一显式传 `src=SW2021`、字段串包含 `src`、required/minimum fields 包含 `src`；同步 000666 supplement packet。既有历史 execution summary/raw payload 不回写、不重跑、不升级结论。
+- `O-P02-3`：删除 `test_sw2021_cache_generation_does_not_read_v6` 中位于精确 v7 key 断言之后的冗余 `assertNotIn`；v7 key 的承重断言保留。
+- `O-P02-4`：source binding 比较改为去空格后大小写归一化；观测记录仍保留 provider 原始值，因此 `sw2021` 不会误杀且不会伪造观测证据。
+
+### 调用链 / 消费者 / schema / source-binding / 写盘边界
+
+`run_egs → get_sw_industry_map → index_classify(L2/L1, src+fields) → frame source gate → member fetch → PIT/主板零遗漏门 → build_master → data_health/weekly consumers` 不变；新增 `observed_sources` 只进入 data-health lineage，不改变评分或候选消费。A-long 三个改动只约束未来 reviewed call plan，未执行 provider。SW2014、mixed、missing source 仍在成员调用和 `save_cache` 前 fail-closed；旧 v6 cache 仍不可达。
+
+### 负向控制与自审
+
+- A-short focused fixture 覆盖 lower-case provider value 保留为 `observed_sources=["sw2021"]`、规范值仍为 `SW2021`；错误 source、混合 source、缺 source、未观测携带 observed value 继续拒绝。
+- A-long route/full/supplement tests 断言 source、fields、required/minimum fields 同时存在；packet call plan 与 runner 一致。
+- 已回扫本轮生产调用点、schema 必填链、A-long packet 形状、历史产物写盘边界；未改 `docs/a_short_evidence_epoch_mode_registry_20260725.json`。
+
+### 验证命令与原始终态
+
+固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。精确命令为：
+
+```powershell
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -c "import os,sys,unittest; root=r'D:\cnhea\Codex\worktrees\c405\Stock'; os.chdir(root); sys.path.insert(0,root); names=['tests.phase6.test_egs_sw_industry_and_watch_pool_health','tests.phase6.test_egs_main_suspend_guard','tests.phase6.test_egs_margin_coverage','tests.test_a_long_tushare_route_validation_packet','tests.test_a_long_full_main_board_materialization_packet','tests.test_a_long_000666_sw_membership_supplement_packet']; suite=unittest.defaultTestLoader.loadTestsFromNames(names); result=unittest.TextTestRunner(verbosity=1).run(suite); raise SystemExit(0 if result.wasSuccessful() else 1)"
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -c "import json,py_compile,sys; root=r'D:\cnhea\Codex\worktrees\c405\Stock'; files=['A-EGS/egs_main.py','runners/a_long_tushare_route_validation_packet.py','runners/a_long_full_main_board_materialization_packet.py','runners/a_long_000666_sw_membership_supplement_packet.py','tests/phase6/test_egs_main_suspend_guard.py','tests/phase6/test_egs_margin_coverage.py','tests/phase6/test_egs_sw_industry_and_watch_pool_health.py','tests/test_a_long_tushare_route_validation_packet.py','tests/test_a_long_full_main_board_materialization_packet.py','tests/test_a_long_000666_sw_membership_supplement_packet.py']; [py_compile.compile(root+'\\'+path,doraise=True) for path in files]; [json.load(open(root+'\\'+path,encoding='utf-8')) for path in ['schemas/data_health.schema.json','docs/a_long_000666_sw_membership_supplement_packet_20260604.json']]"
+git -C 'D:\cnhea\Codex\worktrees\c405\Stock' diff --check
+```
+
+结果：`Ran 70 tests in 3.248s / OK`；固定 Python 编译与 JSON 解析 `PASS`；`git diff --check` `PASS`（仅 LF→CRLF 提示）。未调用 provider/live/network，未跑 P0-3 runner、历史重跑或 full lane，未起 sub-agent，未 stage/commit/push/merge。
+
+### 失效旧结论 / 下一步
+
+本文件上方把 `O-P02-1`~`O-P02-4` 记为待处理的旧 Optional 结论由本段 supersede；P0-2 真实无缓存验收仍 `NOT_VERIFIED`，P0-3 四周历史产物仍按其独立文档处置。下一步由 Claude Code 独立审查本 Optional 修复；审查 PASS 后仍须用户单独授权真实无缓存 runtest。
+
+## 2026-08-13 追加：a_testrun0813 P0-2 四条 Optional 的独立审查 = PASS（Claude Code；c405）
+
+**判定**：PASS，零 Required；`O-P02-1`/`O-P02-3`/`O-P02-4` 收口成立，`O-P02-2` 部分收口并另记 `O-P02-5`，另记 `O-P02-6`。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方转述）**：整读改动后的 `_record_sw_industry_source_observation`、`_observed_sw_classification_sources`、`_classification_standard_from_observed_sources`、`_validate_sw_classification_frame` 与 `validate_data_health_consistency`，并逐一核对全仓 5 处观测记录调用点都显式传标准（否则新 raise 会在错误路径上盖掉原始 RuntimeError）。执行方自报的 `70 OK` 我没有采信，自己重跑了覆盖改动符号的 193 用例超集。
+
+**反向 / 边界探针**：本轮唯一的放宽是 source gate 的大小写归一化，故按「放松类改动必做强制腿反向控制」跑了三格（全小写 sw2014、SW2021+sw2014、Sw2021+SW2014），全部在成员调用与 `save_cache` 之前抛 `source binding invalid`。正向三格证明 `observed_sources` 随 provider 变（`SW2021` / `sw2021` / 带空格）。另实测缓存命中路径写 `observed_sources=[]` 且 validator 对空列表短路——该路径上标准仍是自述，已记为边界。
+
+**未覆盖维度与诚实边界**：仍无真实 provider/无缓存周跑，SW2021 的真实覆盖仍 NOT_VERIFIED；本轮未重跑 full lane（上一刀刚在同一代码面跑过 2820/2820，rule 8 不重复付税）。
+
+**下一步**：重启 A-long 数据线前先补 `O-P02-5`；P0-1 闭环仍需用户单独授权的无缓存胶囊。

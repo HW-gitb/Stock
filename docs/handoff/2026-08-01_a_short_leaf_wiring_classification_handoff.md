@@ -6874,3 +6874,45 @@ This entry records only §15A in `D:\\cnhea\\Codex\\worktrees\\43fe\\Stock`; the
 **为什么会过期**：这正是本仓反复出现的 route-doc drift——表**写时正确**，随后被逐刀执行推翻，而没人回扫。教训与 `AGENTS.md` route-doc 约定一致：**队列/进度类表格不作为派活依据，派活前一律回代码核**。
 
 **用户 2026-08-13 明确裁决：`unclassified_pending_audit_baseline` 剩余 222 条叶子的裁定「明确不做」。** 详见 `docs/system_risk_register.md` 同日条目；后续任何人不得以「队列里还剩这一项」为由重新提起，除非用户另行改口。
+
+## 2026-08-13 追加：a_testrun0813 P0-3 四周历史产物统一处置（Codex executor/fixer；docs-only）
+
+### Verdict / Action
+
+按 `C:\Users\cnhea\Desktop\a_testrun0813.md` 的 P0-3 方案，统一将 `20260720`、`20260727`、`20260803`、`20260810` 四周原始周报定义为 **pre-design audit-only artifacts**。本处置已完成文档闭环；不把它们当作修复后 forward evidence，也不把文档处置误报成 P0-1/P0-2 真实运行验证。
+
+### 根因与适用问题
+
+四周产物是在设计完成/冻结 epoch 建立前形成，且受 P0-2 SW industry source-binding 缺陷影响，行业分类存在约 `37%~50%` 的未知/不可用覆盖。它们因此只能保留作历史审计材料，不能证明修复后生产链、正式 forward 周或设计完成基线。
+
+### 四日期 disposition 与正式消费者边界
+
+- 四个日期逐一统一适用 `pre-design audit-only`；原始 JSON/Markdown/receipt 逐字保留，不删除、不覆盖、不回填、不伪造 superseding weekly report。
+- 四日期一律排除未来 formal forward evidence、12/24/36-week clock、promote/retire/ready 决策、策略替换、ship gate 及 design-completion baseline accumulation；只允许只读审计，不允许被正式消费者计入。
+- 不新增逐文件 invalidation marker、日期黑名单、cleaner、migrator、schema、runner、fingerprint 或 SHA 机制；本轮不改生产代码、消费者、schema 或写盘路径。
+
+### epoch / 前置条件 / registry 边界
+
+`docs/a_short_evidence_epoch_mode_registry_20260725.json` 保持原样：`design_completion_authorization.status=not_authorized`、directive 为 `null`，全部八条 track 仍为 `pre_freeze_audit_only`。未来正式 epoch 只能在 P0-2 完成独立审查并取得用户授权的真实无缓存 acceptance、随后由用户明确宣布 design completion、再出现一周新的 qualified repaired output 后启动；复用既有 freeze-start 规则。上述四个旧日期永远不是 epoch 起点；P0-1 运行闭环仍独立 open。
+
+### 调用链 / source-binding / 写盘边界与负向控制
+
+本刀不触碰 `weekly runner → historical artifact → forward-evidence/clock/promotion consumer` 的代码调用链，只在交接与风险登记中固化正式消费者排除边界；不读取或重写四周产物，不生成替代产物。负向控制为：旧日期不得被计入 forward/clock/promote/ship/design baseline；registry 未授权不得被解释为 epoch 已开启；P0-2 未完成真实 acceptance 前不得发 design-complete。
+
+### 自审、验证与原始终态
+
+已只读核对四个日期、当前主 A-short handoff 路由、registry 未改及本处置的 no-rerun/no-delete/no-backfill 规则；按文档方案不运行测试、runner、provider/live、历史重跑或 full lane，不起 sub-agent，不 stage/commit/push/merge。P0-3 的原始终态为：四周 artifacts 保留、audit-only、正式 forward/clock/promotion/ship/design baseline 排除；P0-1 与 P0-2 真实运行验证保持原边界。
+
+### 失效旧结论 / 下一步
+
+本文件上方只单独提及 `20260810` audit-only 的旧叙述由本统一四日期处置 supersede；以后以本段四日期清单为准。下一步由 Claude Code 独立审查本 docs-only P0-3 处置；不得启动 provider/live、历史重跑、全量 lane 或把旧日期当作新 epoch。
+
+## 2026-08-13 追加：a_testrun0813 P0-3 四周历史处置的独立审查 = PASS（Claude Code；c405）
+
+**判定**：PASS，零 Required。这是纯文档处置，没有代码面可审；我按桌面方案 §7 的五条完成判据逐条核，并对其中唯一可被机器证伪的一条做了独立重算。
+
+**我实际验了什么**：① 四周原始产物零改动——本轮 scope manifest 里没有任何 `result/` 或 `A-EGS/Result/` 条目；② `docs/a_short_evidence_epoch_mode_registry_20260725.json` 未被改动，其 `design_completion_authorization.status=not_authorized`、`track_modes` 8 条全部 `pre_freeze_audit_only`；③ **不止读 JSON**：我直接 import `engine/a_short_evidence_epoch_mode.py`，对 `TRACKS` 的 8 条逐条实跑 `evidence_counts_toward_clock()` 与 `durable_evidence_writes_enabled()`，16 个返回值全为 False——即「四周不可能被计入」这句话在当前代码态下是真的，不只是文档承诺。
+
+**诚实边界**：本处置不改任何生产链路，因此它保证的只是「现在不会被计入」；将来若有人在没有设计完成授权、或拿四个旧日期之一去启动冻结，属于新问题，必须 fail-closed，不能靠这条历史裁决兜底。P0-3 的关闭不代表 P0-1 或 P0-2 的真实运行验收已完成。
+
+**下一步**：无（随本轮提交）；未来 epoch 起点必须是 P0-2 真实验收通过后的首个全新合格周。

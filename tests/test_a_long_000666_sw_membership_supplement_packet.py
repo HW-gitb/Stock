@@ -35,6 +35,7 @@ class FakeFoundMembershipPro:
                 "industry_name": "textile fixture",
                 "level": "L2",
                 "parent_code": "800000.SI",
+                "src": "SW2021",
             }
         ]
 
@@ -218,6 +219,9 @@ class ALong000666SwMembershipSupplementPacketTest(unittest.TestCase):
         self.assertIn("industry", calls[0]["kwargs"]["fields"])
         self.assertIn("area", calls[0]["kwargs"]["fields"])
         self.assertEqual(calls[1]["kwargs"]["level"], "L2")
+        self.assertEqual(calls[1]["kwargs"]["src"], runner.route_base.SW_INDUSTRY_CLASSIFICATION_STANDARD)
+        self.assertIn("src", calls[1]["kwargs"]["fields"].split(","))
+        self.assertIn("src", calls[1]["required_fields"])
         self.assertEqual(calls[2]["kwargs"]["ts_code"], "000666.SZ")
         self.assertNotIn("index_member", {call["method"] for call in calls})
         self.assertTrue(

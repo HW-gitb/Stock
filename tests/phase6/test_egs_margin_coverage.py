@@ -526,6 +526,7 @@ class MarginCoverageTests(unittest.TestCase):
         health = {"metrics": {"watch_pool_reconciliation": em.build_watch_pool_reconciliation(0, 0, 0),
             "sw_industry_membership": {"status": "not_observed", "source": None,
             "classification_standard": None,
+            "observed_sources": None,
             "active_count": None, "min_active": None, "fast_path_used": False,
             "fallback_used": False, "cache_hit": False}, "margin_coverage": invalid}}
         with self.assertRaisesRegex(ValueError, "margin coverage"):

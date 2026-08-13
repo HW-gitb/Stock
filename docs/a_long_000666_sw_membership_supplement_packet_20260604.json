@@ -88,13 +88,15 @@
       "method": "index_classify",
       "kwargs": {
         "level": "L2",
-        "fields": "index_code,industry_name,level,parent_code"
+        "src": "SW2021",
+        "fields": "index_code,industry_name,parent_code,level,src"
       },
       "required_fields": [
         "index_code",
         "industry_name",
         "level",
-        "parent_code"
+        "parent_code",
+        "src"
       ],
       "target_match_field": "none"
     },

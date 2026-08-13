@@ -148,6 +148,7 @@ class SwIndustrySourceTest(unittest.TestCase):
         self.assertTrue(observation["fast_path_used"])
         self.assertFalse(observation["fallback_used"])
         self.assertEqual(observation["classification_standard"], "SW2021")
+        self.assertEqual(observation["observed_sources"], ["SW2021"])
 
     def test_fast_path_limit_hit_falls_back_instead_of_accepting_truncation(self) -> None:
         l1, l2 = _classifications()
@@ -218,6 +219,41 @@ class SwIndustrySourceTest(unittest.TestCase):
         self.assertTrue(observation["fallback_used"])
         self.assertEqual(observation["message"], "decision_as_of_requires_pit_history")
         self.assertEqual(observation["classification_standard"], "SW2021")
+        self.assertEqual(observation["observed_sources"], ["SW2021"])
+
+    def test_source_observation_preserves_provider_value_while_binding_case_insensitively(self) -> None:
+        l1, l2 = _classifications()
+        l1 = l1.copy()
+        l2 = l2.copy()
+        l1["src"] = "sw2021"
+        l2["src"] = "sw2021"
+
+        def index_classify(*, level, src, fields):
+            return l1 if level == "L1" else l2
+
+        def index_member_all(**_kwargs):
+            return pd.DataFrame({
+                "ts_code": ["000001.SZ", "000002.SZ"],
+                "l2_code": ["801783.SI", "801780.SI"],
+                "in_date": ["20200101", "20200101"],
+                "out_date": ["", ""],
+                "is_new": ["Y", "Y"],
+            })
+
+        self.egs_main.TODAY = self.egs_main.datetime.now().strftime("%Y%m%d")
+        self.egs_main.pro = SimpleNamespace(
+            index_classify=index_classify,
+            index_member_all=index_member_all,
+            index_member=lambda **_kwargs: pd.DataFrame(),
+        )
+        with patch.object(self.egs_main, "load_cache", return_value=None), \
+             patch.object(self.egs_main, "save_cache"), \
+             patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+            self.egs_main.get_sw_industry_map()
+
+        observation = self.egs_main._current_sw_industry_source_observation()
+        self.assertEqual(observation["classification_standard"], "SW2021")
+        self.assertEqual(observation["observed_sources"], ["sw2021"])
 
     def test_wrong_classification_source_fails_before_members_and_cache_write(self) -> None:
         for source_shape in ("SW2014", "mixed", "missing"):
@@ -292,7 +328,6 @@ class SwIndustrySourceTest(unittest.TestCase):
             self.egs_main.get_sw_industry_map()
 
         self.assertEqual(loaded_keys, [f"sw_industry_map_sw2021_v7_{self.egs_main.TODAY}"])
-        self.assertNotIn("sw_industry_map_v6", loaded_keys[0])
 
 
 class WatchPoolHealthTest(unittest.TestCase):
@@ -442,6 +477,7 @@ class WatchPoolHealthTest(unittest.TestCase):
             "cache_hit": False,
             "message": None,
             "classification_standard": "SW2021",
+            "observed_sources": ["SW2021"],
         }
 
         with self.assertRaisesRegex(ValueError, "minimum coverage"):

@@ -41,6 +41,16 @@ class ALongFullMainBoardMaterializationPacketTest(unittest.TestCase):
         fina_indicator_call = next(call for call in runner.symbol_call_plan(["000001.SZ"]) if call["table_id"] == "fina_indicator")
         self.assertNotIn("f_ann_date", fina_indicator_call["kwargs"]["fields"])
         self.assertNotIn("f_ann_date", fina_indicator_call["minimum_fields"])
+        classification_calls = [call for call in base_calls if call["table_id"] == "industry_classification"]
+        self.assertEqual(len(classification_calls), 2)
+        self.assertTrue(
+            all(
+                call["kwargs"]["src"] == runner.route_base.SW_INDUSTRY_CLASSIFICATION_STANDARD
+                and "src" in call["kwargs"]["fields"].split(",")
+                and "src" in call["minimum_fields"]
+                for call in classification_calls
+            )
+        )
 
     def test_candidate_universe_helper_filters_main_board_and_delisted_window(self) -> None:
         active_records = [

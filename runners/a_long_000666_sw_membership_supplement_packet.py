@@ -134,9 +134,10 @@ def supplement_call_plan() -> list[dict[str, Any]]:
             "method": "index_classify",
             "kwargs": {
                 "level": "L2",
-                "fields": "index_code,industry_name,level,parent_code",
+                "src": route_base.SW_INDUSTRY_CLASSIFICATION_STANDARD,
+                "fields": route_base.SW_INDUSTRY_CLASSIFICATION_FIELDS,
             },
-            "required_fields": ["index_code", "industry_name", "level", "parent_code"],
+            "required_fields": ["index_code", "industry_name", "level", "parent_code", "src"],
             "target_match_field": "none",
         },
         {
