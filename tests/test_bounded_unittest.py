@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import os
+import io
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -253,3 +255,71 @@ class NestedRunDoesNotClobberReceiptTests(unittest.TestCase):
             "these launcher spawns would clobber the acceptance receipt; pass "
             "STOCK_BOUNDED_UNITTEST_ACTIVE=1 in their env: " + ", ".join(offenders),
         )
+
+
+class DocumentOnlyRunDoesNotClobberReceiptTests(unittest.TestCase):
+    DOC_ARGS = [
+        "tests.test_route_doc_ledger_status_consistency",
+        "tests.test_doc_governance_guard",
+    ]
+
+    def test_document_gate_classifier_is_exact_and_bidirectional(self):
+        self.assertTrue(bounded._is_document_only_focused_run(self.DOC_ARGS))
+        self.assertTrue(bounded._is_document_only_focused_run(list(reversed(self.DOC_ARGS))))
+        self.assertFalse(bounded._is_document_only_focused_run(self.DOC_ARGS + ["-v"]))
+        self.assertFalse(bounded._is_document_only_focused_run([self.DOC_ARGS[0], self.DOC_ARGS[0]]))
+        self.assertFalse(bounded._is_document_only_focused_run(["tests.test_bounded_unittest"]))
+
+    def test_document_gate_preserves_existing_receipt_without_collecting_or_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            receipt_path = root / "focused_acceptance_receipt.json"
+            sentinel = b"existing-code-receipt\n"
+            receipt_path.write_bytes(sentinel)
+            result = bounded.Result("PASS", 0, 55, 0.1, "Ran 55 tests in 0.1s\n\nOK\n")
+            with (
+                patch.object(bounded, "ROOT", root),
+                patch.object(bounded, "run_unittest", return_value=result),
+                patch.object(bounded.receipts, "RECEIPT_PATH", receipt_path),
+                patch.object(bounded.receipts, "collect_code_state") as collect_state,
+                patch.object(bounded.receipts, "write_focused_receipt") as write_receipt,
+                patch.dict(os.environ, {bounded.NESTED_RUN_MARKER: ""}),
+            ):
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    exit_code = bounded.main(["focused", "300", "--", *self.DOC_ARGS])
+            self.assertEqual(exit_code, 0, output.getvalue())
+            self.assertEqual(receipt_path.read_bytes(), sentinel)
+            collect_state.assert_not_called()
+            write_receipt.assert_not_called()
+            self.assertIn("DOC_ONLY - acceptance receipt left untouched", output.getvalue())
+
+    def test_document_gate_does_not_fabricate_missing_receipt_and_code_gate_still_writes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            receipt_path = root / "focused_acceptance_receipt.json"
+            result = bounded.Result("PASS", 0, 1, 0.1, "Ran 1 test in 0.1s\n\nOK\n")
+            replacement = {
+                "receipt_id": "new",
+                "bundles": [],
+                "tests": 1,
+                "python_executable": str(bounded.receipts.PINNED_PYTHON),
+            }
+            with (
+                patch.object(bounded, "ROOT", root),
+                patch.object(bounded, "run_unittest", return_value=result),
+                patch.object(bounded.receipts, "RECEIPT_PATH", receipt_path),
+                patch.object(bounded.receipts, "collect_code_state", return_value={"@CODE_CONTENT": "x"}),
+                patch.object(bounded.receipts, "write_focused_receipt", return_value=replacement) as write_receipt,
+                patch.dict(os.environ, {bounded.NESTED_RUN_MARKER: ""}),
+            ):
+                with redirect_stdout(io.StringIO()):
+                    document_exit = bounded.main(["focused", "300", "--", *self.DOC_ARGS])
+                self.assertEqual(document_exit, 0)
+                self.assertFalse(receipt_path.exists())
+                write_receipt.assert_not_called()
+                with patch.dict(os.environ, {bounded.NESTED_RUN_MARKER: ""}):
+                    with redirect_stdout(io.StringIO()):
+                        code_exit = bounded.main(["focused", "300", "--", "tests.test_bounded_unittest"])
+                self.assertEqual(code_exit, 0)
+                write_receipt.assert_called_once()

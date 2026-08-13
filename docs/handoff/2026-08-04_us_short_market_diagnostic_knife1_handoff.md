@@ -1302,7 +1302,8 @@ python .tools\full_pack_ledger.py run us_short "<rule-6 escalation reason>" "rec
 **为什么**：底层早有重试与关闭可选通道的按钮，最上层操作员入口按不到；桌面 §问题12 只要求贯通这五项，`--resume` / `--pass2-call-budget` / `--catalyst-recall-ticker` 明确不开。
 
 **验证命令**：
-- `.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_paper_one_click tests.provider.test_us_short_weekly_capstone tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.test_us_short_soft_boost_consumption tests.test_us_short_discovery_conformance`
+- `.tools
+un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_paper_one_click tests.provider.test_us_short_weekly_capstone tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.test_us_short_soft_boost_consumption tests.test_us_short_discovery_conformance`
 - reviewer 直跑真函数 `_normalize_capstone_retry_policy` 的九格转移表
 - reviewer 三次源码级植入：逐条删掉 `run_weekly_capstone(...)` 的转发再跑 one-click 测试，`finally` 按字节还原并核 sha256 + `git diff --numstat`
 
@@ -1314,3 +1315,93 @@ python .tools\full_pack_ledger.py run us_short "<rule-6 escalation reason>" "rec
 - 问题8 仍是 retry/物理预算的唯一 owner（`_normalize_capstone_retry_policy` 出自 `8fb7f2d4`，本刀一行未改），问题10 仍是 soft-boost 三态唯一 owner；后续别在一键层再加第二套校验或默认值。
 - `runners/us_short_weekly_capstone.py:2189` 的 `include_soft_discovery=ctx.soft_discovery_enabled` 耦合**必须继续保留**：靠它，`--disable-soft-discovery` 才是把 K4a stage 整个移出 pipeline（问题10 判为正常 `NOT_REQUESTED`），而不是让 stage 发出 `disabled` 回执再被 degrade 成 `zero_invalid_evidence`。
 - 按 0810 去重后的顺序，下一刀是**问题11 + 问题13 同一刀（先 11 后 13）**。
+
+## 2026-08-13 追加：问题11→问题13统一 stage outcome（1302，repaired / OPEN-NOT_VERIFIED）
+
+### 实现边界
+
+- 按桌面 us_testrun0810.md 先处理问题11，再处理问题13；两者共用 weekly capstone 的唯一 outcome owner。问题11没有新增 Web/X、Serenity 或 maturity producer，只消费本轮既有 typed status/reason/count。
+- runners/us_short_weekly_capstone.py 增加单一 normalizer 与 terminal recorder：stage_outcomes 与原 stages 同序、同 execution_mode；四项 stage_outcome_counts 从列表现场派生。十个特殊 stage 的 completed/no-work/waiting/failed 映射只定义一次，未知 typed result 统一 fail-closed。
+- input unreadable、stage exception、fresh output missing 三类既有 nonblocking 出口均记录失败行并发 stage_failed；同轮多失败不覆盖，后续合法 stage 继续。删去旧 shadow_capture_failure / shadow_capture_failed 单数生产投影，不新增第二失败列表。
+- runners/us_short_paper_one_click.py 只读取 capstone summary：stderr 输出四类短表和全部非 completed 行，stdout 仍是一份合法 JSON；capstone_completed 不复制 counts，runner_completed 只带一次 counts。emit/no-emit、退出码、官方发布和诊断不阻断边界未改。
+
+### 验证与自审
+
+- 固定主 Python C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe。桌面焦点超集通过：297 tests，receipt=receipt:d3c118348035d8b8e1860d47；唯一 full lane 终态为 discovered=5838、ran=5838、equal=True、PASS，388.2s/860s，fingerprint=db1b9e1ee4a1；文档门 55 OK，receipt=receipt:a70c10eae9dce137bfccecbf。
+- 四个实际代码/测试文件 py_compile=4、git diff --check=PASS、BOM/FFFD/冲突标记扫描 PASS。测试覆盖十 stage mapping、valid-empty/no-work/waiting、问题10 artifact-invalid 对照、三类同轮失败与 missing-output terminal event、executed/reused/refreshed/no-emit、one-click stdout/stderr proof。
+- 自审确认无新 schema/sidecar/registry/hash/fingerprint/runtime receipt/checkpoint 字段；无 provider/live/paper/真实 state 写入；问题6 health、问题9 shape、问题10三态、问题14成败计数和问题11 producer 边界未被复制或改写。
+
+### 交接状态
+
+- 风险登记：R-USSHORT-CAPSTONE-STAGE-OUTCOME-TRUTHFULNESS-GAP，状态 repaired / OPEN-NOT_VERIFIED。两道文档门需在本轮落盘后执行；独立审查尚未发生，不能宣称问题11/13已最终关闭。
+- Claude Code：请独立核对十项 mapping、多失败保全、fresh-output terminal event、两个 summary 返回路径以及 one-click 同一 counts 消费；PASS 后由 Claude 按项目规则提交，本 Codex 不提交。
+
+### 后续执行项：纯文档门不得覆盖仍有效的代码 focused receipt
+
+- **执行责任与时点**：本项由 Codex 在问题11/13独立审查并合入后的后续独立小刀执行；本轮只记录方案，不改验证工具。目标是消除“先跑较大代码焦点包，最后两道文档门覆盖 singleton receipt，提交前被迫原样重跑焦点包”的重复耗时。
+- **最小方案**：只调整 `.tools/bounded_unittest.py` 的 receipt 写入判定。若本次 invocation 仅运行项目既定的纯文档门，并且盘上 focused receipt 对当前非文档代码 fingerprint 仍校验有效，则文档门照常执行和报告 PASS/FAIL，但不得覆盖该 receipt。代码态变化、原 receipt 无效/缺失或普通代码焦点测试运行时，仍沿现有逻辑生成新 receipt。
+- **窄作用域**：纯文档门只按现有明确测试入口识别（当前为 `tests.test_route_doc_ledger_status_consistency` 与 `tests.test_doc_governance_guard`），不按 `bundles=[]`、测试数量、名称模糊匹配或“看起来像文档测试”猜测；因为正常代码焦点包也可能是 `bundles=[]`。不新增第二个 receipt、sidecar、schema、hash、CLI flag 或并行验证系统。
+- **必须保留的安全门**：`.githooks/pre-commit` 对 staged 非文档代码的 hard gate 不删除、不降级；receipt 继续绑定固定主 Python、当前代码 fingerprint、真实 PASS/正测试数和完整性 ID；`full_pack_ledger.py` 继续只接受与当前代码态和 token 一致的 focused evidence。文档门失败仍必须返回失败，不能因保留旧 receipt 而被吞掉。
+- **回归闭合判据**：①先生成有效代码 focused receipt，再跑两道文档门，测试正常通过且 receipt 文件字节/ID不变；②代码改一字后旧 receipt 必须失效，文档门不得把它“续命”；③无 receipt 时跑文档门不得伪造代码 receipt；④再跑普通代码焦点包必须生成新 receipt；⑤pre-commit、verification_receipt、bounded_unittest 与 full_pack_ledger 相关既有测试保持绿。
+- **完成边界**：这项只优化验证证据生命周期，不能据此少跑方案要求的首次焦点包、条件触发的唯一 full lane 或两道文档门；省掉的仅是文档门之后为恢复 singleton receipt 而重复执行的同一焦点包。实现后按正常流程落风险/SESSION_LOG/本 handoff，并交 Claude Code 独立审查；Codex 不提交。
+## 2026-08-13 追加：刀11+13 stage outcome 真实性——审查 FAIL（两格分类把真相说反了）
+
+**改了什么**：本节只记审查侧结论。被审范围 `runners/us_short_weekly_capstone.py`（+248/−61，新增四类 outcome normalizer 与单一 terminal recorder）、`runners/us_short_paper_one_click.py`（+28/−1，stderr 短表）及两份测试。
+
+**为什么 FAIL**：骨架成立，但十格映射表里两格与产出端/方案不符——
+1. `market_diagnostic_settle` 只认 `settle_status == "settled"`，而真实链路给的是 `published` / `idempotent` / `recovered`（`engine/us_short_market_diagnostic_lifecycle.py:682/704/772` → `_settle_outcome`（`runners/us_short_market_diagnostic_weekly_fetch.py:752`）只在上游缺 `status` 时才退化成 `"settled"`）。**结算真正成功的那一周被判成 `failed_nonblocking / OUTCOME_CONTRACT_UNRECOGNIZED`。**新表测试钉的 `"settled"` 来自把 `settle_week` mock 掉的夹具，所以全绿也照不出来；仓库自己的 e2e 在三处断言 `{settled, published, recorded}`。
+2. `weekly_bridge` 的 no-emit 一律 `no_work_expected`，但 `no_emit_reason` 有两种语义（`engine/us_short_weekend_orchestrator.py:391` 的 `out_of_window` vs `:401` 的 `provider_health_*`）。provider 被挡那周，一键短表会打出 `waiting_dependency=0 failed_nonblocking=0`。同时与桌面 §问题13 两处明写的 `completed_work` 相悖，且 register/SESSION_LOG 无偏离说明。
+
+**验证命令**：
+- `.tools
+un_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.provider.test_us_short_weekly_capstone tests.test_us_short_paper_one_click tests.provider.test_us_short_weekly_capstone_soft_discovery tests.test_us_short_serenity_quality_forward tests.test_us_short_market_diagnostic_weekly_advance tests.test_us_short_market_diagnostic_weekly_producer tests.test_us_short_capstone_checkpoint`
+- reviewer 三次源码级植入（failure 整类 / 问题10 ARTIFACT_INVALID / 非 dict 兜底），`finally` 按字节还原
+- 独立对抗 agent（只读、探针在 scratchpad）
+
+**验证结果**：焦点超集 `PASS tests=297 elapsed=103.7s`、`receipt:54a33b35cf07f386c923e167`；full lane 引账本 `5838/5838`、`318/318`、gate True，独立重算指纹 `db1b9e1ee4a1` 与账本及 prepared 一致。植入：前两次精确转红（`failures=7` / `failures=1`），第三次**仍绿**（非 dict 兜底无人钉，记 `O-K13-6`）；三次均按字节还原、numstat 回 `248 61`。十格表其余九格与方案逐条一致。
+
+**失效旧结论**：register 里「emitted=true / honest emitted=false / dry-run 三条返回路径都带同一 outcome 投影」不准确——`_run_pass2_budget_preview` 是第四条且不带（`O-K13-5`）。
+
+**下一步注意事项**：
+- 修 `market_diagnostic_settle` 时不要在 normalizer 里另造别名，按产出端真实词表对；并把测试夹具从 mock 出来的 `"settled"` 换成真实产出值，否则同一个洞下次照旧照不出来。
+- 另外九个 stage 的成功值与产出端的逐条对照是 agent 做的、不是我做的，修复轮需给出逐条对照结果。
+- `weekly_bridge` 若认为方案的 `completed_work` 不对，可以改，但必须在 register 写明理由——静默偏离方案是这次被记 Required 的一半原因。
+- 1302 当前落后 master 2 个提交（实测零 us_short 重叠），修复轮开工前先 ff-only 同步，避免 receipt 与账本作废两次。
+
+## 2026-08-13 追加：纯文档 focused receipt 保留修复（1302，repaired / OPEN-NOT_VERIFIED）
+
+### 十格双向差集（改代码前）
+
+| 维度 | D-C | C-D |
+|---|---|---|
+| 入口参数 | 两道文档门模块只在文档集合 | 两道 effect-contract 模块只在代码集合 |
+| 路径边界 | `docs/*.md` 与根 `.md` 不进 code scope | `runners/*.py`、`engine/*.py` 进 code scope |
+| fingerprint | 文档改动保持代码 fingerprint | 代码内容改动改变 fingerprint |
+| bundle | 文档门 `()` | effect-contract 组合为 `a_short_effect_contract` |
+| receipt side effect | 修前文档门会写/覆盖（唯一差集） | 修前代码焦点写入（正确行为） |
+
+### 实现与闭合
+
+- `.tools/bounded_unittest.py` 只识别精确的两模块文档门集合；顺序可交换，额外参数、重复参数和普通代码焦点不匹配。匹配时不采集 code state、不调用 receipt writer；PASS 输出固定 `DOC_ONLY - acceptance receipt left untouched`。失败仍返回原失败状态。
+- `tests/test_bounded_unittest.py` 新增十格入口反控、已有 receipt 保留、无 receipt 不伪造、普通代码焦点仍写入四类承重测试。未修改 `.tools/verification_receipt.py`、`.githooks/pre-commit` 或 `.tools/full_pack_ledger.py`。
+- 固定主 Python 焦点：`tests.test_bounded_unittest tests.test_verification_receipt`，`32 tests OK`，receipt=`receipt:14660bdd054cd4b7806bbe46`。随后两道文档门 `55 tests OK`，输出 DOC_ONLY，receipt 前后 ID 与字节均未变化；py_compile=2、git diff --check、BOM/FFFD/冲突扫描和 verification receipt PASS。
+- 本刀是验证工具面，full-lane=`not_triggered`；未调用 provider/network/live/paper，未写真实 `state/us_short`，未改主树或桌面文档。状态保持 `repaired / OPEN-NOT_VERIFIED`，待 Claude Code 独立审查。
+## 2026-08-13 追加：文档门不再覆盖代码 receipt——审查 PASS，已合入 master
+
+**改了什么**：本节只记审查侧结论。范围两个文件：`.tools/bounded_unittest.py`（+22/−2，新增 `_is_document_only_focused_run` 与两处 `not document_only` 短路）、`tests/test_bounded_unittest.py`（+70，三条直接测试）。
+
+**为什么**：此前任何 focused 运行都写 receipt，于是「跑焦点包 → 跑两道文档门 → 提交」这个正常顺序会让文档门那次把代码 receipt 覆盖掉，pre-commit 报 `focused acceptance receipt does not match the current code state`。本会话我为此多跑过两次焦点包。
+
+**验证命令**：
+- `.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_bounded_unittest tests.test_verification_receipt tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`
+- reviewer 直跑真 `_is_document_only_focused_run` 的七格识别表
+- reviewer 两次源码级植入（放宽成超集 / 删去重守卫），`finally` 按字节还原并核 sha256 + `git diff --numstat`
+
+**验证结果**：焦点超集 `PASS tests=87 elapsed=29.7s`、`receipt:fb613d3ba8b7c6ca6455c5b5`——这一跑本身就是反证，参数含那两个文档模块但共 4 个，识别器没当成文档门，receipt 照常写出。七格表：恰好两模块与顺序颠倒为 True，其余五格（重复、单个、两文档+一代码、一文档+一代码、空）全为 False。植入放宽成超集 → `failures=1` 精确转红；植入删去重守卫 → 仍绿，随即证明该条件冗余（`[a,a]` 在 `len==2 and set==DOC_SET` 下本就 False），记 `O-DOCGATE-1`。
+
+**失效旧结论**：此前几轮交接里「跑完文档门要重跑一次焦点包才能提交」的操作提醒不再需要——但仅限恰好那两个文档模块单独跑的情况；混进任何第三个参数仍会正常写 receipt。
+
+**下一步注意事项**：
+- 该改动只能**不写** receipt、不能**伪造**；pre-commit 侧仍按当前代码指纹校验，旧 receipt 不会因此变得可用。
+- 刀11+13 本轮零改动，`runners/us_short_weekly_capstone.py` sha 仍是上轮 FAIL 时的 `86e50ba3d9d9d5ee`；`R-USSHORT-MARKET-DIAGNOSTIC-SETTLE-SUCCESS-VALUE-IS-NOT-IN-THE-OUTCOME-TABLE` 与 `R-USSHORT-WEEKLY-BRIDGE-NO-EMIT-COLLAPSES-TWO-DIFFERENT-REASONS` 两条 Required 及 6 条 Optional 全部原样 open，是下一刀的内容。
+- 1302 当前落后 master 4 个提交，刀11+13 修复轮开工前先 ff-only 同步。

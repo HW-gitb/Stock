@@ -169,6 +169,19 @@ def _parse(argv: list[str]) -> tuple[str, int, list[str]]:
 
 
 NESTED_RUN_MARKER = "STOCK_BOUNDED_UNITTEST_ACTIVE"
+DOCUMENT_ONLY_FOCUSED_ARGS = frozenset({
+    "tests.test_route_doc_ledger_status_consistency",
+    "tests.test_doc_governance_guard",
+})
+
+
+def _is_document_only_focused_run(unittest_args: list[str]) -> bool:
+    """Recognise only the project's explicit two-module document gate."""
+    return (
+        len(unittest_args) == len(DOCUMENT_ONLY_FOCUSED_ARGS)
+        and len(set(unittest_args)) == len(unittest_args)
+        and set(unittest_args) == DOCUMENT_ONLY_FOCUSED_ARGS
+    )
 
 
 def main(argv: list[str]) -> int:
@@ -189,7 +202,12 @@ def main(argv: list[str]) -> int:
         if pin_error:
             raise ValueError(pin_error)
         tier, timeout, unittest_args = _parse(argv)
-        state_before = receipts.collect_code_state() if tier == "focused" and not nested else None
+        document_only = tier == "focused" and _is_document_only_focused_run(unittest_args)
+        state_before = (
+            receipts.collect_code_state()
+            if tier == "focused" and not nested and not document_only
+            else None
+        )
         result = run_unittest(unittest_args, timeout)
     except (ValueError, OSError) as exc:
         print(f"[bounded-unittest] REFUSED: {exc}")
@@ -198,7 +216,7 @@ def main(argv: list[str]) -> int:
         print(result.output, end="" if result.output.endswith("\n") else "\n")
     receipt = None
     receipt_error = None
-    if tier == "focused" and result.status == "PASS" and not nested:
+    if tier == "focused" and result.status == "PASS" and not nested and not document_only:
         try:
             state_after = receipts.collect_code_state()
             if receipts.fingerprint(state_before or {}) != receipts.fingerprint(state_after):
@@ -230,6 +248,8 @@ def main(argv: list[str]) -> int:
         # Say so rather than skip silently: an unexplained missing receipt is
         # its own trap for whoever is trying to satisfy the pre-commit gate.
         print("[bounded-unittest] NESTED - acceptance receipt left untouched")
+    elif document_only and result.status == "PASS" and not nested:
+        print("[bounded-unittest] DOC_ONLY - acceptance receipt left untouched")
     if receipt_error:
         print(f"[bounded-unittest] REFUSED - {receipt_error}")
     elif receipt is not None:
