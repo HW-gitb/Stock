@@ -4669,3 +4669,31 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_t
 - `stash@{0}`（`io-inventory-retirement-parked`）**仍在**——SESSION_LOG 写的是 pop，但 pop 成功会自动删条目，实际走的是 apply 或冲突恢复路径。文件本身已逐字节核对无误；合入后应 `git stash drop stash@{0}`，否则下一个人会以为还有活停着（`O-IOINV-5`）。
 - `O-IOINV-3` / `O-IOINV-4` 被 reject，缺的只是测试钉子不是行为：同 key 写入次数 1→3 快照不变、新的 class-4 unresolved 写入仍被抓到且加白名单后归零，这两点我已用真 `build_inventory` 实测过。想补测试随时可补。
 - 全量用例数会从 5829 回到 5831（退役版新增的两条闭合用例回到扫描面），不要误当回归。
+
+## 2026-08-13 追加：问题16-A model-paper track → portfolio guard 接线（1302，`repaired / OPEN-NOT-VERIFIED`）
+
+**范围与前置**：本轮只在 `D:\cnhea\Codex\worktrees\1302\Stock` 工作；问题15 已在当前 HEAD 先独立审查并合入。未改主树、桌面 `us_testrun0810.md`、`docs/CURRENT.md` 或 `docs/README.md`，未提交。其他 worktree 同一 seam 无 dirty 改动，满足串行前置。
+
+**实现**：`engine/us_short_model_paper_activation.py` 是唯一 model-paper 激活适配层，正式入口复用既有 `load_start_receipt(..., verify_design_against_disk=True)`。`adapter["paper_track"]` 现在由 `model_paper_adapter` 写入 `CapstoneContext`，经 `run_weekly_bridge()` → Batch5→Batch4 `run_e2e()` → packet，进入已有 Batch4 orchestrator 的 `build_portfolio_guard_result()` → `apply_result_effects()`。正式 model-paper context 缺 track 直接拒绝；非正式 fixture bridge 的旧 template fallback 保持不变。
+
+**激活/停机**：one-click 和 direct capstone 在正式执行前重验同一设计完成 receipt。无 receipt 是可见 typed `DORMANT`，在 context/input/provider/store/账户播种前停止，零 provider、零真实 $100k、零 model-paper store 写入；pending、notification-only、损坏或设计绑定失败是 `activation_gate_broken`，不降级为 dormant。有效 receipt 只表示设计完成门，不替代 provider 授权。`dry_run=True` 仍可做计划检查。用户明确说 `US-short 设计完成` 后下一次运行才可进入 Week 1。
+
+**测试与终态**：固定主 Python focused 超集 `260 OK`，最终 receipt=`receipt:2d1891a55c0733db6efa3503`；full lane `5847/5847 PASS`，`318/318`，`discovered == ran`，fingerprint=`790603ded76921cdfdd604e8e79ca8a351c6ccf135b17f64ecb64ed284d1dafe`，421.8s/860s。py_compile 10 个文件、`git diff --check`、本轮变更文件编码扫描通过；文档门 `55 OK` 且未覆盖 receipt；真实 `state/us_short` / `provider_samples` 前后无变化。未调用 provider/live/paper，未启动 Week 1。
+
+**自审/边界**：没有新 receipt、flag、state machine、capability token、fingerprint/SHA；没有把有效 receipt当 provider 授权；没有重复实现 result-effects 或改模板消费者的既有语义。状态保持 `repaired / OPEN-NOT-VERIFIED`，等待 Claude Code 独立审查与提交；Codex 不提交。
+
+## 2026-08-13 追加：问题16-A 独立审查收口（PASS，已提交并合入 master）
+
+**改了什么**：本节只记审查收口，代码改动见上一节。审查在 `D:\cnhea\Codex\worktrees\1302\Stock` 完成，PASS 后只 stage 本刀 14 个文件（13 个 tracked + 新增 `engine/us_short_model_paper_activation.py`）并合入 master。
+
+**为什么**：两条承重主张都由我独立走通而非采信转述。(1) 消费端我自己查到 `engine/us_short_weekend_orchestrator.py:109` 把 `paper_track` 列为闭世界必填键、`:455` 送进 `build_portfolio_guard_result`、`:476` 送进 `apply_result_effects`，所以真实 `model_paper_nav:` 证据确实落到会改变操作与仓位的消费者，不是只到 bridge。(2) 休眠门的真正判据在既有 `load_start_receipt`，我用 5 组临时私密根直接打它。
+
+**验证命令**：
+- 焦点超集（九模块，含两道文档门与 authorization-conformance）：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_model_paper_capstone_wiring tests.test_us_short_paper_one_click tests.provider.test_us_short_batch5_to_batch4_e2e tests.provider.test_us_short_weekly_capstone tests.test_us_short_result_effects tests.test_us_short_weekend_orchestrator tests.test_us_short_market_diagnostic_authorization_conformance tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`
+- 独立重算全量指纹：`python -c "import sys; sys.path.insert(0,'.tools'); import full_pack_ledger as f; print(f.fingerprint(f.collect_code_state()))"`
+
+**验证结果**：焦点 `PASS tests=260 elapsed=33.7s receipt:e1c26f2ea2803ffd3d69764d`。full lane 按 rule 4 引执行方账本 `5847 OK` / `318/318` / `421.8s`，fingerprint `790603ded76921cdfdd604e8e79ca8a351c6ccf135b17f64ecb64ed284d1dafe`，我独立重算当前代码态得同一值，故该次全量绑定的正是本 diff。5 组临时根探针：空根 `dormant`；notification-only、pending-only、伪造 receipt、非 JSON receipt 全部抛 `DiagnosticStartReceiptError`（即 `activation_gate_broken`），从不降级成普通休眠、从不 authorize。别名探针证 capstone 与 e2e 两段 deepcopy 真隔离。真实 `state/us_short` 只有 `lifecycle` 与 `shadow_compare_private`，无 `market_diagnostic_private`、无 model-paper store、无账户播种；活体 canonical gate 实测 `dormant`。全程 `git status` 恒 14 项，三个被改 runner 的 sha256 与跑前逐字节相同。
+
+**失效旧结论**：上一节「one-click 和 direct capstone 在正式执行前重验同一设计完成 receipt……零 provider」按实际面需收窄——capstone `main()` 没有 `--model-paper-store-root`，capstone CLI 进不了 model-paper 路径，那道门在 CLI 上不可达（Python 调用方可达，one-click 即是）；capstone CLI 的 `-Live` 跑仍会真取 provider，它受的是既有 `--confirm-user-authorization` 而非本刀休眠门。另：register 里「有效 receipt 不替代 provider 授权」一句在 one-click 路径上不成立——`runners/us_short_paper_one_click.py:312/341` 把 `confirm_user_authorization` 硬编码为 `True`（既有行为，非本刀引入），该路径上 receipt 事实上是唯一的门。两处均记为 `O-16A-2`，未阻断 PASS。
+
+**下一步注意事项**：`O-16A-1` 是本刀引入的唯一新可观测落差——`build_paper_track` 的 `consecutive_stops` / `paper_drawdown_frac` 恒 `None`（reducer 按方案有意不建），一旦 `paper_evaluable=True`，`classify_portfolio_guard` 会从 `paper_track_not_evaluable` 变成 `malformed_paper_metrics`；state 与 fail_safe 完全不变、不影响仓位，但周报会出现一个读起来像「数据损坏」的原因码。真开钟后的第一周必现，届时给个专门 reason 或在报告侧注明即可，不必实现 reducer。`O-16A-4`（一张 receipt 可授权任意多个 `-PrivateRoot` 下新播种的 paper 账户）留到真开钟时再决定，收紧它需要新增绑定件而方案明令不新增。按 0810 §去重顺序，下一刀是问题 14，须从本刀已合入的 master 起。

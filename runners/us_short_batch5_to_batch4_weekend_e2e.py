@@ -425,6 +425,7 @@ def _assemble_batch4_packet(
     vix_regime: str | None = None,
     forward_policy_comparison_reminder: str | None = None,
     soft_discovery_receipt_paths: dict[str, str | None] | None = None,
+    model_paper_track: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     data_context = components["data_context"]
     run_provenance = components["run_provenance"]
@@ -448,14 +449,19 @@ def _assemble_batch4_packet(
         market_axis_regimes=market_axis_regimes,
         basket_context=basket_context,
     )
-    paper_track = copy.deepcopy(template.get("paper_track"))
-    if paper_track is None:
-        paper_track = {
-            "paper_evaluable": False,
-            "consecutive_stops": None,
-            "paper_drawdown_frac": None,
-            "evidence_ref": {"kind": "source_id", "value": "batch5_bridge:paper_track_not_supplied"},
-        }
+    if model_paper_track is not None:
+        if not isinstance(model_paper_track, dict):
+            raise Batch5ToBatch4E2EError("model_paper_track must be an object")
+        paper_track = copy.deepcopy(model_paper_track)
+    else:
+        paper_track = copy.deepcopy(template.get("paper_track"))
+        if paper_track is None:
+            paper_track = {
+                "paper_evaluable": False,
+                "consecutive_stops": None,
+                "paper_drawdown_frac": None,
+                "evidence_ref": {"kind": "source_id", "value": "batch5_bridge:paper_track_not_supplied"},
+            }
     return {
         "data_context": data_context,
         "per_ticker_analysis": per_ticker_analysis,
@@ -543,6 +549,7 @@ def run_e2e(
     vix_regime: str | None = None,
     forward_policy_comparison_reminder: str | None = None,
     soft_discovery_receipt_paths: dict[str, str | None] | None = None,
+    model_paper_track: dict[str, Any] | None = None,
     projection_binding_expectations: source_packet_runner.ProjectionBindingExpectations = PROJECTION_INPUTS_BINDING,
 ) -> dict[str, Any]:
     if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
@@ -694,6 +701,7 @@ def run_e2e(
             vix_regime=vix_regime,
             forward_policy_comparison_reminder=forward_policy_comparison_reminder,
             soft_discovery_receipt_paths=soft_discovery_receipt_paths,
+            model_paper_track=model_paper_track,
         )
         _write_private_json(context_path, packet)
         batch4_summary = _safe_batch4_run(

@@ -196,6 +196,7 @@ EXEMPT = {
     "engine/us_short_market_diagnostic_start_receipt.py::start_receipt_sha256": "pure digest of a receipt already in hand",
     "engine/us_short_market_diagnostic_start_receipt.py::validate_start_receipt": "validates the authorization itself",
     "engine/us_short_market_diagnostic_start_receipt.py::write_completion_notification_template": "writes only the operator-named source file before authorization exists; it cannot read or write the diagnostic store",
+    "engine/us_short_model_paper_activation.py::resolve_model_paper_activation": "the sole model-paper adapter delegates authorization to load_start_receipt",
     "engine/us_short_market_diagnostic_weekly_producer.py::_load_preset": "reads a named preset file; no store",
     "engine/us_short_market_diagnostic_weekly_producer.py::has_counted_weeks": "existence probe over the weekly records; reads no content and authorizes nothing",
     "engine/us_short_market_diagnostic_weekly_producer.py::model_paper_week_is_settled": "reads the model-paper store, not the diagnostic store",

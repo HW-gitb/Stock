@@ -33,6 +33,7 @@ provider call, production, DataHub, ship-gate, broker path, or A-share crossing 
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import math
@@ -265,6 +266,7 @@ class CapstoneContext:
     max_total_http_attempts: int | None = None
     model_paper_store_root: Path | None = None
     model_paper_run_account_mode: str | None = None
+    model_paper_track: dict[str, Any] | None = None
     # None until a 26-week diagnostic clock exists. Dormant by default and dormant
     # forever until a start receipt is issued, which no code path here can do.
     market_diagnostic_root: Path | None = None
@@ -482,6 +484,54 @@ class CapstoneContext:
 
 def _model_paper_enabled(ctx: CapstoneContext) -> bool:
     return ctx.model_paper_store_root is not None
+
+
+def _dormant_model_paper_summary(ctx: CapstoneContext) -> dict[str, Any]:
+    print(
+        "[US-SHORT PAPER] DORMANT: 尚未收到并完成 US-short 设计完成激活；"
+        "未执行 provider、账户播种或 model-paper 写入。",
+        file=sys.stderr,
+    )
+    return {
+        "mode": "dormant",
+        "execution_mode": "dormant",
+        "report_mode": "offline_test",
+        "operational_use": "not_authorized",
+        "decision_date": ctx.decision_date,
+        "price_basis_date": ctx.price_basis_date,
+        "activation_status": "dormant",
+        "model_paper_started": False,
+        "provider_calls_performed": False,
+        "account_write": False,
+        "model_paper_store_write": False,
+        "stages": [],
+        "stage_outcomes": [],
+        "stage_outcome_counts": {
+            "completed_work": 0,
+            "no_work_expected": 0,
+            "waiting_dependency": 0,
+            "failed_nonblocking": 0,
+        },
+    }
+
+
+def _update_model_paper_context(ctx: CapstoneContext, result: dict[str, Any]) -> CapstoneContext:
+    if not _model_paper_enabled(ctx):
+        return ctx
+    holdings = result.get("frozen_holding_tickers")
+    if not isinstance(holdings, list) or any(not isinstance(ticker, str) for ticker in holdings):
+        raise WeeklyCapstoneError("model-paper adapter did not return canonical holding tickers")
+    adapter = result.get("adapter")
+    track = adapter.get("paper_track") if isinstance(adapter, dict) else None
+    if not isinstance(track, dict):
+        raise WeeklyCapstoneError(
+            "model-paper adapter did not return a source-bound paper_track object"
+        )
+    return replace(
+        ctx,
+        frozen_holding_tickers=tuple(holdings),
+        model_paper_track=copy.deepcopy(track),
+    )
 
 
 # The lines the two advance stages contribute. Fixed strings by construction: a
@@ -2334,6 +2384,7 @@ def run_weekly_capstone(
     auto_authorize_pass2_budget: bool = False,
     model_paper_store_root: Path | None = None,
     model_paper_run_account_mode: str | None = None,
+    market_diagnostic_root: Path | None = None,
     soft_discovery_enabled: bool = True,
     theme_soft_boost_enabled: bool = True,
     serenity_annotation_payload: dict[str, Any] | None = None,
@@ -2386,6 +2437,7 @@ def run_weekly_capstone(
         max_total_http_attempts=max_total_http_attempts, state_dir=state_dir,
         model_paper_store_root=model_paper_store_root,
         model_paper_run_account_mode=model_paper_run_account_mode,
+        market_diagnostic_root=market_diagnostic_root,
         soft_discovery_enabled=soft_discovery_enabled,
         theme_soft_boost_enabled=theme_soft_boost_enabled,
         sample_root=sample_root,
@@ -2433,6 +2485,20 @@ def run_weekly_capstone(
 
     if dry_run:
         return _plan(ctx, pipeline, resume_from=resume_from)
+
+    if _model_paper_enabled(ctx):
+        try:
+            from engine.us_short_model_paper_activation import resolve_model_paper_activation
+
+            activation = resolve_model_paper_activation(root=ctx.market_diagnostic_root)
+        except Exception as exc:  # noqa: BLE001 - activation is a fail-closed boundary
+            raise WeeklyCapstoneError(
+                f"activation_gate_broken: {type(exc).__name__}: {exc}"
+            ) from exc
+        if not isinstance(activation, dict) or activation.get("status") not in {"dormant", "authorized"}:
+            raise WeeklyCapstoneError("activation_gate_broken: model-paper activation result is invalid")
+        if activation["status"] == "dormant":
+            return _dormant_model_paper_summary(ctx)
 
     if not ctx.confirm_user_authorization:
         raise WeeklyCapstoneError(
@@ -2754,6 +2820,8 @@ def run_weekly_capstone(
                         ctx = replace(ctx, soft_discovery_run_result=dict(result))
                     if stage.name == "pass2_fetch":
                         ctx = replace(ctx, soft_boost_run_result=pass2_soft_boost_result(result))
+                    if stage.name == "model_paper_adapter" and _model_paper_enabled(ctx):
+                        ctx = _update_model_paper_context(ctx, result)
                     if stage.name == "serenity_quality_forward":
                         shadow = result.get("shadow_consumption")
                         ctx = replace(
@@ -2977,10 +3045,7 @@ def run_weekly_capstone(
                         file=sys.stderr,
                     )
             if stage.name == "model_paper_adapter" and _model_paper_enabled(ctx):
-                holdings = result.get("frozen_holding_tickers") if isinstance(result, dict) else None
-                if not isinstance(holdings, list) or any(not isinstance(ticker, str) for ticker in holdings):
-                    raise WeeklyCapstoneError("model-paper adapter did not return canonical holding tickers")
-                ctx = replace(ctx, frozen_holding_tickers=tuple(holdings))
+                ctx = _update_model_paper_context(ctx, result)
             if stage.name == "soft_discovery":
                 ctx = replace(ctx, soft_discovery_run_result=dict(result))
             if stage.name == "pass2_fetch":
