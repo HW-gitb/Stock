@@ -27,10 +27,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
-from engine.us_short_model_paper_activation import (  # noqa: E402
-    MODEL_PAPER_ACTIVATION_ROOT,
-    resolve_model_paper_activation,
-)
+from engine.us_short_model_paper_activation import resolve_model_paper_activation  # noqa: E402
 from runners.us_short_weekly_capstone import (  # noqa: E402
     WeeklyCapstoneError,
     resolve_capstone_context,
@@ -259,11 +256,11 @@ def run_one_click(
     state_dir = _canonical_source_state_dir(state_dir)
 
     try:
-        activation = resolve_model_paper_activation(root=MODEL_PAPER_ACTIVATION_ROOT)
+        activation = resolve_model_paper_activation()
     except Exception as exc:  # noqa: BLE001 - malformed authorization is never ordinary dormancy
         raise PaperOneClickError(
-            f"activation_gate_broken: {type(exc).__name__}: {exc}"
-        ) from exc
+            f"activation_gate_broken: {type(exc).__name__}"
+        ) from None
     if not isinstance(activation, dict) or activation.get("status") not in {"dormant", "authorized"}:
         raise PaperOneClickError("activation_gate_broken: model-paper activation result is invalid")
     if activation["status"] == "dormant":

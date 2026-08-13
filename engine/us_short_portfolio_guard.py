@@ -66,6 +66,8 @@ def classify_portfolio_guard(paper_evaluable, consecutive_stops=0, paper_drawdow
     normal. Advisory only, never a hard veto / auto-trade."""
     if paper_evaluable is not True:
         return _result("caution", True, "paper_track_not_evaluable")
+    if consecutive_stops is None and paper_drawdown_frac is None:
+        return _result("caution", True, "paper_metrics_not_available")
     stops = _count(consecutive_stops)
     dd = _finite_number(paper_drawdown_frac)
     if stops is None or dd is None or dd < 0:

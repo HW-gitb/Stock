@@ -494,8 +494,25 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         )
         self.assertTrue(capture_path.exists())
         capture = json.loads(capture_path.read_text(encoding="utf-8"))
+        self.assertEqual(capture["schema_version"], "1.1.0")
         self.assertEqual(capture["aggregate_counts"]["split_endpoint_call_count"], 3)
+        self.assertEqual(capture["aggregate_counts"]["split_endpoint_success_count"], 3)
+        self.assertEqual(capture["aggregate_counts"]["split_endpoint_error_count"], 0)
         self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_call_count"], 3)
+        self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_success_count"], 3)
+        self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_error_count"], 0)
+        self.assertEqual(capture["aggregate_counts"]["split_event_count"], 3)
+        self.assertEqual(capture["aggregate_counts"]["dividend_event_count"], 3)
+        self.assertEqual(
+            capture["aggregate_counts"]["split_endpoint_call_count"],
+            capture["aggregate_counts"]["split_endpoint_success_count"]
+            + capture["aggregate_counts"]["split_endpoint_error_count"],
+        )
+        self.assertEqual(
+            capture["aggregate_counts"]["dividend_endpoint_call_count"],
+            capture["aggregate_counts"]["dividend_endpoint_success_count"]
+            + capture["aggregate_counts"]["dividend_endpoint_error_count"],
+        )
         self.assertFalse(capture["scope"]["corporate_action_reconciliation_performed"])
         contract_path = self.paths["prefix"].with_name(
             self.paths["prefix"].name + "_theme_selection_contract.json"
@@ -567,6 +584,17 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertEqual(final_status[("stock_splits", "AAPL")], "success")
         self.assertEqual(final_status[("dividends", "MSFT")], "success")
 
+        capture_path = self.paths["prefix"].with_name(
+            self.paths["prefix"].name + "_corporate_action_capture.json"
+        )
+        capture = json.loads(capture_path.read_text(encoding="utf-8"))
+        self.assertEqual(capture["aggregate_counts"]["split_endpoint_call_count"], 3)
+        self.assertEqual(capture["aggregate_counts"]["split_endpoint_success_count"], 3)
+        self.assertEqual(capture["aggregate_counts"]["split_endpoint_error_count"], 0)
+        self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_call_count"], 3)
+        self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_success_count"], 3)
+        self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_error_count"], 0)
+
         news_path = self.paths["prefix"].with_name(self.paths["prefix"].name + "_massive_news_events.json")
         news = json.loads(news_path.read_text(encoding="utf-8"))
         self.assertEqual(news["records"]["AAPL"][0]["id"], "aapl-news-1")
@@ -604,6 +632,154 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         receipt = _research_receipt(provider_health_facts=tuple(provider_health.items()))
         require_research_live_provider_health_result(receipt, classified)
         self.assertIn("massive_events=clean", provider_health_detail_line(classified))
+
+    def test_corporate_action_capture_counts_mixed_final_records(self):
+        record = runner.sample_validation.FetchRecord
+        records = [
+            record(
+                provider_id="massive",
+                endpoint_family="stock_splits",
+                symbol="AAPL",
+                raw_sample_ref="capture_test/split_aapl.json",
+                ok=True,
+                http_status=200,
+                error_type=None,
+                payload={"results": [{"id": "split-1"}]},
+            ),
+            record(
+                provider_id="massive",
+                endpoint_family="stock_splits",
+                symbol="MSFT",
+                raw_sample_ref="capture_test/split_msft.json",
+                ok=False,
+                http_status=429,
+                error_type="http_error",
+                payload={"error": "rate limited"},
+            ),
+            record(
+                provider_id="massive",
+                endpoint_family="dividends",
+                symbol="AAPL",
+                raw_sample_ref="capture_test/div_aapl.json",
+                ok=True,
+                http_status=200,
+                error_type=None,
+                payload={"results": [{"id": "div-1"}]},
+            ),
+            record(
+                provider_id="massive",
+                endpoint_family="dividends",
+                symbol="MSFT",
+                raw_sample_ref="capture_test/div_msft.json",
+                ok=False,
+                http_status=500,
+                error_type="provider_error",
+                payload={"error": "provider failure"},
+            ),
+            record(
+                provider_id="massive",
+                endpoint_family="dividends",
+                symbol="JPM",
+                raw_sample_ref="capture_test/div_jpm.json",
+                ok=True,
+                http_status=200,
+                error_type=None,
+                payload={"results": []},
+            ),
+        ]
+        capture = runner._build_corporate_action_capture(
+            generated_at="2026-07-06T12:00:00+00:00",
+            expected_decision_date="20260706",
+            source_as_of="2026-07-02",
+            observed_at="2026-07-06T12:00:00+00:00",
+            selected_symbols=["AAPL", "MSFT", "JPM"],
+            records=records,
+        )
+        aggregate = capture["aggregate_counts"]
+        self.assertEqual(capture["schema_version"], "1.1.0")
+        self.assertEqual(
+            {
+                key: aggregate[key]
+                for key in (
+                    "split_endpoint_call_count",
+                    "split_endpoint_success_count",
+                    "split_endpoint_error_count",
+                    "split_event_count",
+                    "dividend_endpoint_call_count",
+                    "dividend_endpoint_success_count",
+                    "dividend_endpoint_error_count",
+                    "dividend_event_count",
+                )
+            },
+            {
+                "split_endpoint_call_count": 2,
+                "split_endpoint_success_count": 1,
+                "split_endpoint_error_count": 1,
+                "split_event_count": 1,
+                "dividend_endpoint_call_count": 3,
+                "dividend_endpoint_success_count": 2,
+                "dividend_endpoint_error_count": 1,
+                "dividend_event_count": 1,
+            },
+        )
+        self.assertEqual(capture["by_ticker"]["MSFT"]["split_endpoint"]["status"], "error")
+        self.assertEqual(capture["by_ticker"]["MSFT"]["split_endpoint"]["http_status"], 429)
+        self.assertEqual(capture["by_ticker"]["MSFT"]["dividend_endpoint"]["status"], "error")
+        self.assertEqual(capture["by_ticker"]["MSFT"]["dividend_endpoint"]["http_status"], 500)
+        self.assertEqual(
+            aggregate["split_endpoint_call_count"],
+            aggregate["split_endpoint_success_count"] + aggregate["split_endpoint_error_count"],
+        )
+        self.assertEqual(
+            aggregate["dividend_endpoint_call_count"],
+            aggregate["dividend_endpoint_success_count"] + aggregate["dividend_endpoint_error_count"],
+        )
+
+    def test_corporate_action_capture_counts_successful_empty_results(self):
+        record = runner.sample_validation.FetchRecord
+        capture = runner._build_corporate_action_capture(
+            generated_at="2026-07-06T12:00:00+00:00",
+            expected_decision_date="20260706",
+            source_as_of="2026-07-02",
+            observed_at="2026-07-06T12:00:00+00:00",
+            selected_symbols=["JPM"],
+            records=[
+                record(
+                    provider_id="massive",
+                    endpoint_family="stock_splits",
+                    symbol="JPM",
+                    raw_sample_ref="capture_test/empty_split.json",
+                    ok=True,
+                    http_status=200,
+                    error_type=None,
+                    payload={"results": []},
+                ),
+                record(
+                    provider_id="massive",
+                    endpoint_family="dividends",
+                    symbol="JPM",
+                    raw_sample_ref="capture_test/empty_dividend.json",
+                    ok=True,
+                    http_status=200,
+                    error_type=None,
+                    payload={"results": []},
+                ),
+            ],
+        )
+        self.assertEqual(
+            capture["aggregate_counts"],
+            {
+                "ticker_count": 1,
+                "split_endpoint_call_count": 1,
+                "split_endpoint_success_count": 1,
+                "split_endpoint_error_count": 0,
+                "split_event_count": 0,
+                "dividend_endpoint_call_count": 1,
+                "dividend_endpoint_success_count": 1,
+                "dividend_endpoint_error_count": 0,
+                "dividend_event_count": 0,
+            },
+        )
 
     def test_yfinance_grades_do_not_require_fmp_key_and_summary_is_honest(self):
         def yfinance_source(ticker: str) -> dict:

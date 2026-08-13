@@ -2,7 +2,6 @@
 """The single dormant/authorized door for the model-paper execution path."""
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from engine.us_short_market_diagnostic_start_receipt import DEFAULT_ROOT, load_start_receipt
@@ -10,10 +9,10 @@ from engine.us_short_market_diagnostic_start_receipt import DEFAULT_ROOT, load_s
 MODEL_PAPER_ACTIVATION_ROOT = DEFAULT_ROOT
 
 
-def resolve_model_paper_activation(root: str | Path | None = None) -> dict[str, Any]:
+def resolve_model_paper_activation() -> dict[str, Any]:
     """Re-check the existing design receipt and return only dormant/authorized."""
     receipt = load_start_receipt(
-        MODEL_PAPER_ACTIVATION_ROOT if root is None else root,
+        MODEL_PAPER_ACTIVATION_ROOT,
         verify_design_against_disk=True,
     )
     if receipt is None:

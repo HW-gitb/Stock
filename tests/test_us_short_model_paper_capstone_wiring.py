@@ -12,7 +12,14 @@ from engine.us_short_model_paper_store import load_head
 from engine.us_short_result_effects import apply_result_effects, build_portfolio_guard_result
 import runners.us_short_weekly_capstone as capstone
 from runners import us_short_weekly_capstone_stages as capstone_stages
-from runners.us_short_weekly_capstone import Stage, _run_model_paper_adapter, _run_model_paper_weekly, default_pipeline, run_weekly_capstone
+from runners.us_short_weekly_capstone import (
+    Stage,
+    WeeklyCapstoneError,
+    _run_model_paper_adapter,
+    _run_model_paper_weekly,
+    default_pipeline,
+    run_weekly_capstone,
+)
 from tests.provider.test_us_short_batch5_data_context import _candidate_artifact
 from tests.provider.us_short_private_test_root import temporary_us_short_state_directory
 
@@ -164,23 +171,53 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
         stage = Stage("must_not_run", False, lambda _ctx: [], lambda _ctx: [], must_not_run)
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            summary = run_weekly_capstone(
-                now_et=datetime(2026, 7, 20, 8, 0, 0),
-                private_root=root / "private",
-                batch4_template_path=root / "template.json",
-                account_state_path=root / "account.json",
-                dry_run=False,
-                confirm_user_authorization=True,
-                state_dir=root / "state",
-                sample_root=root,
-                stages=[stage],
-                model_paper_store_root=root / "private" / "model_paper_private",
-                model_paper_run_account_mode="paper_only",
-                market_diagnostic_root=root / "private" / "market_diagnostic_private",
-            )
+            with mock.patch(
+                "engine.us_short_model_paper_activation.resolve_model_paper_activation",
+                return_value={"status": "dormant", "receipt": None},
+            ) as activation:
+                summary = run_weekly_capstone(
+                    now_et=datetime(2026, 7, 20, 8, 0, 0),
+                    private_root=root / "private",
+                    batch4_template_path=root / "template.json",
+                    account_state_path=root / "account.json",
+                    dry_run=False,
+                    confirm_user_authorization=True,
+                    state_dir=root / "state",
+                    sample_root=root,
+                    stages=[stage],
+                    model_paper_store_root=root / "private" / "model_paper_private",
+                    model_paper_run_account_mode="paper_only",
+                    market_diagnostic_root=root / "private" / "market_diagnostic_private",
+                )
+            activation.assert_called_once_with()
         self.assertEqual(summary["activation_status"], "dormant")
         self.assertFalse(summary["model_paper_started"])
         self.assertEqual([], entered)
+
+    def test_activation_failure_redacts_private_exception_details(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            private_path = root / "private" / "diagnostic_start_receipt.json"
+            with mock.patch(
+                "engine.us_short_model_paper_activation.resolve_model_paper_activation",
+                side_effect=ValueError(str(private_path)),
+            ):
+                with self.assertRaisesRegex(WeeklyCapstoneError, "activation_gate_broken: ValueError") as raised:
+                    run_weekly_capstone(
+                        now_et=datetime(2026, 7, 20, 8, 0, 0),
+                        private_root=root / "private",
+                        batch4_template_path=root / "template.json",
+                        account_state_path=root / "account.json",
+                        dry_run=False,
+                        confirm_user_authorization=True,
+                        state_dir=root / "state",
+                        sample_root=root,
+                        stages=[],
+                        model_paper_store_root=root / "private" / "model_paper_private",
+                        model_paper_run_account_mode="paper_only",
+                        market_diagnostic_root=root / "private" / "market_diagnostic_private",
+                    )
+            self.assertNotIn("diagnostic_start_receipt.json", str(raised.exception))
 
     def test_absent_in_repo_model_paper_root_reaches_first_week_seed_preview(self) -> None:
         with temporary_us_short_state_directory(capstone.ROOT) as state_root_text:
