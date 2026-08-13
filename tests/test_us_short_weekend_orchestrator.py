@@ -179,6 +179,7 @@ def _pipeline_context(reg_path, runs_root, weekly_root, *, universe=None, pass2=
         "cost_inputs": {}, "available_cash": 4000.0, "report_context": _report_context(),
         "lifecycle_register_path": reg_path, "lifecycle_readiness_out_path": None,
         "runs_private_root": runs_root, "weekly_private_root": weekly_root,
+        "prior_run_dir": None, "prior_runs_private_root": runs_root,
     }
 
 
@@ -305,19 +306,37 @@ class EmptyRunEndToEnd(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
             reg = Path(d) / "reg.json"
             reg.write_text(json.dumps(_register()), encoding="utf-8")
-            (Path(rr) / "symbol_cooldown_state.json").write_text(json.dumps({
+            prior_dir = Path(rr) / "20260601"
+            prior_dir.mkdir()
+            (prior_dir / "market_regime_state.json").write_text(json.dumps({
+                "schema_name": "us_short_market_regime_state", "schema_version": "1.0.0",
+                "as_of": "20260601", "market_risk_regime": "防御", "upgrade_count": 0,
+            }), encoding="utf-8")
+            (prior_dir / "holding_action_state.json").write_text(json.dumps({
+                "schema_name": "us_short_holding_action_state", "schema_version": "1.0.0",
+                "as_of": "20260601", "positions": [],
+            }), encoding="utf-8")
+            (prior_dir / "portfolio_guard_state.json").write_text(json.dumps({
+                "schema_name": "us_short_portfolio_guard_state", "schema_version": "1.0.0",
+                "as_of": "20260601", "state": "normal",
+            }), encoding="utf-8")
+            (prior_dir / "symbol_cooldown_state.json").write_text(json.dumps({
                 "schema_name": "us_short_symbol_cooldown_state", "schema_version": "1.0.0", "as_of": "20260601",
                 "records": [{"ticker": "AAPL", "trigger": "filled_then_stop_loss", "triggered_at": "20260601",
                              "cooldown_until": "20260621", "source_reconciliation_ref": "test:filled-stop"}],
             }), encoding="utf-8")
             pc = _pipeline_context(reg, rr, wr, universe=[_univ_row("AAPL")], pass2={"AAPL": {}},
                                    per_ticker_analysis={"AAPL": _analysis_row("AAPL")})
+            pc["prior_run_dir"] = prior_dir
+            pc["prior_regime"] = "进攻"
+            pc["prior_upgrade_count"] = 0
             pc["sizing_context"]["per_ticker"] = {"AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
             pc["basket_context"]["per_ticker"] = {
                 "AAPL": {"theme_probe": {
                     "high_confidence": False, "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             row = out["machine_record"]["rows"][0]
+            self.assertEqual("防御", row["market_risk_regime"])
             self.assertEqual((row["final_action"], row["observe_reason_type"], row["symbol_cooldown_status"], row["cooldown_until"]),
                              ("观察", "risk_cooldown", "in_cooldown", "20260621"))
             cooldown_record = next(f for f in row["field_records"] if f["field_id"] == "symbol_cooldown")
@@ -327,6 +346,61 @@ class EmptyRunEndToEnd(unittest.TestCase):
             with out["written"]["action_table_path"].open(encoding="utf-8", newline="") as f:
                 csv_row = next(csv.DictReader(f))
             self.assertEqual(csv_row["cooldown_until"], "20260621")
+
+    def test_missing_account_cooldown_field_publishes_state_and_recovers_next_weeks(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            rr, wr = Path(rr), Path(wr)
+
+            def context_for(decision_date, price_basis, run_date, prior_dir=None, *, include_cooldown=True):
+                reg = Path(d) / f"reg_{decision_date}.json"
+                reg.write_text(json.dumps(_register(decision_date)), encoding="utf-8")
+                pc = _pipeline_context(reg, rr, wr)
+                pc["prior_run_dir"] = prior_dir
+                pc["run_provenance"] = _run_provenance(
+                    observed=f"{run_date[:4]}-{run_date[4:6]}-{run_date[6:]}T08:00:00",
+                    as_of=decision_date, price_basis=price_basis)
+                pc["account_state"]["as_of"] = decision_date
+                pc["account_state"]["holding_action_reconciliation"]["as_of"] = decision_date
+                if include_cooldown:
+                    pc["account_state"]["symbol_cooldown_reconciliation"]["as_of"] = decision_date
+                else:
+                    pc["account_state"].pop("symbol_cooldown_reconciliation")
+                pc["data_context"]["selection_inputs"]["theme_selection_contract"]["as_of"] = decision_date
+                pc["paper_track"]["evidence_ref"]["as_of"] = decision_date
+                pc["report_context"]["price_clock"].update(
+                    price_data_through=price_basis, news_window_through=run_date, decision_date=decision_date)
+                pc["calendar"] = _cal()
+                pc["calendar"].update(start_date="20260701", end_date="20260731", holidays=[])
+                return pc
+
+            first = orch.run_weekend_pipeline(
+                _now("20260711", 10, 0),
+                context_for("20260713", "20260710", "20260711", include_cooldown=False),
+            )
+            first_state = json.loads(first["written"]["symbol_cooldown_state_path"].read_text(encoding="utf-8"))
+            self.assertEqual((first_state["as_of"], first_state["records"]), ("20260713", []))
+            (rr / "20260713" / "holding_action_state.json").unlink()
+            (rr / "20260713" / "portfolio_guard_state.json").unlink()
+
+            second = orch.run_weekend_pipeline(
+                _now("20260718", 10, 0),
+                context_for("20260720", "20260717", "20260718", rr / "20260713"),
+            )
+            second_state = json.loads(second["written"]["symbol_cooldown_state_path"].read_text(encoding="utf-8"))
+            self.assertEqual(second_state["as_of"], "20260720")
+            self.assertEqual(
+                json.loads(second["written"]["holding_action_state_path"].read_text(encoding="utf-8"))["as_of"],
+                "20260720")
+            self.assertEqual(
+                json.loads(second["written"]["portfolio_guard_state_path"].read_text(encoding="utf-8"))["as_of"],
+                "20260720")
+
+            third = orch.run_weekend_pipeline(
+                _now("20260725", 10, 0),
+                context_for("20260727", "20260724", "20260725", rr / "20260720"),
+            )
+            third_state = json.loads(third["written"]["symbol_cooldown_state_path"].read_text(encoding="utf-8"))
+            self.assertEqual(third_state["as_of"], "20260727")
 
     def test_existing_holding_current_mark_reduces_total_cap_end_to_end(self):
         # The final capacity stage must use the held name's same-run price_input.close, not avg_cost, before
@@ -421,6 +495,18 @@ class EmptyRunEndToEnd(unittest.TestCase):
             pc["per_ticker_analysis"]["AAPL"]["price_input"]["close"] = state["positions"][0]["active_tp1_price"]
             pc["per_ticker_analysis"]["AAPL"]["holding_action_cost_input"] = {
                 "commission_round_trip": 0.0, "slippage_dollars": 0.0, "spread_dollars": 0.0}
+            # Same-date reruns must not read the just-published current directory. Copy the prior state to an
+            # earlier dated child to exercise the formal cross-week path instead.
+            prior_dir = Path(rr) / "20260614"
+            prior_dir.mkdir()
+            for name in (
+                "market_regime_state.json", "holding_action_state.json",
+                "portfolio_guard_state.json", "symbol_cooldown_state.json",
+            ):
+                payload = json.loads((Path(rr) / _DD / name).read_text(encoding="utf-8"))
+                payload["as_of"] = "20260614"
+                (prior_dir / name).write_text(json.dumps(payload), encoding="utf-8")
+            pc["prior_run_dir"] = prior_dir
             out2 = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             row2 = out2["machine_record"]["rows"][0]
             self.assertEqual(row2["final_action"], "减仓")

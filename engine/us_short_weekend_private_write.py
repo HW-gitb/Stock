@@ -31,12 +31,17 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 
 from engine.us_short_action_table_renderer import write_action_table
 from engine.us_short_holding_action import STATE_FILENAME as HOLDING_ACTION_STATE_FILENAME, validate_holding_action_state
 from engine.us_short_lifecycle_readiness import _assert_readiness
 from engine.us_short_private_paths import reject_nonprivate_output_path
+from engine.us_short_regime import (
+    MARKET_REGIME_STATE_FILENAME,
+    validate_market_regime_state,
+)
 from engine.us_short_provider_health import (
     provider_health_detail_line,
     provider_health_non_clean_lines,
@@ -81,6 +86,65 @@ _BANNER_TITLE = "## 诚实横幅"
 
 class WeekendPrivateWriteError(Exception):
     """The run artifacts are malformed / cross-week, or a destination is not provably private (fail-closed)."""
+
+
+_DATE_DIR_RE = re.compile(r"^\d{8}$")
+_LEGACY_STATE_FILENAMES = frozenset({
+    "machine_record.json",
+    MARKET_REGIME_STATE_FILENAME,
+    HOLDING_ACTION_STATE_FILENAME,
+    PORTFOLIO_GUARD_STATE_FILENAME,
+    SYMBOL_COOLDOWN_STATE_FILENAME,
+})
+
+
+def _strict_date(value, label):
+    if not isinstance(value, str) or _DATE_DIR_RE.fullmatch(value) is None:
+        raise WeekendPrivateWriteError(f"{label} must be strict YYYYMMDD")
+    try:
+        datetime.strptime(value, "%Y%m%d")
+    except ValueError as exc:
+        raise WeekendPrivateWriteError(f"{label} is not a real date") from exc
+    return value
+
+
+def validate_prior_run_dir(runs_private_root, prior_run_dir, *, decision_date):
+    """Validate an already-selected direct dated child without rescanning the history root."""
+    decision_date = _strict_date(decision_date, "decision_date")
+    root = Path(runs_private_root).resolve()
+    candidate = Path(prior_run_dir).resolve()
+    if candidate.parent != root or not candidate.is_dir() or _DATE_DIR_RE.fullmatch(candidate.name) is None:
+        raise WeekendPrivateWriteError("prior_run_dir must be one direct dated runs_private child")
+    _strict_date(candidate.name, "prior_run_dir")
+    if candidate.name >= decision_date:
+        raise WeekendPrivateWriteError("prior_run_dir must be strictly earlier than decision_date")
+    reject_nonprivate_output_path(candidate / "machine_record.json")
+    return candidate
+
+
+def resolve_prior_run_dir(runs_private_root, decision_date):
+    """Select the latest strict real dated child before ``decision_date`` exactly once."""
+    decision_date = _strict_date(decision_date, "decision_date")
+    root = Path(runs_private_root).resolve()
+    reject_nonprivate_output_path(root / "machine_record.json")
+    legacy = sorted(name for name in _LEGACY_STATE_FILENAMES if (root / name).exists())
+    if legacy:
+        raise WeekendPrivateWriteError("root-level legacy private state exists; migration is not automatic")
+    if not root.is_dir():
+        return None
+    candidates = []
+    for child in root.iterdir():
+        if not child.is_dir() or _DATE_DIR_RE.fullmatch(child.name) is None:
+            continue
+        try:
+            _strict_date(child.name, "runs_private child")
+        except WeekendPrivateWriteError:
+            continue
+        if child.name < decision_date:
+            candidates.append(child)
+    if not candidates:
+        return None
+    return validate_prior_run_dir(root, max(candidates, key=lambda path: path.name), decision_date=decision_date)
 
 
 def _write_text_private(path, text):
@@ -220,6 +284,7 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md, report
                       provider_health, coverage_inputs, lifecycle_result,
                       runs_private_root=None, weekly_private_root=None,
                       holding_action_state=None, portfolio_guard_state=None, symbol_cooldown_state=None,
+                      market_regime_state=None,
                       run_origin=OFFLINE_TEST_RUN_ORIGIN,
                       research_live_capability=None) -> dict:
     """4d-ii-n idempotent private write. Persists the run's machine layer + §11.1 weekly_private surface to the
@@ -305,9 +370,10 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md, report
     runs_dir, weekly_dir = runs_root / decision_date, weekly_root / decision_date
     machine_path, action_path = runs_dir / "machine_record.json", weekly_dir / "action_table.csv"
     report_path = weekly_dir / "weekly_report.md"
-    holding_state_path = runs_root / HOLDING_ACTION_STATE_FILENAME
-    portfolio_guard_state_path = runs_root / PORTFOLIO_GUARD_STATE_FILENAME
-    cooldown_state_path = runs_root / SYMBOL_COOLDOWN_STATE_FILENAME
+    market_regime_state_path = runs_dir / MARKET_REGIME_STATE_FILENAME
+    holding_state_path = runs_dir / HOLDING_ACTION_STATE_FILENAME
+    portfolio_guard_state_path = runs_dir / PORTFOLIO_GUARD_STATE_FILENAME
+    cooldown_state_path = runs_dir / SYMBOL_COOLDOWN_STATE_FILENAME
     if holding_action_state is not None:
         try:
             validate_holding_action_state(holding_action_state, decision_date=decision_date)
@@ -325,10 +391,17 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md, report
             validate_symbol_cooldown_state(symbol_cooldown_state, decision_date=decision_date)
         except Exception as exc:
             raise WeekendPrivateWriteError("symbol_cooldown_state is not valid") from exc
+    if market_regime_state is not None:
+        try:
+            validate_market_regime_state(market_regime_state, decision_date=decision_date)
+        except Exception as exc:
+            raise WeekendPrivateWriteError("market_regime_state is not valid") from exc
 
     # PREFLIGHT every destination with the §18.0 P0 guard BEFORE any directory / file is created, so a mixed
     # valid/invalid set of roots leaves NO partial private run (atomic fail-closed for the guard case).
     destinations = [machine_path, action_path, report_path]
+    if market_regime_state is not None:
+        destinations.append(market_regime_state_path)
     if holding_action_state is not None:
         destinations.append(holding_state_path)
     if portfolio_guard_state is not None:
@@ -357,6 +430,8 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md, report
         _write_text_private(portfolio_guard_state_path, json.dumps(portfolio_guard_state, ensure_ascii=False, indent=2, sort_keys=True))
     if symbol_cooldown_state is not None:
         _write_text_private(cooldown_state_path, json.dumps(symbol_cooldown_state, ensure_ascii=False, indent=2, sort_keys=True))
+    if market_regime_state is not None:
+        _write_text_private(market_regime_state_path, json.dumps(market_regime_state, ensure_ascii=False, indent=2, sort_keys=True))
     result = {"machine_record_path": machine_path, "action_table_path": action_path, "weekly_report_path": report_path}
     if holding_action_state is not None:
         result["holding_action_state_path"] = holding_state_path
@@ -364,4 +439,6 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md, report
         result["portfolio_guard_state_path"] = portfolio_guard_state_path
     if symbol_cooldown_state is not None:
         result["symbol_cooldown_state_path"] = cooldown_state_path
+    if market_regime_state is not None:
+        result["market_regime_state_path"] = market_regime_state_path
     return result

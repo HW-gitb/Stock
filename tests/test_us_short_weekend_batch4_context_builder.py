@@ -344,7 +344,7 @@ class PublishedCommandShape(unittest.TestCase):
     def test_builder_help_advertises_direct_full_template_input(self):
         result = _run([str(BUILDER), "--help"])
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("full 19-key packet/example", result.stdout)
+        self.assertIn("full 20-key packet/example", result.stdout)
 
 
 if __name__ == "__main__":

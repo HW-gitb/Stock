@@ -230,6 +230,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
   - `theme_opportunity_state` = 赛道机会强度 → **决定赛道机会优先级**。
   - 弱市但有极强赛道时，允许"低仓位试探建仓"，不直接全转观察——**仓位落点见 §8「强赛道试探名额」**（`theme_probe`：防御 ≤1 / 进攻+极强 ≤2、最小仓、超出常规周建仓上限；极度防御 / hard veto / 熔断冷静期一律不放行）。
 - **防抖**（快防守慢进攻）：降档立即；升档要确认（连续 2 次周跑更好或站回阈值上方缓冲）。
+- **跨周状态正式持久化（问题16-B）**：市场环境、holding action、portfolio guard、symbol cooldown 四项状态与 machine record 一起写入成功周跑的 `runs_private/<decision_date>/` 日期事务；下一周只从该目录的直接子目录选择严格早于当前决策日的最新真实日期。四个消费者共享同一个已选 prior，不读取根目录 legacy、不向更老日期回退；选定状态缺失、损坏或 `as_of` 不匹配时按不可用/保守失败关闭。市场状态记录固定为 `us_short_market_regime_state` `1.0.0` 的五键记录，`as_of` 等于其日期目录。
 - **unknown 按防御**：关键输入缺 → 不默认进攻；缺一项降级、缺关键项至少防御、严重 restricted。
 - **作用域**：影响仓位/新建仓许可/(可选)`action_confidence`；不影响 hard veto、不替代个股分析。阈值全 prior（§13 #3）。
 

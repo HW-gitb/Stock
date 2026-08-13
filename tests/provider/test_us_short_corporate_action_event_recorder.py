@@ -45,6 +45,9 @@ def account_state_payload() -> dict:
         "us_short_available_cash": 4000.0,
         "portfolio_total_equity": None,
         "positions": [{"ticker": "TWTR", "direction": "long", "shares": 5, "avg_cost_usd": 10.0, "entry_date": "20260601", "current_stop": None, "notes": None}],
+        "symbol_cooldown_reconciliation": {
+            "schema_name": "us_short_symbol_cooldown_reconciliation", "schema_version": "1.0.0",
+            "as_of": "20260713", "events": []},
         "manual_order_only": True,
         "broker_connection_allowed": False,
     }

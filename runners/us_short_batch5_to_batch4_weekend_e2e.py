@@ -18,6 +18,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
+from engine.us_short_regime import (
+    MARKET_REGIME_STATE_FILENAME,
+    load_market_regime_state,
+)  # noqa: E402
 from engine.us_short_provider_health import ProviderHealthError, classify_provider_health  # noqa: E402
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
 from engine.us_short_market_calendar import sessions_for_window, validate_market_calendar  # noqa: E402
@@ -35,6 +39,11 @@ from engine.us_short_result_source_linkage import (  # noqa: E402
 from engine.us_short_weekend_analysis import analyze_rows  # noqa: E402
 from engine.us_short_weekend_decision import decide_actions  # noqa: E402
 from engine.us_short_weekend_orchestrator import _build_analysis_rows  # noqa: E402
+from engine.us_short_weekend_private_write import (
+    WeekendPrivateWriteError,
+    resolve_prior_run_dir,
+    validate_prior_run_dir,
+)  # noqa: E402
 from engine.us_short_weekend_pipeline import run_selection  # noqa: E402
 from engine.us_short_weekend_sizing import _BUILD as _BUILD_ACTION, size_rows  # noqa: E402
 from runners import us_short_batch5_data_context_source_packet as source_packet_runner  # noqa: E402
@@ -336,13 +345,14 @@ def _basket_input_for_ticker() -> dict[str, Any]:
 def _derive_current_action_inputs(
     *,
     components: dict[str, Any],
-    template: dict[str, Any],
     account_state_path: Path,
     calendar_path: Path,
     governance_path: Path,
     now_et: datetime,
     market_axis_regimes: dict[str, Any],
     basket_context: dict[str, Any],
+    prior_regime: str | None,
+    prior_upgrade_count: int,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, Any], dict[str, dict[str, float]]]:
     data_context = components["data_context"]
     universe = _universe_by_ticker(data_context)
@@ -372,8 +382,8 @@ def _derive_current_action_inputs(
     analysis = analyze_rows(
         rows,
         market_axis_regimes=market_axis_regimes,
-        prior_regime=template["prior_regime"],
-        prior_upgrade_count=template["prior_upgrade_count"],
+        prior_regime=prior_regime,
+        prior_upgrade_count=prior_upgrade_count,
     )
     decided = decide_actions(analysis)
     build_tickers = {
@@ -422,6 +432,9 @@ def _assemble_batch4_packet(
     private_root: Path,
     official_output_root: Path | None,
     now_et: datetime,
+    prior_run_dir: Path | None = None,
+    prior_regime: str | None = None,
+    prior_upgrade_count: int = 0,
     vix_regime: str | None = None,
     forward_policy_comparison_reminder: str | None = None,
     soft_discovery_receipt_paths: dict[str, str | None] | None = None,
@@ -441,13 +454,14 @@ def _assemble_batch4_packet(
         market_axis_regimes["vix"] = vix_regime
     per_ticker_analysis, sizing_per_ticker, basket_context, cost_inputs = _derive_current_action_inputs(
         components=components,
-        template=template,
         account_state_path=account_state_path,
         calendar_path=calendar_path,
         governance_path=governance_path,
         now_et=now_et,
         market_axis_regimes=market_axis_regimes,
         basket_context=basket_context,
+        prior_regime=prior_regime,
+        prior_upgrade_count=prior_upgrade_count,
     )
     if model_paper_track is not None:
         if not isinstance(model_paper_track, dict):
@@ -468,8 +482,8 @@ def _assemble_batch4_packet(
         "run_provenance": run_provenance,
         "provider_health": provider_health,
         "market_axis_regimes": market_axis_regimes,
-        "prior_regime": template["prior_regime"],
-        "prior_upgrade_count": template["prior_upgrade_count"],
+        "prior_regime": prior_regime,
+        "prior_upgrade_count": prior_upgrade_count,
         "sizing_per_ticker": sizing_per_ticker,
         "basket_context": basket_context,
         "cost_inputs": cost_inputs,
@@ -488,11 +502,12 @@ def _assemble_batch4_packet(
         "lifecycle_readiness_out_path": None,
         "runs_private_root": str(((official_output_root or private_root) / "runs_private").resolve()),
         "weekly_private_root": str(((official_output_root or private_root) / "weekly_private").resolve()),
+        "prior_run_dir": str(prior_run_dir) if prior_run_dir is not None else None,
     }
 
 
 def _safe_batch4_run(packet_path: Path, *, now_et: datetime, run_mode: str, research_live_capability,
-                     bootstrap_lifecycle: bool, dry_run: bool):
+                     bootstrap_lifecycle: bool, dry_run: bool, prior_runs_private_root: Path):
     try:
         return batch4_runner.run_packet(
             packet_path,
@@ -501,6 +516,7 @@ def _safe_batch4_run(packet_path: Path, *, now_et: datetime, run_mode: str, rese
             _research_live_capability=research_live_capability,
             bootstrap_lifecycle=bootstrap_lifecycle,
             dry_run=dry_run,
+            prior_runs_private_root=prior_runs_private_root,
         )
     except batch4_runner.Batch4RunnerError:
         raise
@@ -536,6 +552,7 @@ def run_e2e(
     provider_health_path: Path | str,
     private_root: Path | str,
     official_output_root: Path | str | None = None,
+    prior_run_dir: Path | str | None = None,
     now_et: datetime,
     context_components_path: Path | str | None = None,
     context_packet_path: Path | str | None = None,
@@ -688,6 +705,28 @@ def run_e2e(
                     "provider-backed receipt does not bind the assembled run identity"
                 ) from exc
 
+        decision_date = components.get("run_provenance", {}).get("as_of")
+        try:
+            history_root = (private_root_path / "runs_private").resolve()
+            selected_prior_run_dir = (
+                resolve_prior_run_dir(history_root, decision_date)
+                if prior_run_dir is None
+                else validate_prior_run_dir(history_root, prior_run_dir, decision_date=decision_date)
+            )
+            if selected_prior_run_dir is None:
+                prior_regime, prior_upgrade_count = None, 0
+            else:
+                prior_state = load_market_regime_state(
+                    selected_prior_run_dir / MARKET_REGIME_STATE_FILENAME,
+                    decision_date=decision_date,
+                )
+                if prior_state["as_of"] != selected_prior_run_dir.name:
+                    raise WeekendPrivateWriteError("prior market-regime state date does not match its dated directory")
+                prior_regime = prior_state["market_risk_regime"]
+                prior_upgrade_count = prior_state["upgrade_count"]
+        except (WeekendPrivateWriteError, PrivatePathError, OSError, ValueError, KeyError, TypeError) as exc:
+            raise Batch5ToBatch4E2EError("selected prior cross-week state is unavailable") from exc
+
         packet = _assemble_batch4_packet(
             components=components,
             template=_load_template(template_path, expected_sha256=action_input_manifest[0][2]),
@@ -698,6 +737,9 @@ def run_e2e(
             private_root=private_root_path,
             official_output_root=official_output_root_path,
             now_et=now_et,
+            prior_run_dir=selected_prior_run_dir,
+            prior_regime=prior_regime,
+            prior_upgrade_count=prior_upgrade_count,
             vix_regime=vix_regime,
             forward_policy_comparison_reminder=forward_policy_comparison_reminder,
             soft_discovery_receipt_paths=soft_discovery_receipt_paths,
@@ -711,6 +753,7 @@ def run_e2e(
             research_live_capability=_research_live_capability,
             bootstrap_lifecycle=bootstrap_lifecycle,
             dry_run=dry_run,
+            prior_runs_private_root=history_root,
         )
     except Exception:
         _cleanup_created_paths(cleanup_paths, cleanup_roots, existed_before)

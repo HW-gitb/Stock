@@ -462,8 +462,8 @@ def run_forward_policy_shadow(ctx) -> dict[str, Any]:
         source_context_sha256=hashlib.sha256(components_bytes).hexdigest(),
         overextension_by_ticker=components["overextension_by_ticker"],
         market_axis_regimes=market_axes,
-        prior_regime=template["prior_regime"],
-        prior_upgrade_count=template["prior_upgrade_count"],
+        prior_regime=getattr(ctx, "prior_regime", None),
+        prior_upgrade_count=getattr(ctx, "prior_upgrade_count", 0),
         private_output_path=ctx.forward_policy_source_capture_private_path,
     )
     return {**shadow, "source_capture": source_capture}
@@ -921,6 +921,7 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         provider_health_path=ctx.provider_health_path,
         private_root=ctx.private_root,
         official_output_root=getattr(ctx, "official_output_root", None),
+        prior_run_dir=getattr(ctx, "prior_run_dir", None),
         now_et=ctx.now_et,
         context_components_path=ctx.context_components_path,
         run_mode="mixed_source",   # real provider facts + receipt-bound caller action template; never research_live

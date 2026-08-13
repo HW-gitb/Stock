@@ -67,10 +67,12 @@ def _policy():
     return policy
 
 
-def load_holding_action_state(path, *, decision_date):
-    """Load a prior private state.  Missing is a valid first-run condition; malformed is not."""
+def load_holding_action_state(path, *, decision_date, require_present=False):
+    """Load a prior private state; selected-history callers may make absence fail closed."""
     p = Path(path)
     if not p.exists():
+        if require_present:
+            raise HoldingActionError("private holding action state is missing")
         return None
     try:
         state = json.loads(p.read_text(encoding="utf-8"))

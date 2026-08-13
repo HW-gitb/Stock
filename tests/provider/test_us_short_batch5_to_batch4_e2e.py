@@ -429,6 +429,58 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             self.assertIn("coverage_status", action_csv.splitlines()[0])
             self.assertIn("partial", action_csv.splitlines()[1])
 
+    def test_same_date_rerun_reuses_one_earlier_prior_and_publishes_four_states(self) -> None:
+        """The bridge/orchestrator/writer path must not treat the first same-date slot as a new prior week."""
+        with tempfile.TemporaryDirectory() as private_dir:
+            private_root = Path(private_dir)
+            prior_dir = private_root / "runs_private" / "20260612"
+            _write_json(prior_dir / "machine_record.json", {})
+            _write_json(prior_dir / "market_regime_state.json", {
+                "schema_name": "us_short_market_regime_state", "schema_version": "1.0.0",
+                "as_of": "20260612", "market_risk_regime": "防御", "upgrade_count": 1,
+            })
+            _write_json(prior_dir / "holding_action_state.json", {
+                "schema_name": "us_short_holding_action_state", "schema_version": "1.0.0",
+                "as_of": "20260612", "positions": [],
+            })
+            _write_json(prior_dir / "portfolio_guard_state.json", {
+                "schema_name": "us_short_portfolio_guard_state", "schema_version": "1.0.0",
+                "as_of": "20260612", "state": "normal",
+            })
+            _write_json(prior_dir / "symbol_cooldown_state.json", {
+                "schema_name": "us_short_symbol_cooldown_state", "schema_version": "1.0.0",
+                "as_of": "20260612", "records": [],
+            })
+            account = _write_json(private_root / "account_state.json", _empty_account())
+            health = _write_json(private_root / "provider_health.json", _provider_health())
+            template_payload = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+            template_payload["prior_regime"] = "进攻"
+            template_payload["prior_upgrade_count"] = 99
+            template = _write_json(private_root / "batch4_template.json", template_payload)
+
+            kwargs = dict(
+                source_packet_path=self.paths["packet"], batch4_template_path=template,
+                account_state_path=account, provider_health_path=health, private_root=private_root,
+                now_et=datetime(2026, 6, 15, 9, 0, 0), context_components_path=self.paths["components"],
+                bootstrap_lifecycle=True, generated_at="2026-06-15T13:01:00Z",
+            )
+            first = e2e.run_e2e(**kwargs)
+            first_context = json.loads(Path(first["context_packet"]["path"]).read_text(encoding="utf-8"))
+            second = e2e.run_e2e(**kwargs)
+
+            context = json.loads(Path(second["context_packet"]["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(context["prior_regime"], "防御")
+            self.assertEqual(context["prior_upgrade_count"], 1)
+            self.assertEqual(Path(context["prior_run_dir"]).resolve(), prior_dir.resolve())
+            self.assertEqual(first_context["prior_run_dir"], context["prior_run_dir"])
+            current_dir = private_root / "runs_private" / _DECISION_DATE
+            self.assertTrue(current_dir.is_dir())
+            self.assertTrue({
+                "machine_record.json", "market_regime_state.json", "holding_action_state.json",
+                "portfolio_guard_state.json", "symbol_cooldown_state.json",
+            }.issubset({path.name for path in current_dir.iterdir()}))
+            self.assertFalse((private_root / "runs_private" / "market_regime_state.json").exists())
+
     def test_one_current_producer_carrier_feeds_bridge_then_shadow_then_maturity(self) -> None:
         """The same six-key producer artifact feeds both runtime consumers and the existing H20 reader."""
         _write_json(self.paths["overextension"], _overextension_for_current_aapl())

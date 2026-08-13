@@ -55,7 +55,16 @@ from engine.us_short_canonical_asof import OutOfWindowError, resolve_canonical_a
 from engine import us_short_capstone_checkpoint as checkpoint_store  # noqa: E402
 from engine.us_short_market_calendar import load_market_calendar, sessions_for_window  # noqa: E402
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
+from engine.us_short_regime import (
+    MARKET_REGIME_STATE_FILENAME,
+    MarketRegimeStateError,
+    load_market_regime_state,
+)  # noqa: E402
 from engine.us_short_run_origin import _issue_capstone_research_live_receipt  # noqa: E402
+from engine.us_short_weekend_private_write import (
+    WeekendPrivateWriteError,
+    resolve_prior_run_dir,
+)  # noqa: E402
 from runners import us_short_batch5_data_context_source_packet as source_packet_runner  # noqa: E402
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 
@@ -267,8 +276,9 @@ class CapstoneContext:
     model_paper_store_root: Path | None = None
     model_paper_run_account_mode: str | None = None
     model_paper_track: dict[str, Any] | None = None
-    # None until a 26-week diagnostic clock exists. Dormant by default and dormant
-    # forever until a start receipt is issued, which no code path here can do.
+    prior_run_dir: Path | None = None
+    prior_regime: str | None = None
+    prior_upgrade_count: int = 0
     market_diagnostic_root: Path | None = None
     soft_discovery_enabled: bool = True
     theme_soft_boost_enabled: bool = True
@@ -1096,7 +1106,6 @@ def resolve_capstone_context(
     max_total_http_attempts: int | None = None,
     model_paper_store_root: Path | None = None,
     model_paper_run_account_mode: str | None = None,
-    market_diagnostic_root: Path | None = None,
     soft_discovery_enabled: bool = True,
     theme_soft_boost_enabled: bool = True,
     state_dir: Path = STATE_DIR,
@@ -1123,6 +1132,24 @@ def resolve_capstone_context(
     # PIT observation instant = the ET run wall-clock made TZ-AWARE. The status source + Cut5 engines REQUIRE a
     # tz-aware observed_at (a naive string is rejected as a non-PIT clock); America/New_York is DST-correct.
     generated_at = _tz_aware_et_or_fail(now_et).isoformat(timespec="seconds")
+    try:
+        prior_run_dir = resolve_prior_run_dir(
+            Path(private_root).resolve() / "runs_private", resolved["decision_date"])
+        if prior_run_dir is None:
+            prior_regime, prior_upgrade_count = None, 0
+        else:
+            prior_state = load_market_regime_state(
+                prior_run_dir / MARKET_REGIME_STATE_FILENAME,
+                decision_date=resolved["decision_date"],
+            )
+            if prior_state["as_of"] != prior_run_dir.name:
+                raise MarketRegimeStateError("prior market-regime state date does not match its dated directory")
+            prior_regime = prior_state["market_risk_regime"]
+            prior_upgrade_count = prior_state["upgrade_count"]
+    except PrivatePathError as exc:
+        raise WeeklyCapstoneError("private output preflight rejected prior state root") from exc
+    except (WeekendPrivateWriteError, MarketRegimeStateError, OSError, ValueError) as exc:
+        raise WeeklyCapstoneError("selected prior cross-week state is unavailable") from exc
     return CapstoneContext(
         decision_date=resolved["decision_date"],
         price_basis_date=resolved["price_basis_date"],
@@ -1149,9 +1176,9 @@ def resolve_capstone_context(
         # the diagnostic authorization surface, where they would need ~90
         # exemptions — and an exemption list that large is an off switch, not a
         # list of exceptions.
-        market_diagnostic_root=Path(market_diagnostic_root)
-        if market_diagnostic_root is not None
-        else None,
+        prior_run_dir=prior_run_dir,
+        prior_regime=prior_regime,
+        prior_upgrade_count=prior_upgrade_count,
         soft_discovery_enabled=soft_discovery_enabled,
         theme_soft_boost_enabled=theme_soft_boost_enabled,
         state_dir=Path(state_dir),
@@ -2018,6 +2045,7 @@ class _CurrentOutputTransaction:
     journal_path: Path
     staging_root: Path
     archived_paths: tuple[Path, ...]
+    context: CapstoneContext
     decision_lock: _DecisionDateLock
 
 
@@ -2153,6 +2181,7 @@ def _begin_current_output_transaction_locked(
         journal_path=journal,
         staging_root=staging_root,
         archived_paths=tuple(history for _, history in moved),
+        context=ctx,
         decision_lock=decision_lock,
     )
 
@@ -2161,7 +2190,13 @@ def _abort_current_output_transaction(txn: _CurrentOutputTransaction) -> None:
     try:
         if txn.staging_root.exists():
             shutil.rmtree(txn.staging_root)
-        txn.journal_path.unlink(missing_ok=True)
+        if txn.archived_paths:
+            # Reuse the existing journal-driven recovery primitive immediately so an aborted run never leaves the
+            # canonical prior week absent. If recovery itself fails, its journal remains as the next-startup guard.
+            _write_transaction_journal(txn.journal_path, tag=txn.tag, phase="archiving_prior")
+            _recover_current_output_transaction(txn.context)
+        else:
+            txn.journal_path.unlink(missing_ok=True)
     finally:
         _release_decision_lock(txn.decision_lock)
 
@@ -2384,7 +2419,6 @@ def run_weekly_capstone(
     auto_authorize_pass2_budget: bool = False,
     model_paper_store_root: Path | None = None,
     model_paper_run_account_mode: str | None = None,
-    market_diagnostic_root: Path | None = None,
     soft_discovery_enabled: bool = True,
     theme_soft_boost_enabled: bool = True,
     serenity_annotation_payload: dict[str, Any] | None = None,
@@ -2437,7 +2471,6 @@ def run_weekly_capstone(
         max_total_http_attempts=max_total_http_attempts, state_dir=state_dir,
         model_paper_store_root=model_paper_store_root,
         model_paper_run_account_mode=model_paper_run_account_mode,
-        market_diagnostic_root=market_diagnostic_root,
         soft_discovery_enabled=soft_discovery_enabled,
         theme_soft_boost_enabled=theme_soft_boost_enabled,
         sample_root=sample_root,

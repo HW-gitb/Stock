@@ -68,6 +68,7 @@ _ANALYSIS_KEYS = frozenset({
 _PATH_KEYS = frozenset({
     "eligibility_governance_path", "calendar_path", "account_state_path", "lifecycle_register_path",
     "lifecycle_readiness_out_path", "runs_private_root", "weekly_private_root",
+    "prior_run_dir",
 })
 _OPTIONAL_ANALYSIS_KEYS = frozenset({"paper_track"})
 _ALL_PACKET_KEYS = _ANALYSIS_KEYS | _OPTIONAL_ANALYSIS_KEYS | _PATH_KEYS
@@ -187,6 +188,7 @@ def build_packet(*, account_path, analysis_fixture_path, calendar_path, governan
                                          else _abs(lifecycle_readiness_out_path, "--lifecycle-readiness-out")),
         "runs_private_root": _abs(runs_private_root, "--runs-private-root"),
         "weekly_private_root": _abs(weekly_private_root, "--weekly-private-root"),
+        "prior_run_dir": None,
     }
     _validate_packet_schema(packet)
     return packet
@@ -211,7 +213,7 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(description="Assemble a US-short batch4 weekend context packet (offline)")
     p.add_argument("--account", required=True, help="batch1 us_short_account_state.json (ABSOLUTE private path)")
     p.add_argument("--analysis-fixture", required=True,
-                    help="local batch2/3 fixture: bare 11-key analysis object or full 19-key packet/example")
+                    help="local batch2/3 fixture: bare 11-key analysis object or full 20-key packet/example")
     p.add_argument("--calendar", required=True, help="reviewed frozen NYSE/NASDAQ calendar artifact")
     p.add_argument("--governance", required=True, help="reviewed eligibility governance preset")
     p.add_argument("--lifecycle-register", required=True, help="private lifecycle register path")

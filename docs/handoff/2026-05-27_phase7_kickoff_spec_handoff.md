@@ -4735,3 +4735,60 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_t
 **失效旧结论**：本轮 register 与本 handoff 上一节里「`O-16A-4` 留待 design-completion/clock-open 前的独立决策」的措辞已失效——用户 2026-08-13 已裁决它是**开钟后必修**，触发点与修法约束（不要把绝对 store 路径钉进 receipt）见 register 同日更早那条。
 
 **下一步注意事项**：新记 `O-16A-3b`——`run_weekly_capstone(market_diagnostic_root=…)` 是上一刀为 activation 门加的形参，现在门已不读它、生产无调用方传它（只剩两处测试），但它仍能经 `ctx.market_diagnostic_root` 让调用方选诊断私密 store；「根由调用方选」这一类只收紧了 activation 那半，诊断那半还开着，建议顺手收掉。按 0810 §去重顺序，下一刀是 16-B，须从本刀已合入的 master 起，且 16-B 会碰 capstone context / weekly bridge / private writer 同一 seam，不得与别的未提交刀并行叠加。
+
+## 2026-08-13 Codex executor/fixer：问题16-B 四项跨周状态持久化 + O-16A-3b（1302）
+
+### 执行范围与最小修复
+
+- 严格按桌面 `us_testrun0810.md` 问题16-B：只处理 market regime、holding action、portfolio guard、symbol cooldown 的跨周正式状态；不改算法，不新建 DB/event bus、第二 transaction、checkpoint、manifest、fingerprint/SHA 或 schema 文件。
+- `resolve_prior_run_dir()` 只选 `runs_private` 直接子目录中严格真实 `YYYYMMDD`、且早于当前决策日的最新目录；同日/未来/非日期/`_superseded` 忽略，root legacy 直接拒绝，选定 prior 缺失/损坏不向更老日期回退。
+- capstone 只解析一次 prior，并将同一目录和市场 `(market_risk_regime, upgrade_count)` 传给 forward shadow、weekly bridge、Batch4、orchestrator；模板 prior 不能覆盖正式文件。当前成功事务同时发布 machine record 与四项状态，状态文件都位于当前日期槽位。
+- `market_regime_state.json` 固定为 `us_short_market_regime_state` / `1.0.0` / 五键记录，`as_of` 与日期目录一致。`O-16A-3b` 仅移除 `run_weekly_capstone` 与 `resolve_capstone_context` 的公开 `market_diagnostic_root` kwarg；保留现有内部测试注入点，`O-16A-4` 不动。
+
+### 验证与自审
+
+- 固定主 Python 3.13.8；focused `410 OK`，receipt=`receipt:5c55144aab287b6bbf0b5414`。焦点覆盖 resolver、四消费者同一 prior、模板冲突、缺失不回退、root legacy、事务成功/失败、同日两次真实 capstone→bridge→orchestrator→writer。
+- 唯一 full lane：`5861/5861 PASS`，`discovered == ran`，404.0s，fingerprint=`290e2bd39e80cfcf9d62c1ab3b72351c0fc577e65b5c43ffe950a5d5153c4104`；静态 `py_compile=19`、`git diff --check=PASS`。未调用 provider/live/paper，未写真实 `state/us_short`。
+- 状态：`repaired / OPEN-NOT-VERIFIED`，等待 Claude Code 独立审查与提交；Codex 不提交。工作仅在 1302，未改主树、桌面文档或 `docs/CURRENT.md`。
+
+### 下一步
+
+Claude Code：独立审查问题16-B和 `O-16A-3b`，确认后按项目流程提交；不要扩大到 `O-16A-4`。
+
+## 2026-08-13 — 问题16-B Required + Optional 修复交接（Codex executor/fixer，1302）
+
+### 结论与范围
+
+- 两条 Required 已按最小方案修复，状态 `repaired / OPEN-NOT-VERIFIED`；不提交、不 merge。`O-16A-4` 未动。
+- 只在 `D:\cnhea\Codex\worktrees\1302\Stock` 工作；未改主树、桌面文档、`docs/CURRENT.md`，未调用 provider/live/paper，未写真实 `state/us_short`。
+
+### 修复内容
+
+- 同日事务 abort 不再留下 canonical prior 缺口：写入现有 `archiving_prior` journal 后复用现有 recovery 原语立即还原 `_superseded` prior；无 prior 的 abort 清理 journal，恢复失败保留 journal 并显式失败。
+- withheld 的 holding/guard/cooldown 当前周仍发布合法首值或保守状态；account schema 将 `symbol_cooldown_reconciliation` 设为 required，model-paper account projection 同步该字段。
+- `O-16B-1` 补齐 batch4 wrapper 异常类型；`O-16B-2` 使用显式 history root 校验 prior；`O-16B-5` 修正 SESSION_LOG 标签。`O-16B-3` 保留 legacy packet 字段，`O-16B-4` 保持不可达 fail-closed，均按最小范围不清理。
+
+### 验证与自审
+
+- 固定主 Python 3.13.8；受影响焦点 `185 OK`，receipt=`receipt:fcbc535661dd1e59455cda52`。当前代码态唯一 full lane：`5865/5865 PASS`，`discovered=ran`，422.9s，fingerprint=`c00db493c056608a4d7327d8578bdd4b4809927c8211d0b7b117ebfe306e2360`；full static `diff_check=PASS`、`py_compile=25`。
+- 自审覆盖 no-emit、stage exception、stale emit、D+7 prior、三周 withheld/recovery、model-paper projection、外根 prior 拒绝；没有新增第二套事务、schema 状态机或 hash/CAS 机制。
+
+### 下一步
+
+Claude Code：独立审查本节对应 Required/Additional；PASS 后按项目流程提交，不扩大到 `O-16A-4`。
+
+## 2026-08-13 追加：问题16-B 修复轮独立审查收口（PASS，已提交并合入 master）
+
+**改了什么**：本节只记审查收口，实现见上一节。PASS 后只 stage 本刀 34 个文件并合入 master。**0810 §去重顺序上的剩余三节（16-A → 问题14 → 16-B）至此全部完成。**
+
+**为什么**：本轮唯一的放松类改动是「扣留周从不写、改成无条件发首值」，所以我必须自己证两件事——(1) 中止的同日重跑真能把那一周还回来；(2) 发首值不会把上周的真状态洗掉。
+
+**验证命令**：
+- 焦点超集（二十模块，含两道文档门、`discovery_conformance` 与 account schema 测试）：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1300 tests.test_us_short_regime tests.test_us_short_weekend_private_write tests.test_us_short_weekend_orchestrator tests.provider.test_us_short_batch5_to_batch4_e2e tests.test_us_short_forward_policy_shadow_stage tests.provider.test_us_short_weekly_capstone tests.provider.test_us_short_weekly_capstone_soft_discovery tests.test_us_short_weekend_batch4_context_builder tests.test_us_short_weekend_batch4_runner tests.test_us_short_model_paper_capstone_wiring tests.test_us_short_holding_action tests.test_us_short_symbol_cooldown_state tests.test_us_short_result_effects tests.schema.test_us_short_account_state_schema tests.test_us_short_corporate_action_workflow tests.test_us_short_corporate_action_event_recorder tests.provider.test_us_short_corporate_action_event_recorder tests.test_us_short_discovery_conformance tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`
+- 独立重算全量指纹（动文档之前跑）：`python -c "import sys; sys.path.insert(0,'.tools'); import full_pack_ledger as f; print(f.fingerprint(f.collect_code_state()))"`
+
+**验证结果**：焦点 `PASS tests=473 elapsed=103.7s receipt:7ba4decfc810f2bc0e0af2ac`。full lane 引执行方账本 `5865 OK` / `422.9s`，fingerprint `c00db493c056608a4d7327d8578bdd4b4809927c8211d0b7b117ebfe306e2360`，我独立重算得同一值。**探针在同一次跑里先复现坏再验证好**：临时私密根放好已发布的 `20260810` 与 `20260817`，按事务真实语义归档掉 `20260817` 后，解析 `20260824` 的 prior 实测得 `20260810`（上一轮 FAIL 那条静默回退，原样复现）；随后调修复后的 `_abort_current_output_transaction`，`runs_private/20260817` 恢复、五个文件字节完好、journal 已清理，再解析得 `20260817`。探针尾部的 `AttributeError('NoneType' … 'handle')` 是我给 `decision_lock` 传 `None` 的夹具问题，发生在恢复完成之后的释放锁步骤，与被审代码无关。第二件事由代码本身给出：`build_holding_action_context` docstring 明写 `holding_action_reconciliation`「is the only source that may mark TP1 completed; the sidecar is only the system's previous target-level memory」，所以空 prior 丢的只是缓存价位，已执行的 TP 不会被忘。
+
+**失效旧结论**：上一轮 FAIL 的两条 Required 均 `resolved`；`O-16B-1`（batch4 except 元组抓不到实际异常）与 `O-16B-2`（`validate_prior_run_dir` 拿候选自己父目录当 root）也已修掉。注意 `_PACKET_KEYS` 仍是 20 键、schema `required` 20、example 20 键、`:109` 的「20-key」文案同步——`prior_runs_private_root` 是函数参数不是 packet 键，别误当契约扩张。
+
+**下一步注意事项**：新记 `O-16B-6`——扣留周发首值之后的恢复**只在账户对账保留历史时才无损**（`build_next_symbol_cooldown_state` docstring 是「**may** retain full history」）；且 guard 若 prior 恰为 `cooldown` 而当周扣留发出 `caution`，下一周会少走一档 `recovery` 过渡。这是拿「永久锁死」换来的「略偏宽松」，真开钟前按实际对账口径复核一次。另：排队中的 `R-DOCGOV-DOC-EDITS-INVALIDATE-THE-CODE-RECEIPT`（改文档不该作废代码回执）现在可以做了——16-B 已合入，方案见 `docs/handoff/2026-08-04_us_short_market_diagnostic_knife1_handoff.md` 末节与 register。

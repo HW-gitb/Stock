@@ -8,7 +8,7 @@
     "data_context", "eligibility_governance_path", "per_ticker_analysis", "run_provenance",
     "provider_health", "calendar_path", "account_state_path", "market_axis_regimes", "prior_regime",
     "prior_upgrade_count", "sizing_per_ticker", "basket_context", "cost_inputs", "report_context",
-    "lifecycle_register_path", "lifecycle_readiness_out_path", "runs_private_root", "weekly_private_root",
+    "lifecycle_register_path", "lifecycle_readiness_out_path", "runs_private_root", "weekly_private_root", "prior_run_dir",
     "paper_track"
   ],
   "properties": {
@@ -225,7 +225,9 @@
     "runs_private_root": {"type": "string", "minLength": 1,
       "description": "Private (gitignored / external) root for the machine-record layer."},
     "weekly_private_root": {"type": "string", "minLength": 1,
-      "description": "Private (gitignored / external) root for the weekly report + action table."}
+      "description": "Private (gitignored / external) root for the weekly report + action table."},
+    "prior_run_dir": {"type": ["string", "null"], "minLength": 1,
+      "description": "The already-selected direct dated runs_private child, or null before the first run."}
   },
   "$defs": {
     "provenance_family": {

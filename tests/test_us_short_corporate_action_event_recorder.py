@@ -58,6 +58,9 @@ def account_state(*positions: dict) -> dict:
         "us_short_available_cash": 4000.0,
         "portfolio_total_equity": None,
         "positions": list(positions),
+        "symbol_cooldown_reconciliation": {
+            "schema_name": "us_short_symbol_cooldown_reconciliation", "schema_version": "1.0.0",
+            "as_of": "20260713", "events": []},
         "manual_order_only": True,
         "broker_connection_allowed": False,
     }

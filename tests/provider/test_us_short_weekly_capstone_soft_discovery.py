@@ -167,6 +167,27 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
             for path in paths:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("terminal", encoding="utf-8")
+            run_dir = paths[2].parent
+            dated_states = {
+                "market_regime_state.json": {
+                    "schema_name": "us_short_market_regime_state", "schema_version": "1.0.0",
+                    "as_of": run_ctx.decision_date, "market_risk_regime": "防御", "upgrade_count": 0,
+                },
+                "holding_action_state.json": {
+                    "schema_name": "us_short_holding_action_state", "schema_version": "1.0.0",
+                    "as_of": run_ctx.decision_date, "positions": [],
+                },
+                "portfolio_guard_state.json": {
+                    "schema_name": "us_short_portfolio_guard_state", "schema_version": "1.0.0",
+                    "as_of": run_ctx.decision_date, "state": "normal",
+                },
+                "symbol_cooldown_state.json": {
+                    "schema_name": "us_short_symbol_cooldown_state", "schema_version": "1.0.0",
+                    "as_of": run_ctx.decision_date, "records": [],
+                },
+            }
+            for name, payload in dated_states.items():
+                (run_dir / name).write_text(json.dumps(payload), encoding="utf-8")
             return {
                 "batch4_run": {
                     "emitted": True,

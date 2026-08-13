@@ -22,9 +22,12 @@ if str(ROOT) not in sys.path:
 from runners.us_short_weekly_capstone import (  # noqa: E402
     Stage,
     WeeklyCapstoneError,
+    resolve_capstone_context,
     run_weekly_capstone,
 )
 from runners import us_short_weekly_capstone as capstone  # noqa: E402
+from runners import us_short_weekly_capstone_stages as capstone_stages  # noqa: E402
+from tests.provider import test_us_short_batch5_to_batch4_e2e as e2e_fixture  # noqa: E402
 from tests.provider.us_short_private_test_root import temporary_us_short_state_directory  # noqa: E402
 
 _STAGE_NAMES = [
@@ -193,6 +196,24 @@ class CapstoneDryRunTest(unittest.TestCase):
             "state/us_short/us_short_batch5_full_universe_ohlcv_series_20260708_packet.json",
             pass2["inputs"],
         )
+
+    def test_context_binds_one_earlier_market_state_not_template_defaults(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            prior = root / "runs_private" / "20260708"
+            prior.mkdir(parents=True)
+            (prior / "machine_record.json").write_text("{}", encoding="utf-8")
+            (prior / "market_regime_state.json").write_text(json.dumps({
+                "schema_name": "us_short_market_regime_state", "schema_version": "1.0.0",
+                "as_of": "20260708", "market_risk_regime": "防御", "upgrade_count": 1,
+            }), encoding="utf-8")
+            ctx = resolve_capstone_context(
+                now_et=datetime(2026, 7, 9, 8, 0, 0), private_root=root,
+                batch4_template_path=Path("template.json"), account_state_path=Path("account.json"),
+                state_dir=root / "state", sample_root=root,
+            )
+            self.assertEqual(ctx.prior_run_dir, prior)
+            self.assertEqual((ctx.prior_regime, ctx.prior_upgrade_count), ("防御", 1))
 
     def test_cli_default_private_root_lands_in_gitignored_state_dir(self):
         """--private-root omitted on the CLI defaults to the gitignored state/us_short tree, so the weekly report /
@@ -799,6 +820,100 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertTrue(summary["emitted_report"].endswith("weekly_report.md"))
         self.assertNotIn("shadow_capture_failed", summary)
 
+    def test_real_bridge_orchestrator_writer_twice_reuses_one_prior_and_publishes_four_states(self):
+        """Exercise the dated state through the capstone transaction, not just the resolver or writer."""
+        fixture = e2e_fixture.Batch5ToBatch4E2ETest(
+            "test_local_source_packet_to_private_weekly_report_and_action_table")
+        fixture.setUp()
+        self.addCleanup(fixture.tearDown)
+        self.addCleanup(fixture._state_root_context.__exit__, None, None, None)
+
+        decision_date = "20260615"
+        prior_date = "20260612"
+        prior_dir = self.private_root / "runs_private" / prior_date
+        prior_dir.mkdir(parents=True)
+        for name, payload in {
+            "machine_record.json": {},
+            "market_regime_state.json": {
+                "schema_name": "us_short_market_regime_state", "schema_version": "1.0.0",
+                "as_of": prior_date, "market_risk_regime": "防御", "upgrade_count": 1,
+            },
+            "holding_action_state.json": {
+                "schema_name": "us_short_holding_action_state", "schema_version": "1.0.0",
+                "as_of": prior_date, "positions": [],
+            },
+            "portfolio_guard_state.json": {
+                "schema_name": "us_short_portfolio_guard_state", "schema_version": "1.0.0",
+                "as_of": prior_date, "state": "normal",
+            },
+            "symbol_cooldown_state.json": {
+                "schema_name": "us_short_symbol_cooldown_state", "schema_version": "1.0.0",
+                "as_of": prior_date, "records": [],
+            },
+        }.items():
+            (prior_dir / name).write_text(json.dumps(payload), encoding="utf-8")
+
+        account_payload = e2e_fixture._empty_account()
+        account = e2e_fixture._write_json(self.private_root / "account.json", account_payload)
+        template = e2e_fixture._no_build_template(self.private_root / "batch4_template.json")
+        seen_prior: list[Path | None] = []
+        real_run_e2e = e2e_fixture.e2e.run_e2e
+
+        def prepare_offline_health(ctx):
+            ctx.provider_health_path.parent.mkdir(parents=True, exist_ok=True)
+            ctx.provider_health_path.write_text(
+                json.dumps(e2e_fixture._provider_health()), encoding="utf-8")
+            ctx.vix_regime_summary_path.parent.mkdir(parents=True, exist_ok=True)
+            ctx.vix_regime_summary_path.write_text(
+                json.dumps({"vix_regime": "防御", "vix_regime_is_unknown": False}), encoding="utf-8")
+
+        def offline_bridge(**kwargs):
+            seen_prior.append(Path(kwargs["prior_run_dir"]).resolve() if kwargs["prior_run_dir"] else None)
+            return real_run_e2e(
+                **{
+                    **kwargs,
+                    "source_packet_path": fixture.paths["packet"],
+                    "batch4_template_path": template,
+                    "account_state_path": account,
+                    "context_components_path": fixture.paths["components"],
+                    "run_mode": "offline_test",
+                    "_research_live_capability": None,
+                    "projection_binding_expectations": e2e_fixture.e2e.PROJECTION_INPUTS_BINDING,
+                }
+            )
+
+        stages = [Stage(
+            "weekly_bridge", False, lambda _c: [fixture.paths["packet"]],
+            capstone._official_output_paths, capstone_stages.run_weekly_bridge,
+        )]
+        run_kwargs = dict(
+            now_et=datetime(2026, 6, 15, 8, 0, 0), private_root=self.private_root,
+            batch4_template_path=template, account_state_path=account, dry_run=False,
+            confirm_user_authorization=True, state_dir=self.state_dir, sample_root=self.state_dir,
+            stages=stages,
+        )
+        with mock.patch.object(capstone_stages, "_write_provider_health", side_effect=prepare_offline_health), \
+             mock.patch.object(capstone_stages._bridge, "run_e2e", side_effect=offline_bridge):
+            first = run_weekly_capstone(**run_kwargs)
+            first_state = json.loads(
+                (self.private_root / "runs_private" / decision_date / "market_regime_state.json").read_text(
+                    encoding="utf-8"))
+            second = run_weekly_capstone(**run_kwargs)
+        self.assertTrue(first["emitted"] and second["emitted"])
+        self.assertEqual(seen_prior, [prior_dir.resolve(), prior_dir.resolve()])
+        second_state = json.loads(
+            (self.private_root / "runs_private" / decision_date / "market_regime_state.json").read_text(
+                encoding="utf-8"))
+        self.assertEqual(first_state, second_state)
+        current = self.private_root / "runs_private" / decision_date
+        self.assertTrue({
+            "machine_record.json", "market_regime_state.json", "holding_action_state.json",
+            "portfolio_guard_state.json", "symbol_cooldown_state.json",
+        }.issubset({path.name for path in current.iterdir()}))
+        dated_children = {path.name for path in (self.private_root / "runs_private").iterdir()
+                          if path.is_dir() and path.name != "_superseded"}
+        self.assertEqual(dated_children, {prior_date, decision_date})
+
     def test_pass2_summary_soft_boost_result_reaches_later_stage_context(self):
         order: list[str] = []
         stages = self._fake_stages(order)
@@ -1184,7 +1299,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
              mock.patch.object(capstone.checkpoint_store, "restore_stage", return_value=({}, "g", "o")), \
              mock.patch.object(
                  capstone, "_publish_current_output_transaction",
-                 side_effect=lambda _ctx, txn: capstone._abort_current_output_transaction(txn),
+                         side_effect=lambda _ctx, txn: capstone._abort_current_output_transaction(txn),
              ):
             self._run(
                 [],
@@ -1417,19 +1532,40 @@ class CapstoneFakeChainTest(unittest.TestCase):
             order, skip_output_stage="weekly_bridge",
             bridge_batch4={"emitted": False, "no_emit_reason": "provider_health_blocked"}))
         self.assertFalse(summary["emitted"])
-        self.assertFalse(wk.exists())                                       # current slot emptied ...
-        self.assertFalse(rn.exists())
-        self.assertEqual(self._superseded_files(), self._OFFICIAL_SIBLINGS)  # ... history preserved (all 3 siblings)
+        self.assertTrue(wk.exists())                                        # abort restores the canonical prior slot
+        self.assertTrue(rn.exists())
+        self.assertEqual(self._superseded_files(), set())
         self.assertTrue(summary["superseded_prior_outputs"]["moved"])
+        self.assertFalse((self.private_root / "weekly_private" / "_transaction_state" / "20260709.json").exists())
+
+    def test_no_emit_restores_prior_for_next_week_resolution(self):
+        from engine.us_short_weekend_private_write import resolve_prior_run_dir
+
+        wk, rn = self._seed_prior_official_outputs()
+        for name, payload in {
+            "market_regime_state.json": {"as_of": "20260709"},
+            "holding_action_state.json": {"as_of": "20260709"},
+            "portfolio_guard_state.json": {"as_of": "20260709"},
+            "symbol_cooldown_state.json": {"as_of": "20260709"},
+        }.items():
+            (rn / name).write_text(json.dumps(payload), encoding="utf-8")
+        order: list[str] = []
+        self._run(order, stages=self._fake_stages(
+            order, skip_output_stage="weekly_bridge",
+            bridge_batch4={"emitted": False, "no_emit_reason": "provider_health_blocked"}))
+
+        self.assertTrue(wk.exists())
+        self.assertTrue(rn.exists())
+        self.assertEqual(resolve_prior_run_dir(self.private_root / "runs_private", "20260716"), rn)
 
     def test_stage_exception_supersedes_prior_same_date_current_outputs(self):
         wk, rn = self._seed_prior_official_outputs()
         order: list[str] = []
         with self.assertRaises(WeeklyCapstoneError):
             self._run(order, stages=self._fake_stages(order, break_stage="momentum_fetch"))
-        self.assertFalse(wk.exists())
-        self.assertFalse(rn.exists())
-        self.assertEqual(self._superseded_files(), self._OFFICIAL_SIBLINGS)
+        self.assertTrue(wk.exists())
+        self.assertTrue(rn.exists())
+        self.assertEqual(self._superseded_files(), set())
 
     def test_missing_output_failure_supersedes_prior_same_date_current_outputs(self):
         # the third non-emitting outcome (a stage completes but does not produce its declared output) closes the class.
@@ -1437,9 +1573,9 @@ class CapstoneFakeChainTest(unittest.TestCase):
         order: list[str] = []
         with self.assertRaises(WeeklyCapstoneError):
             self._run(order, stages=self._fake_stages(order, skip_output_stage="pass2_fetch"))
-        self.assertFalse(wk.exists())
-        self.assertFalse(rn.exists())
-        self.assertEqual(self._superseded_files(), self._OFFICIAL_SIBLINGS)
+        self.assertTrue(wk.exists())
+        self.assertTrue(rn.exists())
+        self.assertEqual(self._superseded_files(), set())
 
     def test_no_emit_without_prior_outputs_is_noop(self):
         # reverse control: a no-emit with NO prior same-date report supersedes nothing (no crash, no _superseded dir).
@@ -1478,8 +1614,9 @@ class CapstoneFakeChainTest(unittest.TestCase):
         with self.assertRaises(WeeklyCapstoneError):
             self._run(order, stages=self._fake_stages(
                 order, skip_output_stage="weekly_bridge", bridge_batch4={"emitted": True}))
-        self.assertFalse(wk.exists())
-        self.assertEqual(self._superseded_files(), self._OFFICIAL_SIBLINGS)
+        self.assertTrue(wk.exists())
+        self.assertTrue(rn.exists())
+        self.assertEqual(self._superseded_files(), set())
 
     def test_fresh_report_without_action_and_machine_cannot_commit(self):
         # C1: the bridge commit contract is all three siblings. Producing only a fresh report in staging cannot publish

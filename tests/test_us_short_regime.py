@@ -8,6 +8,7 @@ the frozen us_short_regime_governance preset.
 """
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -104,6 +105,35 @@ class AntiChatterTests(unittest.TestCase):
     def test_equal_regime_no_chatter(self):
         out = rg.compute_market_risk_regime(_r("震荡", "震荡", "震荡"), prior_regime="震荡")
         self.assertEqual(out["market_risk_regime"], "震荡")
+
+
+class DatedStateTests(unittest.TestCase):
+    def test_formal_analysis_builds_fixed_five_key_state(self):
+        state = rg.build_market_regime_state(
+            "20260810",
+            {"regime": {"market_risk_regime": "防御", "upgrade_count": 1}},
+        )
+        self.assertEqual(
+            set(state),
+            {"schema_name", "schema_version", "as_of", "market_risk_regime", "upgrade_count"},
+        )
+        self.assertEqual("防御", state["market_risk_regime"])
+        self.assertEqual(1, state["upgrade_count"])
+
+    def test_loader_rejects_missing_or_corrupt_selected_state(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / rg.MARKET_REGIME_STATE_FILENAME
+            with self.assertRaises(rg.MarketRegimeStateError):
+                rg.load_market_regime_state(path, decision_date="20260810")
+            path.write_text(json.dumps({
+                "schema_name": rg.MARKET_REGIME_STATE_SCHEMA_NAME,
+                "schema_version": rg.MARKET_REGIME_STATE_SCHEMA_VERSION,
+                "as_of": "20260809",
+                "market_risk_regime": "防御",
+                "upgrade_count": True,
+            }), encoding="utf-8")
+            with self.assertRaises(rg.MarketRegimeStateError):
+                rg.load_market_regime_state(path, decision_date="20260810")
 
 
 class ContractConformanceTests(unittest.TestCase):

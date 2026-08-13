@@ -187,7 +187,6 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
                     stages=[stage],
                     model_paper_store_root=root / "private" / "model_paper_private",
                     model_paper_run_account_mode="paper_only",
-                    market_diagnostic_root=root / "private" / "market_diagnostic_private",
                 )
             activation.assert_called_once_with()
         self.assertEqual(summary["activation_status"], "dormant")
@@ -215,7 +214,6 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
                         stages=[],
                         model_paper_store_root=root / "private" / "model_paper_private",
                         model_paper_run_account_mode="paper_only",
-                        market_diagnostic_root=root / "private" / "market_diagnostic_private",
                     )
             self.assertNotIn("diagnostic_start_receipt.json", str(raised.exception))
 

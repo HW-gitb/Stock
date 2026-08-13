@@ -60,6 +60,11 @@ def _empty_state(as_of):
             "as_of": as_of, "records": []}
 
 
+def empty_symbol_cooldown_state(as_of):
+    _date(as_of, "as_of")
+    return _empty_state(as_of)
+
+
 def validate_symbol_cooldown_state(state, *, decision_date):
     _date(decision_date, "decision_date")
     if not isinstance(state, dict) or set(state) != {"schema_name", "schema_version", "as_of", "records"}:
@@ -89,9 +94,11 @@ def validate_symbol_cooldown_state(state, *, decision_date):
             raise SymbolCooldownStateError("cooldown record 日期/来源非法")
 
 
-def load_symbol_cooldown_state(path, *, decision_date):
+def load_symbol_cooldown_state(path, *, decision_date, require_present=False):
     path = Path(path)
     if not path.exists():
+        if require_present:
+            raise SymbolCooldownStateError("cooldown state is missing")
         return _empty_state(decision_date)
     try:
         state = json.loads(path.read_text(encoding="utf-8"))

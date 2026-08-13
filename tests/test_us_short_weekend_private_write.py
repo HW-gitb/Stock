@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 
 import engine.us_short_weekend_private_write as pw  # noqa: E402
 import engine.us_short_weekend_machine_record as mr  # noqa: E402
+import engine.us_short_regime as rg  # noqa: E402
 from engine.us_short_run_origin import (  # noqa: E402
     OFFLINE_DISCLOSURE_SENTINEL, OFFLINE_PROVIDER_DISCLAIMER, OFFLINE_TEST_RUN_ORIGIN,
     OFFLINE_LIMITATION_LINE, build_run_status, canonical_section_1, canonical_offline_sections,
@@ -178,6 +179,68 @@ def _machine_record(as_of=_AS_OF):
            "selection_record": {"selection_rank": 1, "selection_bucket": "core_top",   # top15_candidate = selected
                                 "core_score": 50.0, "theme_momentum_score": 0.0}}
     return mr.assemble_machine_record({"regime": {"market_risk_regime": "进攻"}, "rows": [row]}, as_of=as_of)
+
+
+class DatedPrivateStateTests(unittest.TestCase):
+    def test_resolver_uses_latest_strict_earlier_direct_child(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            for name in ("20260101", "20260110", "20260112", "20260120", "20260110_superseded", "not-a-date"):
+                (root / name).mkdir()
+            self.assertEqual(root / "20260110", pw.resolve_prior_run_dir(root, "20260112"))
+
+    def test_selected_missing_state_does_not_fall_back_to_older_child(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "20260101").mkdir()
+            newest = root / "20260110"
+            newest.mkdir()
+            selected = pw.resolve_prior_run_dir(root, "20260112")
+            self.assertEqual(newest, selected)
+            with self.assertRaises(Exception):
+                rg.load_market_regime_state(selected / "market_regime_state.json", decision_date="20260112")
+
+    def test_root_legacy_state_stops_without_migration(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "symbol_cooldown_state.json").write_text("{}", encoding="utf-8")
+            with self.assertRaises(pw.WeekendPrivateWriteError):
+                pw.resolve_prior_run_dir(root, "20260112")
+
+    def test_normal_write_places_all_four_states_in_the_current_dated_dir(self):
+        with tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            out = _wrp(
+                decision_date=_AS_OF, machine_record=_machine_record(),
+                weekly_report_md=_REPORT_MD, report_data=_REPORT_DATA,
+                runs_private_root=rr, weekly_private_root=wr,
+                market_regime_state={
+                    "schema_name": "us_short_market_regime_state",
+                    "schema_version": "1.0.0", "as_of": _AS_OF,
+                    "market_risk_regime": "进攻", "upgrade_count": 0,
+                },
+                holding_action_state={
+                    "schema_name": "us_short_holding_action_state",
+                    "schema_version": "1.0.0", "as_of": _AS_OF, "positions": [],
+                },
+                portfolio_guard_state={
+                    "schema_name": "us_short_portfolio_guard_state",
+                    "schema_version": "1.0.0", "as_of": _AS_OF, "state": "normal",
+                },
+                symbol_cooldown_state={
+                    "schema_name": "us_short_symbol_cooldown_state",
+                    "schema_version": "1.0.0", "as_of": _AS_OF, "records": [],
+                },
+            )
+            dated = Path(rr) / _AS_OF
+            self.assertEqual(
+                {
+                    "machine_record.json", "market_regime_state.json",
+                    "holding_action_state.json", "portfolio_guard_state.json",
+                    "symbol_cooldown_state.json",
+                },
+                {path.name for path in dated.iterdir()},
+            )
+            self.assertEqual(dated / "market_regime_state.json", out["market_regime_state_path"])
 
 
 class HappyWrite(unittest.TestCase):

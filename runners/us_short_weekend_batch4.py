@@ -22,6 +22,11 @@ from engine.us_short_cli_redaction import closed_world_counts, safe_schema_locat
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance
 from engine.us_short_market_calendar import sessions_for_window, validate_market_calendar
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path
+from engine.us_short_weekend_private_write import (
+    WeekendPrivateWriteError,
+    resolve_prior_run_dir,
+    validate_prior_run_dir,
+)
 from engine.us_short_run_origin import (
     RunOriginError,
     is_capstone_research_live_capability,
@@ -36,7 +41,7 @@ _PACKET_KEYS = frozenset({
     "data_context", "eligibility_governance_path", "per_ticker_analysis", "run_provenance",
     "provider_health", "calendar_path", "account_state_path", "market_axis_regimes", "prior_regime",
     "prior_upgrade_count", "sizing_per_ticker", "basket_context", "cost_inputs", "report_context",
-    "lifecycle_register_path", "lifecycle_readiness_out_path", "runs_private_root", "weekly_private_root", "paper_track",
+    "lifecycle_register_path", "lifecycle_readiness_out_path", "runs_private_root", "weekly_private_root", "prior_run_dir", "paper_track",
 })
 
 
@@ -101,12 +106,12 @@ def _load_packet(packet_path) -> tuple[dict, Path]:
     packet = _read_json(path, "batch4 context packet")
     if not isinstance(packet, dict) or set(packet) != _PACKET_KEYS:
         shape = closed_world_counts(packet, expected_keys=_PACKET_KEYS)
-        raise Batch4RunnerError(f"context packet 顶层须为 19-key closed-world object ({shape})")
+        raise Batch4RunnerError(f"context packet 顶层须为 20-key closed-world object ({shape})")
     _validate_packet_schema(packet)
     return packet, path.parent
 
 
-def _assemble_context(packet: dict, base: Path) -> tuple[dict, dict]:
+def _assemble_context(packet: dict, base: Path, *, prior_runs_private_root: Path | None = None) -> tuple[dict, dict]:
     gov_path = _resolve_path(packet["eligibility_governance_path"], base=base,
                              label="eligibility_governance_path")
     calendar_path = _resolve_path(packet["calendar_path"], base=base, label="calendar_path")
@@ -166,6 +171,13 @@ def _assemble_context(packet: dict, base: Path) -> tuple[dict, dict]:
         "runs_private_root": _resolve_path(packet["runs_private_root"], base=base, label="runs_private_root"),
         "weekly_private_root": _resolve_path(packet["weekly_private_root"], base=base,
                                                label="weekly_private_root"),
+        "prior_run_dir": _resolve_path(packet["prior_run_dir"], base=base,
+                                         label="prior_run_dir", allow_none=True),
+        "prior_runs_private_root": (
+            _resolve_path(str(prior_runs_private_root), base=base, label="prior_runs_private_root")
+            if prior_runs_private_root is not None
+            else _resolve_path(packet["runs_private_root"], base=base, label="runs_private_root")
+        ),
     }
     return pc, account
 
@@ -187,12 +199,15 @@ def _summary(result: dict, *, dry_run: bool) -> dict:
         "dry_run": dry_run,
     }
     if result.get("emitted") and not dry_run:
-        summary["output_paths"] = {key: str(value) for key, value in result["written"].items()}
+        summary["output_paths"] = {
+            key: str(result["written"][key])
+            for key in ("machine_record_path", "action_table_path", "weekly_report_path")
+        }
     return summary
 
 
 def run_packet(packet_path, *, now_et: datetime, run_mode="offline_test", _research_live_capability=None,
-               bootstrap_lifecycle=False, dry_run=False) -> dict:
+               bootstrap_lifecycle=False, dry_run=False, prior_runs_private_root: Path | None = None) -> dict:
     if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
         raise Batch4RunnerError("now_et 须为无时区 datetime，按 America/New_York 本地墙钟解释")
     # Provider-backed modes are CAPSTONE-INTERNAL: a generic batch4 caller must not stamp a
@@ -209,7 +224,7 @@ def run_packet(packet_path, *, now_et: datetime, run_mode="offline_test", _resea
         raise Batch4RunnerError("jsonschema 未安装；batch4 官方 validator 无法运行，拒绝降级执行") from exc
     from engine.us_short_weekend_orchestrator import run_weekend_pipeline
     packet, base = _load_packet(packet_path)
-    pc, account = _assemble_context(packet, base)
+    pc, account = _assemble_context(packet, base, prior_runs_private_root=prior_runs_private_root)
     if run_mode in ("research_live", "mixed_source"):
         try:
             require_research_live_provider_health(_research_live_capability, pc["provider_health"])
@@ -221,6 +236,16 @@ def run_packet(packet_path, *, now_et: datetime, run_mode="offline_test", _resea
     if run_mode in ("offline_test", "research_live", "mixed_source"):
         decision_date = _decision_date_for_bootstrap(now_et, pc["calendar"])
         if decision_date is not None:
+            try:
+                pc["prior_run_dir"] = (
+                    resolve_prior_run_dir(pc["runs_private_root"], decision_date)
+                    if pc["prior_run_dir"] is None
+                    else validate_prior_run_dir(
+                        pc["prior_runs_private_root"],
+                        pc["prior_run_dir"], decision_date=decision_date)
+                )
+            except (OSError, ValueError, PrivatePathError, WeekendPrivateWriteError) as exc:
+                raise Batch4RunnerError("selected prior cross-week state is unavailable") from exc
             try:
                 validate_account_state(account, decision_date)
             except ConvertError:
@@ -237,7 +262,8 @@ def run_packet(packet_path, *, now_et: datetime, run_mode="offline_test", _resea
         with tempfile.TemporaryDirectory(prefix="us_short_batch4_dry_") as tmp:
             dry_pc = {**pc, "runs_private_root": Path(tmp) / "runs_private",
                       "weekly_private_root": Path(tmp) / "weekly_private",
-                      "lifecycle_readiness_out_path": None}
+                      "lifecycle_readiness_out_path": None, "prior_run_dir": None,
+                      "prior_regime": None, "prior_upgrade_count": 0}
             return _summary(run_weekend_pipeline(now_et, dry_pc, run_mode=run_mode,
                                                  research_live_capability=_research_live_capability), dry_run=True)
     return _summary(run_weekend_pipeline(now_et, pc, run_mode=run_mode,
