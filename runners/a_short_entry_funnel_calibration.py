@@ -31,7 +31,6 @@ if str(ROOT) not in sys.path:
 PREREG_PATH = ROOT / "research" / "preregistrations" / "a_short_entry_funnel_calibration_20260713.json"
 PREREG_SCHEMA_PATH = ROOT / "schemas" / "a_short_entry_funnel_calibration_preregistration.schema.json"
 REPORT_SCHEMA_PATH = ROOT / "schemas" / "a_short_entry_funnel_calibration_report.schema.json"
-ANALYSIS_INPUT_SCHEMA_PATH = ROOT / "schemas" / "analysis_input.schema.json"
 HISTORICAL_REPORT_SCHEMA_PATH = ROOT / "schemas" / "a_short_entry_funnel_historical_report.schema.json"
 DEFAULT_OUT = ROOT / "research" / "results" / "a_short" / "entry_funnel_calibration_20260713" / "calibration_report.json"
 HISTORICAL_DEFAULT_OUT = ROOT / "research" / "results" / "a_short" / "entry_funnel_calibration" / "calibration_report.json"
@@ -542,12 +541,13 @@ def _historical_analysis_inputs(historical_root: Path) -> list[tuple[str, dict[s
             return None
         try:
             analysis_input = load_json(path)
-            validate(analysis_input, ANALYSIS_INPUT_SCHEMA_PATH, "historical analysis input")
         except (OSError, json.JSONDecodeError, ValueError) as exc:
             raise HistoricalInputError(str(exc)) from exc
         trade_date = _canonical_date(analysis_input.get("trade_date"), "analysis input trade_date")
         if trade_date != as_of:
             raise HistoricalInputError("analysis input trade_date does not match its as_of directory")
+        if not isinstance(analysis_input.get("candidates"), list):
+            raise HistoricalInputError("analysis input candidates must be a list")
         inputs.append((as_of, analysis_input))
     return inputs
 
@@ -591,11 +591,22 @@ def _historical_prices(prices_path: Path, known_as_of: set[str]) -> tuple[dict[t
     return price_rows, row_count
 
 
+def _historical_volatility(analysis_input: dict[str, Any]) -> dict[str, Any]:
+    market_context = analysis_input.get("market_context")
+    if not isinstance(market_context, dict):
+        return {}
+    volatility = market_context.get("volatility")
+    return volatility if isinstance(volatility, dict) else {}
+
+
 def _candidate_gap_reasons(candidate: dict[str, Any], volatility: dict[str, Any],
                            as_of: str, price_rows: dict[tuple[str, str], list[dict[str, Any]]]) -> list[str]:
     reasons: list[str] = []
-    derived = candidate.get("derived_flags") or {}
-    rule6_checks = ((candidate.get("event_risk") or {}).get("rule6_checks"))
+    derived = candidate.get("derived_flags")
+    derived = derived if isinstance(derived, dict) else {}
+    event_risk = candidate.get("event_risk")
+    event_risk = event_risk if isinstance(event_risk, dict) else {}
+    rule6_checks = event_risk.get("rule6_checks")
     if not isinstance(rule6_checks, list) or not rule6_checks or not isinstance(derived.get("hard_veto"), bool):
         reasons.append("missing_rule6_hard_veto")
     if not isinstance(derived.get("is_breakout"), bool):
@@ -632,7 +643,7 @@ def _historical_production_input(candidate: dict[str, Any], price_series: list[d
     """Use the existing weekly normalizer; it is a pure source-binding adapter here."""
     from runners.a_short_weekly_pipeline import normalize_candidate, resolve_market_regime
 
-    volatility = ((analysis_input.get("market_context") or {}).get("volatility") or {})
+    volatility = _historical_volatility(analysis_input)
     regime, _ = resolve_market_regime(analysis_input)
     return normalize_candidate(
         candidate, price_series, {}, volatility.get("iv_percentile_252d"), {}, regime,
@@ -693,9 +704,12 @@ def build_historical_report(historical_root: Path, generated_at: str) -> tuple[d
     as_of_dates: list[str] = []
     for as_of, analysis_input in inputs:
         as_of_dates.append(as_of)
-        versions.add(str(analysis_input.get("schema_version")))
-        volatility = ((analysis_input.get("market_context") or {}).get("volatility") or {})
-        for candidate in analysis_input.get("candidates") or []:
+        schema_version = analysis_input.get("schema_version")
+        if isinstance(schema_version, str):
+            versions.add(schema_version)
+        volatility = _historical_volatility(analysis_input)
+        for raw_candidate in analysis_input["candidates"]:
+            candidate = raw_candidate if isinstance(raw_candidate, dict) else {}
             candidate_count += 1
             reasons = _candidate_gap_reasons(candidate, volatility, as_of, price_rows)
             if reasons:

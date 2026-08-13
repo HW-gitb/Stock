@@ -6817,3 +6817,39 @@ This entry records only §15A in `D:\\cnhea\\Codex\\worktrees\\43fe\\Stock`; the
 - 15C 未执行，第 15 刀保持 OPEN；§6a 未起 agent（rule 8）；真实 launcher 端到端仍未跑（14B 遗留边界）。
 
 **下一步**：`Codex：执行`（15C：需用户授权本地历史 PIT 数据）
+
+## 2026-08-13 追加：§15C historical input consumed-contract Required（`43fe`，`repaired / OPEN-NOT_VERIFIED`）
+
+### 改了什么、为什么和调用边界
+
+按最新 `R-ASHORT-15A-HISTORICAL-INPUT-VALIDATED-AGAINST-TODAYS-SCHEMA-NOT-ITS-OWN` 方案，只收窄 `runners/a_short_entry_funnel_calibration.py` 的 historical mode。旧 `analysis_input.json` 不再被今天的共享 `schemas/analysis_input.schema.json` 整份拒绝；历史目录仍要求 JSON object、canonical `trade_date` 与目录 `as_of` 一致、`candidates` 为 list。逐候选的 Rule6/hard-veto、EGS breakout、M0.5/Rule3 与 20 日价格窗继续由既有 `_candidate_gap_reasons` 分类，缺失只进已有 `not_evaluable_reason_counts`，不猜值、不变成整份 exit 1。
+
+`authorized local PIT analysis_input -> _historical_analysis_inputs -> _historical_volatility / _candidate_gap_reasons -> _historical_production_input -> active calibration_report` 保持不变；weekly 仍只消费 active report，永不读 historical root。`market_context.liquidity` 等未消费旧块、缺 document `schema_name`/`schema_version` 不再阻塞；report 只收集实际 string schema versions，缺版本不伪造 `"None"`。共享 analysis-input schema、EGS、backtest、weekly production 路径、provider 和 atomic writer 均未改，输入不写回。
+
+### 控制、验证、失效旧结论和下一步注意
+
+- 正向控制：带 legacy `liquidity` 的 input 与缺 schema identity 的 input 均能写 schema-valid report，前者输入字节保持不变；缺 Rule6/Rule3 等**消费**叶仍产生 visible candidate gaps。反向控制：未来行、重复键、非有限价格、混合 as_of 与非 list `candidates` 仍 exit 1 且不覆盖原 active report。故「所有历史 input 必须符合今天的 schema 才能启动」这一旧结论已失效；只允许 historical mode 的 consumed-contract 兼容，禁止放松共享 schema。
+- 固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。最终命令 `cmd /c .tools\run_unittest_with_repo_pythonpath.cmd tests.test_a_short_entry_funnel_calibration tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_weekly_pipeline`（launcher 硬编码同一固定 Python）→ `662 OK`、3 existing skips、`131.561s`、`receipt:f4fca8f5592d321c749fe22f`；`py_compile`、`git diff --check` 与 historical whole-schema validation call=`0` PASS；route/doc guards `66 OK`、`receipt:d375dcced0f524a4869d81f5`。full lane 未触发：仅 calibration-only historical compatibility layer，未触及 production top-level/shared schema/provider/account，focused pack 足以界定影响。
+- 未访问真实 PIT root、未修改 15 份历史 input、未执行 15C/取数、未调用 provider/live/network，未起 sub-agent，未 stage/commit/push/merge。Knife 15 仍 `OPEN-NOT_VERIFIED`；Claude Code 仅需独立审查本 Required。审查 PASS 后，才按用户授权目录先离线重放；只有重放结果需价格数据时，才另行使用已授权的 15C 取数边界。
+
+## 2026-08-13 追加：历史输入按消费面校验（15C 门）独立审查 —— PASS（已提交并合入 master）
+
+**判定**：PASS，Required 转 resolved，新记一条 Options 交用户决策。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**（区别于执行方转述）
+
+- **用真实产物做 before/after 对照**，不靠合成夹具下结论：同一支探针、同样 15 份真实周产物，主树（无此刀）`exit=1` 零报告、拒因 `liquidity`；43fe（有此刀）`exit=0` 写出报告、13 个不同周、五代 schema 版本露在产物里。原始产物只读复制，一字未动。
+- **红线我自己核**：`schemas/analysis_input.schema.json` 不在改动清单，全仓对它的校验调用点归零；effect-contract 静态快照未变，其守卫在验收包内绿。这是这条修复最容易走歪的地方（放松共享 schema 会一次性放松生产+回测+contract），没走歪。
+- **强制腿重跑**：四类结构性错误仍 exit=1 且哨兵报告 sha 未变、缺源仍 exit=2、20 日窗口边界不变——放宽没有漏进结构门。
+- **把「修好了但仍跑不出结论」查到底**：197/212 候选落 `missing_m05_rule3`，我逐份读了 14 个老周的 volatility——`iv_pct=None`、`rule3/awakening=unknown`，即当年 IV 数据根本不存在（08-08 才接上）。所以这是如实排除，不是新的误杀；也因此**建议用户暂不花那 212 次取数**，并把「等 12 周」还是「M0.5 未知周单独分层」作为 Options 交回用户。
+
+**我自己的一处流程失误（如实记）**
+
+首个验收包 300s TIMEOUT，根因是我把探针与重包并发跑（rule 7(c) 明令同一时刻只跑一个重包），不是代码变慢。按 rule ⑥ 只诊断一次，随后按 rule ⑤ 缩窄到改动符号面重跑，未申请延长 deadline。代价是 `tests.test_a_short_weekly_pipeline` 本轮未复跑，已作为证据边界写进 register。
+
+**未覆盖维度与诚实边界**
+
+- 上述 weekly pipeline 模块本轮未复跑；全量未跑（rule 3 未触发）；§6a 未起 agent。
+- 15C 未执行，第 15 刀保持 OPEN；探针里的价格是合成的，只验结构、不构成任何校准结论。
+
+**下一步**：`Codex：执行`

@@ -14,7 +14,6 @@ from jsonschema import Draft7Validator
 
 import runners.a_short_entry_funnel_calibration as calibration
 from runners.a_short_entry_funnel_calibration import (
-    ANALYSIS_INPUT_SCHEMA_PATH,
     HISTORICAL_REPORT_SCHEMA_PATH,
     PREREG_PATH,
     PREREG_SCHEMA_PATH,
@@ -28,6 +27,7 @@ from runners.a_short_entry_funnel_calibration import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
+ANALYSIS_INPUT_SCHEMA_PATH = ROOT / "schemas" / "analysis_input.schema.json"
 ANALYSIS_INPUT_EXAMPLE = ROOT / "schemas" / "examples" / "analysis_input.example.json"
 HISTORICAL_AS_OF = "20260522"
 HISTORICAL_GENERATED_AT = "2026-08-12T00:00:00+00:00"
@@ -262,6 +262,45 @@ class AShortEntryFunnelCalibrationTests(unittest.TestCase):
         self.assertNotIn("a_short_tushare_client", historical_source)
         self.assertNotIn("init_tushare_pro", historical_source)
 
+    def test_historical_mode_accepts_an_unconsumed_legacy_block(self) -> None:
+        analysis_input = self._historical_analysis_input()
+        analysis_input["schema_version"] = "analysis_input.v1.0"
+        analysis_input["market_context"]["liquidity"] = {"legacy_only": True}
+        self.assertNotEqual(list(Draft7Validator(load_json(ANALYSIS_INPUT_SCHEMA_PATH)).iter_errors(analysis_input)), [])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "historical"
+            out = Path(tmpdir) / "active_report.json"
+            self._write_historical_root(root, analysis_input=analysis_input)
+            frozen_input = (root / "analysis_inputs" / HISTORICAL_AS_OF / "analysis_input.json").read_bytes()
+            self.assertEqual(main([
+                "--historical-root", str(root), "--out", str(out),
+                "--generated-at", HISTORICAL_GENERATED_AT,
+            ]), 0)
+            report = self._read_historical_report(out)
+            self.assertEqual(
+                (root / "analysis_inputs" / HISTORICAL_AS_OF / "analysis_input.json").read_bytes(),
+                frozen_input,
+            )
+        self.assertEqual(report["source_readiness"]["analysis_input_schema_versions"], ["analysis_input.v1.0"])
+        self.assertEqual(report["funnel"]["evaluable_candidate_count"], 1)
+
+    def test_historical_mode_accepts_missing_legacy_schema_name(self) -> None:
+        analysis_input = self._historical_analysis_input()
+        analysis_input.pop("schema_name")
+        analysis_input.pop("schema_version")
+        self.assertNotEqual(list(Draft7Validator(load_json(ANALYSIS_INPUT_SCHEMA_PATH)).iter_errors(analysis_input)), [])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "historical"
+            out = Path(tmpdir) / "active_report.json"
+            self._write_historical_root(root, analysis_input=analysis_input)
+            self.assertEqual(main([
+                "--historical-root", str(root), "--out", str(out),
+                "--generated-at", HISTORICAL_GENERATED_AT,
+            ]), 0)
+            report = self._read_historical_report(out)
+        self.assertEqual(report["funnel"]["evaluable_candidate_count"], 1)
+        self.assertEqual(report["source_readiness"]["analysis_input_schema_versions"], [])
+
     def test_missing_historical_source_writes_a_schema_valid_source_missing_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             out = Path(tmpdir) / "active_report.json"
@@ -307,12 +346,27 @@ class AShortEntryFunnelCalibrationTests(unittest.TestCase):
                     )
                     self.assertEqual(out.read_bytes(), original)
 
+    def test_nonlist_candidates_preserve_existing_active_report(self) -> None:
+        analysis_input = self._historical_analysis_input()
+        analysis_input["candidates"] = {}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "historical"
+            out = Path(tmpdir) / "active_report.json"
+            self._write_historical_root(root, analysis_input=analysis_input)
+            original = b'{"keep":"existing-active-report"}\n'
+            out.write_bytes(original)
+            self.assertEqual(main([
+                "--historical-root", str(root), "--out", str(out),
+                "--generated-at", HISTORICAL_GENERATED_AT,
+            ]), 1)
+            self.assertEqual(out.read_bytes(), original)
+
     def test_missing_candidate_facts_are_counted_not_guessed(self) -> None:
         analysis_input = self._historical_analysis_input()
         candidate = analysis_input["candidates"][0]
-        candidate["event_risk"]["rule6_checks"] = []
+        del candidate["event_risk"]["rule6_checks"]
         candidate["derived_flags"]["is_breakout"] = None
-        self.assertEqual(list(Draft7Validator(load_json(ANALYSIS_INPUT_SCHEMA_PATH)).iter_errors(analysis_input)), [])
+        self.assertNotEqual(list(Draft7Validator(load_json(ANALYSIS_INPUT_SCHEMA_PATH)).iter_errors(analysis_input)), [])
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir) / "historical"
             out = Path(tmpdir) / "active_report.json"
@@ -426,7 +480,7 @@ class AShortEntryFunnelCalibrationTests(unittest.TestCase):
         self.assertEqual(report["funnel"]["diagnostic_week_count"], 12)
         self.assertEqual(report["funnel"]["diagnostic_candidate_count"], 120)
 
-    def test_invalid_m05_rule3_input_preserves_existing_active_report(self) -> None:
+    def test_missing_consumed_m05_leaf_is_counted_not_rejected(self) -> None:
         analysis_input = self._historical_analysis_input()
         del analysis_input["market_context"]["volatility"]["rule3_status"]
         self.assertNotEqual(list(Draft7Validator(load_json(ANALYSIS_INPUT_SCHEMA_PATH)).iter_errors(analysis_input)), [])
@@ -434,16 +488,17 @@ class AShortEntryFunnelCalibrationTests(unittest.TestCase):
             root = Path(tmpdir) / "historical"
             out = Path(tmpdir) / "active_report.json"
             self._write_historical_root(root, analysis_input=analysis_input)
-            original = b'{"keep":"existing-active-report"}\n'
-            out.write_bytes(original)
             self.assertEqual(
                 main([
                     "--historical-root", str(root), "--out", str(out),
                     "--generated-at", HISTORICAL_GENERATED_AT,
                 ]),
-                1,
+                0,
             )
-            self.assertEqual(out.read_bytes(), original)
+            report = self._read_historical_report(out)
+        self.assertEqual(report["source_readiness"]["status"], "ready_with_candidate_gaps")
+        self.assertEqual(report["funnel"]["evaluable_candidate_count"], 0)
+        self.assertEqual(report["funnel"]["not_evaluable_reason_counts"]["missing_m05_rule3"], 1)
 
     def test_historical_mode_rejects_a_legacy_mode_mix_without_writing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
