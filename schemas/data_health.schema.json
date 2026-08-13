@@ -24,7 +24,7 @@
       "const": "data_health"
     },
     "schema_version": {
-      "const": "1.10.0"
+      "const": "1.11.0"
     },
     "generated_at": {
       "type": "string"
@@ -217,7 +217,7 @@
               "uniqueItems": true
             },
             "source": {
-              "enum": [null, "cache", "index_member_all_l1_current", "index_member_l2_history"]
+              "enum": [null, "cache", "index_classify", "index_member_all_l1_current", "index_member_l2_history"]
             },
             "as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
             "active_count": {"type": ["integer", "null"], "minimum": 0},

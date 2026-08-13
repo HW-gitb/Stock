@@ -1727,7 +1727,7 @@ def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity
     return out_path
 
 
-DATA_HEALTH_SCHEMA_VERSION = "1.10.0"
+DATA_HEALTH_SCHEMA_VERSION = "1.11.0"
 DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
 LAST_SELECTION_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "a_short_last_selection.schema.json")
 
@@ -3070,7 +3070,67 @@ def _current_sw_industry_source_observation():
 
 
 def _sw_mapping_is_usable(mapping):
-    return isinstance(mapping, dict) and len(mapping) >= SW_INDUSTRY_MIN_ACTIVE
+    if not isinstance(mapping, dict) or len(mapping) < SW_INDUSTRY_MIN_ACTIVE:
+        return False
+    required_fields = ("l1_name", "l1_code", "l2_name", "l2_code")
+    for entry in mapping.values():
+        if not isinstance(entry, dict):
+            return False
+        for field in required_fields:
+            value = entry.get(field)
+            if not isinstance(value, str) or not value.strip():
+                return False
+            if field in {"l1_name", "l2_name"} and value.strip() == "未知":
+                return False
+    return True
+
+
+def _normalize_sw_code(value):
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        return None
+    text = str(value)
+    stripped = text.strip()
+    if text != stripped or stripped.casefold() in {"", "nan", "none", "null", "<na>"}:
+        return None
+    return stripped
+
+
+def _bounded_sw_reason(reason, limit=256):
+    text = " ".join(str(reason).split())
+    return text[:limit]
+
+
+def _record_sw_failure(
+    *,
+    source,
+    reason,
+    observed_sources=None,
+    active_count=None,
+    request_group_count=0,
+    fast_path_used=False,
+    fallback_used=False,
+    cache_hit=False,
+):
+    reason = _bounded_sw_reason(reason)
+    _record_sw_industry_source_observation(
+        status="fail",
+        source=source,
+        as_of=TODAY,
+        active_count=active_count,
+        request_group_count=int(request_group_count),
+        fast_path_used=bool(fast_path_used),
+        fallback_used=bool(fallback_used),
+        cache_hit=bool(cache_hit),
+        classification_standard=SW_INDUSTRY_CLASSIFICATION_STANDARD,
+        observed_sources=sorted(set(observed_sources or [])),
+        message=reason,
+    )
+    return reason
 
 
 def _normalize_member_dates(df):
@@ -3168,6 +3228,7 @@ def _observed_sw_classification_sources(*frames):
 
 
 def _classification_standard_from_observed_sources(observed_sources):
+    """Derive the standard at this helper boundary, fail-closed on misuse."""
     normalized_sources = {
         str(value).strip().upper()
         for value in observed_sources
@@ -3206,7 +3267,8 @@ def get_sw_industry_map():
         }
     cached = load_cache(key)
     if cached is not None:
-        missing_target = sorted(target_codes - set(cached)) if target_codes is not None else []
+        cached_codes = set(cached) if isinstance(cached, dict) else set()
+        missing_target = sorted(target_codes - cached_codes) if target_codes is not None else []
         if _sw_mapping_is_usable(cached) and not missing_target:
             _record_sw_industry_source_observation(
                 status="pass",
@@ -3226,29 +3288,86 @@ def get_sw_industry_map():
         cached_size = len(cached) if isinstance(cached, dict) else "invalid"
         log.warning(f"SW industry cache {key} coverage too low ({cached_size}); refetching")
     log.info("拉取申万行业分类(按as_of时点)...")
-    df_l2 = safe_api(
-        pro.index_classify,
-        level="L2",
-        src=SW_INDUSTRY_CLASSIFICATION_STANDARD,
-        fields=SW_INDUSTRY_CLASSIFICATION_FIELDS,
-    )
-    df_l1 = safe_api(
-        pro.index_classify,
-        level="L1",
-        src=SW_INDUSTRY_CLASSIFICATION_STANDARD,
-        fields=SW_INDUSTRY_CLASSIFICATION_FIELDS,
-    )
-    df_l2 = _validate_sw_classification_frame(df_l2, "L2")
-    df_l1 = _validate_sw_classification_frame(df_l1, "L1")
+    def _fetch_classification(level):
+        errors = []
+        frame = safe_api(
+            pro.index_classify,
+            level=level,
+            src=SW_INDUSTRY_CLASSIFICATION_STANDARD,
+            fields=SW_INDUSTRY_CLASSIFICATION_FIELDS,
+            errors=errors,
+        )
+        if errors:
+            reason = _record_sw_failure(
+                source="index_classify",
+                reason=(
+                    f"index_classify:{level}:exception="
+                    f"{type(errors[-1]).__name__}"
+                ),
+            )
+            raise RuntimeError(reason)
+        try:
+            return _validate_sw_classification_frame(frame, level)
+        except (RuntimeError, TypeError, ValueError) as exc:
+            reason = _record_sw_failure(
+                source="index_classify",
+                reason=f"index_classify:{level}:invalid={exc}",
+            )
+            raise RuntimeError(reason) from exc
+
+    df_l2 = _fetch_classification("L2")
+    df_l1 = _fetch_classification("L1")
     observed_sources = _observed_sw_classification_sources(df_l2, df_l1)
-    classification_standard = _classification_standard_from_observed_sources(observed_sources)
+    try:
+        classification_standard = _classification_standard_from_observed_sources(observed_sources)
+    except (RuntimeError, TypeError, ValueError) as exc:
+        reason = _record_sw_failure(
+            source="index_classify",
+            reason=f"index_classify:source_derivation_invalid={exc}",
+        )
+        raise RuntimeError(reason) from exc
 
     l1_map = {}
     if df_l1 is not None and not df_l1.empty:
-        l1_map.update(dict(zip(df_l1["index_code"], df_l1["industry_name"])))
+        for code, name in zip(df_l1["index_code"], df_l1["industry_name"]):
+            normalized_code = _normalize_sw_code(code)
+            if normalized_code is not None:
+                l1_map[normalized_code] = name
         if "industry_code" in df_l1.columns:
-            l1_map.update(dict(zip(df_l1["industry_code"].astype(str), df_l1["industry_name"])))
-    l2_info = {row["index_code"]: row for _, row in df_l2.iterrows()}
+            for code, name in zip(df_l1["industry_code"], df_l1["industry_name"]):
+                normalized_code = _normalize_sw_code(code)
+                if normalized_code is not None:
+                    l1_map[normalized_code] = name
+    l2_info = {}
+    for _, row in df_l2.iterrows():
+        normalized_code = _normalize_sw_code(row.get("index_code"))
+        if normalized_code is not None:
+            l2_info[normalized_code] = row
+
+    l1_parent_keys = set()
+    for value in l1_map:
+        normalized_code = _normalize_sw_code(str(value).split(".", 1)[0])
+        if normalized_code is not None:
+            l1_parent_keys.add(normalized_code)
+    unresolved_parents = []
+    for l2_code, row in l2_info.items():
+        raw_parent = row.get("parent_code")
+        parent_code = _normalize_sw_code(raw_parent)
+        parent_key = parent_code.split(".", 1)[0] if parent_code else None
+        if not parent_key or parent_key not in l1_parent_keys:
+            unresolved_parents.append((l2_code, raw_parent))
+    if unresolved_parents:
+        reason = _record_sw_failure(
+            source="index_classify",
+            reason=(
+                "sw_parent_closure:"
+                f"unresolved_parent_count={len(unresolved_parents)};"
+                f"l2_total={len(l2_info)};"
+                f"sample={unresolved_parents[:10]}"
+            ),
+            observed_sources=observed_sources,
+        )
+        raise RuntimeError(reason)
 
     member_fields = "con_code,index_code,in_date,out_date"
     l2_codes = set(l2_info.keys())
@@ -3257,14 +3376,44 @@ def get_sw_industry_map():
         """L2-by-L2 batching fallback. Slow but covers when full-market endpoints
         return incomplete data. Returns a concat'd raw DataFrame (unfiltered)."""
         frames = []
-        l2_code_list = df_l2["index_code"].dropna().astype(str).drop_duplicates().tolist()
+        l2_code_list = list(l2_info)
+        counts = {"ok": 0, "exception": 0, "empty": 0, "bad_shape": 0}
+        failures = []
         for l2_code in tqdm(l2_code_list, desc="SW industry L2 batching"):
-            t = safe_api(pro.index_member, index_code=l2_code, fields=member_fields)
-            if t is not None and not t.empty:
-                frames.append(t)
-        if not frames:
-            return pd.DataFrame(), len(l2_code_list)
-        return pd.concat(frames, ignore_index=True), len(l2_code_list)
+            errors = []
+            t = safe_api(
+                pro.index_member,
+                index_code=l2_code,
+                fields=member_fields,
+                errors=errors,
+            )
+            if errors:
+                category = "exception"
+            elif t is None or (isinstance(t, pd.DataFrame) and t.empty):
+                category = "empty"
+            elif not isinstance(t, pd.DataFrame):
+                category = "bad_shape"
+            else:
+                normalized = _normalize_sw_member_columns(t, "index_member")
+                if normalized.empty:
+                    category = "bad_shape"
+                else:
+                    counts["ok"] += 1
+                    frames.append(normalized)
+                    continue
+            counts[category] += 1
+            failures.append(f"{l2_code}:{category}")
+        summary = (
+            "l2_batch:"
+            + ",".join(
+                f"{name}={counts[name]}"
+                for name in ("ok", "exception", "empty", "bad_shape")
+            )
+            + f",failed_count={len(failures)},sample={failures[:10]}"
+        )
+        if failures or not frames:
+            return pd.DataFrame(), len(l2_code_list), summary, True
+        return pd.concat(frames, ignore_index=True), len(l2_code_list), summary, False
 
     def _fetch_current_by_l1(index_member_all):
         """Use the documented current-members endpoint in bounded L1 groups.
@@ -3280,15 +3429,25 @@ def get_sw_industry_map():
         frames = []
         fields = "ts_code,l2_code,in_date,out_date,is_new"
         for l1_code in l1_codes:
+            errors = []
             raw = safe_api(
                 index_member_all,
                 l1_code=l1_code,
                 is_new="Y",
                 fields=fields,
                 retries=1,
+                errors=errors,
             )
-            if raw is None or raw.empty:
+            if errors:
+                return (
+                    pd.DataFrame(),
+                    len(frames) + 1,
+                    f"exception_l1_response:{l1_code}:{type(errors[-1]).__name__}",
+                )
+            if raw is None or (isinstance(raw, pd.DataFrame) and raw.empty):
                 return pd.DataFrame(), len(frames) + 1, f"empty_l1_response:{l1_code}"
+            if not isinstance(raw, pd.DataFrame):
+                return pd.DataFrame(), len(frames) + 1, f"bad_shape:{l1_code}"
             if len(raw) >= SW_INDEX_MEMBER_ALL_ROW_LIMIT:
                 return pd.DataFrame(), len(frames) + 1, f"row_limit_hit:{l1_code}:{len(raw)}"
             normalized = _normalize_sw_member_columns(raw, "index_member_all")
@@ -3334,20 +3493,17 @@ def get_sw_industry_map():
             "SW industry L1 current fast path unavailable or incomplete "
             f"({fallback_reason}); fetching PIT history by L2 index_code"
         )
-        batched, l2_group_count = _fetch_l2_batch()
+        batched, l2_group_count, batch_summary, batch_failed = _fetch_l2_batch()
         request_group_count += l2_group_count
-        if batched.empty:
-            _record_sw_industry_source_observation(
-                status="fail",
+        if batch_failed:
+            reason = _record_sw_failure(
                 source="index_member_l2_history",
-                as_of=TODAY,
+                reason=f"{fallback_reason or 'l2_fallback'};{batch_summary}",
+                observed_sources=observed_sources,
                 request_group_count=request_group_count,
                 fallback_used=True,
-                classification_standard=classification_standard,
-                observed_sources=observed_sources,
-                message=fallback_reason,
             )
-            raise RuntimeError("SW industry member fetch failed; cannot build reliable L2 map")
+            raise RuntimeError(reason)
         df_mem = _apply_pit_window(batched, l2_codes, TODAY, source="index_member")
         member_source = "index_member_l2_history"
 
@@ -3376,49 +3532,75 @@ def get_sw_industry_map():
 
     mapping = {}
     for _, row in df_mem.iterrows():
-        l2_code = row["index_code"]
-        stock   = row["con_code"]
+        l2_code = str(row["index_code"]).strip()
+        stock   = str(row["con_code"]).strip()
         l2_row  = l2_info[l2_code]
-        raw_parent = str(l2_row.get("parent_code", ""))
+        raw_parent = l2_row.get("parent_code")
+        parent_code = _normalize_sw_code(raw_parent)
 
         # parent_code 与 l1_map key 格式可能不一致，尝试多种匹配
-        l1_name = l1_map.get(raw_parent)
+        l1_name = l1_map.get(parent_code)
         if l1_name is None:
-            stripped = raw_parent.split(".")[0]
+            stripped = parent_code.split(".")[0] if parent_code else ""
             l1_name = l1_map.get(stripped)
         if l1_name is None:
             for suffix in [".SI", ".SZ", ".SH"]:
-                l1_name = l1_map.get(raw_parent + suffix)
+                l1_name = l1_map.get((parent_code or "") + suffix)
                 if l1_name: break
         if l1_name is None:
-            l1_name = "未知"
+            reason = _record_sw_failure(
+                source=member_source,
+                reason=(
+                    "sw_parent_mapping_unresolved:"
+                    f"l2_code={l2_code};parent_code={raw_parent}"
+                ),
+                observed_sources=observed_sources,
+                active_count=int(len(mapping)),
+                request_group_count=request_group_count,
+                fast_path_used=member_source == "index_member_all_l1_current",
+                fallback_used=member_source == "index_member_l2_history",
+            )
+            raise RuntimeError(reason)
 
         mapping[stock] = {
             "l2_name": l2_row["industry_name"], "l2_code": l2_code,
-            "l1_name": l1_name, "l1_code": raw_parent,
+            "l1_name": l1_name, "l1_code": parent_code,
         }
     missing_target = sorted(target_codes - set(mapping)) if target_codes is not None else []
     if missing_target:
-        _record_sw_industry_source_observation(
-            status="fail",
+        missing_count = len(missing_target)
+        target_count = len(target_codes)
+        missing_ratio = (missing_count / target_count) if target_count else 0.0
+        reason = _record_sw_failure(
             source=member_source,
-            as_of=TODAY,
+            reason=(
+                "target_board_missing:"
+                f"missing_count={missing_count};"
+                f"target_count={target_count};"
+                f"missing_ratio={missing_ratio:.6f};"
+                f"sample={missing_target[:10]}"
+            ),
+            observed_sources=observed_sources,
             active_count=int(len(mapping)),
             request_group_count=request_group_count,
             fast_path_used=member_source == "index_member_all_l1_current",
             fallback_used=member_source == "index_member_l2_history",
-            classification_standard=classification_standard,
-            observed_sources=observed_sources,
-            message=f"target_board_missing:{missing_target[:10]}",
         )
-        raise RuntimeError(
-            "SW industry map target-board coverage incomplete: "
-            + ",".join(missing_target[:10])
-        )
+        raise RuntimeError(f"SW industry map target-board coverage incomplete: {reason}")
     if not _sw_mapping_is_usable(mapping):
-        raise RuntimeError(
-            f"SW industry map coverage too low after mapping: {len(mapping)} stocks; aborting to avoid invalid Tier1 output"
+        reason = _record_sw_failure(
+            source=member_source,
+            reason=(
+                "mapping_semantic_invalid:"
+                f"entry_count={len(mapping)};minimum={SW_INDUSTRY_MIN_ACTIVE}"
+            ),
+            observed_sources=observed_sources,
+            active_count=int(len(mapping)),
+            request_group_count=request_group_count,
+            fast_path_used=member_source == "index_member_all_l1_current",
+            fallback_used=member_source == "index_member_l2_history",
         )
+        raise RuntimeError(reason)
     _record_sw_industry_source_observation(
         status="pass",
         source=member_source,
