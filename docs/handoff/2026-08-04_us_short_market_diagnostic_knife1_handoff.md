@@ -1276,3 +1276,41 @@ python .tools\full_pack_ledger.py run us_short "<rule-6 escalation reason>" "rec
 
 - ETF 模块 `18 OK`；问题8与既有问题6消费者 focused 超集 `415 OK`，receipt=`receipt:5328794d756e3be6929c54f6`；full lane `5779/5779 equal=True PASS`、`317/317`、`388.4s/860s`。
 - 固定主 Python、fake client、临时根和离线测试；无 provider/network/live，未改变 26-week clock、settlement、cash return 或 ship-gate 语义。状态 `OPEN-NOT_VERIFIED`，待 Claude Code 独立复审。
+
+## 2026-08-13 追加：问题12正式一键入口透传五个既有运行控制（1302，待 Claude 独立审查）
+
+### 方案与责任边界
+
+- 桌面 `us_testrun0810.md` 问题12的五个真实缺口是 `--max-retries-per-call`、`--retry-backoff-seconds`、`--max-total-http-attempts`、`--disable-soft-discovery`、`--disable-theme-soft-boost`。底层责任已经分别在 Problem8 的 retry normalizer/`HttpAttemptBudget` 与 Problem10 的 K4a/K4b/三态分类器中存在，本刀只补正式 paper one-click 的入口透传。
+- 单一链为 `.cmd`（仅 `%*`）→ `us_short_paper_one_click.ps1` → `us_short_paper_one_click.py` argparse → `run_one_click()` → `run_weekly_capstone()` → 既有 retry/soft-channel owners。PowerShell 的 nullable 数字和 switch 只在显式给出时追加 argv；Python 省略值原样交给 capstone 的唯一归一化责任点。
+- `auto_authorize_pass2_budget + resume_from` 的拒绝、手工 Pass2 budget/`--resume`/`--catalyst-recall-ticker` 不暴露、stage 顺序、checkpoint/receipt/schema/产物生命周期均保持原状；五个参数不持久化。
+
+### 实施与验证
+
+- 改动文件仅为 `runners/us_short_paper_one_click.py`、`runners/us_short_paper_one_click.ps1`、`tests/test_us_short_paper_one_click.py`；capstone、Problem8、Problem10 生产 owner 和 `.cmd` 未改。Python 测试覆盖显式五值到达 capstone、全部省略保持 `None/True/True`；PowerShell 同一临时仓两次调用覆盖 argv 无继承、数值/开关顺序和退出码透传。
+- 旧实现红测：Python 显式参数为未知关键字、省略仍硬编码 `2/65`、PowerShell 显式参数为 `NamedParameterNotFound`；修复后固定主 Python 焦点超集 `248 OK`，receipt=`receipt:1f1d28ece8ab0a9553855354`。其中包含 `tests.test_us_short_discovery_conformance`、Problem8 retry、Problem10 K4a/K4b/分类器和现有 capstone 消费测试。
+- 因修改生产顶层 one-click runner，按 rule 3(a) 执行官方 full lane。首跑在 `test_us_short_discovery_conformance_executable` 暴露 one-click 日期解析调用缺显式 `theme_soft_boost_enabled`；补上同一开关透传后以最终 receipt 完成 `5832/5832 equal=True PASS`，`318/318`，`416.3s/860s`，fingerprint=`917623ebe194d708f1e59cf2cde4ed490e0bac07d82eaa3872dcfadd569383b8`。
+- `py_compile=2`、`git diff --check`、BOM/FFFD/冲突标记扫描通过；仅使用固定主 Python、fake PowerShell runner、临时根和离线 full lane。未调用 provider/network/live/paper，未写真实 `state/us_short`，未修改主树或桌面 guideline。
+
+### 交接状态
+
+- 风险条目为 `R-USSHORT-PAPER-ONECLICK-OMITS-EXISTING-RUNTIME-CONTROLS`，当前 `repaired / OPEN-NOT_VERIFIED`；需 Claude Code 独立审查后再决定 `resolved` 与提交。Codex 不提交、不 merge；后续若审查通过，下一刀才可按用户命令处理其他问题。
+## 2026-08-13 追加：问题12 一键入口五项控制贯通——审查 PASS，已合入 master
+
+**改了什么**：本节只记审查侧结论。范围三个代码/测试文件：`runners/us_short_paper_one_click.py`（argparse 三个 retry 值 + 两个 disable flag，`run_one_click` 原值转发）、`runners/us_short_paper_one_click.ps1`（两个 `[Nullable[...]]`、一个 `[Nullable[int]]`、两个 `[switch]`，只在显式给值时追加 argv）、`tests/test_us_short_paper_one_click.py`。`.cmd` 未改，仍 `%*`。
+
+**为什么**：底层早有重试与关闭可选通道的按钮，最上层操作员入口按不到；桌面 §问题12 只要求贯通这五项，`--resume` / `--pass2-call-budget` / `--catalyst-recall-ticker` 明确不开。
+
+**验证命令**：
+- `.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_paper_one_click tests.provider.test_us_short_weekly_capstone tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.test_us_short_soft_boost_consumption tests.test_us_short_discovery_conformance`
+- reviewer 直跑真函数 `_normalize_capstone_retry_policy` 的九格转移表
+- reviewer 三次源码级植入：逐条删掉 `run_weekly_capstone(...)` 的转发再跑 one-click 测试，`finally` 按字节还原并核 sha256 + `git diff --numstat`
+
+**验证结果**：焦点超集 `PASS tests=180 elapsed=109.3s`、`receipt:86c660cbdb5fd9d4d28a9d04`。转移表：省略 + `auto_authorize_pass2_budget=True`（正式一键）→ `(2, 65.0)`，与被删掉的硬编码 `max_retries_per_call=2` / `MASSIVE_RATE_LIMIT_RETRY_SECONDS` 逐字等价；非 auto 仍 `(0, 0.0)`；`2+30`、`3`、`True`、`0+65` 全部在 provider 调用前被拒。三次植入（删 `theme_soft_boost_enabled` / `max_total_http_attempts` / `soft_discovery_enabled` 转发）每次都让 `tests.test_us_short_paper_one_click` 转红，还原后 sha256 与植入前相同、numstat 回 `32 3`。full lane 引执行方账本 `5832/5832`、`318/318`、`count_gate_equal=True`，独立重算指纹 `917623ebe194` 与记录及 `prepared_fingerprint` 一致。
+
+**失效旧结论**：`R-USSHORT-PAPER-ONECLICK-OMITS-EXISTING-RUNTIME-CONTROLS` 转 `resolved`；「一键入口无法启用 429 重试」的旧描述不再成立（默认仍是 2 次 / 65 秒，且现在可显式覆盖）。
+
+**下一步注意事项**：
+- 问题8 仍是 retry/物理预算的唯一 owner（`_normalize_capstone_retry_policy` 出自 `8fb7f2d4`，本刀一行未改），问题10 仍是 soft-boost 三态唯一 owner；后续别在一键层再加第二套校验或默认值。
+- `runners/us_short_weekly_capstone.py:2189` 的 `include_soft_discovery=ctx.soft_discovery_enabled` 耦合**必须继续保留**：靠它，`--disable-soft-discovery` 才是把 K4a stage 整个移出 pipeline（问题10 判为正常 `NOT_REQUESTED`），而不是让 stage 发出 `disabled` 回执再被 degrade 成 `zero_invalid_evidence`。
+- 按 0810 去重后的顺序，下一刀是**问题11 + 问题13 同一刀（先 11 后 13）**。

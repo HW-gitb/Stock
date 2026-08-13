@@ -27,7 +27,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
-from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 from runners.us_short_weekly_capstone import (  # noqa: E402
     WeeklyCapstoneError,
     resolve_capstone_context,
@@ -241,6 +240,11 @@ def run_one_click(
     state_dir: Path = DEFAULT_STATE_DIR,
     momentum_top_k: int = 200,
     provider_pace_seconds: float = 1.0,
+    max_retries_per_call: int | None = None,
+    retry_backoff_seconds: float | None = None,
+    max_total_http_attempts: int | None = None,
+    soft_discovery_enabled: bool = True,
+    theme_soft_boost_enabled: bool = True,
     diagnostic_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict:
     private_root = _private_root(private_root)
@@ -264,6 +268,8 @@ def run_one_click(
         calendar_path=ROOT / "presets" / "us_short_market_calendar_2026_2027.json",
         confirm_user_authorization=True,
         state_dir=state_dir,
+        soft_discovery_enabled=soft_discovery_enabled,
+        theme_soft_boost_enabled=theme_soft_boost_enabled,
         sample_root=ROOT,
     )
     _emit_diagnostic_event(diagnostic_event, {
@@ -292,11 +298,14 @@ def run_one_click(
         confirm_user_authorization=True,
         dry_run=False,
         provider_pace_seconds=provider_pace_seconds,
-        max_retries_per_call=2,
-        retry_backoff_seconds=universe_fetch.MASSIVE_RATE_LIMIT_RETRY_SECONDS,
+        max_retries_per_call=max_retries_per_call,
+        retry_backoff_seconds=retry_backoff_seconds,
+        max_total_http_attempts=max_total_http_attempts,
         state_dir=state_dir,
         sample_root=ROOT,
         auto_authorize_pass2_budget=True,
+        soft_discovery_enabled=soft_discovery_enabled,
+        theme_soft_boost_enabled=theme_soft_boost_enabled,
         model_paper_store_root=private_root / "model_paper_private",
         model_paper_run_account_mode="paper_only",
         diagnostic_event=diagnostic_event,
@@ -323,6 +332,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--momentum-top-k", type=int, default=200)
     parser.add_argument("--provider-pace-seconds", type=float, default=1.0)
+    parser.add_argument("--max-retries-per-call", type=int, default=None)
+    parser.add_argument("--retry-backoff-seconds", type=float, default=None)
+    parser.add_argument("--max-total-http-attempts", type=int, default=None)
+    parser.add_argument(
+        "--disable-soft-discovery",
+        dest="soft_discovery_enabled",
+        action="store_false",
+        default=True,
+    )
+    parser.add_argument(
+        "--disable-theme-soft-boost",
+        dest="theme_soft_boost_enabled",
+        action="store_false",
+        default=True,
+    )
     parser.add_argument("--diagnostics-dir", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     diagnostics: _RunDiagnostics | None = None
@@ -340,6 +364,11 @@ def main(argv: list[str] | None = None) -> int:
             state_dir=args.state_dir,
             momentum_top_k=args.momentum_top_k,
             provider_pace_seconds=args.provider_pace_seconds,
+            max_retries_per_call=args.max_retries_per_call,
+            retry_backoff_seconds=args.retry_backoff_seconds,
+            max_total_http_attempts=args.max_total_http_attempts,
+            soft_discovery_enabled=args.soft_discovery_enabled,
+            theme_soft_boost_enabled=args.theme_soft_boost_enabled,
             diagnostic_event=diagnostics.emit,
         )
     except BaseException as exc:  # noqa: BLE001 - diagnostics must preserve every failure class

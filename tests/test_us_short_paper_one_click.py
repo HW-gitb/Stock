@@ -182,8 +182,35 @@ class USShortPaperOneClickTest(unittest.TestCase):
         kwargs = run_capstone.call_args.kwargs
         self.assertEqual(private_root.resolve(), kwargs["private_root"])
         self.assertEqual(DEFAULT_STATE_DIR.resolve(), kwargs["state_dir"])
-        self.assertEqual(2, kwargs["max_retries_per_call"])
+        self.assertIsNone(kwargs["max_retries_per_call"])
+        self.assertIsNone(kwargs["retry_backoff_seconds"])
+        self.assertIsNone(kwargs["max_total_http_attempts"])
+        self.assertIs(kwargs["soft_discovery_enabled"], True)
+        self.assertIs(kwargs["theme_soft_boost_enabled"], True)
+
+    @mock.patch("runners.us_short_paper_one_click.run_weekly_capstone", return_value={})
+    @mock.patch(
+        "runners.us_short_paper_one_click.resolve_capstone_context",
+        return_value=SimpleNamespace(decision_date="20260723", price_basis_date="20260722"),
+    )
+    def test_explicit_problem12_controls_reach_the_existing_capstone_owners(self, _context, run_capstone) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            run_one_click(
+                now_et=datetime(2026, 7, 23, 8, 0, 0),
+                private_root=Path(td),
+                max_retries_per_call=1,
+                retry_backoff_seconds=65.0,
+                max_total_http_attempts=123,
+                soft_discovery_enabled=False,
+                theme_soft_boost_enabled=False,
+            )
+
+        kwargs = run_capstone.call_args.kwargs
+        self.assertEqual(1, kwargs["max_retries_per_call"])
         self.assertEqual(65.0, kwargs["retry_backoff_seconds"])
+        self.assertEqual(123, kwargs["max_total_http_attempts"])
+        self.assertIs(kwargs["soft_discovery_enabled"], False)
+        self.assertIs(kwargs["theme_soft_boost_enabled"], False)
 
     @mock.patch(
         "runners.us_short_paper_one_click.resolve_capstone_context",
@@ -251,18 +278,37 @@ class USShortPaperOneClickTest(unittest.TestCase):
                 + "' }\n",
                 encoding="utf-8",
             )
-            for expected_exit in (0, 17):
+            log_path = repo / "argv.jsonl"
+            (runners / "us_short_paper_one_click.py").write_text(
+                "import json, os, sys\n"
+                "from pathlib import Path\n"
+                "with Path(os.environ['US_SHORT_ONE_CLICK_ARG_LOG']).open('a', encoding='utf-8') as handle:\n"
+                "    handle.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                "print('normal stdout summary')\n"
+                "print('normal stderr status', file=sys.stderr)\n"
+                "raise SystemExit(int(os.environ['US_SHORT_ONE_CLICK_EXIT']))\n",
+                encoding="utf-8",
+            )
+            base = [
+                "--now-et", "2026-07-23T08:00:00",
+                "--momentum-top-k", "200",
+                "--provider-pace-seconds", "1",
+            ]
+            calls = (
+                (17, base + [
+                    "--max-retries-per-call", "1",
+                    "--retry-backoff-seconds", "65",
+                    "--max-total-http-attempts", "123",
+                    "--disable-soft-discovery",
+                    "--disable-theme-soft-boost",
+                ]),
+                (0, base),
+            )
+            for expected_exit, expected_argv in calls:
                 with self.subTest(expected_exit=expected_exit):
-                    (runners / "us_short_paper_one_click.py").write_text(
-                        "import sys\n"
-                        "expected = ['--now-et', '2026-07-23T08:00:00', '--momentum-top-k', '200', "
-                        "'--provider-pace-seconds', '1']\n"
-                        "if sys.argv[1:] != expected: raise SystemExit(91)\n"
-                        "print('normal stdout summary')\n"
-                        "print('normal stderr status', file=sys.stderr)\n"
-                        f"raise SystemExit({expected_exit})\n",
-                        encoding="utf-8",
-                    )
+                    env = os.environ.copy()
+                    env["US_SHORT_ONE_CLICK_ARG_LOG"] = str(log_path)
+                    env["US_SHORT_ONE_CLICK_EXIT"] = str(expected_exit)
                     result = subprocess.run(
                         [
                             powershell,
@@ -273,8 +319,12 @@ class USShortPaperOneClickTest(unittest.TestCase):
                             str(runners / "us_short_paper_one_click.ps1"),
                             "-NowEt",
                             "2026-07-23T08:00:00",
+                            *(["-MaxRetriesPerCall", "1", "-RetryBackoffSeconds", "65",
+                               "-MaxTotalHttpAttempts", "123", "-DisableSoftDiscovery",
+                               "-DisableThemeSoftBoost"] if expected_exit == 17 else []),
                         ],
                         cwd=repo,
+                        env=env,
                         text=True,
                         capture_output=True,
                         errors="replace",
@@ -286,6 +336,9 @@ class USShortPaperOneClickTest(unittest.TestCase):
                     self.assertIn("normal stderr status", combined)
                     self.assertNotIn("RemoteException", combined)
                     self.assertNotIn("NativeCommandError", combined)
+
+            recorded = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(recorded, [expected for _exit, expected in calls])
 
 
 if __name__ == "__main__":
