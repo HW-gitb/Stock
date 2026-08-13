@@ -9,7 +9,9 @@ from types import SimpleNamespace
 from unittest import mock
 
 from engine.us_short_model_paper_store import load_head
+from engine.us_short_result_effects import apply_result_effects, build_portfolio_guard_result
 import runners.us_short_weekly_capstone as capstone
+from runners import us_short_weekly_capstone_stages as capstone_stages
 from runners.us_short_weekly_capstone import Stage, _run_model_paper_adapter, _run_model_paper_weekly, default_pipeline, run_weekly_capstone
 from tests.provider.test_us_short_batch5_data_context import _candidate_artifact
 from tests.provider.us_short_private_test_root import temporary_us_short_state_directory
@@ -41,6 +43,145 @@ def _record(decision: str, action: str) -> dict:
 
 
 class ModelPaperCapstoneWiringTest(unittest.TestCase):
+    def test_model_paper_nav_reaches_portfolio_guard_and_result_effects(self) -> None:
+        """The source-bound adapter packet must replace the synthetic bridge template at the real consumers."""
+        as_of = "20260720"
+        track = {
+            "paper_evaluable": True,
+            "consecutive_stops": 0,
+            "paper_drawdown_frac": 0.0,
+            "evidence_ref": {
+                "kind": "source_id", "value": "model_paper_nav:source-bound-test", "as_of": as_of,
+            },
+        }
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            template = root / "batch4_template.json"
+            template.write_text(
+                json.dumps({
+                    "paper_track": {
+                        "paper_evaluable": False,
+                        "consecutive_stops": None,
+                        "paper_drawdown_frac": None,
+                        "evidence_ref": {
+                            "kind": "source_id", "value": "synthetic_fixture:paper_track_not_evaluable",
+                        },
+                    },
+                }),
+                encoding="utf-8",
+            )
+            vix = root / "vix.json"
+            vix.write_text(json.dumps({"vix_regime": "进攻", "vix_regime_is_unknown": False}), encoding="utf-8")
+            seen: dict[str, object] = {}
+
+            def fake_run_e2e(**kwargs):
+                supplied = kwargs.get("model_paper_track")
+                if supplied is None:
+                    supplied = json.loads(template.read_text(encoding="utf-8"))["paper_track"]
+                guard = build_portfolio_guard_result(
+                    supplied,
+                    prior_state={"schema_name": "us_short_portfolio_guard_state", "schema_version": "1.0.0",
+                                 "as_of": as_of, "state": "normal"},
+                    as_of=as_of,
+                )
+                effected = apply_result_effects(
+                    {"regime": {"market_risk_regime": "进攻", "position_cap": 1.0}, "rows": [{
+                        "ticker": "ABC", "final_action": "观察", "observe_reason_type": "capacity_or_budget_deferred",
+                    }]},
+                    portfolio_guard_result=guard,
+                    cooldown_by_ticker={"ABC": {
+                        "status": "none", "cooldown_until": None, "reentry_allowed_reason": None,
+                        "evidence_ref": {"kind": "source_id", "value": "cooldown:test", "as_of": as_of},
+                    }},
+                    as_of=as_of,
+                )
+                seen["evidence_ref"] = effected["rows"][0]["result_effects"]["evidence_refs"]["portfolio_guard"]["value"]
+                return {"batch4_run": {"emitted": False, "no_emit_reason": "out_of_window"}}
+
+            ctx = SimpleNamespace(
+                vix_regime_summary_path=vix,
+                research_live_capability=None,
+                forward_policy_comparison_ledger_path=root / "comparison.json",
+                source_packet_path=root / "source.json",
+                batch4_template_path=template,
+                account_state_path=root / "account.json",
+                provider_health_path=root / "health.json",
+                private_root=root,
+                official_output_root=None,
+                now_et=datetime(2026, 7, 20, 8, 0, 0),
+                context_components_path=root / "components.json",
+                generated_at="2026-07-20T08:00:00-04:00",
+                serenity_shadow_result=None,
+                serenity_quality_run_result=None,
+                model_paper_store_root=root / "model_paper_private",
+                model_paper_track=track,
+            )
+            with (
+                mock.patch.object(capstone_stages, "_write_provider_health"),
+                mock.patch.object(capstone_stages, "comparison_banner_from_private_ledger_path", return_value=None),
+                mock.patch.object(capstone_stages, "classify_soft_boost_artifact_state", return_value={"state": "not_applicable", "reason_code": None}),
+                mock.patch.object(capstone_stages._bridge, "run_e2e", side_effect=fake_run_e2e),
+            ):
+                capstone_stages.run_weekly_bridge(ctx)
+        self.assertEqual(seen["evidence_ref"], "model_paper_nav:source-bound-test")
+
+    def test_formal_model_paper_bridge_without_track_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            ctx = SimpleNamespace(
+                model_paper_store_root=root / "model_paper_private",
+                model_paper_track=None,
+                vix_regime_summary_path=root / "vix.json",
+                forward_policy_comparison_ledger_path=root / "comparison.json",
+                source_packet_path=root / "source.json",
+                batch4_template_path=root / "template.json",
+                account_state_path=root / "account.json",
+                provider_health_path=root / "health.json",
+                private_root=root,
+                official_output_root=None,
+                now_et=datetime(2026, 7, 20, 8, 0, 0),
+                context_components_path=root / "components.json",
+                generated_at="2026-07-20T08:00:00-04:00",
+            )
+            ctx.vix_regime_summary_path.write_text(
+                json.dumps({"vix_regime": "进攻", "vix_regime_is_unknown": False}), encoding="utf-8"
+            )
+            with mock.patch.object(capstone_stages, "_write_provider_health"), \
+                 mock.patch.object(capstone_stages, "comparison_banner_from_private_ledger_path", return_value=None), \
+                 mock.patch.object(capstone_stages, "classify_soft_boost_artifact_state", return_value={"state": "not_applicable", "reason_code": None}), \
+                 mock.patch.object(capstone_stages._bridge, "run_e2e") as run_e2e:
+                with self.assertRaisesRegex(ValueError, "model-paper.*paper_track"):
+                    capstone_stages.run_weekly_bridge(ctx)
+                run_e2e.assert_not_called()
+
+    def test_direct_model_paper_capstone_without_receipt_stops_before_stage(self) -> None:
+        entered: list[str] = []
+
+        def must_not_run(_ctx):
+            entered.append("stage")
+            raise AssertionError("model-paper stage was entered before activation")
+
+        stage = Stage("must_not_run", False, lambda _ctx: [], lambda _ctx: [], must_not_run)
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            summary = run_weekly_capstone(
+                now_et=datetime(2026, 7, 20, 8, 0, 0),
+                private_root=root / "private",
+                batch4_template_path=root / "template.json",
+                account_state_path=root / "account.json",
+                dry_run=False,
+                confirm_user_authorization=True,
+                state_dir=root / "state",
+                sample_root=root,
+                stages=[stage],
+                model_paper_store_root=root / "private" / "model_paper_private",
+                model_paper_run_account_mode="paper_only",
+                market_diagnostic_root=root / "private" / "market_diagnostic_private",
+            )
+        self.assertEqual(summary["activation_status"], "dormant")
+        self.assertFalse(summary["model_paper_started"])
+        self.assertEqual([], entered)
+
     def test_absent_in_repo_model_paper_root_reaches_first_week_seed_preview(self) -> None:
         with temporary_us_short_state_directory(capstone.ROOT) as state_root_text:
             state_root = Path(state_root_text)
@@ -199,6 +340,7 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
                 return summary
 
             def seed_weekly_bridge(ctx):
+                seen_track["value"] = ctx.model_paper_track
                 report_path, action_path, machine_path = capstone._official_output_paths(ctx)
                 report_path.parent.mkdir(parents=True, exist_ok=True)
                 report_path.write_text("# weekly base\n", encoding="utf-8")
@@ -215,6 +357,7 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
                     }
                 }
 
+            seen_track: dict[str, object] = {}
             pipeline = (
                 Stage("momentum", False, lambda _ctx: (), lambda ctx: (ctx.series_packet_path, ctx.ohlcv_series_packet_path), seed_momentum),
                 Stage("model_paper_adapter", False, lambda ctx: (ctx.ohlcv_series_packet_path,), lambda ctx: (ctx.account_state_path,), _run_model_paper_adapter),
@@ -226,6 +369,10 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
             with (
                 mock.patch.object(capstone, "default_pipeline", return_value=pipeline),
                 mock.patch.object(capstone, "_provider_execution_receipt", receipt),
+                mock.patch(
+                    "engine.us_short_model_paper_activation.resolve_model_paper_activation",
+                    return_value={"status": "authorized", "receipt": {}},
+                ),
                 mock.patch(
                     "runners.us_short_batch5_full_candidate_pass2_preflight.finalize_preflight_from_existing_derivation",
                     side_effect=lambda **kwargs: json.loads(
@@ -249,6 +396,10 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
                 )
 
             self.assertTrue(summary["emitted"])
+            self.assertEqual(
+                seen_track["value"]["evidence_ref"]["value"],
+                next(item for item in summary["stages"] if item["name"] == "model_paper_adapter")["result"]["adapter"]["paper_track"]["evidence_ref"]["value"],
+            )
             self.assertEqual(1, receipt.call_count)
             terminal = next(item for item in summary["stages"] if item["name"] == "model_paper_weekly")
             weekly = terminal["result"]

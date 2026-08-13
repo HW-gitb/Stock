@@ -27,6 +27,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
+from engine.us_short_model_paper_activation import (  # noqa: E402
+    MODEL_PAPER_ACTIVATION_ROOT,
+    resolve_model_paper_activation,
+)
 from runners.us_short_weekly_capstone import (  # noqa: E402
     WeeklyCapstoneError,
     resolve_capstone_context,
@@ -253,6 +257,45 @@ def run_one_click(
     if provider_pace_seconds < 0:
         raise PaperOneClickError("provider-pace-seconds must be nonnegative")
     state_dir = _canonical_source_state_dir(state_dir)
+
+    try:
+        activation = resolve_model_paper_activation(root=MODEL_PAPER_ACTIVATION_ROOT)
+    except Exception as exc:  # noqa: BLE001 - malformed authorization is never ordinary dormancy
+        raise PaperOneClickError(
+            f"activation_gate_broken: {type(exc).__name__}: {exc}"
+        ) from exc
+    if not isinstance(activation, dict) or activation.get("status") not in {"dormant", "authorized"}:
+        raise PaperOneClickError("activation_gate_broken: model-paper activation result is invalid")
+    if activation["status"] == "dormant":
+        print(
+            "[US-SHORT PAPER] DORMANT: 尚未收到并完成 US-short 设计完成激活；"
+            "未执行 provider、账户播种或 model-paper 写入。",
+            file=sys.stderr,
+        )
+        _emit_diagnostic_event(diagnostic_event, {
+            "event": "model_paper_dormant",
+            "activation_status": "dormant",
+            "model_paper_started": False,
+        })
+        return {
+            "mode": "dormant",
+            "execution_mode": "dormant",
+            "report_mode": "offline_test",
+            "operational_use": "not_authorized",
+            "activation_status": "dormant",
+            "model_paper_started": False,
+            "provider_calls_performed": False,
+            "account_write": False,
+            "model_paper_store_write": False,
+            "stages": [],
+            "stage_outcomes": [],
+            "stage_outcome_counts": {
+                "completed_work": 0,
+                "no_work_expected": 0,
+                "waiting_dependency": 0,
+                "failed_nonblocking": 0,
+            },
+        }
 
     # Resolve the canonical week before writing any generated input.  This is
     # the same resolver used by the capstone, so the wrapper cannot drift to a

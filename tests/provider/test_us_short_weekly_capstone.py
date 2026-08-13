@@ -705,7 +705,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
 
     def _run(self, order_sink, **kw):
         account_state_path = kw.pop("account_state_path", self.private_root / "account.json")
-        return run_weekly_capstone(
+        runner = lambda: run_weekly_capstone(
             now_et=datetime(2026, 7, 9, 8, 0, 0),
             private_root=self.private_root,
             batch4_template_path=Path("template.json"),
@@ -716,6 +716,13 @@ class CapstoneFakeChainTest(unittest.TestCase):
             sample_root=self.state_dir,   # keep the preflight provider_samples sidecar inside the tempdir (isolation)
             **kw,
         )
+        if kw.get("model_paper_store_root") is not None:
+            with mock.patch(
+                "engine.us_short_model_paper_activation.resolve_model_paper_activation",
+                return_value={"status": "authorized", "receipt": {}},
+            ):
+                return runner()
+        return runner()
 
     def test_unregistered_in_repo_root_fails_before_first_stage(self):
         from runners import us_short_weekly_capstone as cap
@@ -974,6 +981,15 @@ class CapstoneFakeChainTest(unittest.TestCase):
         with (
             mock.patch.object(one_click, "ROOT", checkout_root),
             mock.patch.object(one_click, "DEFAULT_STATE_DIR", self.state_dir),
+            mock.patch.object(
+                one_click,
+                "resolve_model_paper_activation",
+                return_value={"status": "authorized", "receipt": {}},
+            ),
+            mock.patch(
+                "engine.us_short_model_paper_activation.resolve_model_paper_activation",
+                return_value={"status": "authorized", "receipt": {}},
+            ),
             mock.patch.object(capstone, "default_pipeline", return_value=stages),
             mock.patch.object(capstone, "_provider_execution_receipt", return_value=mock.Mock()),
             mock.patch(

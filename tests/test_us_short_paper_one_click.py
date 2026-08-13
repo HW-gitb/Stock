@@ -71,6 +71,49 @@ def _assert_state_dir_literal_children_are_gitignored(
 
 
 class USShortPaperOneClickTest(unittest.TestCase):
+    def test_no_receipt_is_typed_dormant_stop_before_context_inputs_provider_or_store(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            private_root = root / "private"
+            activation_root = private_root / "market_diagnostic_private"
+            with (
+                mock.patch.object(one_click, "MODEL_PAPER_ACTIVATION_ROOT", activation_root, create=True),
+                mock.patch.object(one_click, "resolve_capstone_context", side_effect=AssertionError("context reached")),
+                mock.patch.object(one_click, "_prepare_paper_inputs", side_effect=AssertionError("inputs reached")),
+                mock.patch.object(one_click, "run_weekly_capstone", side_effect=AssertionError("capstone reached")),
+            ):
+                stderr = io.StringIO()
+                with redirect_stderr(stderr):
+                    result = run_one_click(
+                        now_et=datetime(2026, 7, 20, 8, 0, 0),
+                        private_root=private_root,
+                        state_dir=DEFAULT_STATE_DIR,
+                        provider_pace_seconds=0.0,
+                    )
+            self.assertEqual(result["activation_status"], "dormant")
+            self.assertFalse(result["model_paper_started"])
+            self.assertIn("[US-SHORT PAPER] DORMANT", stderr.getvalue())
+            self.assertFalse((private_root / "weekly_private" / "_run_inputs").exists())
+            self.assertFalse((private_root / "model_paper_private").exists())
+
+    def test_broken_activation_is_not_downgraded_to_dormant(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.object(
+                one_click, "resolve_model_paper_activation", side_effect=ValueError("damaged receipt")
+            ), mock.patch.object(one_click, "resolve_capstone_context") as resolve_context:
+                with self.assertRaisesRegex(PaperOneClickError, "activation_gate_broken"):
+                    run_one_click(
+                        now_et=datetime(2026, 7, 20, 8, 0, 0),
+                        private_root=Path(td) / "private",
+                        state_dir=DEFAULT_STATE_DIR,
+                        provider_pace_seconds=0.0,
+                    )
+                resolve_context.assert_not_called()
+
+    @mock.patch(
+        "runners.us_short_paper_one_click.resolve_model_paper_activation",
+        return_value={"status": "authorized", "receipt": {}},
+    )
     @mock.patch(
         "runners.us_short_paper_one_click.resolve_capstone_context",
         return_value=SimpleNamespace(decision_date="20260723", price_basis_date="20260722"),
@@ -115,7 +158,7 @@ class USShortPaperOneClickTest(unittest.TestCase):
         },
     )
     def test_main_prints_stage_outcome_counts_and_rows_from_same_stdout_summary(
-        self, _run_capstone, _context,
+        self, _run_capstone, _context, _activation,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
             stdout = io.StringIO()
@@ -249,12 +292,16 @@ class USShortPaperOneClickTest(unittest.TestCase):
         with self.assertRaises(AssertionError):
             _assert_state_dir_literal_children_are_gitignored(planted_children)
 
+    @mock.patch(
+        "runners.us_short_paper_one_click.resolve_model_paper_activation",
+        return_value={"status": "authorized", "receipt": {}},
+    )
     @mock.patch("runners.us_short_paper_one_click.run_weekly_capstone", return_value={})
     @mock.patch(
         "runners.us_short_paper_one_click.resolve_capstone_context",
         return_value=SimpleNamespace(decision_date="20260723", price_basis_date="20260722"),
     )
-    def test_private_root_never_repoints_shared_source_state(self, _context, run_capstone) -> None:
+    def test_private_root_never_repoints_shared_source_state(self, _context, run_capstone, _activation) -> None:
         with tempfile.TemporaryDirectory() as td:
             private_root = Path(td)
             run_one_click(now_et=datetime(2026, 7, 23, 8, 0, 0), private_root=private_root)
@@ -268,12 +315,16 @@ class USShortPaperOneClickTest(unittest.TestCase):
         self.assertIs(kwargs["soft_discovery_enabled"], True)
         self.assertIs(kwargs["theme_soft_boost_enabled"], True)
 
+    @mock.patch(
+        "runners.us_short_paper_one_click.resolve_model_paper_activation",
+        return_value={"status": "authorized", "receipt": {}},
+    )
     @mock.patch("runners.us_short_paper_one_click.run_weekly_capstone", return_value={})
     @mock.patch(
         "runners.us_short_paper_one_click.resolve_capstone_context",
         return_value=SimpleNamespace(decision_date="20260723", price_basis_date="20260722"),
     )
-    def test_explicit_problem12_controls_reach_the_existing_capstone_owners(self, _context, run_capstone) -> None:
+    def test_explicit_problem12_controls_reach_the_existing_capstone_owners(self, _context, run_capstone, _activation) -> None:
         with tempfile.TemporaryDirectory() as td:
             run_one_click(
                 now_et=datetime(2026, 7, 23, 8, 0, 0),
@@ -293,11 +344,15 @@ class USShortPaperOneClickTest(unittest.TestCase):
         self.assertIs(kwargs["theme_soft_boost_enabled"], False)
 
     @mock.patch(
+        "runners.us_short_paper_one_click.resolve_model_paper_activation",
+        return_value={"status": "authorized", "receipt": {}},
+    )
+    @mock.patch(
         "runners.us_short_paper_one_click.resolve_capstone_context",
         return_value=SimpleNamespace(decision_date="20260723", price_basis_date="20260722"),
     )
     @mock.patch("runners.us_short_paper_one_click.run_weekly_capstone")
-    def test_unexpected_failure_writes_redacted_private_diagnostics(self, run_capstone, _context) -> None:
+    def test_unexpected_failure_writes_redacted_private_diagnostics(self, run_capstone, _context, _activation) -> None:
         secret = "LEAK_DIAGNOSTICS_SENTINEL"
         run_capstone.side_effect = RuntimeError(f"provider process stopped: {secret}")
         old = os.environ.get("US_SHORT_DIAGNOSTICS_TEST_TOKEN")

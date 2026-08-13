@@ -873,6 +873,10 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         ctx.forward_policy_comparison_ledger_path,
     )
     artifact_state = classify_soft_boost_artifact_state(ctx)
+    formal_model_paper = getattr(ctx, "model_paper_store_root", None) is not None
+    model_paper_track = getattr(ctx, "model_paper_track", None)
+    if formal_model_paper and not isinstance(model_paper_track, dict):
+        raise ValueError("formal model-paper context requires a model-paper paper_track object")
     soft_paths = (
         {
             "stage_receipt_path": None,
@@ -928,6 +932,7 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         vix_regime=vix_regime,
         forward_policy_comparison_reminder=comparison_reminder,
         soft_discovery_receipt_paths=soft_paths,
+        model_paper_track=model_paper_track if formal_model_paper else None,
         projection_binding_expectations=_bridge.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
     )
     delivery = _deliver_serenity_shadow_to_official_report(ctx, summary)

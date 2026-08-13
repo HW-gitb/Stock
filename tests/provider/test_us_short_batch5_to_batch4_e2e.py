@@ -321,6 +321,39 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
         self.assertEqual(packet["market_axis_regimes"]["market_trend"], original_axes["market_trend"])
         self.assertEqual(packet["market_axis_regimes"]["breadth"], original_axes["breadth"])
 
+    def test_explicit_model_paper_track_replaces_template_and_omission_preserves_fixture_path(self) -> None:
+        template = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+        components = {
+            "data_context": {"selection_inputs": {"theme_opportunity_state": "no_strong_theme"}},
+            "per_ticker_analysis": {},
+            "run_provenance": {"as_of": _DECISION_DATE, "price_basis_date": "20260612"},
+        }
+        track = {
+            "paper_evaluable": True,
+            "consecutive_stops": 0,
+            "paper_drawdown_frac": 0.0,
+            "evidence_ref": {"kind": "source_id", "value": "model_paper_nav:e2e-test", "as_of": _DECISION_DATE},
+        }
+        kwargs = {
+            "components": components,
+            "template": template,
+            "provider_health": _provider_health(),
+            "account_state_path": Path("account.json"),
+            "calendar_path": Path("calendar.json"),
+            "governance_path": Path("governance.json"),
+            "private_root": Path("private"),
+            "official_output_root": None,
+            "now_et": datetime(2026, 6, 15, 9, 0, 0),
+        }
+        supplied = e2e._assemble_batch4_packet(**kwargs, model_paper_track=track)
+        self.assertEqual(supplied["paper_track"], track)
+        self.assertIsNot(supplied["paper_track"], track)
+        template_path = e2e._assemble_batch4_packet(**kwargs)
+        self.assertEqual(
+            template_path["paper_track"]["evidence_ref"]["value"],
+            "synthetic_fixture:paper_track_not_evaluable",
+        )
+
     def test_provider_bridge_rejects_research_live_when_it_consumes_action_template(self) -> None:
         """This bridge always consumes a caller template, so it cannot emit the fully-provider-derived label."""
         with self.assertRaisesRegex(e2e.Batch5ToBatch4E2EError, "must use mixed_source"):
