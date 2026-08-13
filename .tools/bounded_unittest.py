@@ -179,7 +179,6 @@ def _is_document_only_focused_run(unittest_args: list[str]) -> bool:
     """Recognise only the project's explicit two-module document gate."""
     return (
         len(unittest_args) == len(DOCUMENT_ONLY_FOCUSED_ARGS)
-        and len(set(unittest_args)) == len(unittest_args)
         and set(unittest_args) == DOCUMENT_ONLY_FOCUSED_ARGS
     )
 
