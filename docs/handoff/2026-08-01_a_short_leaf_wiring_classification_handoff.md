@@ -7232,7 +7232,7 @@ P3-10 的代码面已经独立审查 PASS；唯一保留的 `NOT_VERIFIED` 原�
 
 后续如再修复，只能在本 handoff 继续追加问题、根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审、精确测试命令和原始终态，并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；不得新建平行 handoff。
 
-## 2026-08-13 追加：N-3 / N-4 同刀的独立审查 = PASS（Claude Code；c405，已合入 master）
+## 2026-08-13 追加：N-3 / N-4 同刀的独立审查 = PASS（Claude Code；c405 已提交 `80e8506b`；合入 master 被并发窗口阻塞）
 
 **判定**：PASS，零 Required，N-3 与 N-4 均 resolved。正文只在 `docs/system_risk_register.md`。
 
