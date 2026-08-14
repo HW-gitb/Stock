@@ -937,5 +937,51 @@ class BacktestInputAndEvidenceBoundaryTest(unittest.TestCase):
         self.assertFalse(evaluation["full_size_allowed"])
 
 
+class SafeApiRetryPolicyTest(unittest.TestCase):
+    """Pin how many times a provider call is attempted, and who may narrow it."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.em = _load_egs_module()
+
+    def _attempts(self, **kwargs):
+        calls = []
+
+        def always_fails():
+            calls.append(1)
+            raise RuntimeError("provider down")
+
+        errors = []
+        with patch.object(self.em.time, "sleep", lambda _seconds: None):
+            result = self.em.safe_api(always_fails, errors=errors, **kwargs)
+        return len(calls), result, errors
+
+    def test_a_failing_call_is_attempted_five_times_by_default(self) -> None:
+        attempts, result, errors = self._attempts()
+        self.assertEqual(attempts, 5)
+        self.assertIsNone(result)
+        self.assertEqual(len(errors), 1)
+
+    def test_an_explicit_retries_argument_still_narrows_the_call(self) -> None:
+        # The SW fast-path probe and the two chunked fetches rely on failing fast,
+        # so widening the default must not widen them.
+        for requested in (1, 2):
+            with self.subTest(retries=requested):
+                attempts, _, _ = self._attempts(retries=requested)
+                self.assertEqual(attempts, requested)
+
+    def test_a_successful_call_never_pays_for_the_extra_attempts(self) -> None:
+        calls = []
+
+        def succeeds():
+            calls.append(1)
+            return [{"ts_code": "600001.SH"}]
+
+        with patch.object(self.em.time, "sleep", lambda _seconds: None):
+            result = self.em.safe_api(succeeds)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(result, [{"ts_code": "600001.SH"}])
+
+
 if __name__ == "__main__":
     unittest.main()
