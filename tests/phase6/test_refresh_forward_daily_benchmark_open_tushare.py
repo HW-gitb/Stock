@@ -64,12 +64,20 @@ def _close_only_cache() -> dict:
         },
         "stocks": pd.DataFrame(
             [
-                {"ts_code": "000001.SZ", "trade_date": "20240131", "open": 10.0, "close": 10.5},
+                {
+                "ts_code": "000001.SZ", "trade_date": "20240131", "open": 10.0, "close": 10.5,
+                # `_forward_cache_has_coverage` refuses a cache without provider lineage;
+                # a real cache carries these, so the fixture has to as well.
+                "adj_factor": 1.0, "adj_factor_observed": True, "raw_provider_observed": True,
+            },
             ]
         ),
         "limits": pd.DataFrame(
             [
-                {"ts_code": "000001.SZ", "trade_date": "20240131", "up_limit": 11.0, "down_limit": 9.0},
+                {
+                "ts_code": "000001.SZ", "trade_date": "20240131",
+                "up_limit": 11.0, "down_limit": 9.0, "provider_observed": True,
+            },
             ]
         ),
         "benchmarks": {"csi300": close_only.copy(), "csi1000": close_only.copy()},

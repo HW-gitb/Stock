@@ -201,6 +201,11 @@ class EgsMainL3GuardTest(unittest.TestCase):
             self.egs_main.CONF.update(original_conf)
 
     def test_today_reuse_uses_complete_hithink_snapshot_without_provider_call(self) -> None:
+        # The reuse gate compares the snapshot against the real wall clock, so a
+        # pinned date silently rots into a >14d failure.  Anchor on today instead:
+        # this case is about reusing a FRESH snapshot without a provider call, and
+        # the staleness gate itself is covered by its own case below.
+        fresh_day = datetime.now().strftime("%Y%m%d")
         catalog_codes = {f"{885000 + i}.TI" for i in range(1, 390)}
         concepts = pd.DataFrame([
             {"code": code, "name": f"概念{code}"} for code in sorted(catalog_codes)
@@ -221,19 +226,19 @@ class EgsMainL3GuardTest(unittest.TestCase):
         }
         candidates = pd.DataFrame([{"ts_code": "600000.SH", "pct_20d_n": 0.0}])
         daily = pd.DataFrame([
-            {"ts_code": "600000.SH", "trade_date": "20260716", "pct_chg": 2.0, "amount": 100.0}
+            {"ts_code": "600000.SH", "trade_date": fresh_day, "pct_chg": 2.0, "amount": 100.0}
         ])
         original_today = self.egs_main.TODAY
         original_snapshot_dir = self.egs_main.L3_SNAPSHOT_DIR
         original_conf = dict(self.egs_main.CONF)
         try:
-            self.egs_main.TODAY = "20260716"
+            self.egs_main.TODAY = fresh_day
             self.egs_main.CONF["l3_mode"] = "today"
             self.egs_main.CONF["l3_cache_mode"] = "reuse"
             with TemporaryDirectory(dir=str(ROOT)) as tmp:
                 self.egs_main.L3_SNAPSHOT_DIR = tmp
                 self.egs_main._write_l3_snapshot(
-                    "20260716", concepts,
+                    fresh_day, concepts,
                     {"600000.SH": ["885001.TI"]},
                     concept_members,
                     l3_source="hithink_finance", coverage=coverage,
@@ -242,17 +247,17 @@ class EgsMainL3GuardTest(unittest.TestCase):
                     self.egs_main, "fetch_complete_concept_graph",
                     side_effect=AssertionError("provider must not be called"),
                 ) as fetch:
-                    scored = self.egs_main.score_l3(candidates, ["20260716"], daily)
+                    scored = self.egs_main.score_l3(candidates, [fresh_day], daily)
                     empty_scored = self.egs_main.score_l3(
                         pd.DataFrame(columns=["ts_code", "pct_20d_n"]),
-                        ["20260716"],
+                        [fresh_day],
                         daily,
                     )
                 fetch.assert_not_called()
                 self.assertEqual(scored.loc[0, "cat_score"], 100.0)
                 self.assertTrue(empty_scored.empty)
                 self.assertEqual(self.egs_main.CONF["l3_provider"], "hithink_finance")
-                self.assertEqual(self.egs_main.CONF["l3_snapshot_date"], "20260716")
+                self.assertEqual(self.egs_main.CONF["l3_snapshot_date"], fresh_day)
         finally:
             self.egs_main.TODAY = original_today
             self.egs_main.L3_SNAPSHOT_DIR = original_snapshot_dir

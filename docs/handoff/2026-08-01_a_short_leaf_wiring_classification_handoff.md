@@ -7652,3 +7652,8 @@ OK (skipped=1)
 **本轮最值得记的收获（已落 Optional）**：diff 里有两处 `attempts == 3` → `5` 的断言修正，那是我上一刀把 `safe_api` 默认重试 3→5 的**遗留红**。它之所以没被发现，是因为 a_short 全量的 discovery pattern 是 `test_a_short*.py`，**根本不覆盖 `tests/phase6/test_egs_*` 这些 egs_main 的直接消费者**——那次全量 2846 全绿给了超出实际覆盖面的安全感。我随后全树扫了 `attempts[...]` 这一类，确认只剩这两处且都已改对。
 
 **未覆盖维度**：前瞻走快路径只在离线打桩证到；方案 §6 要求的"用户授权后一次无缓存 canonical live 真跑"未做，真实 `index_member_all(is_new=Y)` 覆盖率能否过 `SW_INDUSTRY_MIN_ACTIVE=3000` 未验。
+## 2026-08-14 追加：`O-P14-2` 两条既有红已闭（Claude Code 自修自审 PASS；c405）
+
+P1-4 审查时用 `tests/phase6` 整目录扫出的两条既有红（已确认与 P1-4 无关、master 同样红）现已修完，**两条都在测试侧，生产码零改动**。① `test_egs_main_l3_guard` 那条把快照日期与 `TODAY` 钉死在 `20260716`，而 `score_l3` 的新鲜度门比的是 `datetime.now()` 的真实墙钟，于是这条用例从写下当天就在倒计时、今天差 29 天必红；改成锚定当天即可，没有用 `l3_allow_stale_cache` 绕过——同模块紧接着那条陈旧门用例本来就是按 `now()` 相对锚定的，我的改法与它同套路，它也顺带充当了「门仍然咬得住」的反向控制。② `test_refresh_forward_daily_benchmark_open_tushare` 那条的夹具缺 `adj_factor` / `adj_factor_observed` / `raw_provider_observed` / `provider_observed`，被后来加严的 `_forward_cache_has_coverage` 拒绝；补齐夹具、门一行不动，修后日志出现 `[CACHE] forward_daily reused` 是正向证据，而我把四个列逐个抽掉重跑、每次都退回 refetch，是逐列的反向证据。
+
+整目录复扫 `245 OK`（修前同命令 `failures=1 errors=1`），确认没有被先前失败掩盖的其他红。`O-P14-1` 仍未处理：a_short 全量的 discovery pattern 是 `test_a_short*.py`，不覆盖 `tests/phase6/test_egs_*`，这两条红能长期无人发现正是它的直接后果。
