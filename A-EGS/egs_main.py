@@ -4291,10 +4291,11 @@ def _lookback_cutoff_trade_date(trade_dates, lookback):
     cutoff_idx = min(len(trade_dates) - 1, lookback - 1)
     return trade_dates[cutoff_idx]
 
-def get_relisted_stocks(trade_dates):
+def get_relisted_stocks(trade_dates, all_daily=None):
     key = f"relisted_{trade_dates[0]}_v2"
     if (cached := load_cache(key)) is not None: return cached
-    all_daily = get_daily_all(trade_dates)
+    if all_daily is None:
+        all_daily = get_daily_all(trade_dates)
     if all_daily.empty:
         save_cache(key, set())          # [小修复④]
         return set()
@@ -7532,7 +7533,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
         suspended_codes=suspended_set,
         suspended_observed_at=suspension_observed_at,
     )
-    relisted_set  = get_relisted_stocks(trade_dates)
+    relisted_set  = get_relisted_stocks(trade_dates, all_daily=all_daily)
 
     # [崩溃修复②] get_unlock_future 内置前置防御
     unlock_set = get_unlock_future(df_stocks, df_db)
