@@ -1749,6 +1749,12 @@ _EXCL_REASON_META = {
         "price_observation_count",
         "20日动量历史不足",
     ),
+    "financial_data_unavailable": (
+        "financial_data_unavailable",
+        "l0_filter",
+        "announcement_date",
+        "财务数据不可用",
+    ),
 }
 
 # EGS v1.4 曾把这些 post-L0 排名淘汰键混入 excluded_counts，导致 weekly 把它们当未知 L0
