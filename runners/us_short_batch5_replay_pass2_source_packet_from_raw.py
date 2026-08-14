@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, urlparse
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+sys.modules.setdefault("runners.us_short_batch5_replay_pass2_source_packet_from_raw", sys.modules[__name__])
 
 from runners import us_egs_sample_validation as sample_validation  # noqa: E402
 from runners import us_short_batch5_full_candidate_live_source_packet as live_source_packet  # noqa: E402

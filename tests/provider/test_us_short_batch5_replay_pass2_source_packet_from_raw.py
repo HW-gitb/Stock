@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import hashlib
 import sys
+import subprocess
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -25,6 +27,74 @@ from tests.provider.us_short_private_test_root import temporary_us_short_directo
 def _wrapper(provider_id, endpoint_family, symbol, payload, *, http_status=200, ok=True, error_type=None):
     return {"provider_id": provider_id, "endpoint_family": endpoint_family, "symbol": symbol,
             "http_status": http_status, "ok": ok, "error_type": error_type, "payload": payload}
+
+
+class ReplayClientScriptEntryTest(unittest.TestCase):
+    def test_direct_script_entry_reuses_canonical_replay_client_class(self):
+        probe = textwrap.dedent(
+            r'''
+            import hashlib
+            import importlib
+            import importlib.util
+            import json
+            import sys
+            import tempfile
+            from pathlib import Path
+
+            root = Path(sys.argv[1])
+            replay_path = root / "runners" / "us_short_batch5_replay_pass2_source_packet_from_raw.py"
+            spec = importlib.util.spec_from_file_location("us_short_replay_script_entry", replay_path)
+            script_module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = script_module
+            spec.loader.exec_module(script_module)
+
+            canonical = importlib.import_module("runners.us_short_batch5_replay_pass2_source_packet_from_raw")
+            assert script_module.ReplayClient is canonical.ReplayClient
+
+            with tempfile.TemporaryDirectory() as tempdir:
+                raw_root = Path(tempdir)
+                wrapper_path = script_module.sample_validation.raw_sample_ref(
+                    raw_root, "massive", "reference_news", "AAPL"
+                )
+                wrapper_path.parent.mkdir(parents=True)
+                wrapper_path.write_text(
+                    json.dumps({
+                        "provider_id": "massive",
+                        "endpoint_family": "reference_news",
+                        "symbol": "AAPL",
+                        "http_status": 200,
+                        "ok": True,
+                        "error_type": None,
+                        "payload": {"results": []},
+                    }),
+                    encoding="utf-8",
+                )
+                capture = {}
+                client = script_module.ReplayClient(
+                    raw_root,
+                    expected_records={
+                        ("massive", "reference_news", "AAPL"): (
+                            wrapper_path.resolve(),
+                            hashlib.sha256(wrapper_path.read_bytes()).hexdigest(),
+                        )
+                    },
+                    bound_capture=capture,
+                )
+                script_module.live_source_packet._require_bound_offline_replay_client(client, capture)
+            '''
+        )
+        completed = subprocess.run(
+            [sys.executable, "-c", probe, str(ROOT)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(
+            completed.returncode,
+            0,
+            f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}",
+        )
 
 
 class ReplayClientTest(unittest.TestCase):

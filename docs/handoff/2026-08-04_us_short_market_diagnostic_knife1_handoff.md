@@ -1501,3 +1501,27 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_bounded_un
 - 新记 `O-0814-1`——**同一缺陷类还有第二个实例**：`ReplayClient` 定义在 `runners/us_short_batch5_replay_pass2_source_packet_from_raw.py`，该模块自身是脚本入口（`:370 main` / `:401 __main__`），`:27` 按包名 import live-source、`:343` 把自己造的 client 交进去，而 `live_source:1435` 对它做严格 `isinstance`。直接以脚本方式跑它会重演同一个洞，同法一行即可修。严重度低（离线诊断工具、零 provider、fail-closed），故未阻断本刀。跨模块从 `runners.*` 导入的名字里只有 `Pass2BudgetApproval`/`ConvertError`/`ReplayClient` 三个是类，其余是常量；`ConvertError` 的定义模块只被 import、不作启动器入口，不构成第三个实例。**类到此为止。**
 - **桌面 §7 的 live 收口仍开着**：本刀只闭代码面。要关掉 0814 的「全链路阻断」，仍需一次获授权的真实胶囊越过 yfinance 与 Pass2、进入 receipt → weekly_bridge → emit/no-emit 终态；若先被 Massive 403 拦住只能记那个独立终态。
 - 0814 的另两项**未处理且仍开着**（按桌面 §3 明确排除，非遗漏）：`universe_fetch` 的 Massive grouped daily HTTP 403；数据覆盖缺口（`no_price=592`、`no_shares=2067`、市值兜底后 14 未解析、SIC 缺 54、momentum 缺 6）。
+
+## 2026-08-14 追加：O-0814-1 ReplayClient 直接脚本入口类身份修复（1302，repaired / OPEN-NOT_VERIFIED）
+
+- **缺口**：replay runner 自身以脚本路径启动时生成 `__main__.ReplayClient`，而 live-source offline 严格门按 canonical 包名导入另一份类；真实 replay client 因此会被 fail-closed 拒绝。该路径只消费已落盘 capture，不调用 provider。
+- **最小修复**：在 `runners/us_short_batch5_replay_pass2_source_packet_from_raw.py` 的 repo-root 初始化后增加 `sys.modules.setdefault(...)`；未改 `ReplayClient`、live-source 严格门、manifest 校验或 replay 输出契约。
+- **验证**：新增 fresh-subprocess 入口回归按红→绿闭合；ReplayClient 与 live-source 焦点 `41 OK`，receipt=`receipt:f7b03f4bec98faefd0f7a6a9`；固定主 Python；py_compile=2、diff-check、增量编码/冲突扫描 PASS；full-lane 未触发（离线诊断、焦点已界定）。
+- **边界 / 下一步**：未调用 provider/live/paper，未写真实 state，未改主树或桌面文档。`O-0814-2` 已由上一条 Claude PASS 以完整同指纹账本纠正，本轮不重复改历史；待 Claude Code 独立审查 O-0814-1 后提交。
+
+## 2026-08-14 追加：`O-0814-1` 独立审查收口（PASS，已提交并合入 master）—— 本缺陷类到此关闭
+
+**改了什么**：本节只记审查收口，实现见上一节。PASS 后只 stage 本刀 5 个文件并合入 master。
+
+**为什么**：与上一刀同一个问题——判的不是「修没修好」，而是「是不是靠放松门修好的」。被消费的 `_require_bound_offline_replay_client` 所在文件本轮 `git diff --name-only` 为空，定义上就没动；我再用四腿探针把它的两条腿各验一遍。
+
+**验证命令**：
+- 焦点超集（五模块，含两道文档门）：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1300 tests.provider.test_us_short_batch5_replay_pass2_source_packet_from_raw tests.provider.test_us_short_batch5_full_candidate_live_source_packet tests.provider.test_us_short_pass2_budget_approval tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`
+
+**验证结果**：焦点 `PASS tests=108 elapsed=75.5s receipt:07af3d7b3c7d2f0bb8a17691`。四腿反向控制（同进程造两份副本复现修复前形态）：`foreign.ReplayClient is canonical.ReplayClient` 为 **False**；foreign 类 client → **拒**；只实现 `is_bound_to_capture` 且恒 True 的鸭子类型假货 → **拒**（这正是该门 docstring 承诺的「不接受任意 HTTP-like client 或调用方自造的 provenance 对象」）；canonical 且正确绑定 → **过**；canonical 但换成不匹配的 capture → **拒**（`is_bound_to_capture` 这条腿独立活着，没被 isinstance 通过后短路）。
+
+**full-lane 分级**：我独立判 `not_triggered`，与执行方一致。rule 3 五触发逐条不满足：该 runner 是离线回放/诊断工具、零 provider 调用，不是 rule 3(a) 举例的生产周跑 entrypoint；非共享 engine/schema；不碰 provider/凭证/授权/raw 抓取/账户；影响面被焦点包完全界定；用户未要求。**账本里 `eaa58a74…` 那条属于上一刀（capstone），与本刀代码态 `73163057…` 不符，本刀本来就没有也不需要全量——别误当遗漏。**
+
+**下一步注意事项 —— 本缺陷类已关闭，后来者不必再扫**：判据是「**类定义在一个自身会被当脚本跑的模块里**」。`engine/` 下的模块永不是启动入口，所以定义在那里的类（`paid_gateway.LiveTransport`、`merge.ThemeDiscoveryMergeError`、`ingest.LLMThemeDiscoveryError`、`validate.ProvisionalThemeValidationError`、`plan_budget.PlanBudgetError`、`publish_policy.DiscoveryPublishPolicyError`）天然免疫；`runners/` 下被跨模块严格判型的类只有三个——`Pass2BudgetApproval`（已锚定）、`ReplayClient`（本刀锚定）、`ConvertError`（其定义模块只被 import，`.ps1` 仅在帮助文案里提示操作员单独跑它生成 JSON，不在同进程交对象）。两种写法（`from X import 类` 与 `mod.Class` 属性式）都扫过；全仓 `sys.modules.setdefault` 恰好 2 处，与两个真实实例一一对应。**再加第三处之前，先确认真有第三个实例，别照着 idiom 铺。**
+
+**仍然开着（与本刀无关，别误读为已闭）**：桌面 `us_testrun0814.md` §7 的 live 收口（需授权胶囊越过 yfinance 与 Pass2 进入 receipt → weekly_bridge → emit/no-emit）；`universe_fetch` 的 Massive grouped daily HTTP 403；数据覆盖缺口（`no_price=592`、`no_shares=2067`、市值兜底后 14 未解析、SIC 缺 54、momentum 缺 6）。
