@@ -27,7 +27,7 @@
 #
 # 约束：
 # - 默认 dry-run；-Live 前会检查 batch4 模板 + 账户状态文件存在,缺则早失败给出补齐指引(dry-run 不检查、也不需要)。
-# - -Live 要求有效的 -MomentumTopK(1..250)；runner 在本次运行内派生并冻结精确 Pass2 调用数，内部预算/速率/429 闸门仍强制。
+# - -MomentumTopK 可选(1..250)；省略时 runner 用默认 200。runner 在本次运行内派生并冻结精确 Pass2 调用数，内部预算/速率/429 闸门仍强制。
 # - 脚本不改选股逻辑、不 push、不碰真钱边界;真跑是否放行由 runner 的 provider_health/授权门决定。
 
 [CmdletBinding()]
@@ -100,7 +100,7 @@ if ($Live) {
                "`n补齐后重跑:账户状态用 runners\us_short_account_state_from_manual_tables.py --as-of <决策日> 生成(as_of 必须==本周决策日,先 dry-run 看决策日)。")
     }
     if ($Live -and ($MomentumTopK -le 0)) {
-        Write-Host "[提醒] -Live 要求有效的 -MomentumTopK(1..250);缺则 runner 会拒。Pass2 预算由本次运行自动派生。" -ForegroundColor Yellow
+        Write-Host "[提醒] 未传 -MomentumTopK(1..250);本次沿用 runner 默认 200。Pass2 预算由本次运行自动派生。" -ForegroundColor Yellow
     }
 }
 
