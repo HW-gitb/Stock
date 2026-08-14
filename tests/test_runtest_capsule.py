@@ -226,7 +226,14 @@ class RuntestCapsuleTest(unittest.TestCase):
         self.assertIn("'TEMP', 'TMP', 'XDG_CACHE_HOME', 'PYTHONPYCACHEPREFIX'", a_short)
         self.assertNotIn("$WorkerArgs", a_short)
         self.assertIn("$WorkerParams = @{", a_short)
-        self.assertIn("L3Mode = 'today'", a_short)
+        # The splat must still name the mode itself (never leave it to the worker
+        # default) and must still fall back to today when the caller asks for nothing;
+        # a historical replay is the only reason it may carry anything else.
+        self.assertIn(
+            "L3Mode = if ([string]::IsNullOrWhiteSpace($L3Mode)) { 'today' } else { $L3Mode }",
+            a_short,
+        )
+        self.assertIn("[ValidateSet('', 'today', 'pit', 'neutralize')]", a_short)
         self.assertIn("CachePolicy = 'disabled'", a_short)
         self.assertIn("PythonExe = $PythonExe", a_short)
         self.assertIn("PYTHONIOENCODING", a_short)

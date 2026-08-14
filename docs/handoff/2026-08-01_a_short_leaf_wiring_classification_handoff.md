@@ -7617,3 +7617,10 @@ OK (skipped=1)
 **未覆盖维度与诚实边界**：新门是本轮引入的新失败模式（候选池里超过 5% 完全无财务行 → 整批停），方向仍比刀 4 之前宽松且 fail-closed；同类正规化不一致仍留在刀 3 的 `requested_codes` 与 `_code_set`，端到端被刀 3 先行剔除掩盖，按 rule 8 不追第三轮。真实无缓存胶囊仍未跑。
 
 **下一步**：问题 1 只剩那次用户授权的无缓存真实胶囊验收。
+## 2026-08-14 追加：胶囊启动器透传 `-L3Mode`（Claude Code 自修自审 PASS；c405）
+
+本日真实胶囊实跑（`a_short_20260814_k4review_canonical_c405`）暴露：`-AsOf 20260813` 一步未跑即 `[FATAL] Historical -AsOf ... cannot run with -L3Mode today.`——启动器把 `L3Mode` 写死为 `today` 且不接受该参数，而 weekly 对历史回放强制要求显式 `pit`/`neutralize`。修法是最窄的一档：启动器加 `[ValidateSet('', 'today', 'pit', 'neutralize')] $L3Mode`，splat 未指定则 `today`、指定则透传；**不**在启动器重复 weekly 的历史门（重复挡会让人分不清哪层是真门），**不**自动把历史日换成 canonical（静默替换会把「重放那天」偷换成「跑这周」）。
+
+自审三腿：整读启动器 param/splat 与 `weekly_screening.ps1::Invoke-HistoricalInputGuards`（`:339-354`）及 pit 分支（`:711-713`）；A/B 用既有 stub-worker harness 经真实启动器捕获绑定（默认/账户档仍 `today`，新档 `20260813`+`neutralize`——修改前不可能存在）；反向控制两条（`bogus` 在建胶囊前被拒且目录未生成；历史日+`today` 仍 fail-closed，那道门一行未动且本日实测到该 FATAL）。源码文本守卫从钉字面量改为钉默认表达式 + 允许集合，改前红改后绿。
+
+边界：只解开 `neutralize`。`pit` 要 `--l3-pit-strict` 且 `state/l3_snapshots/` 是 gitignored、不在胶囊克隆内，需扩 `--copy-input` 并先裁决隔离性，属独立设计决定，本轮不做；本轮也未端到端真跑一次历史胶囊。

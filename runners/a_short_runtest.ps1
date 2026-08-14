@@ -8,6 +8,11 @@
 param(
     [ValidatePattern('^(\d{8})?$')]
     [string]$AsOf = $null,
+    # A historical -AsOf is refused by weekly_screening.ps1 unless the caller names
+    # a replay mode, so the capsule has to be able to carry one.  Omitted = today,
+    # which is the only mode a current-week run may use anyway.
+    [ValidateSet('', 'today', 'pit', 'neutralize')]
+    [string]$L3Mode = '',
     [string]$Account = $null,
     [string]$SourceRoot = '',
     [string]$CapsuleRoot = 'D:\cnhea\Stock_runtest_private',
@@ -84,7 +89,7 @@ try {
     # passes these tokens positionally, so the forced runtest gates can bind
     # to the wrong weekly-screening parameters.
     $WorkerParams = @{
-        L3Mode = 'today'
+        L3Mode = if ([string]::IsNullOrWhiteSpace($L3Mode)) { 'today' } else { $L3Mode }
         CachePolicy = 'disabled'
         PythonExe = $PythonExe
     }
