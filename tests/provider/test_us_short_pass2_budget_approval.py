@@ -4,7 +4,9 @@ import json
 import os
 import shutil
 import sys
+import subprocess
 import tempfile
+import textwrap
 import unittest
 from dataclasses import replace
 from datetime import datetime
@@ -28,6 +30,66 @@ from tests.provider.us_short_private_test_root import temporary_provider_directo
 DECISION_DATE = "20260615"
 PRICE_BASIS_DATE = "20260612"
 GENERATED_AT = "2026-06-13T10:00:00+00:00"
+
+
+class Pass2BudgetApprovalScriptEntryTest(unittest.TestCase):
+    def test_direct_script_entry_reuses_canonical_pass2_approval_class(self):
+        probe = textwrap.dedent(
+            r'''
+            import importlib
+            import importlib.util
+            import sys
+            from pathlib import Path
+            from types import SimpleNamespace
+
+            root = Path(sys.argv[1])
+            capstone_path = root / "runners" / "us_short_weekly_capstone.py"
+            spec = importlib.util.spec_from_file_location("us_short_capstone_script_entry", capstone_path)
+            script_module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = script_module
+            spec.loader.exec_module(script_module)
+
+            canonical = importlib.import_module("runners.us_short_weekly_capstone")
+            assert script_module.Pass2BudgetApproval is canonical.Pass2BudgetApproval
+
+            approval = script_module.Pass2BudgetApproval(
+                decision_date="20260813",
+                candidate_price_basis_date="20260812",
+                candidate_artifact_sha256="0" * 64,
+                momentum_top_k=200,
+                target_count=200,
+                exact_pass2_calls=1001,
+                authorization_mode="one_click_test",
+                authorization_ref="one_click_test:direct-script",
+                generated_at="2026-08-13T12:00:00+00:00",
+            )
+            ctx = SimpleNamespace(
+                budget_approval=approval,
+                authorized_momentum_top_k=approval.momentum_top_k,
+                authorized_pass2_call_budget=approval.exact_pass2_calls,
+            )
+
+            from runners import us_short_batch5_full_candidate_live_source_packet as live_source
+            from runners import us_short_weekly_capstone_stages as stages
+            from runners import us_short_yfinance_grades_fetch as yfinance
+
+            assert stages._require_budget_approval(ctx) is approval
+            assert yfinance._approval_binding(approval) == approval.binding_summary()
+            assert live_source._approval_binding(approval) == approval.binding_summary()
+            '''
+        )
+        completed = subprocess.run(
+            [sys.executable, "-c", probe, str(ROOT)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(
+            completed.returncode,
+            0,
+            f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}",
+        )
 
 
 class Pass2BudgetApprovalContractTest(unittest.TestCase):

@@ -50,6 +50,7 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+sys.modules.setdefault("runners.us_short_weekly_capstone", sys.modules[__name__])
 
 from engine.us_short_canonical_asof import OutOfWindowError, resolve_canonical_asof  # noqa: E402
 from engine import us_short_capstone_checkpoint as checkpoint_store  # noqa: E402

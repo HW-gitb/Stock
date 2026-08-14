@@ -1474,3 +1474,30 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_bounded_un
 **闭合证据**：新增 docs JSON 工作副本与提交两格反控、Markdown 保持格、full-ledger 共享边界和 hook 静态接线。旧实现运行精确 `3 failures`；旧 hook 排除式单独植回时点名用例精确 `1 failure`，还原后 receipt PASS；修后两模块 `45 OK`。正式 fixed-Python focused 为 `17 OK`，receipt=`receipt:055c08fa0f86fbf0126b7cfb`；full lane 因零 production 面 `not_triggered`。
 
 **边界/下一步**：未改 bundle widening、860s/ledger 语义、生产 runner 或业务代码；未调用 provider/network/live/paper，未写真实 state，未改主树或桌面文档。交 Claude Code 独立审查，Codex 不提交。
+
+## 2026-08-14 追加：Pass2 批准直接脚本入口类身份修复（1302，repaired / OPEN-NOT_VERIFIED）
+
+- **问题**：PS wrapper 以文件路径直接启动 weekly capstone，入口模块名为 `__main__`；三个下游严格门从 canonical module 导入 `Pass2BudgetApproval`，导致同内容批准对象也被 `isinstance` 拒绝。影响 stage gate、yfinance 与 full-candidate live source 三个直接消费者；paper one-click 的 canonical import 不在本缺口内。
+- **修复**：在 `runners/us_short_weekly_capstone.py` 的 repo-root 初始化后增加一行 `sys.modules.setdefault(...)`，把直接入口锚定到 canonical module key。未放松门、未移动类、未修改 wrapper、预算、授权、retry、checkpoint、provider-health、receipt/report。
+- **验证**：新 fresh-subprocess 回归按红→绿闭合；最终焦点包 `191 OK`，receipt=`receipt:441cca0a4b3908e472394eb5`，覆盖 stage/yfinance/live-source 正向和既有 fake/missing/mismatch 反向门。固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；`py_compile=2`、`diff-check`、编码/冲突扫描 PASS。
+- **Full lane**：按生产顶层 runner 规则执行一次；ledger fingerprint=`eaa58a74d413`，`discovered=5866`、`ran=200`，因既有两个私有根残留守卫模块先红而终止，状态 FAIL，不作 PASS/生产或 live 结论。
+- **边界 / 下一步**：未调用 provider/live/paper，未写真实 state，未改主树或桌面文档；待 Claude Code 独立审查和提交，随后由授权胶囊验证真实直接脚本路径。
+
+## 2026-08-14 追加：Pass2 批准类身份修复的独立审查收口（PASS，已提交并合入 master）
+
+**改了什么**：本节只记审查收口，实现见上一节。PASS 后只 stage 本刀 5 个文件并合入 master。
+
+**为什么**：这刀的风险不在「能不能修好」，而在「会不会是靠放松门修好的」。所以我做的两腿反向控制是：在同一进程里先 canonical import、再用非规范名加载第二份 capstone 副本，精确复现修复前的两个类形态，然后**同时**验两件相反的事。
+
+**验证命令**：
+- 焦点超集（七模块，含两道文档门）：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1300 tests.provider.test_us_short_pass2_budget_approval tests.provider.test_us_short_weekly_capstone tests.provider.test_us_short_batch5_full_candidate_pass2_preflight tests.test_us_short_paper_one_click tests.test_us_short_capstone_checkpoint tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`
+- 独立重算全量指纹（动文档之前跑）：`python -c "import sys; sys.path.insert(0,'.tools'); import full_pack_ledger as f; print(f.fingerprint(f.collect_code_state()))"`
+
+**验证结果**：焦点 `PASS tests=215 elapsed=47.1s receipt:fdd7922e5249a094b954900a`。反向控制：两份副本下 `foreign.Pass2BudgetApproval is canonical.…` 为 **False**（缺陷原样复现），把 foreign 批准交给三道门 → `stages._require_budget_approval` `PermissionError`、`yfinance._approval_binding` `YFinanceGradesFetchError`、`live_source._approval_binding` `FullCandidateLiveSourcePacketError`，**三处全拒**；把 canonical 真批准交给同样三道门 → 三处全过且 binding 与 `binding_summary()` 逐字段相等。**门是严的，修复只消除了假阳性。**另核 `stages:156` / `yfinance:208` / `live_source:330` 三处 `isinstance` 本轮零改动；`setdefault` 在正常 import 下恒为 no-op（Python 执行模块体前已注册 canonical 名，我实测确认）。
+
+**失效旧结论**：上一节「Full lane … `ran=200` … 状态 FAIL」**已被同一指纹上的成功重跑取代**。账本逐字段为完整 PASS：`modules_discovered/run = 318/318`、`modules_not_dispatched=0`、`discovered_cases/ran_cases = 5866/5866`、`count_gate_equal=True`、453.4s、`recorded_at 2026-08-14T15:47:53`（prepared 15:42:49，sidecar `20260814T154021`），fingerprint `eaa58a74d4136bffa197c6f79ef499b148c87032da9e794bb7c90337541b7ba1` 与我动文档前独立重算的当前代码态一致。残留导致的红按 rule 7(d) 处理是对的，只是写作停在了那一次。**本刀有通过的全量，不要再重跑。**
+
+**下一步注意事项**：
+- 新记 `O-0814-1`——**同一缺陷类还有第二个实例**：`ReplayClient` 定义在 `runners/us_short_batch5_replay_pass2_source_packet_from_raw.py`，该模块自身是脚本入口（`:370 main` / `:401 __main__`），`:27` 按包名 import live-source、`:343` 把自己造的 client 交进去，而 `live_source:1435` 对它做严格 `isinstance`。直接以脚本方式跑它会重演同一个洞，同法一行即可修。严重度低（离线诊断工具、零 provider、fail-closed），故未阻断本刀。跨模块从 `runners.*` 导入的名字里只有 `Pass2BudgetApproval`/`ConvertError`/`ReplayClient` 三个是类，其余是常量；`ConvertError` 的定义模块只被 import、不作启动器入口，不构成第三个实例。**类到此为止。**
+- **桌面 §7 的 live 收口仍开着**：本刀只闭代码面。要关掉 0814 的「全链路阻断」，仍需一次获授权的真实胶囊越过 yfinance 与 Pass2、进入 receipt → weekly_bridge → emit/no-emit 终态；若先被 Massive 403 拦住只能记那个独立终态。
+- 0814 的另两项**未处理且仍开着**（按桌面 §3 明确排除，非遗漏）：`universe_fetch` 的 Massive grouped daily HTTP 403；数据覆盖缺口（`no_price=592`、`no_shares=2067`、市值兜底后 14 未解析、SIC 缺 54、momentum 缺 6）。
