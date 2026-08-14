@@ -7575,9 +7575,23 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
             f"({financial_full_universe_coverage:.2%}) below "
             f"{financial_full_universe_min_coverage:.2%}"
         )
-    financial_l0_missing_codes = _code_set(df_l0) - financial_code_set
+    financial_l0_codes = set(_canonical_financial_codes(df_l0["ts_code"].tolist()))
+    financial_l0_missing_codes = financial_l0_codes - financial_code_set
     if financial_l0_missing_codes:
-        df_l0 = df_l0[~df_l0["ts_code"].astype(str).isin(financial_l0_missing_codes)].copy()
+        financial_l0_coverage = (
+            len(financial_l0_codes & financial_code_set) / len(financial_l0_codes)
+            if financial_l0_codes else 0.0
+        )
+        if financial_l0_coverage < financial_full_universe_min_coverage:
+            raise RuntimeError(
+                "financial L0 coverage too low: "
+                f"{len(financial_l0_codes & financial_code_set)}/"
+                f"{len(financial_l0_codes)} codes "
+                f"({financial_l0_coverage:.2%}) below "
+                f"{financial_full_universe_min_coverage:.2%}"
+            )
+        l0_code_values = df_l0["ts_code"].astype(str).str.strip()
+        df_l0 = df_l0[~l0_code_values.isin(financial_l0_missing_codes)].copy()
         l0_excluded_counts["financial_data_unavailable"] = (
             int(l0_excluded_counts.get("financial_data_unavailable", 0))
             + len(financial_l0_missing_codes)

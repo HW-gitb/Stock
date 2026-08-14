@@ -596,6 +596,48 @@ class FinancialL0CoverageTest(unittest.TestCase):
 
         self.assertEqual(set(captured["df_l0"]["ts_code"]), set(codes[:-1]))
 
+    def test_l0_coverage_floor_blocks_when_missing_rows_are_concentrated_in_l0(self) -> None:
+        codes = [f"{600000 + i:06d}.SH" for i in range(40)]
+        stocks = pd.DataFrame({"ts_code": codes})
+        l0 = stocks.iloc[:4].copy()
+        financial = self._financial_frame(codes[2:])
+        reached = []
+
+        def stop_after_build(*args, **kwargs):
+            reached.append(True)
+            raise RuntimeError("build_master reached")
+
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            with ExitStack() as stack:
+                self._patch_run_inputs(stack, stocks, l0, financial, stop_after_build)
+                with self.assertRaisesRegex(RuntimeError, "financial L0 coverage"):
+                    self.em.run_egs(backtest_mode=True, output_root=tmp)
+        self.assertEqual(reached, [])
+
+    def test_financial_l0_code_matching_strips_padding(self) -> None:
+        codes = [f"{600000 + i:06d}.SH" for i in range(20)]
+        stocks = pd.DataFrame({"ts_code": codes})
+        padded_l0 = stocks.copy()
+        padded_l0.loc[0, "ts_code"] = f" {codes[0]} "
+        captured = {}
+
+        class BuildReached(RuntimeError):
+            pass
+
+        def stop_after_build(df_l0, *args, **kwargs):
+            captured["df_l0"] = df_l0.copy()
+            raise BuildReached()
+
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            with ExitStack() as stack:
+                self._patch_run_inputs(
+                    stack, stocks, padded_l0, self._financial_frame(codes), stop_after_build
+                )
+                with self.assertRaises(BuildReached):
+                    self.em.run_egs(backtest_mode=True, output_root=tmp)
+
+        self.assertIn(f" {codes[0]} ", captured["df_l0"]["ts_code"].tolist())
+
     def test_financial_full_universe_below_floor_aborts_before_build_master(self) -> None:
         codes = [f"{600000 + i:06d}.SH" for i in range(20)]
         stocks = pd.DataFrame({"ts_code": codes})

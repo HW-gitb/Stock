@@ -1,5 +1,32 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-14 Codex executor/fixer - 5a 问题1 第四刀 Optional O-K4-1/O-K4-2（repaired / OPEN-NOT_VERIFIED，c405）
+
+### 问题、方案与最小改动
+
+上一轮第四刀独立审查 PASS 后留下两条不阻断 Optional：
+
+- O-K4-1：全市场 95% 地板按 df_stocks 计算，但缺失可能集中在较小的 L0 子集，导致 L0 实际掉行比例远超“少数”直觉。
+- O-K4-2：_code_set() 不去空白，而 financial canonicalizer 会去空白；L0 的填充代码可能被误判成无财务行。
+
+本轮严格按登记的最小方案：
+
+- 复用既有 financial_full_universe_min_coverage = 0.95，在 L0 缺失代码被删除前增加 canonical L0 子集覆盖门；低于地板整批中止，达到地板才局部隔离。
+- 仅在第四刀 financial L0 比对处调用 _canonical_financial_codes()，隔离过滤值使用 strip()；不改全局 _code_set()，不扩展其他路径。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+run_egs() → get_financial_data(full_codes) → full-universe gate → canonical L0 coverage gate → L0 isolation → build_master()/rank → export_analysis_input() → a_short_weekly_pipeline::_build_exclusion_summary()。低于 L0 地板不产生候选或正式输出；达到地板时仅按既有 financial_data_unavailable 计数和 weekly 映射消费。未改 schema、provider、cache、daily_basic、排名、Tier、watch/final 或写盘边界。
+
+### 测试、负向控制与结论边界
+
+- 固定 Python：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（3.13.8）。FinancialL0CoverageTest 5/5 OK，receipt=receipt:a95f769eb14bf56fba8866fd；覆盖 L0 集中缺失低于地板、95% 边界和空白代码正向保留；py_compile/git diff --check PASS。
+- Optional-only 快路径未跑 full lane、provider/live、真实无缓存胶囊或 sub-agent；没有 stage/commit/push/merge。当前状态 repaired / OPEN-NOT_VERIFIED。
+
+### 交接
+
+Claude Code：独立复审 O-K4-1/O-K4-2 的 L0 子集覆盖门、canonical code 比对、低于地板 fail-closed 与空白代码正向控制；PASS 后按项目规则提交；不启动 provider/live/真实无缓存胶囊。
+
 ## 2026-08-14 Codex executor/fixer - 5a 问题1 第四刀 Required：财务行局部缺失（repaired / OPEN-NOT_VERIFIED，c405）
 
 ### 问题、方案与最小改动
@@ -7577,3 +7604,16 @@ OK (skipped=1)
 **未覆盖维度与诚实边界**：全部结论建立在离线假 provider 与打桩 `run_egs` 上；方案 §真实验收标准要求的无缓存真实胶囊仍未跑，问题 1 整体仍 `OPEN-NOT_VERIFIED`。隔离后 `financial_l0` 的 1.0 检查对本路径已恒真，仍守其他掉行路径。
 
 **下一步**：四刀工程侧全部收口；问题 1 只剩那次用户授权的无缓存真实胶囊验收。
+## 2026-08-14 追加：第四刀两条 Optional（`O-K4-1` / `O-K4-2`）的复审 = PASS（Claude Code；c405）
+
+**判定**：PASS，零 Required，两条 Optional 转 resolved。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方转述）**：整读修复后的那段（L0 覆盖率算式、新中止门、统一后的删除掩码），确认共享 helper `_code_set` 一行未改、仍被 reconciliation 的 5 处消费——即修法是局部的，没有把行为改动扩散到全仓。执行方自报的 `5/5 OK` 一条没采信。
+
+**六组 A/B 探针（对照的是我上一轮在同一 harness 上实测到的旧行为）**：40 只 L0 缺 2 只（恰好 95.00%）仍只隔离这两只（基线 40 只全留）；**200 universe / 40 L0 / 缺 3 只**——universe 98.5% 会放行而 L0 92.5% 触发新门中止，这正是 `O-K4-1` 描述的洞；我上一轮那个「40/4/缺 2」夹具从「静默减半」变成 `2/4 (50.00%)` 中止；空白填充码 `" 600039.SH "` 从「被静默移出」变成保留；空白码 + 另一只真缺失时仍精确掉那一只（40→39），证明统一 strip 没掩盖真缺口；universe 级不足仍由原门先中止。
+
+**为什么这轮我自跑了全量**：执行方标 `full-lane=not_required_optional_only`，但 ledger 记录的指纹是上一轮的 `e0e6e5a8ba8d`、当前代码态为 `27d83d7e…`，记录不绑当前代码；且本刀新增了一道会**中止整批**的门，既有夹具若 L0 财务覆盖不足 95% 会由绿转红，focused 五模块盖不住这个面。按 rule 6 escalation 自跑一次：`[parallel-lane] COUNT_GATE discovered=2843 ran=2843 equal=True / Ran 2843 tests in 279.864s / [full-pack-ledger] RESULT status=PASS exit=0 tests=2843 elapsed=279.9s deadline=860s mode=parallel`。
+
+**未覆盖维度与诚实边界**：新门是本轮引入的新失败模式（候选池里超过 5% 完全无财务行 → 整批停），方向仍比刀 4 之前宽松且 fail-closed；同类正规化不一致仍留在刀 3 的 `requested_codes` 与 `_code_set`，端到端被刀 3 先行剔除掩盖，按 rule 8 不追第三轮。真实无缓存胶囊仍未跑。
+
+**下一步**：问题 1 只剩那次用户授权的无缓存真实胶囊验收。
