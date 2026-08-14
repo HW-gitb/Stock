@@ -286,6 +286,45 @@ class SwIndustrySourceTest(unittest.TestCase):
         self.assertTrue(observation["fallback_used"])
         self.assertIn("row_limit", observation["message"])
 
+    def test_forward_live_asof_uses_l1_fast_path(self) -> None:
+        l1, l2 = _classifications()
+        calls = []
+
+        def index_classify(*, level, src, fields):
+            return l1 if level == "L1" else l2
+
+        def index_member_all(**kwargs):
+            calls.append(kwargs)
+            if "l2_code" in kwargs:
+                self.fail("forward live as-of must not enter the L2 PIT path")
+            return pd.DataFrame({
+                "ts_code": ["000001.SZ", "000002.SZ"],
+                "l2_code": ["801783.SI", "801780.SI"],
+                "in_date": ["20200101", "20200101"],
+                "out_date": ["", ""],
+                "is_new": ["Y", "Y"],
+            })
+
+        self.egs_main.TODAY = "20260814"
+        self.egs_main.pro = SimpleNamespace(
+            index_classify=index_classify,
+            index_member_all=index_member_all,
+            index_member=lambda **_kwargs: pd.DataFrame(),
+        )
+        with patch.object(self.egs_main, "a_share_market_date", return_value="20260813"), \
+             patch.object(self.egs_main, "load_cache", return_value=None), \
+             patch.object(self.egs_main, "save_cache"), \
+             patch.object(self.egs_main, "safe_api", side_effect=_safe_call):
+            mapping = self.egs_main.get_sw_industry_map()
+
+        self.assertEqual(set(mapping), {"000001.SZ", "000002.SZ"})
+        self.assertEqual(calls[0]["l1_code"], "801000.SI")
+        self.assertEqual(calls[0]["is_new"], "Y")
+        observation = self.egs_main._current_sw_industry_source_observation()
+        self.assertEqual(observation["source"], "index_member_all_l1_current")
+        self.assertTrue(observation["fast_path_used"])
+        self.assertFalse(observation["fallback_used"])
+
     def test_historical_run_skips_current_only_fast_path(self) -> None:
         l1, l2 = _classifications()
 
@@ -834,7 +873,7 @@ class SwIndustrySourceTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "index_classify:L2:exception=RuntimeError"):
                 self.egs_main.get_sw_industry_map()
 
-        self.assertEqual(attempts["L2"], 3)
+        self.assertEqual(attempts["L2"], 5)
         self.assertEqual(member_calls, [])
         save_cache.assert_not_called()
 
@@ -891,7 +930,7 @@ class SwIndustrySourceTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "l2_batch"):
                 self.egs_main.get_sw_industry_map()
 
-        self.assertEqual(attempts["801783.SI"], 3)
+        self.assertEqual(attempts["801783.SI"], 5)
         self.assertEqual(attempts["801780.SI"], 1)
         observation = self.egs_main._current_sw_industry_source_observation()
         self.assertIn("exception=1", observation["message"])

@@ -7629,3 +7629,26 @@ OK (skipped=1)
 本日真实胶囊实跑里 `daily` / `adj_factor` / `fina_indicator` 各出现一次瞬时连接失败（都在第 2 次成功），用户据此裁决把默认重试放宽到 5 次、且不给退避加上限。改动只在 `safe_api` 签名与 docstring；三处显式 `retries=1`（SW 快路径探针）/ `retries=2`（fina_indicator、moneyflow）有意保持不动——它们靠快速失败换取上层回退与补取，跟着放大只会在已知会失败的路上白等。重试耗尽仍返回 `default` 而不抛异常、`errors` 列表仍是区分"真空表"与"没答上来"的唯一手段，这条前四刀都依赖，一行未动。
 
 代价已实测而非估算：全量 `2846 tests / 268.0s`，改前基线 `2843 / 279.9s`，没有变慢——说明现有测试没有一条真的走进退避路径。新增 `SafeApiRetryPolicyTest` 补上原先完全缺失的守卫（默认 5 次 / 显式收窄仍精确生效 / 成功调用只跑一次），其中"同一计数 helper 对 1、2、5 三个期望值都成立"本身就是它真在数次数的对照。
+
+## 2026-08-14 追加：6a P1-4 SW 快路径 live 日期边界修复（Codex executor/fixer；c405，repaired / OPEN-NOT_VERIFIED）
+
+**问题 / 根因**：`get_sw_industry_map()` 原来用 `TODAY == wall_date` 才进入 SW L1 current fast path；canonical live 的 `as_of >= run_date` 会被误送入 L2 PIT 慢路径，导致 20260814/20260817 一类 forward-live 运行没有按方案走 L1。根因是日期分支，不是 provider 数据内容。
+
+**修复**：严格按桌面 `C:\Users\cnhea\Desktop\6a_testrun0814.md`，只改为 `TODAY >= wall_date`，历史分支改为 `TODAY < wall_date`。只改 `A-EGS/egs_main.py` 与本 handoff 对应测试；保留 SW2021 分类、`index_member_all(l1_code, is_new=Y)`、all-or-none coverage、PIT、parent closure、目标主板门、source observation、cache/write boundary、下游消费者和 schema。既有 safe_api 默认 5 次变化造成的两个旧断言同步为 5，不改 helper 或重试实现。
+
+**调用链 / 自审 / 负向控制**：`run_egs() → get_sw_industry_map() → build_master()` 及 data-health 消费已回扫；新增 forward-live 回归钉住 L1 调用、`fast_path_used=true`、`fallback_used=false`；same-day positive、historical negative、row-limit fallback、weekly date-contract 和 effect-contract 为其余控制。历史日仍不得用 current-only rows，L1 不完整/row cap 仍进入既有 L2 fallback。
+
+**验证与原始终态**：固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 3.13.8；focused `141/141 OK`，receipt=`receipt:8543b8bdc560095b145994d7`，bundle=`a_short_effect_contract`；`py_compile`、`git diff --check` PASS；`verify_doc_process.cmd` `67/67 PASS`；唯一 A-short full lane 原始终态为 `discovered=2846`、`ran=2846`、`PASS`、`115.3s`、`parallel`。未启动 provider/live、真实无缓存 capsule、sub-agent、stage、commit、push 或 merge。
+
+**交接状态 / 下一步**：P1-4 为 `repaired / OPEN-NOT_VERIFIED`，真实无缓存 canonical live fast-path 命中与后续产物闭环仍需用户另行授权；Claude Code 独立审查，通过后由 reviewer/committer 提交。本条与风险登记、SESSION_LOG 同步记录。
+## 2026-08-14 追加：P1-4（前瞻 as-of 进 SW L1 快路径）的独立审查 = PASS（Claude Code；c405）
+
+**判定**：PASS，零 Required，两条 Optional。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**：整读改动段与两个被消费的定义——`a_share_market_date()` 返回上海墙钟日（无滚动），所以 `TODAY >= wall_date` 恰好等于系统统一的 live 口径 `as_of >= run_date`；`_apply_pit_window()` 按 `in_date <= as_of < out_date` 过滤，前瞻日下当前成员仍成立。执行方自报的测试结果一条没采信，自己重跑 141 用例焦点超集。
+
+**四格探针**：同日与前瞻都进 current-only 端点且调用参数一致（`l1_code` / `is_new=Y`）；历史（`TODAY < wall_date`）的调用记录里没有任何 `l1_code` 调用、只有 L2 PIT 调用——"绝不让历史回放走 current-only"这条强制腿成立；前瞻但端点不可 callable 时记 `index_member_all_unavailable`，没被误标成历史回放。诚实边界：我的夹具把 3200 行塞进同一个 L1 组，触发既有 per-group 行数上限守卫，所以 A/B 证到的是路由与参数一致而非快路径成功态；成功态由执行方新增用例覆盖，它在我那 141 绿包里。
+
+**本轮最值得记的收获（已落 Optional）**：diff 里有两处 `attempts == 3` → `5` 的断言修正，那是我上一刀把 `safe_api` 默认重试 3→5 的**遗留红**。它之所以没被发现，是因为 a_short 全量的 discovery pattern 是 `test_a_short*.py`，**根本不覆盖 `tests/phase6/test_egs_*` 这些 egs_main 的直接消费者**——那次全量 2846 全绿给了超出实际覆盖面的安全感。我随后全树扫了 `attempts[...]` 这一类，确认只剩这两处且都已改对。
+
+**未覆盖维度**：前瞻走快路径只在离线打桩证到；方案 §6 要求的"用户授权后一次无缓存 canonical live 真跑"未做，真实 `index_member_all(is_new=Y)` 覆盖率能否过 `SW_INDUSTRY_MIN_ACTIVE=3000` 未验。
