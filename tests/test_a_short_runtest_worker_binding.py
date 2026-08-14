@@ -85,10 +85,13 @@ if command == "create":
         script = ROOT / "runners" / "a_short_runtest.ps1"
         escaped = lambda path: str(path).replace("'", "''")
         cases = (
-            ("default", (), "", ""),
-            ("account", ("-AsOf", "20260721", "-Account", self.account), "20260721", "a_short_account"),
+            ("default", (), "", "", "today"),
+            ("account", ("-AsOf", "20260721", "-Account", self.account), "20260721", "a_short_account", "today"),
+            # A historical replay is only reachable if the requested mode survives
+            # the splat; weekly_screening.ps1 refuses a past -AsOf under `today`.
+            ("historical", ("-AsOf", "20260813", "-L3Mode", "neutralize"), "20260813", "", "neutralize"),
         )
-        for name, extra_args, expected_as_of, expected_account_leaf in cases:
+        for name, extra_args, expected_as_of, expected_account_leaf, expected_l3_mode in cases:
             with self.subTest(name=name):
                 capsule_root = self.base / f"capsules_{name}"
                 capture = self.base / f"worker_capture_{name}.json"
@@ -117,7 +120,7 @@ if command == "create":
                 capsule = capsule_root / "a_short" / f"worker-binding-{name}"
                 self.assertEqual(captured["as_of"], expected_as_of)
                 self.assertEqual(captured["canary_source"], "")
-                self.assertEqual(captured["l3_mode"], "today")
+                self.assertEqual(captured["l3_mode"], expected_l3_mode)
                 self.assertEqual(captured["cache_policy"], "disabled")
                 self.assertEqual(captured["python_exe"].casefold(), PINNED_STOCK_PYTHON.casefold())
                 self.assertEqual(captured["python_io_encoding"], "utf-8")
