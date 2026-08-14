@@ -1430,6 +1430,13 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
     final_codes = set(tier1_final.head(CONF["final_n"]).get("ts_code", pd.Series(dtype=str)).tolist()) \
         if tier1_final is not None and not tier1_final.empty else set()
 
+    unlock_uncomputable_count = sum(
+        1 for code in (unlock_set or [])
+        if isinstance(_LAST_UNLOCK_DETAILS.get(code), dict)
+        and _LAST_UNLOCK_DETAILS[code].get("status") == "unknown"
+    )
+    unlock_confirmed_count = max(0, len(unlock_set or []) - unlock_uncomputable_count)
+
     industry_heat_governance = load_governance()
     candidates = [
         _candidate_from_row(
@@ -1496,7 +1503,8 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
             "watch_count": int(len(watch_df)),
             "final_count": int(min(len(tier1_final), CONF["final_n"])) if tier1_final is not None else 0,
             "excluded_counts": {
-                "unlock": int(len(unlock_set or [])),
+                "unlock": int(unlock_confirmed_count),
+                "unlock_uncomputable": int(unlock_uncomputable_count),
                 "suspended": int(len(suspended_set or [])),
                 "relisted": int(len(relisted_set or [])),
                 "holder_reduction_veto_10d": int(len((red_dict or {}).get("veto_10d", set()))),
@@ -5561,22 +5569,47 @@ def get_unlock_future(stock_list, daily_basic_df):
         _record_hard_veto_source("unlock", "unknown", None, source="tushare.share_float")
         raise RuntimeError("unlock denominator source unavailable; refusing unknown as clear")
 
-    df_float = safe_api(getattr(pro, "share_float", None), start_date=TODAY, end_date=dfuture(30),
-                        fields="ts_code,ann_date,float_date,float_share,float_ratio")
-    if df_float is None:
-        _record_hard_veto_source("unlock", "unknown", None, source="tushare.share_float")
-        raise RuntimeError("unlock source unavailable; refusing unknown as clear")
-    if df_float.empty:
-        payload = {"status": "known_clear", "observed_at": TODAY, "members": [], "details": {}}
-        _record_hard_veto_source("unlock", "known_clear", TODAY, source="tushare.share_float", hit_count=0)
-        save_cache(key, payload)
-        return set()
+    local_errors = []
+    df_float = safe_api(
+        getattr(pro, "share_float", None), start_date=TODAY, end_date=dfuture(30),
+        fields="ts_code,ann_date,float_date,float_share,float_ratio", errors=local_errors,
+    )
+    if local_errors:
+        exception_types = sorted({type(error).__name__ for error in local_errors})
+        _record_hard_veto_source(
+            "unlock", "unknown", None, source="tushare.share_float",
+            failure_class="exception", exception_type=", ".join(exception_types),
+            exception_count=len(local_errors),
+        )
+        raise RuntimeError("unlock source exception; refusing unknown as clear")
+    if df_float is None or (isinstance(df_float, pd.DataFrame) and df_float.empty):
+        _record_hard_veto_source(
+            "unlock", "unknown", None, source="tushare.share_float",
+            failure_class="unconfirmed_empty",
+        )
+        raise RuntimeError("unlock source returned unconfirmed empty; refusing unknown as clear")
+    if not isinstance(df_float, pd.DataFrame):
+        _record_hard_veto_source(
+            "unlock", "unknown", None, source="tushare.share_float",
+            failure_class="invalid_payload",
+        )
+        raise RuntimeError("unlock source payload invalid; refusing unknown as clear")
     required = {"ts_code", "ann_date", "float_date", "float_share"}
     missing = required - set(df_float.columns)
     if missing:
         _record_hard_veto_source("unlock", "unknown", None, source="tushare.share_float")
         raise RuntimeError(f"unlock source missing required fields: {sorted(missing)}")
-    ann_dates = df_float["ann_date"].astype(str)
+    df_float = df_float.copy()
+    raw_codes = df_float["ts_code"]
+    normalized_codes = raw_codes.astype(str).str.strip()
+    if raw_codes.isna().any() or normalized_codes.isin({"", "nan", "none"}).any():
+        _record_hard_veto_source(
+            "unlock", "unknown", None, source="tushare.share_float",
+            failure_class="invalid_code",
+        )
+        raise RuntimeError("unlock source contains blank ts_code")
+    df_float["ts_code"] = normalized_codes
+    ann_dates = df_float["ann_date"].astype(str).str.strip()
     parsed_ann = pd.to_datetime(ann_dates, format="%Y%m%d", errors="coerce")
     if parsed_ann.isna().any() or (ann_dates > TODAY).any():
         _record_hard_veto_source("unlock", "unknown", None, source="tushare.share_float")
@@ -5590,36 +5623,64 @@ def get_unlock_future(stock_list, daily_basic_df):
 
     df = df_float.merge(db, on="ts_code", how="left")
     df["float_share"] = pd.to_numeric(df["float_share"], errors="coerce")
+    float_share_invalid = (
+        df["float_share"].isna()
+        | ~np.isfinite(df["float_share"])
+        | (df["float_share"] <= 0)
+    )
+    circ_share_unavailable = (
+        df["circ_share"].isna()
+        | ~np.isfinite(df["circ_share"])
+        | (df["circ_share"] <= 0)
+    )
     df["unlock_pct"] = np.nan
-    mask_circ = df["circ_share"].notna() & (df["circ_share"] > 0)
-    df.loc[mask_circ & df["float_share"].notna(), "unlock_pct"] = (
+    computable = ~float_share_invalid & ~circ_share_unavailable
+    df.loc[computable, "unlock_pct"] = (
         df["float_share"] / df["circ_share"] * 100
     )
-    # Missing a real circulating-share denominator is unknown, not clear.  Block
-    # the affected symbol conservatively; float_ratio is provider-relative and
-    # must never be converted with a guessed coefficient.
-    unknown_denominator = set(df[df["unlock_pct"].isna()]["ts_code"].dropna().astype(str))
+    # Missing/invalid per-symbol inputs are unknown for that symbol, not a reason
+    # to turn the entire otherwise-valid source into global unknown.  float_ratio
+    # is provider-relative and must never be converted with a guessed coefficient.
+    float_share_invalid_codes = set(
+        df.loc[float_share_invalid, "ts_code"].dropna().astype(str)
+    )
+    circ_share_unavailable_codes = set(
+        df.loc[circ_share_unavailable, "ts_code"].dropna().astype(str)
+    )
+    unlock_uncomputable_codes = float_share_invalid_codes | circ_share_unavailable_codes
     large = set(df[df["unlock_pct"] > CONF["unlock_ratio"]]["ts_code"].dropna().astype(str))
-    blocked = large | unknown_denominator
+    blocked = large | unlock_uncomputable_codes
+    unknown_reasons = {}
+    for code in unlock_uncomputable_codes:
+        reasons = []
+        if code in float_share_invalid_codes:
+            reasons.append("float_share_invalid")
+        if code in circ_share_unavailable_codes:
+            reasons.append("circ_share_unavailable")
+        unknown_reasons[code] = "+".join(reasons)
     details = {}
     for _, item in df.iterrows():
         code = str(item.get("ts_code"))
         details[code] = {
-            "status": "unknown" if code in unknown_denominator else ("known_hit" if code in large else "known_clear"),
+            "status": "unknown" if code in unlock_uncomputable_codes else ("known_hit" if code in large else "known_clear"),
             "observed_at": str(item.get("ann_date")),
             "unlock_date": str(item.get("float_date")),
             "unlock_pct": _json_float(item.get("unlock_pct")),
-            "denominator": "circ_mv_div_close" if code not in unknown_denominator else "missing",
+            "denominator": "circ_mv_div_close" if code not in circ_share_unavailable_codes else "missing",
         }
+        if code in unknown_reasons:
+            details[code]["unknown_reason"] = unknown_reasons[code]
     _LAST_UNLOCK_DETAILS = details
     source_status = "known_hit" if blocked else "known_clear"
     payload = {"status": source_status, "observed_at": TODAY, "members": sorted(blocked), "details": details}
-    effective_source_status = "unknown" if unknown_denominator else source_status
     _record_hard_veto_source(
-        "unlock", effective_source_status, TODAY, source="tushare.share_float",
-        hit_count=len(large), unknown_denominator_count=len(unknown_denominator),
+        "unlock", source_status, TODAY, source="tushare.share_float",
+        hit_count=len(blocked), large_unlock_count=len(large),
+        unlock_uncomputable_count=len(unlock_uncomputable_codes),
+        float_share_invalid_count=len(float_share_invalid_codes),
+        circ_share_unavailable_count=len(circ_share_unavailable_codes),
     )
-    if not unknown_denominator:
+    if not unlock_uncomputable_codes:
         save_cache(key, payload)
     return blocked
 # ─────────────────────────────────────────────────────────────────────────────

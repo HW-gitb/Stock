@@ -117,6 +117,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
                 latest_td="20260522",
                 rank_reconciliation=reconciliation,
                 l0_excluded_counts={"short_history_momentum": 2},
+                unlock_set={"600001.SH"},
             )
 
         summary = payload["universe_summary"]
@@ -128,6 +129,8 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
         self.assertEqual(summary["rank_exclusion_counts"]["l2_quality_risk"], 1)
         self.assertEqual(summary["rank_exclusion_counts"]["rank_unexpected"], 0)
         self.assertEqual(summary["excluded_counts"]["short_history_momentum"], 2)
+        self.assertEqual(summary["excluded_counts"]["unlock"], 0)
+        self.assertEqual(summary["excluded_counts"]["unlock_uncomputable"], 1)
 
     def test_current_schema_rejects_neutralized_l3_without_provider_binding(self) -> None:
         with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
@@ -306,6 +309,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
         latest_td: str,
         rank_reconciliation=None,
         l0_excluded_counts=None,
+        unlock_set=None,
     ):
         df = pd.DataFrame([{
             "ts_code": "600000.SH",
@@ -320,13 +324,18 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             "entry_flag": "可直接观察",
             "l2_name": "一般零售",
         }])
-        return self.egs_main.export_analysis_input(
+        with patch.object(
+            self.egs_main,
+            "_LAST_UNLOCK_DETAILS",
+            {code: {"status": "unknown"} for code in (unlock_set or set())},
+        ):
+            return self.egs_main.export_analysis_input(
             df_full=df,
             watch_df=df,
             tier1_final=df,
             latest_td=latest_td,
             trade_dates=[latest_td],
-            unlock_set=set(),
+            unlock_set=set(unlock_set or set()),
             suspended_set=set(),
             relisted_set=set(),
             red_dict={},
@@ -342,7 +351,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
                 "holiday_days_ahead": 0,
                 "calendar_source": "tushare.trade_cal",
             },
-        )
+            )
 
 
 if __name__ == "__main__":

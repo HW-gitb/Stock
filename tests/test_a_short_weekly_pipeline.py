@@ -4087,10 +4087,15 @@ class ExclusionSummaryTests(unittest.TestCase):
 
     def test_build_from_counts_drops_zero(self):
         es = _build_exclusion_summary(
-            {"holder_reduction_veto_10d": 12, "unlock": 5, "suspended": 3, "relisted": 0}, AS_OF)
-        self.assertEqual(es["total_excluded"], 20)
-        self.assertEqual(len(es["by_reason"]), 3)            # relisted 0 dropped
+            {"holder_reduction_veto_10d": 12, "unlock": 5, "unlock_uncomputable": 1,
+             "suspended": 3, "relisted": 0}, AS_OF)
+        self.assertEqual(es["total_excluded"], 21)
+        self.assertEqual(len(es["by_reason"]), 4)            # relisted 0 dropped
         self.assertIn("10日减持 12 只", es["m67_text"])
+        self.assertIn("解禁比例不可判定 1 只", es["m67_text"])
+        self.assertIn("share_float_unlock_uncomputable", {
+            row["source_field"] for row in es["by_reason"]
+        })
         self.assertEqual(es["evidence_ref"]["kind"], "lineage_key")
         self.assertEqual(es["evidence_ref"]["as_of"], AS_OF)
         self.assertTrue(all(r["privacy_class"] == "public_tracked" for r in es["by_reason"]))

@@ -1,5 +1,32 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-14 Codex executor/fixer - 5a 问题 1 第一刀：unlock 局部隔离（repaired / OPEN-NOT_VERIFIED，c405）
+
+### 问题、方案与最小改动
+
+桌面 `C:\Users\cnhea\Desktop\5a_testrun0814.md` 问题 1 的直接阻塞是：`get_unlock_future()` 能返回合法响应，但少数股票的 `unlock_pct` 因 `float_share` 无效或 `circ_share` 缺失/非正而不可计算；旧逻辑把该局部缺口聚合成全局 `unlock.status=unknown`，`analysis_input` 最终合约因此拒绝所有 actionable candidates。
+
+本轮只执行第一刀：
+
+- `A-EGS/egs_main.py::get_unlock_future()` 在 `share_float` 调用点局部接收 `safe_api` errors；exception、未确认空表、坏 payload、缺字段、空代码和 PIT 违规继续全局 `unknown`/中止。
+- 合法响应按代码区分 `float_share_invalid` 与 `circ_share_unavailable`；既有 `blocked` 保留确认大额解禁与局部不可计算代码，局部代码逐股标 `unknown` 并在 L0 前隔离，剩余股票可继续；global status 只按 `blocked` 得出 `known_hit`/`known_clear`，`hit_count` 为实际隔离总数。
+- `_LAST_UNLOCK_DETAILS` 是唯一局部明细来源；含局部不可计算代码时不写 complete cache。`export_analysis_input()` 把 `unlock` 与 `unlock_uncomputable` 分开计数；weekly 映射为 `share_float_unlock_uncomputable`、`l0_filter`、`disclosure_date`、`解禁比例不可判定`。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+`weekly_screening.ps1 / a_short_runtest.ps1 → run_egs() → get_unlock_future() → filter_l0() → build_master()/rank → export_analysis_input() → analysis_input contract → a_short_weekly_pipeline::_build_exclusion_summary()`。局部坏代码不进入 L0、rank、watch、final、analysis_input candidates 或 weekly 个股消费者；未确认整源失败仍不写 cache、候选或正式输出。未改 `safe_api` 全局语义、`engine/data/analysis_input_contract.py`、schema、阈值、cache key 或其他刀。
+
+### 测试、负向控制与结论边界
+
+- 先在旧代码上复现红测：`Ran 5 tests`，`FAILED (failures=2, errors=3)`。
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。第一刀 focused 类别：`Ran 43 tests ... OK`，receipt=`receipt:f74110490156087221b874c7`；覆盖混合响应、仅局部缺口、exception、unconfirmed empty、float/circ 原因、export 计数和 weekly no-dangling；`py_compile` 与 `git diff --check` 通过；文档/路由守卫 `Ran 66 tests ... OK`，receipt=`receipt:4fe53ff6a249f9209beda0a1`。
+- 未启动刀 2/3/4、full lane、provider/live、真实无缓存胶囊或 sub-agent；未 stage/commit/push/merge。当前代码面为 `repaired / OPEN-NOT_VERIFIED`，focused PASS 不等于独立 review、commit 或真实 proof-of-use。
+- **Pre-Codex self-review**：`matrix=unlock exception/unconfirmed-empty/global-unknown negative + float_share/circ_share local isolation + export split counts + weekly no-dangling; call-chain=share_float→get_unlock_future→filter_l0→analysis_input→weekly; cache/write/schema boundaries unchanged; focused=43 OK; full-lane=NOT_VERIFIED; reviewer=Claude Code reviewer/committer`。
+
+### 交接
+
+`Claude Code：独立审查第一刀的 producer→L0→analysis_input→weekly 接线、全局 unknown 负向门、cache/write 边界与 receipt；PASS 后按项目规则提交；不启动 provider/live/真实无缓存胶囊。`
+
 ## 2026-08-11 Codex executor/fixer - Optional O32/O33（OPEN-NOT_VERIFIED，40d9）
 
 ### 本轮范围与判断
@@ -7361,3 +7388,17 @@ OK (skipped=1)
 本轮原始终态为 **`repaired / OPEN-NOT_VERIFIED`**：Codex 只完成最小实现、测试和文档记录，未启动 provider/live/真实无缓存 capsule，未 stage/commit/push/merge，也未修改 P1-4、N-3、N-4、N-5、P0-3、P3-10。下一步由 Claude Code 独立审查；只有 reviewer PASS 并提交后，用户另行授权的无缓存真实胶囊实际命中同日停牌缺行、`unexplained_missing=0`、停牌源非 unknown/low coverage，且 candidates/analysis_input/weekly 产物和退出码均正常，才可关闭本条/P0-1。
 
 后续若再修复，只能继续在本主 A-short handoff 追加问题、根因、最小改动、调用链/消费者/schema/source-binding/写盘边界、负向控制、自审、精确命令和原始终态，并同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；不得新建平行 handoff。
+
+## 2026-08-14 追加：5a 问题1 第一刀（unlock 局部隔离）的独立审查 = PASS（Claude Code；c405）
+
+**判定**：PASS，零 Required，`R-ASHORT-UNLOCK-LOCAL-GAP-ESCALATES-GLOBAL-UNKNOWN` 转 resolved。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方转述）**：整读改动后的 `get_unlock_future()` 全体（取数失败三分类、字段/PIT/空白代码门、两类不可计算的掩码构造、`blocked` 合并、details 与 health 记录、cache 写入条件）与 `export_analysis_input()` 里新的两类计数推导，并回头核了缓存命中路径会复原 `_LAST_UNLOCK_DETAILS`。执行方自报的 `43/43 OK` 一条没采信，自己重跑了 721 用例焦点超集（含实测慢包 weekly_pipeline，显式申请 900s、实跑 455.4s），并按 rule 6 补跑一次 a_short 全量。
+
+**八组探针对着方案的测试矩阵打**：混合响应（大额 / `float_share` 非法 / 正常 / `circ_share=0`）→ 三只隔离、正常股留下、不写 cache、details 带两类 `unknown_reason`；只有不可计算 → 仍 `known_hit`；exception / 未确认空表 / 缺字段 / 未来 `ann_date` / 空白 `ts_code` → 五格全部 fail-closed；反向控制 → 只有 `float_ratio` 的股票仍被隔离，没有拿它换算分母。health 明细实读为 `hit_count=2, large_unlock_count=1, unlock_uncomputable_count=1, float_share_invalid_count=1, circ_share_unavailable_count=0`，与 `len(blocked)=2` 一致。
+
+**两条我额外记下的边界**（不阻断）：① 空表语义收紧——修复前空表是 `known_clear`+写 cache，现在一律 `unconfirmed_empty` 中止，方案明确要求这个方向，但真出现"30 日窗口零解禁"会停整周；② `float_share <= 0` 现在算非法而被隔离，修复前它能算出非正 `unlock_pct` 从而留下，方向是保守隔离。
+
+**未覆盖维度与诚实边界**：全部结论建立在离线假 provider 上。桌面 §真实验收标准要的那次真实胶囊没跑，所以"`analysis_input` 真的能产出、被隔离代码真的不出现在 candidates/top50/watch/final"我只在函数层证到 `blocked` 含它们、`filter_l0` 接线未被本刀改动。刀 2/3/4 未实现未审。
+
+**下一步**：刀 2（减持 `after_ratio` 局部隔离）；真实胶囊仍是问题1 整体验收的唯一出口。

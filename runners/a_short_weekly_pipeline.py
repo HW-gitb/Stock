@@ -1734,6 +1734,7 @@ def _apply_portfolio_risk_results(reports: list, context: dict, as_of: str,
 _EXCL_REASON_META = {
     "holder_reduction_veto_10d": ("holder_reduction_veto_10d", "l0_filter", "disclosure_date", "10日减持"),
     "unlock": ("share_float_unlock", "l0_filter", "disclosure_date", "大额解禁"),
+    "unlock_uncomputable": ("share_float_unlock_uncomputable", "l0_filter", "disclosure_date", "解禁比例不可判定"),
     "suspended": ("suspended", "l0_filter", "trade_date_window", "停牌"),
     "relisted": ("relisted", "l0_filter", "trade_date_window", "次新/relisted"),
     "short_history_momentum": (
