@@ -6025,6 +6025,10 @@ def filter_l0(df_stocks, stats_df, unlock_set, red_dict, suspended_set, relisted
         stats_codes = set(stats_df["ts_code"].dropna().astype(str))
         missing_stats_codes = requested_codes - stats_codes
         if missing_stats_codes:
+            # 复用停牌推断那道地板不是借无关阈值:`get_suspend_info` 里同一个常量算的就是
+            # `len(in_universe_traded)/len(universe)`——同一个 daily 源、同一个 symbol 覆盖维度,
+            # 只是消费点不同(那边判"能否推断停牌",这边判"能否只隔离少数缺统计的票")。
+            # 调这个治理值会同时移动两处地板,是有意的单一来源,不要在此另开第二个阈值。
             min_symbol_coverage = float(CONF["suspend_daily_min_coverage"])
             observed_count = len(requested_codes) - len(missing_stats_codes)
             symbol_coverage = observed_count / len(requested_codes)
