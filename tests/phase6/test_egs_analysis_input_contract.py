@@ -11,6 +11,7 @@ import pandas as pd
 
 from engine.a_short_rule6_contract import RULE6_D_TIER_REASONS
 from engine.data.analysis_input_contract import validate_analysis_input_contract
+from runners.a_short_weekly_pipeline import _EXCL_REASON_META
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -134,6 +135,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
         self.assertEqual(summary["excluded_counts"]["unlock"], 0)
         self.assertEqual(summary["excluded_counts"]["unlock_uncomputable"], 1)
         self.assertEqual(summary["excluded_counts"]["holder_reduction_uncomputable"], 1)
+        self.assertEqual(set(summary["excluded_counts"]), set(_EXCL_REASON_META))
 
     def test_current_schema_rejects_neutralized_l3_without_provider_binding(self) -> None:
         with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
