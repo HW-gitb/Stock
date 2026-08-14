@@ -118,6 +118,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
                 rank_reconciliation=reconciliation,
                 l0_excluded_counts={"short_history_momentum": 2},
                 unlock_set={"600001.SH"},
+                red_dict={"unknown_codes": {"000002.SZ"}},
             )
 
         summary = payload["universe_summary"]
@@ -131,6 +132,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
         self.assertEqual(summary["excluded_counts"]["short_history_momentum"], 2)
         self.assertEqual(summary["excluded_counts"]["unlock"], 0)
         self.assertEqual(summary["excluded_counts"]["unlock_uncomputable"], 1)
+        self.assertEqual(summary["excluded_counts"]["holder_reduction_uncomputable"], 1)
 
     def test_current_schema_rejects_neutralized_l3_without_provider_binding(self) -> None:
         with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
@@ -310,6 +312,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
         rank_reconciliation=None,
         l0_excluded_counts=None,
         unlock_set=None,
+        red_dict=None,
     ):
         df = pd.DataFrame([{
             "ts_code": "600000.SH",
@@ -338,7 +341,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             unlock_set=set(unlock_set or set()),
             suspended_set=set(),
             relisted_set=set(),
-            red_dict={},
+            red_dict=red_dict or {},
             tier1_csv_path=ROOT / "tier1.csv",
             full_csv_path=ROOT / "full.csv",
             output_root=output_root,

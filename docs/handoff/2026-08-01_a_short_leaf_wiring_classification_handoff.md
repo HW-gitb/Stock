@@ -1,5 +1,33 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-14 Codex executor/fixer - 5a 问题 1 第二刀：holder `after_ratio` 局部隔离（repaired / OPEN-NOT_VERIFIED，c405）
+
+### 问题、方案与最小改动
+
+桌面 `C:\Users\cnhea\Desktop\5a_testrun0814.md` 的第二刀针对 `get_holder_reductions()`：旧实现一行 `after_ratio` 缺失即把全部 `rule6_holder_events` 置为 `None` 并升级全局 `holder_reduction` 为 `unknown`；`safe_api` 的未确认空响应还会被误读为 `known_clear` 并写 cache。
+
+本轮只做第二刀：
+
+- `stk_holdertrade` 调用点局部接收 `safe_api` errors；exception、未确认空表、坏 payload、缺字段、非法/未来 `ann_date` 仍 `unknown` 并中止。
+- `after_ratio` 逐行数值化；有效事件继续进入 `rule6_holder_events`，缺失/非法/非有限行所属代码进入 `unknown_codes`。global status 只按普通事件或局部隔离得到 `known_hit`/`known_clear`，health 记录普通事件数与不可计算代码数。
+- `filter_l0()` 在既有 `veto_10d` 外删除 `unknown_codes`；`export_analysis_input()` 增加 `holder_reduction_uncomputable`；weekly 增加唯一映射 `holder_reduction_after_ratio_uncomputable` / `l0_filter` / `disclosure_date` / `减持后持股比例不可判定`。
+- 局部不完整响应不写 reductions cache；完整响应沿用现有 cache key/结构读取与写入，不改 schema、Rule6 阈值或日期窗口。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+`weekly_screening.ps1 / a_short_runtest.ps1 → run_egs() → get_holder_reductions() → filter_l0() → build_master()/rank → _collect_rule6_evaluations() → export_analysis_input() → analysis_input contract → a_short_weekly_pipeline::_build_exclusion_summary()`。`unknown_codes` 在 L0 前删除，不进入 rank/watch/final/analysis_input candidates；整源失败不写 reductions cache、候选或正式输出。未改 `safe_api` 全局语义、schema、cache key、provider/client 或最终 unknown 合约门。
+
+### 测试、负向控制与结论边界
+
+- 固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。第二刀直测 `22/22 OK`，receipt=`receipt:b2493d584add3fddf1fe530e`；最终规定 focused acceptance pack `657/657 OK`，receipt=`receipt:a0170ea7a6e6e28b06779caa`；py_compile、git diff --check 通过；文档/路由守卫 `66/66 OK`，receipt=`receipt:ab4ce7ac3d38614a4db72e98`。
+- 负向控制覆盖混合有效/缺值、L0 删除、exception、未确认空表、缺字段、PIT 违规、完整非命中 known-clear/cache；analysis_input 与 weekly 新计数映射均有测试。Optional：5a 文档无新 Optional；既有 `O-SW1-5` 已在当前 HEAD 收口，本轮不重复改动。
+- 刀 3/4 未实现；未启动 full lane、provider/live、真实无缓存胶囊、sub-agent、stage、commit、push 或 merge。当前状态为 `repaired / OPEN-NOT_VERIFIED`；focused PASS 不等于独立 review、提交或真实验收。
+- **Pre-Codex self-review**：`matrix=holder source tri-state + row-level after_ratio + unknown_codes L0 removal + analysis_input/weekly mapping + cache/write/schema/date-window boundaries; call-chain=stk_holdertrade→get_holder_reductions→filter_l0→rank/Rule6→analysis_input→weekly; focused=657 OK; full-lane=NOT_VERIFIED; reviewer=Claude Code reviewer/committer`。
+
+### 交接
+
+`Claude Code：独立审查第二刀的 holder producer→L0→Rule6/analysis_input/weekly 接线、异常/空表/PIT 负向门、cache/write 边界与 receipt；PASS 后按项目规则提交；不启动 provider/live/真实无缓存胶囊。`
+
 ## 2026-08-14 Codex executor/fixer - 5a 问题 1 第一刀：unlock 局部隔离（repaired / OPEN-NOT_VERIFIED，c405）
 
 ### 问题、方案与最小改动
@@ -7402,3 +7430,17 @@ OK (skipped=1)
 **未覆盖维度与诚实边界**：全部结论建立在离线假 provider 上。桌面 §真实验收标准要的那次真实胶囊没跑，所以"`analysis_input` 真的能产出、被隔离代码真的不出现在 candidates/top50/watch/final"我只在函数层证到 `blocked` 含它们、`filter_l0` 接线未被本刀改动。刀 2/3/4 未实现未审。
 
 **下一步**：刀 2（减持 `after_ratio` 局部隔离）；真实胶囊仍是问题1 整体验收的唯一出口。
+
+## 2026-08-14 追加：5a 问题1 第二刀（holder `after_ratio` 局部隔离）的独立审查 = PASS（Claude Code；c405）
+
+**判定**：PASS，零 Required，`R-ASHORT-HOLDER-AFTER-RATIO-LOCAL-GAP-ESCALATES-GLOBAL-UNKNOWN` 转 resolved；第一刀两条 Optional 复核为「方案要求的边界」，无需返工。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方转述）**：整读改动后的 `get_holder_reductions()`（四类取数失败、字段/PIT 门、`after_ratio` 逐行数值化、`unknown_codes` 构造、事件列表构造、health 记录、cache 条件）、`filter_l0()` 里新的集合运算，以及 `export_analysis_input()` 的新计数；另回头读了消费者 `:5486` 那段 `if not isinstance(holder_events, list): code_holder_events = None`——确认修复前"一行坏值 → 全部候选 Rule6 unknown"这条链路真实存在，本刀正是断它。执行方自报的 `657 OK` 一条没采信，自己重跑 710 用例焦点超集并按 rule 6 补跑一次 a_short 全量。
+
+**一次自我纠正**：我第一版 L0 探针里基线本身就是空集（合成股票码不是主板码、又缺 `list_status`，被前置门全删），所以"BBB 被删"这个断言当时不承重。重做成 A/B 对照后才算数：三只真实主板码基线全留，只加 `unknown_codes` 恰好少那一只，只加 `veto_10d` 恰好少另一只，两者同加少两只、第三只留下。
+
+**七组探针**：混合响应（有效/坏行/30 日内）→ 只隔离坏行、有效事件仍在、不写 cache；反向控制 → 另一只票缺值不影响有效票的事件；exception / 未确认空表 / 缺 `after_ratio` 列 / 未来 `ann_date` → 四格全停；cache 两向 → 干净响应写、含缺值不写；旧 cache 无 `unknown_codes` 键仍可读。health 实读 `hit_count=3 / event_count=3 / uncomputable=1`。
+
+**未覆盖维度与诚实边界**：`stk_holdertrade` 空表也从 `known_clear` 收紧成中止（方案点 7 要求），与第一刀同族边界；`unknown_codes` 只看 `in_de=="DE"` 行，与修复前作用域一致。全部结论建立在离线假 provider 上，真实胶囊未跑。刀 3/4 未实现未审。
+
+**下一步**：刀 3（日线统计归入既有短历史隔离）。
