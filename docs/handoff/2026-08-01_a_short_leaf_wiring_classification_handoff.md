@@ -7716,3 +7716,43 @@ P1-4 审查时记的 `O-P14-1` 已闭，且实际缺口比当时写的大：不�
 **过程里有一处值得记**：初版无条件展开，结果并行 runner 按模块名派发到这个聚合模块时又展开一遍，实跑被计数门抓到 `discovered=3093 ran=3338 equal=False`、`status=UNKNOWN exit=125`，没被记成绿。改用 `load_tests` 的 `pattern` 参数（目录发现时有值、按名加载时为 `None`）区分后，按名直跑只剩 1 条守卫。这件事本身也证明计数门是有效的，不是摆设。
 
 前后对照用的是同一条 lane 命令：修前 `2846 / 268.0s`，修后 `3093 / 581.5s` 且 `discovered == ran`。代价是墙钟从 268s 涨到 581.5s（deadline 860s 仍够），地板仍是 `test_a_short_weekly_pipeline` 单模块 570.7s——多出来的主要是它在更拥挤的 worker 池里变慢。
+## 2026-08-14 追加：问题6重上市过滤复用已校验日线面板（Codex executor/fixer；c405；repaired / OPEN-NOT_VERIFIED）
+
+### 问题与根因
+
+按桌面 C:\Users\cnhea\Desktop\6a_testrun0814.md §6 执行。run_egs() 已先按 trade_dates、price_as_of=price_data_through 调用并校验 get_daily_all()，但 cache miss 时 get_relisted_stocks(trade_dates) 又独立调用一次同一逻辑切片。两次独立 provider 响应可能有临时缺行或修订差异；禁 cache 时约为 65 次 daily + 65 次 adj_factor 的两遍重复请求，且一次运行内消费者可能不共享同一快照。问题不是 cutoff、qfq、cache key 或 filter_l0 语义。
+
+### 最小修复与不变边界
+
+只改 A-EGS/egs_main.py：
+
+1. get_relisted_stocks(trade_dates, all_daily=None) 保留原 cache-first；cache 命中立即返回，不读取 supplied frame、不触发 provider。
+2. 只有显式 all_daily is None 才执行原 get_daily_all(trade_dates)，因此旧的无参调用方保持兼容；不对 DataFrame 做真假判断。
+3. run_egs() 当前唯一生产调用点改为 get_relisted_stocks(trade_dates, all_daily=all_daily)，把第一次已经通过 _build_qfq_daily_all / cache validator 的同一对象交给重上市消费者。
+
+未改 65 日窗口、qfq 算法、cache key/version、provider endpoint、重试、cache policy、重上市 cutoff、filter_l0、schema、source binding、写盘目录或其他市场代码；未新增 memoization、fingerprint、状态层或缓存文件。空 frame、groupby("ts_code")["trade_date"].min()、cutoff、set 构造和 save_cache 原样保留。
+
+### 调用链与最终生效点
+
+runners/weekly_screening.cmd → runners/weekly_screening.ps1 → 固定 Python → A-EGS/egs_main.py::run_egs()；内部为 get_trade_dates(65, price_as_of=price_data_through) → get_daily_all(...) → 同一 all_daily 分别供上期候选追踪、get_relisted_stocks(..., all_daily=all_daily)、precompute_stock_stats(...) → relisted_set → filter_l0(...) → exclusion_counts / analysis_input / candidates。本刀没有移动 suspend、daily_basic、relisted 的调用顺序，也没有改变正式产物写盘顺序或失败边界。
+
+### 测试、负向控制与原始终态
+
+在既有 tests/phase6/test_egs_main_relisted_guard.py 增加/调整三类测试：①显式 frame 路径把 get_daily_all 设为若调用即失败，断言既有集合、v2 cache key 和 fetch=0；②无 all_daily 的旧调用恰 fetch=1，输出与 cache 内容不变；③临时输出根运行真实 run_egs() 到 relisted seam，断言 get_daily_all 只调用一次且 seam 收到同一对象 identity。问题6规定的 focused 命令为 12/12 PASS，receipt=receipt:3148be151375ab7f34392632；py_compile 与 git diff --check PASS；文档门禁 verify_doc_process.cmd 67/67 PASS。
+
+full lane 首次提交因 focused receipt 缺少现有 a_short_effect_contract bundle 被门禁拒绝，未启动测试；随后补跑项目现有 effect-contract focused 超集 658/658 PASS，receipt=receipt:43683c5d3f9c5153018832d1，bundle=a_short_effect_contract，再按问题6唯一命令执行一次实际 A-short full lane：discovered=3095、ran=3095、count_gate_equal=true、PASS、127.6s、parallel。未运行 provider/live、真实无缓存胶囊、sub-agent、stage、commit、push 或 merge。
+
+### 交接状态
+
+风险登记与 docs/SESSION_LOG.md 已同步；不改 docs/CURRENT.md。当前为 repaired / OPEN-NOT_VERIFIED：代码、focused 和离线 full lane 已通过，但桌面 §6.6 要求的真实无缓存验收仍需用户单独授权，不能宣称 provider/live 已关闭。下一步先完成文档门禁，再由 Claude Code 独立审查；PASS 后由 reviewer/committer 提交。
+## 2026-08-14 追加：问题 6（同一日线窗口被拉两遍）的独立审查 = PASS（Claude Code；c405）
+
+**判定**：PASS，零 Required。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**：整读改动后的 `get_relisted_stocks()` 与它在 `run_egs` 的唯一调用点，并回头核 `get_daily_all()` 的 as_of 校验——`expected_dates[0] != as_of` 会直接抛错，所以 run_egs 那次调用只要能返回，就意味着 `price_data_through == trade_dates[0]`，两条路径的窗口与 as_of 必然一致、拿到同一份数据；函数体只用 `groupby("ts_code")["trade_date"].min()`，与 qfq 锚定无关，复用语义上安全。
+
+**我补的那格探针**：执行方的三条用例分别证了"给面板就不取数""不给就取一次""run_egs 传的是同一个对象"，但第三条在 relisted 处就抛出停住，证不到**整趟 run_egs 里到底取了几次**。我在打桩 run_egs 里给 `get_daily_all` 装计数器、让真实的 `get_relisted_stocks` 跑：模拟修前接线得 2 次（`price_as_of='20260814'` 与 `None` 各一次，正是当初诊断出的那两次），当前接线得 1 次，两种接线都走到同一个下游点。
+
+**full lane 处理（rule 4，不重跑）**：引用执行方 ledger `3095 OK` / `discovered == ran` / `count_gate_equal`；独立重算指纹一致、代码 mtime 早于 recorded_at。值得记一句：3095 已经包含今天刚挂进 lane 的 phase6，而本刀的测试模块正在其中——这是"全量真的全了"之后第一刀被它覆盖着落地的改动。
+
+**边界**：省下的是每周一次的 65 日全市场日线 + 复权因子重复拉取（无缓存时约 130 次调用）；缓存开启时第二次本就多半命中缓存，故生产提速有限，真正获益的是无缓存胶囊与限流风险。`全市场量能预计算` 上一轮已核实只有一个调用点，不存在同类重复。
