@@ -1,5 +1,63 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-14 Codex executor/fixer - 5a 问题1 第三刀 Required + Optional：symbol 覆盖地板与流程留痕（repaired / OPEN-NOT_VERIFIED，c405）
+
+### 问题、方案与最小改动
+
+Claude 复审确认上一版第三刀虽能隔离少数缺失代码，但删除了 daily stats 唯一的 symbol 覆盖门：partial-symbol 断供会静默缩小候选池，并误记为 `short_history_momentum`。
+
+本轮在既有第三刀上只增加一层地板：
+
+- `filter_l0()` 在精确隔离前计算当前 L0 请求代码与 `stats_df` 的 symbol 覆盖率。
+- 复用既有治理值 `CONF["suspend_daily_min_coverage"]`（0.95）；低于地板整批 `RuntimeError`，达到地板才局部隔离并累加既有计数。
+- 不新增配置、排除键、schema、weekly 映射、cache、provider 或接口；保留 21 根 close 动量要求和隔离后 merge 丢行仍中止。
+
+### Optional 处置
+
+- `O-K3-1`：当前 `SESSION_LOG` entry 已补齐 `register=` / `handoff=` / `focused=` / `full-lane=` / `door=`。
+- `O-K3-2`：已完成；文档守卫通过后，对最终 code fingerprint 只跑一次 a_short full lane，结果 `2837/2837 PASS`，fingerprint=`e94af4f42ea8`；full lane 后未再改行为代码。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+`weekly_screening.ps1 / a_short_runtest.ps1 → run_egs() → precompute_stock_stats() → filter_l0() → build_master()/rank → watch_pool_eligible_frame()/tier1_final → export_analysis_input() → analysis_input contract → a_short_weekly_pipeline::_build_exclusion_summary()`。低于 symbol 地板时不产生候选/正式输出；地板内被隔离代码不进入 master、rank、watch/final、analysis_input candidates 或 weekly 个股消费。未改 schema、cache、provider/source binding 或 weekly 映射。
+
+### 测试、负向控制与结论边界
+
+- 固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。低于地板红测已复现；第三刀直接包 `21/21 OK`；最终 focused acceptance pack `660/660 OK`，receipt=`receipt:887c01faec2f4c3396737410`；effect-contract bundle `77/77 OK`，receipt=`receipt:8db6b2a8612a0656123eb20c`；py_compile/diff-check PASS；a_short full lane `2837/2837 PASS`，`discovered=2837 ran=2837`，fingerprint=`e94af4f42ea8`；文档/路由守卫 `66/66 OK`，receipt=`receipt:9b6528b285ecbff94cfb0a0f`。
+- 负向/边界覆盖：覆盖率低于 0.95 仍中止；19/20 恰好地板放行并只隔离 1 只；地板内混合缺失与 `<21` 根计数累加；隔离后 merge 新缺失仍中止；既有全局空/低行数/无有效 close 门不变。
+- `O-K3-1` 已补流程字段；`O-K3-2` 已由唯一 full lane 关闭。未启动 provider/live、真实无缓存胶囊或 sub-agent；未 stage/commit/push/merge。当前状态 `repaired / OPEN-NOT_VERIFIED`，待 Claude 独立审查。
+
+### 交接
+
+`Claude Code：独立审查第三刀 Required/Optional，复核 receipt:887c01faec2f4c3396737410、receipt:8db6b2a8612a0656123eb20c 与 full-lane 2837/2837；PASS 后按项目规则提交；不启动 provider/live/真实无缓存胶囊。`
+
+## 2026-08-14 Codex executor/fixer - 5a 问题1 第三刀：日线统计个股缺失局部隔离（repaired / OPEN-NOT_VERIFIED，c405）
+
+### 问题、方案与最小改动
+
+桌面 `C:\Users\cnhea\Desktop\5a_testrun0814.md` 第三刀处理：整批日线全局门已经通过，但少数请求代码没有任何有效 close、因此完全不在 `stats_df`；旧 `filter_l0()` 将其视为全局 symbol coverage incomplete 并中止整批。
+
+本轮只做第三刀：
+
+- 在 `filter_l0()` 按 `price_observation_count` 代码集合精确找出完全缺失的股票，从 `df` 删除。
+- 数量累加到既有 `l0_excluded_counts["short_history_momentum"]`；后续 `pct_20d` 为 NaN 的已有短历史用 `+=` 累加。
+- 保留 `precompute_stock_stats()` 的空 payload、最小行数、股票池整体覆盖和无有效 close 全局中止；首次精确隔离后，merge 新产生的 `price_observation_count` 缺失仍抛错。
+- 不新增排除键、weekly 映射、schema、cache、provider 或接口，不改 21 根 close 动量要求和短历史不得进入 Tier1/watch 的既有不变式。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+`weekly_screening.ps1 / a_short_runtest.ps1 → run_egs() → precompute_stock_stats() → filter_l0() → build_master()/rank → watch_pool_eligible_frame()/tier1_final → export_analysis_input() → analysis_input contract → a_short_weekly_pipeline::_build_exclusion_summary()`。完全缺日线统计的代码在 L0 后不进入 master、rank、watch/final、analysis_input candidates 或 weekly 个股消费；继续消费既有 `short_history_momentum`，没有新字段或新映射。未改 schema、日线 cache、provider/source binding 或正式产物写盘边界。
+
+### 测试、负向控制与结论边界
+
+- 固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。第三刀最终规定 focused acceptance pack `659/659 OK`，receipt=`receipt:2f6efd1da6eeb19adf23349d`；目标类与日线 guard 也在该包内通过。文档/路由守卫 `66/66 OK`，receipt=`receipt:c6326757720efa4a9beee0b7`；py_compile/diff-check PASS。
+- 负向控制覆盖：完全缺一代码只隔离该代码；完全缺一代码加 `pct_20d=NaN` 计数不覆盖；隔离后 merge 新缺失仍中止；既有空日线、低总行数、无股票池匹配和无有效 close 全局门保持中止。
+- 未启动 full lane、provider/live、真实无缓存胶囊或 sub-agent；未 stage/commit/push/merge。当前状态为 `repaired / OPEN-NOT_VERIFIED`；focused PASS 不等于独立 review、commit 或真实验收。第四刀财务局部缺失仍未实现。桌面文档无新 Optional，`O-SW1-5` 已收口，本轮不重复修改。
+
+### 交接
+
+`Claude Code：独立审查第三刀的日线全局门→stats_df→L0 局部隔离→master/rank/watch/final→analysis_input/weekly 接线、计数累加、merge 后 fail-closed 与 receipt；PASS 后按项目规则提交；不启动 provider/live/真实无缓存胶囊。`
+
 ## 2026-08-14 Codex executor/fixer - 5a 问题 1 第二刀：holder `after_ratio` 局部隔离（repaired / OPEN-NOT_VERIFIED，c405）
 
 ### 问题、方案与最小改动
@@ -7444,3 +7502,29 @@ OK (skipped=1)
 **未覆盖维度与诚实边界**：`stk_holdertrade` 空表也从 `known_clear` 收紧成中止（方案点 7 要求），与第一刀同族边界；`unknown_codes` 只看 `in_de=="DE"` 行，与修复前作用域一致。全部结论建立在离线假 provider 上，真实胶囊未跑。刀 3/4 未实现未审。
 
 **下一步**：刀 3（日线统计归入既有短历史隔离）。
+## 2026-08-14 追加：5a 问题1 第三刀（日线统计个股缺失局部隔离）的独立审查 = FAIL（Claude Code；c405）
+
+**判定**：FAIL，一条 P1 Required `R-ASHORT-DAILY-STATS-LOCAL-ISOLATION-HAS-NO-SYMBOL-COVERAGE-FLOOR`，另记两条 Optional。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方转述）**：整读改动后的 `filter_l0()` 全体（主板/退市/停牌/复牌/解禁/减持前置过滤 → 新的缺失集合隔离 → 成交额门 → 动量 merge 与保留的 raise → `pct_20d` 短历史剔除），并回头整读了上游 `precompute_stock_stats()`、`get_daily_all()` 与 `_build_qfq_daily_all()` 的全部全局门，确认它们分别是行数门、日期窗门和因子门，**没有一道管 symbol 覆盖**——这正是被删掉那行 raise 原本承担的角色（它的旧测试名直译就是「缺日线统计的票不得被洗成短历史」）。执行方自报的 `659/659 OK` 一条没采信。
+
+**探针与 A/B 对照**：P1 基线三只主板码全留、计数 0，只从 `stats_df` 拿掉一只 → 恰好少那一只、计数 1（基线非空，断言承重）；P2 预置 5 + NaN 腿 → 6，再加缺失腿 → 7（证明两腿都是 `+=`，旧代码在 NaN 腿是赋值）；P3 50 只请求而 `stats_df` 只有 1 只 → 不中止、49 只静默剔除；P3b 按生产阈值 `daily_stats_min_rows=1000` 把「1 只票 ×1200 行」喂给 `precompute_stock_stats(50 codes)` → 同样不中止；P4 四道保留的全局门（merge 后再缺失 / 空 payload / 999 行 / 无有效 close）全部仍抛错。
+
+**为什么判 Required 而不是知情边界**：方案自己写的边界是「仅少数代码」「整批日线不足仍中止」，并把「匹配股票池后整体覆盖太低」当作已存在的门；实测这道门是 1000 **行**（约正常批量的 0.6%），不是 symbol 覆盖率，所以方案前提在代码里不成立。修法不需要新设计——**同一份方案的刀 4 已经定好形态**（全市场覆盖 `>=0.95` 才允许局部隔离），照搬到刀 3 即可。
+
+**未覆盖维度与诚实边界**：本轮未跑 full lane（FAIL 已被探针坐实，按审查门 rule ③ 不等全量；且修复会让任何 full-lane 证据失效）——方案步骤 6 要求的那一次仍欠着。全部结论建立在离线假 provider 与函数级探针上，真实无缓存胶囊未跑。刀 4（财务局部缺失）未实现未审。
+
+**下一步**：Codex 按 Required 加 symbol 覆盖地板并补红测，再跑一次绑修复后代码态的 full lane。
+## 2026-08-14 追加：5a 问题1 第三刀 symbol 覆盖地板的复审 = PASS（Claude Code；c405）
+
+**判定**：PASS，零 Required；`R-ASHORT-DAILY-STATS-LOCAL-ISOLATION-HAS-NO-SYMBOL-COVERAGE-FLOOR` 与 `O-K3-1`/`O-K3-2` 转 resolved，新记一条 `O-K3-3`（注释/别名，非行为）。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方转述）**：整读修复后的 `filter_l0()` 该分支（覆盖率算式、地板比较、抛错先于任何 frame 变更、隔离与计数、后续保留的 merge-loss raise），并**回头整读了被复用常量的原产地** `get_suspend_info:4151-4183`——确认 `suspend_daily_min_coverage` 算的就是 `daily` payload 对股票池的 symbol 覆盖率，与新地板同源同维度，因此复用成立而不是借一个无关阈值来凑。执行方自报的 `660 OK` 一条没采信。
+
+**十条 A/B 探针**：100 只缺 5 只（恰好 95.00%）放行并计数 5；缺 6 只（94.00%）抛错；**我上一轮的 3 只/缺 1 只旧夹具现在抛错**——这是地板承重的直接对照（同一夹具在修复前后结论相反）；50 只只回 1 只（2.00%）抛错，即我判 FAIL 的那条 fail-open 已闭；抛错时不写计数不动 frame；预置 5 + 隔离 5 = 10；零缺失不进分支；隔离后 merge 再缺失仍抛旧消息；21 只里 1 只停牌时分母按 20 只存活集合算（证明分母不是原始股票表）。除零路径由 `if missing_stats_codes:` 前置挡住，不可达。
+
+**full lane 的处理（rule 4，不重跑）**：引用执行方 ledger 的 `2837 OK`、`discovered_cases == ran_cases`、`count_gate_equal=true`；我独立重算当前代码态 fingerprint 得 `e94af4f42ea8…`，与其 `fingerprint` / `prepared_fingerprint` 逐字一致，且两个代码文件的 mtime 都早于 `recorded_at`，其后只动过 doc 路径。
+
+**未覆盖维度与诚实边界**：地板是 5% 的 L0 存活集合，真实周里最多可静默隔离一百多只而不报错——这是方案自己定的治理档次，不是本刀新增口径；缺数据仍并入「20日动量历史不足」也是方案点 3 的明确要求。全部结论建立在离线假 provider 上，方案 §真实验收标准要的无缓存真实胶囊未跑，问题 1 整体仍 `OPEN-NOT_VERIFIED`。刀 4 未实现未审。
+
+**下一步**：刀 4（财务行局部缺失，仍需 95% 全市场覆盖门在前）；真实胶囊仍是问题 1 整体验收的唯一出口。

@@ -129,19 +129,117 @@ class FilterL0BoardScopeTest(unittest.TestCase):
         self.assertTrue(out.empty)
         self.assertIn("ts_code", out.columns)
 
-    def test_missing_daily_stats_symbol_cannot_be_laundered_as_short_history(self) -> None:
+    def test_missing_daily_stats_symbol_is_isolated_as_short_history(self) -> None:
         stocks = pd.DataFrame([
-            {"ts_code": "600001.SH", "name": "正常一", "list_status": "L"},
-            {"ts_code": "600002.SH", "name": "正常二", "list_status": "L"},
+            {"ts_code": f"{600000 + i:06d}.SH", "name": f"正常{i}", "list_status": "L"}
+            for i in range(1, 21)
         ])
-        stats = pd.DataFrame([{
-            "ts_code": "600001.SH",
-            "avg_amount_20d": 2e8,
-            "pct_20d": 1.0,
-            "price_observation_count": 61,
-        }])
+        stats = pd.DataFrame([
+            {
+                "ts_code": f"{600000 + i:06d}.SH",
+                "avg_amount_20d": 2e8,
+                "pct_20d": 1.0,
+                "price_observation_count": 61,
+            }
+            for i in range(1, 20)
+        ])
+
+        exclusion_counts = {"short_history_momentum": 2}
+        out = self.egs_main.filter_l0(
+            stocks, stats, set(), {}, set(), set(),
+            exclusion_counts=exclusion_counts,
+        )
+
+        self.assertEqual(
+            set(out["ts_code"]),
+            {f"{600000 + i:06d}.SH" for i in range(1, 20)},
+        )
+        self.assertEqual(exclusion_counts["short_history_momentum"], 3)
+
+    def test_missing_daily_stats_and_nan_momentum_counts_accumulate(self) -> None:
+        stocks = pd.DataFrame([
+            {"ts_code": f"{600000 + i:06d}.SH", "name": f"正常{i}", "list_status": "L"}
+            for i in range(1, 21)
+        ])
+        stats = pd.DataFrame([
+            {
+                "ts_code": "600001.SH",
+                "avg_amount_20d": 2e8,
+                "pct_20d": 1.0,
+                "price_observation_count": 61,
+            },
+            {
+                "ts_code": "600002.SH",
+                "avg_amount_20d": 2e8,
+                "pct_20d": float("nan"),
+                "price_observation_count": 8,
+            },
+            *[
+                {
+                    "ts_code": f"{600000 + i:06d}.SH",
+                    "avg_amount_20d": 2e8,
+                    "pct_20d": 1.0,
+                    "price_observation_count": 61,
+                }
+                for i in range(3, 20)
+            ],
+        ])
+        exclusion_counts = {}
+
+        out = self.egs_main.filter_l0(
+            stocks, stats, set(), {}, set(), set(),
+            exclusion_counts=exclusion_counts,
+        )
+
+        self.assertEqual(len(out), 18)
+        self.assertNotIn("600020.SH", set(out["ts_code"]))
+        self.assertNotIn("600002.SH", set(out["ts_code"]))
+        self.assertEqual(exclusion_counts["short_history_momentum"], 2)
+
+    def test_daily_stats_merge_loss_after_isolation_still_aborts(self) -> None:
+        stocks = pd.DataFrame([
+            {"ts_code": f"{600000 + i:06d}.SH", "name": f"正常{i}", "list_status": "L"}
+            for i in range(1, 21)
+        ])
+        stats = pd.DataFrame([
+            {
+                "ts_code": "600001.SH",
+                "avg_amount_20d": 2e8,
+                "pct_20d": 1.0,
+                "price_observation_count": float("nan"),
+            },
+            *[
+                {
+                    "ts_code": f"{600000 + i:06d}.SH",
+                    "avg_amount_20d": 2e8,
+                    "pct_20d": 1.0,
+                    "price_observation_count": 61,
+                }
+                for i in range(2, 20)
+            ],
+        ])
 
         with self.assertRaisesRegex(RuntimeError, "symbol coverage incomplete"):
+            self.egs_main.filter_l0(
+                stocks, stats, set(), {}, set(), set()
+            )
+
+    def test_daily_stats_symbol_coverage_below_floor_still_aborts(self) -> None:
+        stocks = pd.DataFrame([
+            {"ts_code": f"{600000 + i:06d}.SH", "name": f"正常{i}", "list_status": "L"}
+            for i in range(1, 21)
+        ])
+        stats = pd.DataFrame([
+            {
+                "ts_code": f"{600000 + i:06d}.SH",
+                "avg_amount_20d": 2e8,
+                "pct_20d": 1.0,
+                "price_observation_count": 61,
+            }
+            for i in range(1, 19)
+        ])
+
+        with self.assertRaisesRegex(RuntimeError, "daily stats symbol coverage too low"):
             self.egs_main.filter_l0(
                 stocks, stats, set(), {}, set(), set()
             )
