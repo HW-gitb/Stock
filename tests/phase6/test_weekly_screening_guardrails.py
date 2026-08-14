@@ -233,6 +233,12 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("-Account path was not found", text)               # bad supplied path -> labelled
         self.assertIn("Set-M67Failure -Reason 'account_path_missing'", text)  # bad supplied path -> deferred fail-closed closeout
         self.assertIn("no -Account: observation-only", text)             # omitted account -> observation-only, labelled
+        observation_line = next(
+            line for line in text.splitlines()
+            if "no -Account: observation-only" in line
+        )
+        self.assertTrue(observation_line.isascii())
+        self.assertIn("entry candidates are rendered as OBSERVE", observation_line)
         self.assertIn("sizing_mode=observation_only_no_account", text)   # points at the durable artifact marker
         self.assertIn("a_short_weekly_pipeline.py", text)                # the one-click stage IS the M6.7 pipeline
         self.assertNotIn("a_short_semantic_risk_summary.py", text)       # standalone summary CLI no longer invoked
