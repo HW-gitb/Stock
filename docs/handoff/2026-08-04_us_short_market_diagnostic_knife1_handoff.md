@@ -1525,3 +1525,21 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_bounded_un
 **下一步注意事项 —— 本缺陷类已关闭，后来者不必再扫**：判据是「**类定义在一个自身会被当脚本跑的模块里**」。`engine/` 下的模块永不是启动入口，所以定义在那里的类（`paid_gateway.LiveTransport`、`merge.ThemeDiscoveryMergeError`、`ingest.LLMThemeDiscoveryError`、`validate.ProvisionalThemeValidationError`、`plan_budget.PlanBudgetError`、`publish_policy.DiscoveryPublishPolicyError`）天然免疫；`runners/` 下被跨模块严格判型的类只有三个——`Pass2BudgetApproval`（已锚定）、`ReplayClient`（本刀锚定）、`ConvertError`（其定义模块只被 import，`.ps1` 仅在帮助文案里提示操作员单独跑它生成 JSON，不在同进程交对象）。两种写法（`from X import 类` 与 `mod.Class` 属性式）都扫过；全仓 `sys.modules.setdefault` 恰好 2 处，与两个真实实例一一对应。**再加第三处之前，先确认真有第三个实例，别照着 idiom 铺。**
 
 **仍然开着（与本刀无关，别误读为已闭）**：桌面 `us_testrun0814.md` §7 的 live 收口（需授权胶囊越过 yfinance 与 Pass2 进入 receipt → weekly_bridge → emit/no-emit）；`universe_fetch` 的 Massive grouped daily HTTP 403；数据覆盖缺口（`no_price=592`、`no_shares=2067`、市值兜底后 14 未解析、SIC 缺 54、momentum 缺 6）。
+
+## 2026-08-14 追加：首次授权胶囊跑的结果 + 账户产物补齐与启动器文案（自修自审 PASS，已合入 master）
+
+**改了什么**：用户授权跑了一次真实胶囊（`runners/us_short_runtest.ps1 -AsOf 20260812 -Live -ConfirmRuntest`，源树=主树 master；解析得 decision `20260812` / price_basis `20260811`）。**它在任何 stage 之前就退出了**，暴露一处回归，随后按用户裁决修复。问题清单已按用户要求单独写在桌面 `2us_testrun0814.md`；本节只记工程收口。
+
+**为什么（这是我自己放行的回归，写明以免下次重犯）**：问题16-B（`ccfbb919`）把 `symbol_cooldown_reconciliation` 加进 `schemas/us_short_account_state.schema.json` 的 `required`，但**既有账户产物没有该字段、也没有迁移**。我审那一刀时验了代码 fail-closed、验了测试全绿，**没验既有真实产物是否还满足新的必填项**——教训是：**给既有 on-disk 产物新增必填项时，必须同轮验证现存产物或提供迁移**，否则测试全绿而入口全死。
+
+**修了什么**：
+- `state/us_short/weekly_private/_run_inputs/paper_account_state.adapter.json` 补 `symbol_cooldown_reconciliation = {schema_name, schema_version 1.0.0, as_of 20260810, events: []}`。`as_of` 必须等于账户自身 `as_of`（validator 对姊妹字段 `holding_action_reconciliation` 已有同款硬等式）。该文件被 `.gitignore:53` 忽略，**是本机私密产物、不进提交**，故本次 commit 不含它。
+- `runners/us_short_weekly_capstone.ps1` 的 `:30` 说明与 `:103` 提示：把「`-Live` 要求 `-MomentumTopK`，缺则 runner 会拒」改成「省略时沿用 runner 默认 200」。实际 `us_short_weekly_capstone.py:3214` 是 `default=200`，原文案与行为相反。
+
+**验证命令**：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_runtest_capsule tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`
+
+**验证结果**：`PASS tests=68 elapsed=8.8s receipt:a953bca57aa6782e95d524e4`（`test_runtest_capsule` 用参数捕获式 fake worker 真调 PowerShell 启动器，是文案改动的直接覆盖）。产物侧我直跑真 validator：`validate_account_state(state,"20260810")` → **VALID**；`(state,"20260812")` → 仍抛 as_of 一致性错误。启动器 `git diff --numstat` = `2 2`，两行纯文案，`:102` 判定条件与 `:115` 参数组装一行未动。full-lane `not_triggered`（零生产行为改动）。
+
+**下一步注意事项**：
+- **要在 decision_date 20260812 跑通，必须先重新生成账户产物**：`runners\us_short_account_state_from_manual_tables.py --as-of 20260812`。schema 那道门已闭，但 as_of 一致性门是**有意的人工门**——validator 的报错原文就要求「确认账户与持仓事实对该决策日仍然成立后」再重生成。任何人都不该替操作员改这个日期。
+- 本轮**未重跑胶囊**（用户指示）。0814 §7 的 live 收口仍未完成，Massive grouped daily HTTP 403 既未复现也未排除；失败的胶囊 `us_short_20260814T083817Z_18116` 已保留待查。
