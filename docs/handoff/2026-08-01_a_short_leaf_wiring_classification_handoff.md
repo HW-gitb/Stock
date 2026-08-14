@@ -7624,3 +7624,8 @@ OK (skipped=1)
 自审三腿：整读启动器 param/splat 与 `weekly_screening.ps1::Invoke-HistoricalInputGuards`（`:339-354`）及 pit 分支（`:711-713`）；A/B 用既有 stub-worker harness 经真实启动器捕获绑定（默认/账户档仍 `today`，新档 `20260813`+`neutralize`——修改前不可能存在）；反向控制两条（`bogus` 在建胶囊前被拒且目录未生成；历史日+`today` 仍 fail-closed，那道门一行未动且本日实测到该 FATAL）。源码文本守卫从钉字面量改为钉默认表达式 + 允许集合，改前红改后绿。
 
 边界：只解开 `neutralize`。`pit` 要 `--l3-pit-strict` 且 `state/l3_snapshots/` 是 gitignored、不在胶囊克隆内，需扩 `--copy-input` 并先裁决隔离性，属独立设计决定，本轮不做；本轮也未端到端真跑一次历史胶囊。
+## 2026-08-14 追加：`safe_api` 默认重试 3 → 5（Claude Code 自修自审 PASS；c405）
+
+本日真实胶囊实跑里 `daily` / `adj_factor` / `fina_indicator` 各出现一次瞬时连接失败（都在第 2 次成功），用户据此裁决把默认重试放宽到 5 次、且不给退避加上限。改动只在 `safe_api` 签名与 docstring；三处显式 `retries=1`（SW 快路径探针）/ `retries=2`（fina_indicator、moneyflow）有意保持不动——它们靠快速失败换取上层回退与补取，跟着放大只会在已知会失败的路上白等。重试耗尽仍返回 `default` 而不抛异常、`errors` 列表仍是区分"真空表"与"没答上来"的唯一手段，这条前四刀都依赖，一行未动。
+
+代价已实测而非估算：全量 `2846 tests / 268.0s`，改前基线 `2843 / 279.9s`，没有变慢——说明现有测试没有一条真的走进退避路径。新增 `SafeApiRetryPolicyTest` 补上原先完全缺失的守卫（默认 5 次 / 显式收窄仍精确生效 / 成功调用只跑一次），其中"同一计数 helper 对 1、2、5 三个期望值都成立"本身就是它真在数次数的对照。

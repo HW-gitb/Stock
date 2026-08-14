@@ -2533,8 +2533,14 @@ def log_data_health_summary(health_path, health):
     log.info(message)
 
 
-def safe_api(fn, *a, default=None, retries=3, errors=None, **kw):
+def safe_api(fn, *a, default=None, retries=5, errors=None, **kw):
     """Bounded provider call.  `errors`, when given a list, distinguishes failure.
+
+    Five attempts, not three: a call that succeeds returns on its first pass, so
+    the extra tries cost a normal run nothing, while one exhausted call can abort a
+    whole weekly run that then has to be redone from scratch.  The backoff stays
+    uncapped (1+2+4+8s).  A caller that must fail fast passes `retries` explicitly;
+    the three sites that do so are deliberate and are not widened by this default.
 
     Both an empty response and an exhausted retry return `default`, so a caller
     that must not confuse "the provider says there is nothing" with "the provider
