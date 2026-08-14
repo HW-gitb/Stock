@@ -1746,13 +1746,13 @@ _EXCL_REASON_META = {
     "short_history_momentum": (
         "short_history_momentum",
         "l0_filter",
-        "price_observation_count",
+        "trade_date_window",
         "20日动量历史不足",
     ),
     "financial_data_unavailable": (
         "financial_data_unavailable",
         "l0_filter",
-        "announcement_date",
+        "disclosure_date",
         "财务数据不可用",
     ),
 }

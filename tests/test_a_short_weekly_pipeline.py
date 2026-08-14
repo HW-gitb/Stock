@@ -34,7 +34,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     TickerLocalPriceError,
     _candidate_price_clock, _candidate_price_exclusion,
     validate_account_state, stateful_risk_for_candidate, _ex_div_notices, _fetch_dividends,
-    _build_exclusion_summary, _upcoming_events, _fetch_unlocks, _fetch_earnings_schedule, _attach_forward_event_impacts,
+    _build_exclusion_summary, _EXCL_REASON_META, _upcoming_events, _fetch_unlocks, _fetch_earnings_schedule, _attach_forward_event_impacts,
     FORWARD_EVENT_WINDOW_DAYS, _FORWARD_EVENT_SOURCE_ID, _FORWARD_EVENT_CONFIDENCE,
     _dragon_list_events, _fetch_dragon_list, _attach_dragon_list_impacts, _recent_trading_days,
     DRAGON_LIST_LOOKBACK_TRADING_DAYS, _DRAGON_LIST_EVIDENCE_VALUE, _DRAGON_LIST_MARKER,
@@ -2468,6 +2468,35 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual([r["source_field"] for r in weekly["exclusion_summary"]["by_reason"]],
                          ["share_float_unlock"])
 
+    def test_main_publishes_all_eight_exclusion_reasons_through_final_schema(self):
+        """Every current producer reason must reach the publisher's schema gate once."""
+        ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+        ai["universe_summary"]["excluded_counts"] = {
+            key: 1 for key in _EXCL_REASON_META
+        }
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai)
+            out = Path(td) / "weekly.json"
+            main([
+                "--as-of", AS_OF,
+                "--analysis-input", str(Path(td) / "ai.json"),
+                "--iv-feed", str(Path(td) / "feed.json"),
+                "--account", str(Path(td) / "acct.json"),
+                "--out", str(out),
+            ], price_provider=lambda code: _series())
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+            self.assertTrue(out.is_file())
+            self.assertTrue(out.with_suffix(".md").is_file())
+            self.assertTrue(out.with_suffix(".receipt.json").is_file())
+
+        rows = weekly["exclusion_summary"]["by_reason"]
+        self.assertEqual(weekly["exclusion_summary"]["total_excluded"], 8)
+        self.assertEqual(len(rows), len(_EXCL_REASON_META))
+        self.assertEqual(
+            {row["source_field"]: row["pit_basis"] for row in rows},
+            {meta[0]: meta[2] for meta in _EXCL_REASON_META.values()},
+        )
+
     def test_price_freshness_mode_controls_tolerance(self):
         # the intraday tolerance is gated on the EXPLICIT --price-freshness-mode (NOT inferred from
         # run-date==as-of). Spy on _fetch_price_series to capture what main passed as the accepted clock.
@@ -4121,7 +4150,7 @@ class ExclusionSummaryTests(unittest.TestCase):
         row = es["by_reason"][0]
         self.assertEqual(row["source_field"], "financial_data_unavailable")
         self.assertEqual(row["stage"], "l0_filter")
-        self.assertEqual(row["pit_basis"], "announcement_date")
+        self.assertEqual(row["pit_basis"], "disclosure_date")
         self.assertIn("财务数据不可用 2 只", es["m67_text"])
 
     def test_build_fails_closed_on_unknown_nonzero_key(self):

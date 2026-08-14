@@ -7657,3 +7657,53 @@ OK (skipped=1)
 P1-4 审查时用 `tests/phase6` 整目录扫出的两条既有红（已确认与 P1-4 无关、master 同样红）现已修完，**两条都在测试侧，生产码零改动**。① `test_egs_main_l3_guard` 那条把快照日期与 `TODAY` 钉死在 `20260716`，而 `score_l3` 的新鲜度门比的是 `datetime.now()` 的真实墙钟，于是这条用例从写下当天就在倒计时、今天差 29 天必红；改成锚定当天即可，没有用 `l3_allow_stale_cache` 绕过——同模块紧接着那条陈旧门用例本来就是按 `now()` 相对锚定的，我的改法与它同套路，它也顺带充当了「门仍然咬得住」的反向控制。② `test_refresh_forward_daily_benchmark_open_tushare` 那条的夹具缺 `adj_factor` / `adj_factor_observed` / `raw_provider_observed` / `provider_observed`，被后来加严的 `_forward_cache_has_coverage` 拒绝；补齐夹具、门一行不动，修后日志出现 `[CACHE] forward_daily reused` 是正向证据，而我把四个列逐个抽掉重跑、每次都退回 refetch，是逐列的反向证据。
 
 整目录复扫 `245 OK`（修前同命令 `failures=1 errors=1`），确认没有被先前失败掩盖的其他红。`O-P14-1` 仍未处理：a_short 全量的 discovery pattern 是 `test_a_short*.py`，不覆盖 `tests/phase6/test_egs_*`，这两条红能长期无人发现正是它的直接后果。
+
+## 2026-08-14 追加：问题 1/2 合并修复（Codex executor/fixer；c405；repaired / OPEN-NOT_VERIFIED）
+
+### 问题、根因与范围
+
+本轮按桌面 `C:\Users\cnhea\Desktop\6a_testrun0814.md` 的“问题 1/2 合并详细修复方案”执行。问题 1 是 weekly exclusion summary 的 `short_history_momentum` producer 元数据写成 `pit_basis=price_observation_count`，但 `schemas/a_short_weekly_report.schema.json` 只允许 `disclosure_date`、`trade_date_window`、`observed_date`；问题 2 是同一张映射中 `financial_data_unavailable` 写成 `announcement_date`，虽然当前测试未先击中，但同样会在最终 schema 校验处失败。根因是 producer 的 `_EXCL_REASON_META` 与 weekly schema enum 脱节，不是 EGS 数据获取、provider、缓存或 schema 扩展问题。
+
+### 严格执行的最小修复
+
+生产代码只改 `runners/a_short_weekly_pipeline.py::_EXCL_REASON_META` 两个值：
+
+| reason | source_field | 修复后的 `pit_basis` |
+|---|---|---|
+| `holder_reduction_veto_10d` | `holder_reduction_10d` | `disclosure_date` |
+| `holder_reduction_uncomputable` | `holder_reduction_10d` | `disclosure_date` |
+| `unlock` | `unlock` | `disclosure_date` |
+| `unlock_uncomputable` | `unlock` | `disclosure_date` |
+| `suspended` | `trade_status` | `trade_date_window` |
+| `relisted` | `trade_status` | `trade_date_window` |
+| `short_history_momentum` | `price_history` | `trade_date_window` |
+| `financial_data_unavailable` | `financial_data` | `disclosure_date` |
+
+未改 `A-EGS/egs_main.py`、schema、renderer、effect contract、PowerShell、provider、cache、preset 或产物。测试只在 `tests/test_a_short_weekly_pipeline.py` 更新既有期望并新增真实 `main()` 全八 reason 回归；在 `tests/phase6/test_egs_analysis_input_contract.py` 增加 exporter 的 `excluded_counts` key set 与 `_EXCL_REASON_META` 的 parity 断言。
+
+### 调用链、消费者、schema 与写盘边界
+
+`weekly_screening.ps1 / a_short_runtest.ps1 → run_egs() → L0 counts → export_analysis_input() → analysis_input.universe_summary.excluded_counts → weekly main() → _build_exclusion_summary() → validate_weekly_report() → publish_weekly_bundle() → weekly schema → Markdown/receipt`。
+
+唯一生产证据绑定仍是 `analysis_input.universe_summary.excluded_counts` 及其 `as_of`；保留 total/count accounting、unknown nonzero fail-closed、zero 不发射、legacy rank key 兼容，以及最终 schema validation 后才写 weekly JSON/Markdown/receipt。修复只让现有八个 producer reason 使用 schema 已允许的 PIT basis，不扩大外部 enum，不改变 source observation 或下游消费协议。
+
+### 负向控制、自审与证据
+
+已覆盖：八个 reason 同时为 nonzero 时真实离线 `main()` 仍能通过最终 schema；外部 `announcement_date` 仍被 schema 拒绝；unknown nonzero、zero 和 legacy rank key 继续走既有行为。修复前新增 main-entry 回归按预期因 `price_observation_count` schema enum 失败，既有 `financial_data_unavailable` 期望也按预期击中旧值；修复后恢复绿色。
+
+固定解释器为 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。focused 658/658 PASS，receipt=`receipt:ebdf66cad5727cff40ee7480`；`py_compile`、外部 enum 负向 probe、`git diff --check` PASS；文档门禁 `verify_doc_process.cmd` `67/67 PASS`。唯一 A-short full lane 使用 `test_a_short*.py`，`discovered=2847`、`ran=2847`、PASS、116.2s、parallel；未启动 provider/live、测试胶囊、全系统真实运行或 sub-agent，未 stage/commit/push/merge。
+
+### 结论与交接
+
+本轮状态为 `repaired / OPEN-NOT_VERIFIED`：代码和离线证据已完成，但尚未形成独立 reviewer/committer 的最终闭环。已同步 `docs/system_risk_register.md` 与 `docs/SESSION_LOG.md`；本条为本 handoff 的追加记录。下一步先完成 `verify_doc_process.cmd` 门禁并恢复最终 focused receipt，再由 Claude Code 独立复核 focused/schema-out-of-enum probe；reviewer/committer PASS 后提交。未经用户另行授权，不运行 provider/live 或真实全系统 lane。
+## 2026-08-14 追加：问题 1/2（`pit_basis` 枚举越界）的独立审查 = PASS（Claude Code；c405）
+
+**判定**：PASS，零 Required。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**：整读 `_build_exclusion_summary()` 的整行构造，确认该行在 schema 里有四个枚举字段——`stage`（8 键全 `l0_filter`）、`veto_class` 与 `privacy_class` 由代码硬写成合法常量、`pit_basis` 即本次所修，没有第二处越界。取值语义单独判过：短历史按"日线窗口内不足 21 根收盘"成立，归 `trade_date_window`，与 `suspended`/`relisted` 同档；财务缺行的 PIT 锚是财报披露，归 `disclosure_date`，与 `unlock`/`holder_reduction` 一致。
+
+**A/B（我自跑，经真实 `main()` 发布路径）**：现表发布成功、8 行、pit 只剩两个合法值；把两个旧值放回去立刻被 `ValidationError` 拒绝，单独放回任一个也各自被拒——两处各自承重，新用例不是碰巧绿。旧值零残留也扫了：全仓其余 `announcement_date` / `price_observation_count` 命中都是同名不同义的字段（披露事件行的日期键、日线统计列名）。
+
+**本轮最有价值的是新增的那条守卫**：把 8 个原因同时置 1 跑完整 `main()` 到发布，断言三件产物齐、8 行齐、`source_field → pit_basis` 与表逐一相等。此前**从没有任何测试拿整份周报过 schema**，这正是两个错值能同时躺着而测试全绿的原因；再加上生产者键集与消费者映射表相等的断言，下次新增第 9 个原因会在测试期就红。
+
+**未覆盖维度**：真实无缓存胶囊未复跑。本次修的正是那次胶囊退出码 1 的直接原因，但"周报真的能发出来"要等下一次真跑才算生产路径验收。
