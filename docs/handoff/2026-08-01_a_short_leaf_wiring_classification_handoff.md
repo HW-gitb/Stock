@@ -7707,3 +7707,12 @@ P1-4 审查时用 `tests/phase6` 整目录扫出的两条既有红（已确认�
 **本轮最有价值的是新增的那条守卫**：把 8 个原因同时置 1 跑完整 `main()` 到发布，断言三件产物齐、8 行齐、`source_field → pit_basis` 与表逐一相等。此前**从没有任何测试拿整份周报过 schema**，这正是两个错值能同时躺着而测试全绿的原因；再加上生产者键集与消费者映射表相等的断言，下次新增第 9 个原因会在测试期就红。
 
 **未覆盖维度**：真实无缓存胶囊未复跑。本次修的正是那次胶囊退出码 1 的直接原因，但"周报真的能发出来"要等下一次真跑才算生产路径验收。
+## 2026-08-14 追加：a_short 全量挂上 `tests/phase6`（Claude Code 自修自审 PASS；c405）
+
+P1-4 审查时记的 `O-P14-1` 已闭，且实际缺口比当时写的大：不只 `test_egs_*`，`tests/phase6` 下 **19 个文件 245 个用例整体**都在 lane 选择器 `-p "test_a_short*.py"` 之外。两条路我都权衡过并放弃了——重命名 19 个文件会波及 `docs/README.md`、`CURRENT`、多份 handoff 以及**已归档**的 register/session log 里的模块名引用（仓库规矩是旧 handoff 不重组）；给 ledger 加第二个选择器要改 `parse_discovery_args → matching_module_files → _files_against_discovery → 计数门` 整条链，那是所有验证的地基。
+
+采用的是第三条：新增一个**名字本身能被选择器匹配**的模块，用 `load_tests` 把 phase6 挂进来。发现器按 `type(item).__module__` 归属用例，所以 phase6 每个模块仍以自己的名字被计数、被并行派发，计数门语义一点没动。
+
+**过程里有一处值得记**：初版无条件展开，结果并行 runner 按模块名派发到这个聚合模块时又展开一遍，实跑被计数门抓到 `discovered=3093 ran=3338 equal=False`、`status=UNKNOWN exit=125`，没被记成绿。改用 `load_tests` 的 `pattern` 参数（目录发现时有值、按名加载时为 `None`）区分后，按名直跑只剩 1 条守卫。这件事本身也证明计数门是有效的，不是摆设。
+
+前后对照用的是同一条 lane 命令：修前 `2846 / 268.0s`，修后 `3093 / 581.5s` 且 `discovered == ran`。代价是墙钟从 268s 涨到 581.5s（deadline 860s 仍够），地板仍是 `test_a_short_weekly_pipeline` 单模块 570.7s——多出来的主要是它在更拥挤的 worker 池里变慢。
