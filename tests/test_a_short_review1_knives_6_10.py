@@ -385,8 +385,140 @@ class HardVetoSourceAndCalendarTest(unittest.TestCase):
         em.pro = SimpleNamespace(stk_holdertrade=lambda **kwargs: None)
         with patch.object(em, "load_cache", return_value=None), \
              patch.object(em, "safe_api", return_value=None):
-            with self.assertRaisesRegex(RuntimeError, "holder-reduction source unavailable"):
+            with self.assertRaisesRegex(RuntimeError, "holder-reduction source returned unconfirmed empty"):
                 em.get_holder_reductions()
+
+    def test_holder_reduction_isolates_only_uncomputable_after_ratio(self) -> None:
+        em = self.em
+        old_today, old_dt = em.TODAY, em.TODAY_DT
+        em.TODAY, em.TODAY_DT = "20260105", datetime(2026, 1, 5)
+        em.pro = SimpleNamespace(stk_holdertrade=lambda **kwargs: None)
+        source = pd.DataFrame([
+            {"ts_code": "600000.SH", "ann_date": "20260104", "in_de": "DE", "after_ratio": 4.99},
+            {"ts_code": "000001.SZ", "ann_date": "20260104", "in_de": "DE", "after_ratio": None},
+            {"ts_code": "000002.SZ", "ann_date": "20260104", "in_de": "DE", "after_ratio": "6.0"},
+        ])
+        try:
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "save_cache") as save_cache, \
+                 patch.object(em, "safe_api", return_value=source):
+                result = em.get_holder_reductions()
+        finally:
+            em.TODAY, em.TODAY_DT = old_today, old_dt
+
+        self.assertEqual(result["veto_10d"], {"600000.SH", "000001.SZ", "000002.SZ"})
+        self.assertEqual(result["deduct_30d"], set())
+        self.assertEqual(result["unknown_codes"], {"000001.SZ"})
+        self.assertEqual(
+            {event["ts_code"] for event in result["rule6_holder_events"]},
+            {"600000.SH", "000002.SZ"},
+        )
+        health = em._LAST_HARD_VETO_SOURCE_HEALTH["holder_reduction"]
+        self.assertEqual(health["status"], "known_hit")
+        self.assertEqual(health["hit_count"], 3)
+        self.assertEqual(health["holder_reduction_event_count"], 3)
+        self.assertEqual(health["holder_reduction_uncomputable_count"], 1)
+        save_cache.assert_not_called()
+
+    def test_holder_reduction_unknown_codes_are_removed_before_l0(self) -> None:
+        em = self.em
+        stocks = pd.DataFrame([
+            {"ts_code": "600000.SH", "name": "A", "list_status": "L", "delist_date": ""},
+            {"ts_code": "000001.SZ", "name": "B", "list_status": "L", "delist_date": ""},
+            {"ts_code": "000002.SZ", "name": "C", "list_status": "L", "delist_date": ""},
+        ])
+        result = em.filter_l0(
+            stocks,
+            pd.DataFrame(),
+            set(),
+            {"veto_10d": set(), "deduct_30d": set(), "unknown_codes": {"000001.SZ"}},
+            set(),
+            set(),
+        )
+        self.assertEqual(set(result["ts_code"]), {"600000.SH", "000002.SZ"})
+
+    def test_holder_reduction_unconfirmed_empty_remains_unknown(self) -> None:
+        em = self.em
+        em.pro = SimpleNamespace(stk_holdertrade=lambda **kwargs: None)
+        with patch.object(em, "load_cache", return_value=None), \
+             patch.object(em, "save_cache") as save_cache, \
+             patch.object(em, "safe_api", return_value=pd.DataFrame()):
+            with self.assertRaisesRegex(RuntimeError, "unconfirmed empty"):
+                em.get_holder_reductions()
+        health = em._LAST_HARD_VETO_SOURCE_HEALTH["holder_reduction"]
+        self.assertEqual(health["status"], "unknown")
+        self.assertEqual(health["failure_class"], "unconfirmed_empty")
+        save_cache.assert_not_called()
+
+    def test_holder_reduction_exception_remains_unknown(self) -> None:
+        em = self.em
+        em.pro = SimpleNamespace(stk_holdertrade=lambda **kwargs: None)
+
+        def failed_safe_api(_fn, *args, **kwargs):
+            kwargs["errors"].append(RuntimeError("provider failure"))
+            return None
+
+        with patch.object(em, "load_cache", return_value=None), \
+             patch.object(em, "save_cache") as save_cache, \
+             patch.object(em, "safe_api", side_effect=failed_safe_api):
+            with self.assertRaisesRegex(RuntimeError, "holder-reduction source exception"):
+                em.get_holder_reductions()
+        health = em._LAST_HARD_VETO_SOURCE_HEALTH["holder_reduction"]
+        self.assertEqual(health["status"], "unknown")
+        self.assertEqual(health["failure_class"], "exception")
+        self.assertEqual(health["exception_type"], "RuntimeError")
+        save_cache.assert_not_called()
+
+    def test_holder_reduction_missing_field_and_future_pit_remain_unknown(self) -> None:
+        em = self.em
+        old_today, old_dt = em.TODAY, em.TODAY_DT
+        em.TODAY, em.TODAY_DT = "20260105", datetime(2026, 1, 5)
+        em.pro = SimpleNamespace(stk_holdertrade=lambda **kwargs: None)
+        cases = [
+            (
+                pd.DataFrame([{"ts_code": "600000.SH", "ann_date": "20260104", "in_de": "DE"}]),
+                "missing required fields",
+            ),
+            (
+                pd.DataFrame([{
+                    "ts_code": "600000.SH", "ann_date": "20260106", "in_de": "DE", "after_ratio": 6.0,
+                }]),
+                "holder-reduction PIT",
+            ),
+        ]
+        try:
+            for source, message in cases:
+                with self.subTest(message=message):
+                    with patch.object(em, "load_cache", return_value=None), \
+                         patch.object(em, "save_cache") as save_cache, \
+                         patch.object(em, "safe_api", return_value=source):
+                        with self.assertRaisesRegex(RuntimeError, message):
+                            em.get_holder_reductions()
+                    self.assertEqual(
+                        em._LAST_HARD_VETO_SOURCE_HEALTH["holder_reduction"]["status"],
+                        "unknown",
+                    )
+                    save_cache.assert_not_called()
+        finally:
+            em.TODAY, em.TODAY_DT = old_today, old_dt
+
+    def test_holder_reduction_complete_non_hit_is_known_clear_and_cached(self) -> None:
+        em = self.em
+        em.pro = SimpleNamespace(stk_holdertrade=lambda **kwargs: None)
+        source = pd.DataFrame([{
+            "ts_code": "600000.SH", "ann_date": "20260104", "in_de": "IN", "after_ratio": 6.0,
+        }])
+        with patch.object(em, "load_cache", return_value=None), \
+             patch.object(em, "save_cache") as save_cache, \
+             patch.object(em, "safe_api", return_value=source):
+            result = em.get_holder_reductions()
+        self.assertEqual(result["veto_10d"], set())
+        self.assertEqual(result["deduct_30d"], set())
+        self.assertEqual(result["unknown_codes"], set())
+        self.assertEqual(result["rule6_holder_events"], [])
+        health = em._LAST_HARD_VETO_SOURCE_HEALTH["holder_reduction"]
+        self.assertEqual(health["status"], "known_clear")
+        save_cache.assert_called_once()
 
 
 class RunIdentityAndPublishTest(unittest.TestCase):

@@ -1733,6 +1733,12 @@ def _apply_portfolio_risk_results(reports: list, context: dict, as_of: str,
 # (全部 L0 上游过滤 = production_hard_veto;counts-only → public_tracked,不暴露个股/持仓)。
 _EXCL_REASON_META = {
     "holder_reduction_veto_10d": ("holder_reduction_veto_10d", "l0_filter", "disclosure_date", "10日减持"),
+    "holder_reduction_uncomputable": (
+        "holder_reduction_after_ratio_uncomputable",
+        "l0_filter",
+        "disclosure_date",
+        "减持后持股比例不可判定",
+    ),
     "unlock": ("share_float_unlock", "l0_filter", "disclosure_date", "大额解禁"),
     "unlock_uncomputable": ("share_float_unlock_uncomputable", "l0_filter", "disclosure_date", "解禁比例不可判定"),
     "suspended": ("suspended", "l0_filter", "trade_date_window", "停牌"),

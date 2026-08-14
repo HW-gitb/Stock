@@ -414,8 +414,8 @@ class HolderReductionPitTest(unittest.TestCase):
         def fake_safe_api(fn, *a, **kw):
             calls.append(kw)
             return pd.DataFrame([
-                {"ts_code": "600000.SH", "ann_date": "20260528", "in_de": "DE"},  # ann<=as_of 近10日 → veto_10d
-                {"ts_code": "000001.SZ", "ann_date": "20260505", "in_de": "DE"},  # ann<=as_of >10日  → deduct_30d
+                {"ts_code": "600000.SH", "ann_date": "20260528", "in_de": "DE", "after_ratio": 4.0},  # ann<=as_of 近10日 → veto_10d
+                {"ts_code": "000001.SZ", "ann_date": "20260505", "in_de": "DE", "after_ratio": 6.0},  # ann<=as_of >10日  → deduct_30d
             ])
 
         try:

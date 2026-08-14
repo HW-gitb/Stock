@@ -1436,6 +1436,9 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         and _LAST_UNLOCK_DETAILS[code].get("status") == "unknown"
     )
     unlock_confirmed_count = max(0, len(unlock_set or []) - unlock_uncomputable_count)
+    holder_reduction_uncomputable_count = len(
+        set((red_dict or {}).get("unknown_codes", set()))
+    )
 
     industry_heat_governance = load_governance()
     candidates = [
@@ -1508,6 +1511,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 "suspended": int(len(suspended_set or [])),
                 "relisted": int(len(relisted_set or [])),
                 "holder_reduction_veto_10d": int(len((red_dict or {}).get("veto_10d", set()))),
+                "holder_reduction_uncomputable": int(holder_reduction_uncomputable_count),
                 "short_history_momentum": int(
                     (l0_excluded_counts or {}).get("short_history_momentum", 0)
                 ),
@@ -5694,31 +5698,53 @@ def get_holder_reductions():
             "veto_10d": set(cached.get("veto_10d") or []),
             "deduct_30d": set(cached.get("deduct_30d") or []),
             "rule6_holder_events": cached.get("rule6_holder_events"),
+            "unknown_codes": set(cached.get("unknown_codes") or []),
         }
         _record_hard_veto_source(
             "holder_reduction", cached["source_status"], cached.get("observed_at"),
             source="local_cache", hit_count=len(result["veto_10d"] | result["deduct_30d"]),
         )
         return result
-    df = safe_api(getattr(pro, "stk_holdertrade", None), start_date=dstr(30), end_date=TODAY,
-                  fields="ts_code,ann_date,in_de,after_ratio")
-    if df is None:
-        _record_hard_veto_source("holder_reduction", "unknown", None, source="tushare.stk_holdertrade")
-        raise RuntimeError("holder-reduction source unavailable; refusing unknown as clear")
-    if len(df) == 0:
-        empty_res = {"veto_10d": set(), "deduct_30d": set(), "rule6_holder_events": []}
-        _record_hard_veto_source("holder_reduction", "known_clear", TODAY, source="tushare.stk_holdertrade", hit_count=0)
-        save_cache(key, {"source_status": "known_clear", "observed_at": TODAY,
-                         "veto_10d": [], "deduct_30d": [], "rule6_holder_events": []})
-        return empty_res
-    required = {"ts_code", "ann_date", "in_de"}
+    local_errors = []
+    df = safe_api(
+        getattr(pro, "stk_holdertrade", None), start_date=dstr(30), end_date=TODAY,
+        fields="ts_code,ann_date,in_de,after_ratio", errors=local_errors,
+    )
+    if local_errors:
+        exception_types = sorted({type(error).__name__ for error in local_errors})
+        _record_hard_veto_source(
+            "holder_reduction", "unknown", None, source="tushare.stk_holdertrade",
+            failure_class="exception", exception_type=", ".join(exception_types),
+            exception_count=len(local_errors),
+        )
+        raise RuntimeError("holder-reduction source exception; refusing unknown as clear")
+    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
+        _record_hard_veto_source(
+            "holder_reduction", "unknown", None, source="tushare.stk_holdertrade",
+            failure_class="unconfirmed_empty",
+        )
+        raise RuntimeError("holder-reduction source returned unconfirmed empty")
+    if not isinstance(df, pd.DataFrame):
+        _record_hard_veto_source(
+            "holder_reduction", "unknown", None, source="tushare.stk_holdertrade",
+            failure_class="bad_schema",
+        )
+        raise RuntimeError("holder-reduction source returned invalid payload")
+    required = {"ts_code", "ann_date", "in_de", "after_ratio"}
     missing = required - set(df.columns)
     if missing:
+        _record_hard_veto_source(
+            "holder_reduction", "unknown", None, source="tushare.stk_holdertrade",
+            failure_class="bad_schema", missing_fields=sorted(missing),
+        )
         raise RuntimeError(f"holder-reduction source missing required fields: {sorted(missing)}")
     ann_dates = df["ann_date"].astype(str)
     parsed_ann = pd.to_datetime(ann_dates, format="%Y%m%d", errors="coerce")
     if parsed_ann.isna().any() or (ann_dates > TODAY).any():
-        _record_hard_veto_source("holder_reduction", "unknown", None, source="tushare.stk_holdertrade")
+        _record_hard_veto_source(
+            "holder_reduction", "unknown", None, source="tushare.stk_holdertrade",
+            failure_class="pit_violation",
+        )
         raise RuntimeError("holder-reduction PIT violation: ann_date must be valid and <= as_of")
     df = df[df["in_de"]=="DE"].copy()
     df["ann_dt"] = pd.to_datetime(df["ann_date"], format="%Y%m%d", errors="coerce")
@@ -5730,22 +5756,29 @@ def get_holder_reductions():
     # 减持并入 veto_10d、提前剔除候选、回测虚高)。对实盘(as_of==今天)该段恒**冗余**:今日公告 ann_date==as_of
     # 已被上面第一段(as_of-30 ≤ ann_date ≤ as_of)纳入 v10,故移除后**实盘行为不变、仅消除历史污染**。
     # 已公告且执行在未来的减持计划由第一段按 ann_date 捕获(ann_date≤as_of);未来才公告的不属 PIT 可知。
-    rule6_events = None
-    after_ratio_complete = "after_ratio" in df.columns and not df["after_ratio"].isna().any()
-    if after_ratio_complete:
-        rule6_events = [
-            {"ts_code": str(row["ts_code"]), "ann_date": str(row["ann_date"]),
-             "in_de": str(row["in_de"]), "after_ratio": _json_float(row["after_ratio"])}
-            for _, row in df.iterrows()
-        ]
-    result = {"veto_10d": v10, "deduct_30d": v30, "rule6_holder_events": rule6_events}
-    source_status = "known_hit" if (v10 or v30) else "known_clear"
-    effective_source_status = source_status if after_ratio_complete else "unknown"
+    after_ratio_values = pd.to_numeric(df["after_ratio"], errors="coerce")
+    valid_after_ratio = after_ratio_values.notna() & np.isfinite(after_ratio_values)
+    unknown_codes = set(df.loc[~valid_after_ratio, "ts_code"].astype(str))
+    df["after_ratio_n"] = after_ratio_values
+    rule6_events = [
+        {"ts_code": str(row["ts_code"]), "ann_date": str(row["ann_date"]),
+         "in_de": str(row["in_de"]), "after_ratio": float(row["after_ratio_n"])}
+        for _, row in df.loc[valid_after_ratio].iterrows()
+    ]
+    result = {
+        "veto_10d": v10,
+        "deduct_30d": v30,
+        "rule6_holder_events": rule6_events,
+        "unknown_codes": unknown_codes,
+    }
+    source_status = "known_hit" if (v10 or v30 or unknown_codes) else "known_clear"
     _record_hard_veto_source(
-        "holder_reduction", effective_source_status, TODAY, source="tushare.stk_holdertrade",
-        hit_count=len(v10 | v30),
+        "holder_reduction", source_status, TODAY, source="tushare.stk_holdertrade",
+        hit_count=len(v10 | v30 | unknown_codes),
+        holder_reduction_event_count=len(v10 | v30),
+        holder_reduction_uncomputable_count=len(unknown_codes),
     )
-    if after_ratio_complete:
+    if not unknown_codes:
         save_cache(key, {
             "source_status": source_status, "observed_at": TODAY,
             "veto_10d": sorted(v10), "deduct_30d": sorted(v30),
@@ -5982,8 +6015,10 @@ def filter_l0(df_stocks, stats_df, unlock_set, red_dict, suspended_set, relisted
     if relisted_set:  df = df[~df["ts_code"].isin(relisted_set)].copy()
     if unlock_set:    df = df[~df["ts_code"].isin(unlock_set)].copy()
 
-    veto = red_dict.get("veto_10d", set())
-    if veto: df = df[~df["ts_code"].isin(veto)].copy()
+    veto = set(red_dict.get("veto_10d", set()))
+    unknown_codes = set(red_dict.get("unknown_codes", set()))
+    if veto or unknown_codes:
+        df = df[~df["ts_code"].isin(veto | unknown_codes)].copy()
 
     if not stats_df.empty and "price_observation_count" in stats_df.columns:
         requested_codes = set(df["ts_code"].astype(str))
