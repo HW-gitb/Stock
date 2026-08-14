@@ -7756,3 +7756,37 @@ full lane 首次提交因 focused receipt 缺少现有 a_short_effect_contract b
 **full lane 处理（rule 4，不重跑）**：引用执行方 ledger `3095 OK` / `discovered == ran` / `count_gate_equal`；独立重算指纹一致、代码 mtime 早于 recorded_at。值得记一句：3095 已经包含今天刚挂进 lane 的 phase6，而本刀的测试模块正在其中——这是"全量真的全了"之后第一刀被它覆盖着落地的改动。
 
 **边界**：省下的是每周一次的 65 日全市场日线 + 复权因子重复拉取（无缓存时约 130 次调用）；缓存开启时第二次本就多半命中缓存，故生产提速有限，真正获益的是无缓存胶囊与限流风险。`全市场量能预计算` 上一轮已核实只有一个调用点，不存在同类重复。
+## 2026-08-14 追加：问题5 M6.7 无账户告警乱码（Codex executor/fixer；c405；repaired / OPEN-NOT_VERIFIED）
+
+### 问题与根因
+
+按桌面 C:\Users\cnhea\Desktop\6a_testrun0814.md §5 执行。runners/weekly_screening.ps1 是无 BOM 的 PowerShell 源文件，Windows PowerShell 5.1 在执行前按宿主默认代码页读取源文件，导致无 Account 的 M6.7 Write-Host 中文字面量被误解码。脚本已有的 OutputEncoding、Console.OutputEncoding 和 Python UTF-8 设置只影响后续输出，不能修复已经读错的源字面量。
+
+### 最小修复与边界
+
+只改 runners/weekly_screening.ps1 无 Account 分支的一段文案：将 建仓 candidates render as 观察 改为 ASCII-only 的 entry candidates are rendered as OBSERVE。保留 no-Account: observation-only、sizing_mode=observation_only_no_account、NOT a real avoid signal、Account 提示、Write-Host、颜色、分支位置及后续 M6.7 调用；不加 BOM，不改账户判定、sizing、PIT、schema、receipt、写盘、OutputEncoding、PYTHONIOENCODING、PYTHONUTF8 或参数转发。
+
+### 调用链与最终生效点
+
+runners/weekly_screening.cmd → Windows PowerShell 5.1 runners/weekly_screening.ps1 → 无 Account 的 M6.7 分支 Write-Host → 原有 $RunM67 / M67InvocationState 请求门 → runners/a_short_weekly_pipeline.py。该文案只面向控制台操作者，不是 Python 输入或持久化字段；周报仍沿用既有 observation_only_no_account 标记。
+
+### 测试、探针与负向控制
+
+在既有 tests/phase6/test_weekly_screening_guardrails.py::test_m67_stage_passes_account_and_labels_missing 增加目标行定位，断言该真实脚本行全 ASCII 且包含 entry candidates are rendered as OBSERVE；有效 Account、无效 Account 的原有转发与 account_path_missing fail-closed 断言保留。守卫先在旧文案上按预期失败，改文案后固定 Python focused 25/25 PASS，receipt=receipt:c37ef2e765288da38f6ac37b；文档门禁 verify_doc_process.cmd 67/67 PASS。
+
+使用 Windows PowerShell 5.1.22621.4391 直接针对真实 runners/weekly_screening.ps1 探针：Parser errors=0；按该宿主读取的 no Account 行唯一、全 ASCII、不含已知乱码片段，并包含 OBSERVE；后续 $RunM67 / M67InvocationState 门和 a_short_weekly_pipeline.py 入口仍存在。git diff --check PASS；未运行 py_compile（本刀不改 Python）。
+
+### 交接状态
+
+本刀按桌面低影响 fast path 不触发 A-short full lane，记录 full-lane=not_triggered；未启动 provider/live、真实胶囊或 sub-agent。已同步 docs/system_risk_register.md 与 docs/SESSION_LOG.md，不改 docs/CURRENT.md。当前为 repaired / OPEN-NOT_VERIFIED，下一步由 Claude Code 独立审查，PASS 后由 reviewer/committer 提交。
+## 2026-08-14 追加：问题 5（控制台文案 mojibake）的独立审查 = PASS（Claude Code；c405）
+
+**判定**：PASS，零 Required，一条 Optional。正文只在 `docs/system_risk_register.md`。
+
+**根因与修法**：`weekly_screening.ps1` 是 UTF-8 无 BOM，Windows PowerShell 5.1 对无 BOM 脚本按 ANSI（本机 GBK）解码，所以那行里的 `建仓`/`观察` 被印成 `寤轰粨`/`瑙傚療`——是脚本文件的解码问题，不是 Python 那条链（它本来就设了 `PYTHONIOENCODING=utf-8`）。改成纯 ASCII 后，ANSI 与 UTF-8 对 ASCII 逐字节相同，这行从构造上不可能再花屏。没有采用"加 UTF-8 BOM"这个 PS 5.1 的常规解法，因为本仓 checklist §F 明令 UTF-8 无 BOM，为一行文案违反全仓编码约定不划算。
+
+**我做的独立验证比新测试更强**：新测试断言的是**那一行** `isascii()`；我整文件扫了一遍——修后 `weekly_screening.ps1` 仍有 88 处非 ASCII，但全部是注释（唯一非注释命中 `:427` 也只是行尾注释，代码部分是 ASCII），`a_short_runtest.ps1` 零非 ASCII。也就是说这两个入口里**没有第二处会被打印的非 ASCII 字面量**，这一类是闭的；注释不进输出，不受影响。
+
+**Optional（`O-P5-1`）**：守卫钉的是那一行而不是那一类，将来新增一条带中文的 `Write-Host` 会同样花屏而测试全绿。窄守卫的自然形态是对该脚本所有 `Write-Host`/`Write-Warning`/`Write-Error` 行断言 `isascii()`——把我这次手工扫描固化下来即可。
+
+**边界**：只扫了这两个 A-short 入口，`runners/` 下其它 `.ps1`（含 us-short 侧）本轮未看；纯文案改动，零行为影响。
