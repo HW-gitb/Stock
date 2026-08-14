@@ -3622,11 +3622,11 @@ def get_sw_industry_map():
     request_group_count = 0
     fallback_reason = None
 
-    # Current production run: query the official endpoint by L1 group.  Never
-    # trust the capped unfiltered response, and never use current-only rows for
-    # a historical PIT replay.
+    # Current or forward-live run: query the official endpoint by L1 group.
+    # Never trust the capped unfiltered response, and never use current-only
+    # rows for a historical PIT replay.
     wall_date = a_share_market_date()
-    if TODAY == wall_date and callable(index_member_all):
+    if TODAY >= wall_date and callable(index_member_all):
         candidate, request_group_count, fallback_reason = _fetch_current_by_l1(index_member_all)
         if not candidate.empty:
             candidate = _apply_pit_window(
@@ -3641,7 +3641,7 @@ def get_sw_industry_map():
                 member_source = "index_member_all_l1_current"
             else:
                 fallback_reason = f"coverage_below_min:{fast_count}<{SW_INDUSTRY_MIN_ACTIVE}"
-    elif TODAY != wall_date:
+    elif TODAY < wall_date:
         fallback_reason = "decision_as_of_requires_pit_history"
     else:
         fallback_reason = "index_member_all_unavailable"
