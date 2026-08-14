@@ -234,14 +234,18 @@ class HardVetoSourceAndCalendarTest(unittest.TestCase):
         daily = pd.DataFrame([
             {"ts_code": "600000.SH", "close": 10.0, "circ_mv": 1000.0, "source_trade_date": "20251231"},
             {"ts_code": "000001.SZ", "close": None, "circ_mv": None, "source_trade_date": "20251231"},
+            {"ts_code": "300001.SZ", "close": 10.0, "circ_mv": 1000.0, "source_trade_date": "20251231"},
+            {"ts_code": "400001.SZ", "close": 10.0, "circ_mv": 1000.0, "source_trade_date": "20251231"},
         ])
         source = pd.DataFrame([
             {"ts_code": "600000.SH", "ann_date": "20260104", "float_date": "20260120", "float_share": 20.0, "float_ratio": 99.0},
             {"ts_code": "000001.SZ", "ann_date": "20260104", "float_date": "20260120", "float_share": 20.0, "float_ratio": 99.0},
+            {"ts_code": "300001.SZ", "ann_date": "20260104", "float_date": "20260120", "float_share": 1.0, "float_ratio": 1.0},
+            {"ts_code": "400001.SZ", "ann_date": "20260104", "float_date": "20260120", "float_share": "invalid", "float_ratio": 99.0},
         ])
         try:
             with patch.object(em, "load_cache", return_value=None), \
-                 patch.object(em, "save_cache"), \
+                 patch.object(em, "save_cache") as save_cache, \
                  patch.object(em, "safe_api", return_value=source):
                 blocked = em.get_unlock_future(pd.DataFrame(), daily)
         finally:
@@ -249,11 +253,113 @@ class HardVetoSourceAndCalendarTest(unittest.TestCase):
 
         # 600000: 20 / (1000/10) = 20%, a real denominator hit.
         # 000001: denominator missing => blocked/unknown; float_ratio must not rescue it.
-        self.assertEqual(blocked, {"600000.SH", "000001.SZ"})
+        self.assertEqual(blocked, {"600000.SH", "000001.SZ", "400001.SZ"})
+        health = em._LAST_HARD_VETO_SOURCE_HEALTH["unlock"]
+        self.assertEqual(health["status"], "known_hit")
+        self.assertEqual(health["hit_count"], 3)
+        self.assertEqual(health["large_unlock_count"], 1)
+        self.assertEqual(health["unlock_uncomputable_count"], 2)
+        self.assertEqual(health["float_share_invalid_count"], 1)
+        self.assertEqual(health["circ_share_unavailable_count"], 1)
+        self.assertEqual(em._LAST_UNLOCK_DETAILS["000001.SZ"]["status"], "unknown")
+        self.assertEqual(
+            em._LAST_UNLOCK_DETAILS["000001.SZ"]["unknown_reason"],
+            "circ_share_unavailable",
+        )
+        self.assertEqual(
+            em._LAST_UNLOCK_DETAILS["400001.SZ"]["unknown_reason"],
+            "float_share_invalid",
+        )
+        self.assertEqual(em._LAST_UNLOCK_DETAILS["300001.SZ"]["status"], "known_clear")
+        save_cache.assert_not_called()
         self.assertNotIn("0.6", Path(EGS_SCRIPT).read_text(encoding="utf-8")[
             Path(EGS_SCRIPT).read_text(encoding="utf-8").index("def get_unlock_future"):
             Path(EGS_SCRIPT).read_text(encoding="utf-8").index("def get_holder_reductions")
         ])
+
+    def test_unlock_source_exception_remains_unknown(self) -> None:
+        em = self.em
+        old_today, old_dt = em.TODAY, em.TODAY_DT
+        em.TODAY, em.TODAY_DT = "20260105", datetime(2026, 1, 5)
+        em.pro = SimpleNamespace(share_float=lambda **kwargs: None)
+        daily = pd.DataFrame([{"ts_code": "600000.SH", "close": 10.0, "circ_mv": 1000.0}])
+
+        def failed_safe_api(_fn, *args, **kwargs):
+            kwargs["errors"].append(RuntimeError("provider failure"))
+            return None
+
+        try:
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "save_cache") as save_cache, \
+                 patch.object(em, "safe_api", side_effect=failed_safe_api):
+                with self.assertRaisesRegex(RuntimeError, "unlock source exception"):
+                    em.get_unlock_future(pd.DataFrame(), daily)
+        finally:
+            em.TODAY, em.TODAY_DT = old_today, old_dt
+
+        health = em._LAST_HARD_VETO_SOURCE_HEALTH["unlock"]
+        self.assertEqual(health["status"], "unknown")
+        self.assertEqual(health["failure_class"], "exception")
+        self.assertEqual(health["exception_type"], "RuntimeError")
+        save_cache.assert_not_called()
+
+    def test_unlock_only_local_gap_is_known_hit_and_not_cached(self) -> None:
+        em = self.em
+        old_today, old_dt = em.TODAY, em.TODAY_DT
+        em.TODAY, em.TODAY_DT = "20260105", datetime(2026, 1, 5)
+        em.pro = SimpleNamespace(share_float=lambda **kwargs: None)
+        daily = pd.DataFrame([
+            {"ts_code": "600000.SH", "close": 10.0, "circ_mv": 1000.0},
+            {"ts_code": "000001.SZ", "close": None, "circ_mv": None},
+        ])
+        source = pd.DataFrame([
+            {"ts_code": "600000.SH", "ann_date": "20260104", "float_date": "20260120", "float_share": 1.0},
+            {"ts_code": "000001.SZ", "ann_date": "20260104", "float_date": "20260120", "float_share": 20.0},
+        ])
+
+        try:
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "save_cache") as save_cache, \
+                 patch.object(em, "safe_api", return_value=source):
+                blocked = em.get_unlock_future(pd.DataFrame(), daily)
+        finally:
+            em.TODAY, em.TODAY_DT = old_today, old_dt
+
+        self.assertEqual(blocked, {"000001.SZ"})
+        health = em._LAST_HARD_VETO_SOURCE_HEALTH["unlock"]
+        self.assertEqual(health["status"], "known_hit")
+        self.assertEqual(health["hit_count"], 1)
+        self.assertEqual(health["large_unlock_count"], 0)
+        self.assertEqual(health["unlock_uncomputable_count"], 1)
+        payload = cloned_minimal_analysis_input_payload()
+        payload["source"]["hard_veto_source_health"] = {
+            "suspension": {"status": "known_clear", "observed_at": "20260105"},
+            "unlock": health,
+            "holder_reduction": {"status": "known_clear", "observed_at": "20260105"},
+        }
+        validate_analysis_input_contract(payload)
+        save_cache.assert_not_called()
+
+    def test_unlock_unconfirmed_empty_remains_unknown(self) -> None:
+        em = self.em
+        old_today, old_dt = em.TODAY, em.TODAY_DT
+        em.TODAY, em.TODAY_DT = "20260105", datetime(2026, 1, 5)
+        em.pro = SimpleNamespace(share_float=lambda **kwargs: None)
+        daily = pd.DataFrame([{"ts_code": "600000.SH", "close": 10.0, "circ_mv": 1000.0}])
+
+        try:
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "save_cache") as save_cache, \
+                 patch.object(em, "safe_api", return_value=None):
+                with self.assertRaisesRegex(RuntimeError, "unconfirmed empty"):
+                    em.get_unlock_future(pd.DataFrame(), daily)
+        finally:
+            em.TODAY, em.TODAY_DT = old_today, old_dt
+
+        health = em._LAST_HARD_VETO_SOURCE_HEALTH["unlock"]
+        self.assertEqual(health["status"], "unknown")
+        self.assertEqual(health["failure_class"], "unconfirmed_empty")
+        save_cache.assert_not_called()
 
     def test_unlock_rejects_future_observation(self) -> None:
         em = self.em
