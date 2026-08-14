@@ -116,7 +116,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
                 tmp,
                 latest_td="20260522",
                 rank_reconciliation=reconciliation,
-                l0_excluded_counts={"short_history_momentum": 2},
+                l0_excluded_counts={"short_history_momentum": 2, "financial_data_unavailable": 1},
                 unlock_set={"600001.SH"},
                 red_dict={"unknown_codes": {"000002.SZ"}},
             )
@@ -130,6 +130,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
         self.assertEqual(summary["rank_exclusion_counts"]["l2_quality_risk"], 1)
         self.assertEqual(summary["rank_exclusion_counts"]["rank_unexpected"], 0)
         self.assertEqual(summary["excluded_counts"]["short_history_momentum"], 2)
+        self.assertEqual(summary["excluded_counts"]["financial_data_unavailable"], 1)
         self.assertEqual(summary["excluded_counts"]["unlock"], 0)
         self.assertEqual(summary["excluded_counts"]["unlock_uncomputable"], 1)
         self.assertEqual(summary["excluded_counts"]["holder_reduction_uncomputable"], 1)

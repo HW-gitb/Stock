@@ -1515,6 +1515,9 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 "short_history_momentum": int(
                     (l0_excluded_counts or {}).get("short_history_momentum", 0)
                 ),
+                "financial_data_unavailable": int(
+                    (l0_excluded_counts or {}).get("financial_data_unavailable", 0)
+                ),
             },
             # 排名层淘汰不是 L0 硬否决；独立存放，避免 weekly exclusion_summary 把它们误当
             # 上游硬过滤原因。旧 v1.4 混装产物由 weekly 对明确键做兼容，不放松其他未知键 fail-closed。
@@ -7548,8 +7551,37 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
     # 用户 2026-06-20 拍板「含全行业」:ChiNext/STAR 等是同 SW 行业的合法成员,纳入使行业中位数更稳健
     # (主板-only 会让某些 SW L2 主板票<5 而 null 掉、丢 ESP)。**这是有意设计、非主板边界 bug**(Codex S2#2 据此驳回)。
     # B 股(200/900)无 SW 映射 → 落「未知」桶,不污染候选所在真实行业的中位数;候选打分本身仍只限主板(filter_l0 strict)。
+    financial_full_universe_min_coverage = 0.95
     full_codes = df_stocks["ts_code"].tolist()
     df_raw_fin = get_financial_data(full_codes)
+    if not isinstance(df_raw_fin, pd.DataFrame) or df_raw_fin.empty:
+        raise RuntimeError("financial full-universe response is empty")
+    financial_codes = _financial_frame_codes(df_raw_fin)
+    requested_financial_codes = set(_canonical_financial_codes(full_codes))
+    if financial_codes is None:
+        raise RuntimeError("financial full-universe response code contract invalid")
+    financial_code_set = set(financial_codes)
+    if not financial_code_set.issubset(requested_financial_codes):
+        raise RuntimeError("financial full-universe response contains foreign codes")
+    financial_full_universe_coverage = (
+        len(financial_code_set & requested_financial_codes) / len(requested_financial_codes)
+        if requested_financial_codes else 0.0
+    )
+    if financial_full_universe_coverage < financial_full_universe_min_coverage:
+        raise RuntimeError(
+            "financial full-universe coverage too low: "
+            f"{len(financial_code_set & requested_financial_codes)}/"
+            f"{len(requested_financial_codes)} codes "
+            f"({financial_full_universe_coverage:.2%}) below "
+            f"{financial_full_universe_min_coverage:.2%}"
+        )
+    financial_l0_missing_codes = _code_set(df_l0) - financial_code_set
+    if financial_l0_missing_codes:
+        df_l0 = df_l0[~df_l0["ts_code"].astype(str).isin(financial_l0_missing_codes)].copy()
+        l0_excluded_counts["financial_data_unavailable"] = (
+            int(l0_excluded_counts.get("financial_data_unavailable", 0))
+            + len(financial_l0_missing_codes)
+        )
     if not df_raw_fin.empty and "q0_dt_yoy" in df_raw_fin.columns:
         df_raw_fin["q0_dt_yoy_n"] = pd.to_numeric(df_raw_fin["q0_dt_yoy"], errors="coerce")
         df_raw_fin["l2_name"]     = df_raw_fin["ts_code"].map(
@@ -7608,7 +7640,9 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
             "daily_stats_l0": (df_l0, stats_df, 1.0),
             "daily_basic_l0": (df_l0, df_db, 1.0),
             "financial_l0": (df_l0, df_raw_fin, 1.0),
-            "financial_full_universe": (df_stocks, df_raw_fin, 0.95),
+            "financial_full_universe": (
+                df_stocks, df_raw_fin, financial_full_universe_min_coverage
+            ),
         },
     )
     if rank_reconciliation["status"] != "pass":

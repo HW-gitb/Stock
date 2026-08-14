@@ -1,5 +1,38 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-14 Codex executor/fixer - 5a 问题1 第四刀 Required：财务行局部缺失（repaired / OPEN-NOT_VERIFIED，c405）
+
+### 问题、方案与最小改动
+
+桌面 `C:\Users\cnhea\Desktop\5a_testrun0814.md` 第四刀处理：全市场财务返回仍达到既有 95% 覆盖时，少数 L0 股票可能没有任何财务行；旧路径在 `build_master()` 前没有精确隔离，导致 `financial_l0` 对齐和下游消费边界不稳。
+
+本轮严格按方案只做四件事：
+
+- 在 `run_egs()` 的 `get_financial_data(full_codes)` 后、`build_master()` 前增加局部 `financial_full_universe_min_coverage = 0.95`；前置门和后续 reconciliation 共用它。
+- 空响应、非法/缺失 `ts_code`、foreign code 或全市场覆盖 `<0.95` 继续 fail-closed；不能先删 L0 股票再计算覆盖率。
+- 覆盖 `>=0.95` 时只从 `df_l0` 隔离无财务行代码，累加既有 `l0_excluded_counts["financial_data_unavailable"]`；行业中位数仍基于完整 `df_raw_fin`。
+- `export_analysis_input()` 与 weekly `_EXCL_REASON_META` 接通唯一的 `financial_data_unavailable` 排除原因；不改行内 NaN/DATA-INC/Tier/候选完整度。
+
+本轮无新增 Optional；既有 Optional 不扩展处理。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+`weekly_screening.ps1 / a_short_runtest.ps1 → run_egs() → get_financial_data() → financial full-universe gate → L0 isolation → build_master()/rank → watch_df/tier1_final → export_analysis_input() → analysis_input contract → a_short_weekly_pipeline::_build_exclusion_summary()`。被隔离代码在 `build_master()` 前消失，不进入 master、rank、watch/final、analysis_input candidates 或 weekly 个股消费；剩余 L0 要求 `financial_l0=100%`，全市场仍要求 `financial_full_universe>=0.95`。
+
+未改 analysis-input schema、provider/cache/version/fallback、daily_basic、既有全局门、排名/Stage3、source binding 或正式写盘边界；没有新增 preset/config、接口或持久化状态。
+
+### 测试、负向控制与结论边界
+
+- 固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。空/坏 code/foreign/低于 95% 的反向控制均在 `build_master()` 前中止；95% 恰好边界只隔离缺失 L0 代码，weekly no-dangling 映射通过。
+- 最终 focused acceptance pack：`741/741 OK`，receipt=`receipt:c9c4e355eb430ac83a8db9a1`，含 effect-contract 与 consumer-probe；a_short full lane：`2841/2841 PASS`，`discovered=ran`，fingerprint=`e0e6e5a8ba8d`；静态 `py_compile=5`、`git diff --check` PASS。
+- 首次 full lane 因并行目标策略测试的 Windows artifact journal 文件锁只跑 `958/2841`，未计绿；代码指纹未变，仅重试一次后形成上述 PASS。未运行 provider/live、真实无缓存胶囊或真实周流水；未 stage/commit/push/merge。
+
+当前结论为 `repaired / OPEN-NOT_VERIFIED`；focused/full lane 不等于独立 review、commit 或真实验收。
+
+### 交接
+
+`Claude Code：独立审查第四刀 financial full-universe gate → L0 isolation → master/rank/watch/final → analysis_input/weekly 接线、95% fail-closed、行业中位数 full-source 与 receipt；PASS 后按项目规则提交；不启动 provider/live/真实无缓存胶囊。`
+
 ## 2026-08-14 Codex executor/fixer - 5a 问题1 第三刀 Required + Optional：symbol 覆盖地板与流程留痕（repaired / OPEN-NOT_VERIFIED，c405）
 
 ### 问题、方案与最小改动
@@ -7531,3 +7564,16 @@ OK (skipped=1)
 ## 2026-08-14 追加：`O-K3-3` 自修自审（Claude Code；c405，已合入 master）
 
 刀 3 复审时记的唯一 Optional：地板复用的常量名字面属于停牌推断，缺一行「为什么可以复用」的说明。本次在 `filter_l0()` 该行前补四行注释（同源同维度、两处地板同一治理值、禁止在此另开阈值），纯注释零行为改动。按 §6a 的 Optional-only 快档自审：先确认没有测试/schema 钉这段文本，再只跑覆盖 `filter_l0` 的最小目标一次 + 文档守卫。`O-K3-3` 转 resolved；刀 4 与真实胶囊状态不变。
+## 2026-08-14 追加：5a 问题1 第四刀（财务行局部缺失）的独立审查 = PASS（Claude Code；c405）
+
+**判定**：PASS，零 Required，新记两条 Optional（`O-K4-1` 地板分母口径、`O-K4-2` 正规化不一致）。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方转述）**：整读 `run_egs()` 新增那段全部（四道前置门、覆盖率算式、`df_l0` 就地收窄、计数累加）与它前后的消费顺序，确认隔离发生在 `build_master()` 之前、`global_ind_med` 仍用完整 `df_raw_fin`、reconciliation 拿到的是收窄后的 `df_l0` 且 `feature_source=df_master`；另整读了被复用的三个 helper（`_code_set` / `_canonical_financial_codes` / `_financial_frame_codes`）与 `is_a_share_main_board`，正是这三者的正规化差异构成 `O-K4-2`。执行方自报的 `741/741 OK` 一条没采信。
+
+**六组探针（我自建 harness，尺寸与执行方用例不同，并多两条腿）**：40 只全有 → 全留（基线非空）；缺 2 只（恰好 95.00%）→ 恰好掉这两只；缺 3 只（92.50%）→ 中止且 `build_master` 一次没被调到（放松类改动的强制腿反向控制）；财务响应含重复 `ts_code` / 含 NaN `ts_code` → 两条契约腿均 fail-closed（执行方只覆盖了空/缺列/foreign）；40 只 universe + 4 只 L0 池、缺的 2 只都在 L0 → 地板读 95% 通过而候选池减半（`O-K4-1` 的证据）；`" 600039.SH "` 这种空白填充码能过主板门却被判成「无财务行」而静默出池（`O-K4-2` 的证据，L0 40→39）。
+
+**full lane 的处理（rule 4，不重跑）**：引用执行方 ledger `2841 OK`、`discovered_cases == ran_cases`、`count_gate_equal=true`；我独立重算当前代码态 fingerprint 得 `e0e6e5a8ba8d…`，与其记录逐字一致，五个代码文件 mtime 均早于 `recorded_at`。执行方那次 `958/2841` 的文件锁中断没有被计绿，ledger 只留重试后的完整绿。
+
+**未覆盖维度与诚实边界**：全部结论建立在离线假 provider 与打桩 `run_egs` 上；方案 §真实验收标准要求的无缓存真实胶囊仍未跑，问题 1 整体仍 `OPEN-NOT_VERIFIED`。隔离后 `financial_l0` 的 1.0 检查对本路径已恒真，仍守其他掉行路径。
+
+**下一步**：四刀工程侧全部收口；问题 1 只剩那次用户授权的无缓存真实胶囊验收。

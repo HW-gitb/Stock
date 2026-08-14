@@ -4114,6 +4114,16 @@ class ExclusionSummaryTests(unittest.TestCase):
         self.assertIn("减持后持股比例不可判定 2 只", es["m67_text"])
         self.assertIsNone(_build_exclusion_summary({"unlock": 0, "suspended": 0}, AS_OF))
 
+    def test_financial_data_unavailable_has_its_own_exclusion_reason(self):
+        es = _build_exclusion_summary({"financial_data_unavailable": 2}, AS_OF)
+        self.assertEqual(es["total_excluded"], 2)
+        self.assertEqual(len(es["by_reason"]), 1)
+        row = es["by_reason"][0]
+        self.assertEqual(row["source_field"], "financial_data_unavailable")
+        self.assertEqual(row["stage"], "l0_filter")
+        self.assertEqual(row["pit_basis"], "announcement_date")
+        self.assertIn("财务数据不可用 2 只", es["m67_text"])
+
     def test_build_fails_closed_on_unknown_nonzero_key(self):
         # 完整性: 未映射的上游过滤原因(count>0)绝不静默丢 → raise
         with self.assertRaises(ValueError):

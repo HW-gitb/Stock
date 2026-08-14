@@ -8,6 +8,7 @@ import copy
 import sys
 import tempfile
 import unittest
+from contextlib import ExitStack
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -519,6 +520,124 @@ class HardVetoSourceAndCalendarTest(unittest.TestCase):
         health = em._LAST_HARD_VETO_SOURCE_HEALTH["holder_reduction"]
         self.assertEqual(health["status"], "known_clear")
         save_cache.assert_called_once()
+
+
+class FinancialL0CoverageTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.em = _load_egs_module()
+
+    @staticmethod
+    def _financial_frame(codes):
+        return pd.DataFrame({"ts_code": list(codes)})
+
+    def _patch_run_inputs(self, stack, stocks, l0, financial, build_master):
+        em = self.em
+        sw_map = {
+            code: {"l1_name": "行业A", "l2_name": "行业B"}
+            for code in stocks["ts_code"]
+        }
+        stack.enter_context(patch.object(em, "_load_iv_feed_projection", return_value={}))
+        stack.enter_context(patch.object(
+            em,
+            "get_trade_dates",
+            return_value=["20260105", "20260102", "20260101", "20251231", "20251230"],
+        ))
+        stack.enter_context(patch.object(em, "a_share_market_date", return_value="20260105"))
+        stack.enter_context(patch.object(em, "get_trade_calendar_context", return_value={}))
+        stack.enter_context(patch.object(em, "_require_nonempty_stock_universe", return_value=stocks))
+        stack.enter_context(patch.object(em, "get_sw_industry_map", return_value=sw_map))
+        stack.enter_context(patch.object(em, "get_csi300_return", return_value=0.0))
+        stack.enter_context(patch.object(em, "get_daily_all", return_value=pd.DataFrame()))
+        stack.enter_context(patch.object(em, "get_suspend_info", return_value=set()))
+        stack.enter_context(patch.object(em, "get_daily_basic", return_value=pd.DataFrame()))
+        stack.enter_context(patch.object(em, "get_relisted_stocks", return_value=set()))
+        stack.enter_context(patch.object(em, "get_unlock_future", return_value=set()))
+        stack.enter_context(patch.object(
+            em,
+            "get_holder_reductions",
+            return_value={"veto_10d": set(), "deduct_30d": set(),
+                          "unknown_codes": set(), "rule6_holder_events": []},
+        ))
+        stack.enter_context(patch.object(em, "precompute_stock_stats", return_value=pd.DataFrame()))
+        stack.enter_context(patch.object(em, "filter_l0", return_value=l0.copy()))
+        stack.enter_context(patch.object(em, "get_financial_data", return_value=financial))
+        stack.enter_context(patch.object(em, "get_moneyflow", return_value=None))
+        stack.enter_context(patch.object(
+            em,
+            "get_margin",
+            return_value=SimpleNamespace(frame=pd.DataFrame()),
+        ))
+        stack.enter_context(patch.object(em, "build_master", side_effect=build_master))
+
+    def test_95_percent_full_coverage_isolates_only_missing_l0_code(self) -> None:
+        codes = [f"{600000 + i:06d}.SH" for i in range(20)]
+        stocks = pd.DataFrame({"ts_code": codes})
+        captured = {}
+
+        class BuildReached(RuntimeError):
+            pass
+
+        def stop_after_build(df_l0, *args, **kwargs):
+            captured["df_l0"] = df_l0.copy()
+            raise BuildReached()
+
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            with ExitStack() as stack:
+                self._patch_run_inputs(
+                    stack,
+                    stocks,
+                    stocks,
+                    self._financial_frame(codes[:-1]),
+                    stop_after_build,
+                )
+                with self.assertRaises(BuildReached):
+                    self.em.run_egs(backtest_mode=True, output_root=tmp)
+
+        self.assertEqual(set(captured["df_l0"]["ts_code"]), set(codes[:-1]))
+
+    def test_financial_full_universe_below_floor_aborts_before_build_master(self) -> None:
+        codes = [f"{600000 + i:06d}.SH" for i in range(20)]
+        stocks = pd.DataFrame({"ts_code": codes})
+        reached = []
+
+        def stop_after_build(*args, **kwargs):
+            reached.append(True)
+            raise RuntimeError("build_master reached")
+
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            with ExitStack() as stack:
+                self._patch_run_inputs(
+                    stack,
+                    stocks,
+                    stocks,
+                    self._financial_frame(codes[:-2]),
+                    stop_after_build,
+                )
+                with self.assertRaisesRegex(RuntimeError, "financial full-universe coverage"):
+                    self.em.run_egs(backtest_mode=True, output_root=tmp)
+        self.assertEqual(reached, [])
+
+    def test_financial_response_code_contract_fails_closed(self) -> None:
+        codes = [f"{600000 + i:06d}.SH" for i in range(20)]
+        stocks = pd.DataFrame({"ts_code": codes})
+        for label, financial in (
+            ("empty", pd.DataFrame()),
+            ("missing_ts_code", pd.DataFrame({"wrong": [1]})),
+            ("foreign_code", self._financial_frame(codes[:-1] + ["999999.SH"])),
+        ):
+            with self.subTest(label=label), tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+                reached = []
+
+                def stop_after_build(*args, **kwargs):
+                    reached.append(True)
+                    raise RuntimeError("build_master reached")
+
+                with ExitStack() as stack:
+                    self._patch_run_inputs(stack, stocks, stocks, financial, stop_after_build)
+                    with self.assertRaisesRegex(RuntimeError, "financial full-universe"):
+                        self.em.run_egs(backtest_mode=True, output_root=tmp)
+                self.assertEqual(reached, [])
 
 
 class RunIdentityAndPublishTest(unittest.TestCase):
