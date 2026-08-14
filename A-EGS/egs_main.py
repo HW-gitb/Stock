@@ -6025,9 +6025,25 @@ def filter_l0(df_stocks, stats_df, unlock_set, red_dict, suspended_set, relisted
         stats_codes = set(stats_df["ts_code"].dropna().astype(str))
         missing_stats_codes = requested_codes - stats_codes
         if missing_stats_codes:
-            raise RuntimeError(
-                "daily stats symbol coverage incomplete before momentum filter: "
-                f"missing_count={len(missing_stats_codes)}"
+            min_symbol_coverage = float(CONF["suspend_daily_min_coverage"])
+            observed_count = len(requested_codes) - len(missing_stats_codes)
+            symbol_coverage = observed_count / len(requested_codes)
+            if symbol_coverage < min_symbol_coverage:
+                raise RuntimeError(
+                    "daily stats symbol coverage too low: "
+                    f"{observed_count}/{len(requested_codes)} codes "
+                    f"({symbol_coverage:.2%}) below configured floor "
+                    f"{min_symbol_coverage:.2%}; refusing partial-symbol isolation"
+                )
+            df = df[~df["ts_code"].astype(str).isin(missing_stats_codes)].copy()
+            if exclusion_counts is not None:
+                exclusion_counts["short_history_momentum"] = (
+                    int(exclusion_counts.get("short_history_momentum", 0))
+                    + len(missing_stats_codes)
+                )
+            log.warning(
+                "L0 排除 %s 只日线统计完全缺失股票（按既有短历史动量原因计数）",
+                len(missing_stats_codes),
             )
 
     if not stats_df.empty and "avg_amount_20d" in stats_df.columns:
@@ -6053,7 +6069,9 @@ def filter_l0(df_stocks, stats_df, unlock_set, red_dict, suspended_set, relisted
                 )
         short_count = int(df["pct_20d"].isna().sum())
         if exclusion_counts is not None:
-            exclusion_counts["short_history_momentum"] = short_count
+            exclusion_counts["short_history_momentum"] = (
+                int(exclusion_counts.get("short_history_momentum", 0)) + short_count
+            )
         if short_count:
             log.warning(
                 "L0 排除 %s 只 pct_20d 不可计算股票（20-session momentum requires 21 closes）",
