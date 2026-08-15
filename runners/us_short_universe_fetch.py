@@ -82,6 +82,7 @@ from engine import us_short_status_source as _status_source  # noqa: E402
 from runners import us_egs_sample_validation as _sv  # noqa: E402
 
 AUTHORIZATION_REF = "user_chat_20260626_universe_fetch"
+UNIVERSE_SUMMARY_SCHEMA_VERSION = "1.3.0"
 GOVERNANCE_PRESET = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 CALENDAR_PRESET = ROOT / "presets" / "us_short_market_calendar_2026_2027.json"
 CANDIDATE_SCHEMA_PATH = ROOT / "schemas" / "us_short_universe_candidate_artifact.schema.json"
@@ -127,7 +128,12 @@ YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT = "yfinance_info_market_cap_snapshot"
 YFINANCE_CLOCK_SHARES_X_MASSIVE_CLOSE = "massive_observed_close_plus_retrieval_snapshot_shares"
 YFINANCE_CLOCK_MARKET_CAP_SNAPSHOT = "retrieval_snapshot_no_historical_asof"
 YFINANCE_RATE_OR_CRUMB_MARKERS = (
-    "429", "too many requests", "rate limit", "rate-limit", "ratelimit", "crumb",
+    "429", "too many requests", "rate limit", "rate-limit", "ratelimit",
+)
+YFINANCE_EXPLICIT_CRUMB_FAILURE_MARKERS = (
+    "crumb error", "crumb failure", "crumb failed", "crumb fetch", "crumb invalid",
+    "failed to get crumb", "failed to fetch crumb", "could not get crumb", "unable to get crumb",
+    "crumb not found", "invalid crumb", "missing crumb", "no crumb",
 )
 _RUN_STATE_SEVERITY = {"clean": 0, "usable_with_fallback": 1, "restricted": 2, "blocked": 3}
 
@@ -1038,7 +1044,8 @@ def _looks_like_yfinance_rate_or_crumb_signal(text: Any) -> bool:
     if not isinstance(text, str):
         return False
     lowered = text.lower()
-    return any(marker in lowered for marker in YFINANCE_RATE_OR_CRUMB_MARKERS)
+    return any(marker in lowered for marker in YFINANCE_RATE_OR_CRUMB_MARKERS) \
+        or any(marker in lowered for marker in YFINANCE_EXPLICIT_CRUMB_FAILURE_MARKERS)
 
 
 def _looks_like_yfinance_rate_or_crumb_exception(exc: BaseException) -> bool:
@@ -1047,6 +1054,8 @@ def _looks_like_yfinance_rate_or_crumb_exception(exc: BaseException) -> bool:
     current: BaseException | None = exc
     while isinstance(current, BaseException) and id(current) not in seen:
         seen.add(id(current))
+        if "crumb" in type(current).__name__.lower():
+            return True
         signals = [type(current).__name__, str(current)]
         for attr in ("status_code", "status", "code"):
             value = getattr(current, attr, None)
@@ -2060,6 +2069,44 @@ def run_fetch(
     )
 
     yfinance_attempted = yfinance_stats.get("logical_ticker_attempt_count", 0)
+    decision_clock = {
+        "decision_date": decision_date,
+        "price_basis_date": price_basis_date,
+        "used_date": used_date,
+        "run_datetime_et": canonical["run_datetime_et"],
+        "calendar_verification_status": calendar_verification_status,
+    }
+    market_cap_fallback_observability = {
+        "yfinance_info": {
+            "target_count": len(yfinance_targets),
+            "logical_ticker_attempt_count": yfinance_stats.get("logical_ticker_attempt_count", 0),
+            "rescued_count": yfinance_stats.get("rescued_count", 0),
+            "shares_x_close_count": yfinance_stats.get("shares_x_close_count", 0),
+            "market_cap_snapshot_count": yfinance_stats.get("market_cap_snapshot_count", 0),
+            "ordinary_failure_count": yfinance_stats.get("ordinary_failure_count", 0),
+            "rate_limit_or_crumb_failure_count": yfinance_stats.get("rate_limit_or_crumb_failure_count", 0),
+            "stopped_on_rate_limit_or_crumb": yfinance_stats.get("stopped_on_rate_limit_or_crumb", False),
+            "physical_http_call_count_recorded": False,
+            "attempt_semantics": "one logical Ticker.info access may issue multiple Yahoo requests; physical HTTP count is not claimed",
+            "provider_readiness_evidence": False,
+        },
+        "massive_ticker_overview": massive_overview_observability,
+    }
+    _write_summary_safe(
+        {
+            "schema_name": "us_short_universe_fetch_summary",
+            "schema_version": UNIVERSE_SUMMARY_SCHEMA_VERSION,
+            "complete": False,
+            "completed_through": "market_cap_completion",
+            "generated_at": generated_at,
+            "scope": {"status": "market_cap_completed_universe_incomplete"},
+            "decision_clock": decision_clock,
+            "market_cap_completion": market_cap_completion,
+            "market_cap_fallback_observability": market_cap_fallback_observability,
+        },
+        summary_path,
+        [massive_key],
+    )
     integrated_bankruptcy_stats = {
         "eligible_symbol_count": 0,
         "sec_company_submissions_calls": 0,
@@ -2216,7 +2263,9 @@ def run_fetch(
 
     summary = {
         "schema_name": "us_short_universe_fetch_summary",
-        "schema_version": "1.3.0",
+        "schema_version": UNIVERSE_SUMMARY_SCHEMA_VERSION,
+        "complete": True,
+        "completed_through": "universe_fetch_and_pass1_completed",
         "authorization_ref": AUTHORIZATION_REF,
         "generated_at": generated_at,
         "scope": {
@@ -2226,13 +2275,7 @@ def run_fetch(
             "production_storage_performed": False,
             "ship_gate_evidence_claimed": False,
         },
-        "decision_clock": {
-            "decision_date": decision_date,
-            "price_basis_date": price_basis_date,
-            "used_date": used_date,
-            "run_datetime_et": canonical["run_datetime_et"],
-            "calendar_verification_status": calendar_verification_status,
-        },
+        "decision_clock": decision_clock,
         "adv_window": {
             "trading_days": ADV_WINDOW_TRADING_DAYS,
             "min_days_required": ADV_MIN_DAYS_REQUIRED,
@@ -2261,22 +2304,7 @@ def run_fetch(
             "yfinance_mktcap_fallback_rescued": market_cap_completion["yfinance_rescued_count"],
         },
         "market_cap_completion": market_cap_completion,
-        "market_cap_fallback_observability": {
-            "yfinance_info": {
-                "target_count": len(yfinance_targets),
-                "logical_ticker_attempt_count": yfinance_stats.get("logical_ticker_attempt_count", 0),
-                "rescued_count": yfinance_stats.get("rescued_count", 0),
-                "shares_x_close_count": yfinance_stats.get("shares_x_close_count", 0),
-                "market_cap_snapshot_count": yfinance_stats.get("market_cap_snapshot_count", 0),
-                "ordinary_failure_count": yfinance_stats.get("ordinary_failure_count", 0),
-                "rate_limit_or_crumb_failure_count": yfinance_stats.get("rate_limit_or_crumb_failure_count", 0),
-                "stopped_on_rate_limit_or_crumb": yfinance_stats.get("stopped_on_rate_limit_or_crumb", False),
-                "physical_http_call_count_recorded": False,
-                "attempt_semantics": "one logical Ticker.info access may issue multiple Yahoo requests; physical HTTP count is not claimed",
-                "provider_readiness_evidence": False,
-            },
-            "massive_ticker_overview": massive_overview_observability,
-        },
+        "market_cap_fallback_observability": market_cap_fallback_observability,
         "provider_health": provider_health,
         "provider_call_evidence": provider_call_evidence,
         "pass1_result": {**summary_counts, "eligible_tickers": eligible_tickers_from_rows(rows)},

@@ -113,6 +113,7 @@ def _stage_results() -> dict:
         "universe_fetch": {
             "scope": {"status": "universe_fetch_and_pass1_completed"},
             "schema_version": "1.3.0",
+            "complete": True,
             "pass1_result": {"needs_market_cap": []},
             "status_screening": {"status_source_outcome": _status_outcome()},
             "provider_health": {
@@ -229,6 +230,22 @@ class CapstoneProviderHealthMatrix(unittest.TestCase):
         summary = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(stages._universe_health(summary), ("universe_status", "ok"))
         self.assertEqual(stages._universe_market_cap_health(summary), ("universe_market_cap", "degraded"))
+
+    def test_current_summary_requires_boolean_complete_true_and_legacy_versions_remain_readable(self):
+        current = _stage_results()["universe_fetch"]
+        for value in (False, "false", None):
+            summary = dict(current)
+            if value is None:
+                summary.pop("complete")
+            else:
+                summary["complete"] = value
+            self.assertEqual(stages._universe_health(summary), ("universe_status", "missing"))
+            self.assertEqual(stages._universe_market_cap_health(summary), ("universe_market_cap", "missing"))
+
+        for name in ("us_short_universe_fetch_summary_20260626.json",
+                     "us_short_universe_fetch_summary_20260730.json"):
+            summary = json.loads((ROOT / "docs" / name).read_text(encoding="utf-8"))
+            self.assertTrue(stages._universe_summary_is_complete_for_health(summary), name)
 
     def test_legacy_fmp_completion_shape_is_not_current_contract(self):
         summary = self._with_completion(
