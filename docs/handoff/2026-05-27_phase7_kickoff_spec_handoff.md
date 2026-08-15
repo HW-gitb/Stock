@@ -4942,3 +4942,92 @@ dc41 7 modified / 0 untracked。整读 `run_fetch` 结账段、`_write_summary_s
 
 - 本刀起，同一 decision_date 的 canonical summary 在市值结账后就会被本轮 partial 覆盖；这是方案明确接受的代价（单一路径、`generated_at` 标识本轮），但意味着**失败重跑会覆盖掉上一轮的成功 summary**，读旧数字前先看 `complete` 与 `generated_at`。
 - dc41 落后 master 17 commits，本轮基线 `d1d5a13c`；下次开工先在该树 `git merge --ff-only master` 同步，否则 receipt 指纹与 merge 都要多花一轮。
+
+## 2026-08-15 追加：桌面 `2us_testrun0814.md` 问题4 Pass2 bankruptcy screening 最小修复（dc41；Codex executor/fixer；repaired / OPEN-NOT-VERIFIED）
+
+### 变更范围
+
+- 严格按问题4方案：`runners/us_short_weekly_capstone_stages.py` 的 Universe adapter 不再打开 eligible-wide bankruptcy scan；Universe 保留 bankruptcy provenance `unscreened`。
+- `runners/us_short_batch5_full_candidate_live_source_packet.py` 在 `_fetch_live_records()` 后复用本次已有 SEC `submissions` `FetchRecord` 做 Item 1.03 screen，使用现有 parser/status resolver，不增加 provider call、raw copy、预算或独立 bankruptcy artifact。
+- 当前候选 subset 重新绑定 status provenance：clean 候选继续 eligible；positive 候选保留在 private subset 但 `eligible=false`、`status_bankruptcy`，不进最终 projection/data_context。holding 使用同一 screen：positive 保留并写 bankruptcy hard-veto signal，missing/failed 写 `critical_data_missing`。
+- 缺 CIK、request failure、payload/array malformed、future PIT 或目标 screen row 缺失均对 candidate fail-closed；offline replay 仍只走 fake/injected client。
+- `schemas/us_short_batch5_full_candidate_live_source_packet_summary.schema.json` 升至 `1.1.0`，加入 counts-only `bankruptcy_screening`；summary validator 强制 conservation、candidate exclusion 守恒、extra provider calls=0、duplicate raw writes=0。`pass2_fetch` stage contract 升至 `2.2.0`；preflight contract 不变。保留历史 candidate-shard/probe route rows。
+
+### 验证与边界
+
+- 固定 Python bounded focused：`177 tests PASS`，receipt `receipt:c9900c2a7ee648e60d59331d`；问题4 source-packet 模块 `35 PASS`。
+- 唯一适用 us_short full lane：`discovered=5885 ran=5885 equal=True`，`5885/5885 PASS`，`374.4s/860s`；启动静态门 `diff_check=PASS`、`py_compile=5`。
+- 文档门按固定 Python 执行：`tests.test_a_short_preflight.PinnedStockPythonSmoke tests.test_doc_governance_guard tests.test_readme_route_row_length tests.test_route_doc_ledger_status_consistency`；本轮未调用真实 Yahoo/FMP/Massive/SEC/provider/live/paper，未提交、未 merge。
+- 当前状态为 `repaired / OPEN-NOT-VERIFIED`，不等于 provider/live、production、ship-gate 或 full-size 证据；Claude Code 需独立审查并按项目流程决定是否提交。`docs/CURRENT.md` 不写本轮 review/commit 瞬态门。
+
+### 下一步
+
+Claude Code：独立审查问题4当前 diff；确认 PASS 后按项目流程提交，不扩大到桌面文档其他问题。
+
+## 2026-08-15 追加：问题4 破产筛查搬到 Pass2 的独立审查（dc41；Claude Code reviewer/committer；**审查 FAIL**）
+
+### 审了什么
+
+dc41 11 modified / 0 untracked，基线 `c66550c4`（该树落后 master 2 个 docs commit，`--ff-only` 被未提交文档挡下）。整读 `_screen_bankruptcy_from_pass2_records`、`_apply_bankruptcy_screen_to_candidate_subset`、`_holding_rows_from_records`、`_validate_summary_against_schema`，并逐行追了 `run_full_candidate_live_source_packet` 里 `selected_symbols` / `candidate_subset` 的赋值与消费顺序。风险档=最高危（影响选股的 fail-closed 否决门 + live provider runner），起 1 个只读独立对抗 agent。
+
+### 结论
+
+FAIL，两条 Required：`R-USSHORT-PROBLEM4-PASS2-BANKRUPTCY-MERGE-BREAKS-ON-ANY-LATER-PASS2-CLOCK`（P1，合并后的状态记录自相矛盾，Pass2 钟一晚就确定性打死必需 stage）、`R-USSHORT-PROBLEM4-DESIGN-DOC-CITES-TWO-NONEXISTENT-TEST-PATHS`（P2）。另 `O-P4-1` 不阻断。完整正文只在 register。
+
+### 验证命令与结果
+
+- focused 超集 `tests.provider.test_us_short_batch5_full_candidate_live_source_packet` + `test_us_short_weekly_capstone` + `test_us_short_batch5_data_context` + `test_us_short_universe_fetch` → `307 tests OK`，`receipt:2942bc92334ade10c78c9989`。full lane 按 rule 4 不复跑，引 executor ledger `5885/5885 PASS`。
+- reviewer 自写 19 条探针全 held：counts 守恒；持仓-only 目标的失败记录被容忍并计数，而候选的失败/非 dict/缺记录三种一律致命；重复目标与越界候选被拒；positive 候选留在 rows 供审计但 `bankruptcy=True / eligible=False / status_bankruptcy`、且移出 `eligible_tickers`；**delisted/halted/otc 的值与 provenance 在替换前后 byte-identical**；缺 screen 行、未 sourced 状态行均 fail-closed；同一票既是候选又是持仓时，候选被排除、持仓仍拿到 `bankruptcy:true`。
+- 编排顺序实证：`selected_symbols` 在重建后（`:2492`）才被重新派生，其后每个消费者与落盘的 `candidate_subset` 都用重建版；重建前的列表只用于派生抓取目标。
+- 复发检查：`docs/README.md` 的文件指针前后各 1082 条、零丢失（上轮 col2 被删的同类 Required 未复发）。
+- Universe 侧诚实性实证：无 screen 时 `resolve_status_record` 给出 `coverage=not_consulted`、`screen_status=unscreened`（非伪造 clean）。
+
+### 失效的旧结论
+
+- 本刀 handoff/register 声称的「候选 bankruptcy 状态替换」在**同一运行内**成立，但不适用于任何候选 artifact 与 Pass2 不同钟的场景；修复前不得据此宣称 resume 路径可用。
+
+### 下一步注意事项
+
+- 修 P1 时按整类想：问题不是「破产」这一面，而是「往一条已定钟的状态记录里塞一个更晚钟的 flag」。修完要能分辨「时钟不一致」与「证据缺失」两种失败。
+- 本轮全程禁网；真实 provider 稳定性、current-day 验证、production / ship-gate 仍未验证。
+
+## 2026-08-15 追加：问题4 Required + Optional 复修（dc41；Codex executor/fixer；repaired / OPEN-NOT-VERIFIED）
+
+### 修复范围
+
+- `R-USSHORT-PROBLEM4-PASS2-BANKRUPTCY-MERGE-BREAKS-ON-ANY-LATER-PASS2-CLOCK`：合并候选状态时把记录时钟推进到当前 Pass2 `observed_at`，只替换 bankruptcy flag，保留既有 delisted/OTC 证据及来源时钟；保留现有 fail-closed validator，并把状态无效、破产证据无效、合并时钟不一致分成三种错误。
+- `R-USSHORT-PROBLEM4-DESIGN-DOC-CITES-TWO-NONEXISTENT-TEST-PATHS`：设计文档两处错误测试路径改回实际 `_schema.py` 文件名。
+- `O-P4-1`：把 `extra_provider_calls` 改为按 submissions 记录相对目标集合的实际冗余/重复记录计数，把 `duplicate_raw_writes` 改为按 raw ref 重复值计数；schema 允许非负度量但 summary 对非零值继续 fail-closed；候选排除数改为实际 bankruptcy-positive 行计数并受 `positive_count` 上界约束。
+
+### 验证与边界
+
+- 固定 Python bounded focused：`179/179 PASS`，receipt `receipt:d026678a06217f441a606543`；覆盖晚 Pass2 时钟、同钟回归、错误分流和 duplicate counter positive control。
+- 唯一适用 US-short full lane：`discovered=5887 ran=5887 equal=True`，`5887/5887 PASS`，`494.5s/860s`；static `diff_check=PASS`、`py_compile=5`；文档治理门 `67/67 PASS`。
+- 全程 fake/offline；未调用真实 Yahoo/FMP/Massive/SEC/provider/live/paper，未修改主树、其他工作树或桌面文档，未提交、未 merge。仍为 `repaired / OPEN-NOT-VERIFIED`，不等于 provider/live、production、ship-gate 或 full-size 证据；`docs/CURRENT.md` 未写本轮 review/commit 瞬态门。
+
+### 下一步
+
+Claude Code：独立审查问题4当前 diff，确认 Required 与 `O-P4-1` 均满足后按项目流程提交；不要扩大到桌面文档其他问题。
+
+## 2026-08-15 追加：问题4 修复轮的独立复审（dc41；Claude Code reviewer/committer；**复审 PASS，已提交并合入 master**）
+
+### 改了什么
+
+1. **P1**：合并破产旗时，把 `updated_status["observed_at"]` 一并推进到本轮 Pass2 钟，使「每个 flag 的来源钟 ≤ 记录钟」重新成立；并把原先一句笼统的 "replacement failed closed" 拆成四条可辨认信息（既有 provenance 无效 / 破产证据无效 / 时钟合并无效 / artifact 校验失败）。
+2. **P2**：`docs/us_short_system_design.md` 两处测试指针改回真实文件名。
+3. **`O-P4-1`（超出不阻断要求）**：`extra_provider_calls` 与 `duplicate_raw_writes` 从硬编码 `0` 改成真度量。
+
+### 验证命令与结果
+
+- focused 超集（batch5 live-source-packet + weekly_capstone + data_context + universe_fetch）`309 tests OK`，`receipt:29c067e036b2a3ec4a465406`；doc-governance pack 绿；`git diff --check` clean。full lane 按 rule 4 不复跑，引 executor ledger `5887/5887 PASS`。
+- **放松腿反向控制 10/10**：本修复的手法是「改写一个时钟让校验通过」，所以重点验它没变成万能旁路——时钟反转（候选比 Pass2 更新）仍 fail-closed；Pass2 钟越过决策开盘或落到次日仍被拒（无 look-ahead）；delisted/halted/otc 的值与 provenance byte-identical 且仍带更早的 Universe 来源钟；行级 `observed_at` 与 artifact `generated_at` 未被顺手挪动；两类失败信息确实不同。
+- **计数器改真度量的验证**：干净输入 `0/0`；同一 `raw_sample_ref` 二次写入 → `1/1`（撞 schema `const: 0` 挡住）；越界 submissions 记录 → `1/0`。确认无误报面：`raw_sample_ref` 只有 `fetch_and_store` 一处派生（按 provider/endpoint/symbol），而 `_fetch_with_retry` 的重试覆写同一 raw 路径且只返回最终一条记录，正常重试不会制造假重复。
+
+### 失效的旧结论
+
+- 上一轮 register 里 P1 的现状描述（合并后记录自相矛盾）与 `O-P4-1` 的「两个常量不是度量」均已被本轮修复取代，按 resolved 读。
+
+### 下一步注意事项
+
+- 本刀起，候选 artifact 里的 `status_provenance.observed_at` 会晚于该 artifact 自身的 `generated_at`（前者是 Pass2 观察钟、后者是 Universe 运行钟）。这是有意的：两者都在同一决策窗口内，破产证据确实观察得更晚。读该 artifact 的人别把这两个钟当成应该相等。
+- 全程禁网；offline replay 平价与真实 provider 稳定性仍未验证。

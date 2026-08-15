@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -21,7 +22,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
-from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
+from engine.us_short_eligibility_gate import (  # noqa: E402
+    canonical_us_ticker,
+    cheap_eligible,
+    load_eligibility_governance,
+)
 from engine.us_short_pass2_funnel import (  # noqa: E402
     Pass2FunnelError,
     partition_pass2_targets,
@@ -48,6 +53,7 @@ from engine.us_short_sec_offering_audit import (  # noqa: E402
     OfferingAuditError,
     build_offering_audit_from_sec_submissions,
 )
+from engine import us_short_status_source as status_source  # noqa: E402
 from runners import us_egs_sample_validation as sample_validation  # noqa: E402
 from runners import us_short_batch5_data_context as data_context_assembly  # noqa: E402
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
@@ -445,6 +451,193 @@ def _candidate_subset_artifact(
         )
     except Exception as exc:
         raise FullCandidateLiveSourcePacketError(f"candidate subset failed validation: {exc}") from exc
+
+
+def _screen_bankruptcy_from_pass2_records(
+    *,
+    target_symbols: list[str],
+    candidate_symbols: list[str],
+    source_as_of: str,
+    observed_at: str,
+    records: list[sample_validation.FetchRecord],
+) -> tuple[dict[str, Any], dict[str, int]]:
+    """Resolve the existing Pass2 SEC submissions records into the Item 1.03 screen.
+
+    This is deliberately a pure consumer of ``records``.  It never calls a provider and never writes a second raw
+    payload.  A missing/failed record is retained as an explicit failed count; candidate targets cannot proceed
+    without a parseable current screen row.
+    """
+    if type(target_symbols) is not list or len(set(target_symbols)) != len(target_symbols):
+        raise FullCandidateLiveSourcePacketError("Pass2 bankruptcy targets must be a unique exact list")
+    candidate_set = set(candidate_symbols)
+    if not candidate_set <= set(target_symbols):
+        raise FullCandidateLiveSourcePacketError("candidate bankruptcy targets must stay inside Pass2 targets")
+    submission_records = [
+        record
+        for record in records
+        if record.provider_id == "sec_edgar" and record.endpoint_family == "submissions"
+    ]
+    target_set = set(target_symbols)
+    seen_submission_symbols: set[str] = set()
+    extra_provider_calls = 0
+    for record in submission_records:
+        if record.symbol not in target_set or record.symbol in seen_submission_symbols:
+            extra_provider_calls += 1
+        elif isinstance(record.symbol, str):
+            seen_submission_symbols.add(record.symbol)
+    raw_refs = [record.raw_sample_ref for record in records if isinstance(record.raw_sample_ref, str)]
+    duplicate_raw_writes = len(raw_refs) - len(set(raw_refs))
+    by_key = _record_map(records)
+    submissions_by_ticker: dict[str, Any] = {}
+    failed_symbols: list[str] = []
+    for symbol in target_symbols:
+        record = by_key.get(("sec_edgar", "submissions", symbol))
+        if record is None or not record.ok or not isinstance(record.payload, dict):
+            failed_symbols.append(symbol)
+            continue
+        submissions_by_ticker[symbol] = record.payload
+    try:
+        screen = status_source.build_bankruptcy_screen_from_sec_submissions(
+            as_of=source_as_of,
+            observed_at=observed_at,
+            submissions_by_ticker=submissions_by_ticker,
+        )
+    except Exception as exc:
+        raise FullCandidateLiveSourcePacketError(
+            f"Pass2 bankruptcy screen rejected existing SEC submissions: {exc}"
+        ) from exc
+    screen_rows = screen.get("by_ticker") if isinstance(screen, dict) else None
+    if not isinstance(screen_rows, dict) or set(screen_rows) != set(submissions_by_ticker):
+        raise FullCandidateLiveSourcePacketError(
+            "Pass2 bankruptcy screen rows do not exactly match successful SEC submissions"
+        )
+    missing_candidate_rows = candidate_set - set(screen_rows)
+    if missing_candidate_rows:
+        raise FullCandidateLiveSourcePacketError(
+            "Pass2 candidate bankruptcy screen is missing a required target row"
+        )
+    if set(failed_symbols) & candidate_set:
+        raise FullCandidateLiveSourcePacketError(
+            "Pass2 candidate bankruptcy screening lacks a required SEC submissions record"
+        )
+    screened_no_filing_count = sum(
+        1 for row in screen_rows.values() if row.get("screen_status") == "screened_no_filing"
+    )
+    positive_count = sum(
+        1 for row in screen_rows.values() if row.get("screen_status") == "bankrupt_8k_found"
+    )
+    successful_screen_count = len(screen_rows)
+    if successful_screen_count != screened_no_filing_count + positive_count:
+        raise FullCandidateLiveSourcePacketError("Pass2 bankruptcy screen disposition counts do not conserve")
+    return screen, {
+        "target_count": len(target_symbols),
+        "successful_screen_count": successful_screen_count,
+        "screened_no_filing_count": screened_no_filing_count,
+        "positive_count": positive_count,
+        "candidate_bankruptcy_excluded_count": 0,
+        "unscreened_or_failed_count": len(failed_symbols),
+        "extra_provider_calls": extra_provider_calls,
+        "duplicate_raw_writes": duplicate_raw_writes,
+    }
+
+
+def _apply_bankruptcy_screen_to_candidate_subset(
+    *,
+    candidate_artifact: dict[str, Any],
+    bankruptcy_screen: dict[str, Any],
+    expected_decision_date: str,
+    source_as_of: str,
+    observed_at: str,
+    eligibility_governance: dict[str, Any],
+) -> dict[str, Any]:
+    """Replace only the validated bankruptcy flag in each retained Pass2 candidate row."""
+    screen_rows = bankruptcy_screen.get("by_ticker") if isinstance(bankruptcy_screen, dict) else None
+    if not isinstance(screen_rows, dict):
+        raise FullCandidateLiveSourcePacketError("Pass2 bankruptcy screen has no by_ticker rows")
+    updated_rows: list[dict[str, Any]] = []
+    for raw_row in candidate_artifact["rows"]:
+        ticker = raw_row.get("ticker") if isinstance(raw_row, dict) else None
+        if not isinstance(ticker, str) or ticker not in screen_rows:
+            raise FullCandidateLiveSourcePacketError(
+                "Pass2 candidate subset is missing a current bankruptcy screen row"
+            )
+        current_status = raw_row.get("status_provenance")
+        if raw_row.get("status_flags_sourced") is not True or not isinstance(current_status, dict):
+            raise FullCandidateLiveSourcePacketError(
+                "Pass2 candidate subset lacks the current status provenance required for bankruptcy replacement"
+            )
+        try:
+            status_source.status_flags_for_row(current_status, row_ticker=ticker)
+        except Exception as exc:
+            raise FullCandidateLiveSourcePacketError(
+                "Pass2 candidate existing status provenance is invalid"
+            ) from exc
+        try:
+            resolved = status_source.resolve_status_record(
+                ticker,
+                ticker_reference=None,
+                halt_feed=None,
+                bankruptcy_screen=bankruptcy_screen,
+                as_of=source_as_of,
+                observed_at=observed_at,
+            )
+            status_source.status_flags_for_row(resolved, row_ticker=ticker)
+        except Exception as exc:
+            raise FullCandidateLiveSourcePacketError(
+                "Pass2 candidate bankruptcy evidence is invalid"
+            ) from exc
+        try:
+            updated_status = deepcopy(current_status)
+            updated_status["observed_at"] = observed_at
+            updated_flags = deepcopy(updated_status["flags"])
+            updated_flags["bankruptcy"] = deepcopy(resolved["flags"]["bankruptcy"])
+            updated_status["flags"] = updated_flags
+            row_flags, _ = status_source.status_flags_for_row(updated_status, row_ticker=ticker)
+        except Exception as exc:
+            raise FullCandidateLiveSourcePacketError(
+                "Pass2 candidate bankruptcy status clock merge is invalid"
+            ) from exc
+        row = deepcopy(raw_row)
+        row["status_provenance"] = updated_status
+        row["bankruptcy"] = row_flags["bankruptcy"]
+        verdict = cheap_eligible(
+            {
+                "ticker": row["ticker"],
+                "exchange": row["exchange"],
+                "price": row["price"],
+                "adv_usd": row["adv_usd"],
+                "market_cap_usd": row["market_cap_usd"],
+                "delisted": row["delisted"],
+                "halted": row["halted"],
+                "bankruptcy": row["bankruptcy"],
+                "otc": row["otc"],
+            },
+            governance=eligibility_governance,
+        )
+        row["eligible"] = verdict["eligible"]
+        row["reasons"] = verdict["reasons"]
+        updated_rows.append(row)
+    rebuilt = universe_fetch.build_candidate_artifact(
+        rows=updated_rows,
+        decision_date=candidate_artifact["decision_date"],
+        price_basis_date=candidate_artifact["price_basis_date"],
+        used_date=candidate_artifact["used_date"],
+        observed_window_dates=candidate_artifact["adv_window"]["observed_window_dates"],
+        generated_at=candidate_artifact["generated_at"],
+        calendar_verification_status=candidate_artifact["calendar_verification_status"],
+        window_days=candidate_artifact["adv_window"]["trading_days"],
+        min_days=candidate_artifact["adv_window"]["min_days_required"],
+    )
+    try:
+        return universe_fetch.validate_candidate_artifact(
+            rebuilt,
+            expected_decision_date=expected_decision_date,
+            governance=eligibility_governance,
+        )
+    except Exception as exc:
+        raise FullCandidateLiveSourcePacketError(
+            f"candidate subset after bankruptcy screening failed validation: {exc}"
+        ) from exc
 
 
 def _assert_endpoint_budget(records: list[sample_validation.FetchRecord], max_total_endpoint_calls: int) -> None:
@@ -910,6 +1103,7 @@ def _holding_rows_from_records(
     source_as_of: str,
     observed_at: str,
     records: list[sample_validation.FetchRecord],
+    bankruptcy_screen: dict[str, Any],
 ) -> list[dict[str, Any]]:
     if not holding_symbols:
         return []
@@ -919,6 +1113,9 @@ def _holding_rows_from_records(
         observed_at=observed_at,
         records=records,
     )["offering_audit_source"]
+    screen_rows = bankruptcy_screen.get("by_ticker") if isinstance(bankruptcy_screen, dict) else None
+    if not isinstance(screen_rows, dict):
+        raise FullCandidateLiveSourcePacketError("holding bankruptcy screen has no by_ticker rows")
     rows: list[dict[str, Any]] = []
     for ticker in holding_symbols:
         if ticker in offering["signals"]:
@@ -927,6 +1124,12 @@ def _holding_rows_from_records(
             signals = {}
         else:
             signals = {"critical_data_missing": True}
+        screen_row = screen_rows.get(ticker)
+        screen_status = screen_row.get("screen_status") if isinstance(screen_row, dict) else None
+        if screen_status == "bankrupt_8k_found":
+            signals["bankruptcy"] = True
+        elif screen_status != "screened_no_filing":
+            signals["critical_data_missing"] = True
         rows.append({"ticker": ticker, "signals": signals})
     return rows
 
@@ -1450,6 +1653,7 @@ def _build_summary(
     preflight_total_call_forecast: int,
     candidate_artifact_path: Path,
     candidate_artifact: dict[str, Any],
+    bankruptcy_screening: dict[str, int],
     pass2_target_universe: dict[str, Any],
     endpoint_records: list[sample_validation.FetchRecord],
     retry_count_allowed: int,
@@ -1479,7 +1683,7 @@ def _build_summary(
     offline_replay = execution_mode == _EXECUTION_MODE_OFFLINE_REPLAY
     return {
         "schema_name": "us_short_batch5_full_candidate_live_source_packet_summary",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "schema_ref": "schemas/us_short_batch5_full_candidate_live_source_packet_summary.schema.json",
         "authorization_ref": (
             "offline_replay_from_bound_source_capture" if offline_replay else AUTHORIZATION_REF
@@ -1564,6 +1768,7 @@ def _build_summary(
                 pass2_target_universe["neutral_fill_tickers_excluded_from_expensive_pass2"]
             ),
         },
+        "bankruptcy_screening": dict(bankruptcy_screening),
         "endpoint_call_budget": {
             "max_total_endpoint_calls": expected_total_call_budget,
             "actual_total_endpoint_calls": len(endpoint_records),
@@ -1685,6 +1890,41 @@ def _validate_summary_against_schema(summary: dict[str, Any]) -> None:
     _validate_analyst_source_semantics(summary)
     gate = summary["preflight_gate"]
     budget = summary["endpoint_call_budget"]
+    screening = summary["bankruptcy_screening"]
+    screening_keys = (
+        "target_count",
+        "successful_screen_count",
+        "screened_no_filing_count",
+        "positive_count",
+        "candidate_bankruptcy_excluded_count",
+        "unscreened_or_failed_count",
+        "extra_provider_calls",
+        "duplicate_raw_writes",
+    )
+    if any(type(screening.get(key)) is not int or screening[key] < 0 for key in screening_keys):
+        raise FullCandidateLiveSourcePacketError("summary bankruptcy screening counts are invalid")
+    if screening["successful_screen_count"] != (
+        screening["screened_no_filing_count"] + screening["positive_count"]
+    ):
+        raise FullCandidateLiveSourcePacketError("summary bankruptcy screen dispositions do not conserve")
+    if screening["target_count"] != (
+        screening["successful_screen_count"] + screening["unscreened_or_failed_count"]
+    ):
+        raise FullCandidateLiveSourcePacketError("summary bankruptcy target counts do not conserve")
+    if screening["candidate_bankruptcy_excluded_count"] != (
+        summary["candidate_universe"]["row_count"] - summary["candidate_universe"]["eligible_count"]
+    ):
+        raise FullCandidateLiveSourcePacketError(
+            "summary candidate subset row_count minus eligible_count disagrees with bankruptcy exclusions"
+        )
+    if screening["candidate_bankruptcy_excluded_count"] > screening["positive_count"]:
+        raise FullCandidateLiveSourcePacketError(
+            "summary candidate bankruptcy exclusions exceed positive bankruptcy screens"
+        )
+    if screening["extra_provider_calls"] != 0 or screening["duplicate_raw_writes"] != 0:
+        raise FullCandidateLiveSourcePacketError(
+            "summary bankruptcy screening claims an extra provider call or duplicate raw write"
+        )
     if gate["expected_total_call_budget"] != gate["preflight_total_call_forecast"]:
         raise FullCandidateLiveSourcePacketError("summary call budget does not match preflight forecast")
     if budget["max_total_endpoint_calls"] != gate["expected_total_call_budget"]:
@@ -2264,6 +2504,29 @@ def run_full_candidate_live_source_packet(
         require_budget_approval=execution_mode == _EXECUTION_MODE_LIVE_PROVIDER_FETCH,
         sleep_func=sleep_func,
     )
+    bankruptcy_screen, bankruptcy_screening = _screen_bankruptcy_from_pass2_records(
+        target_symbols=fetch_symbols,
+        candidate_symbols=verified_targets["_candidate_target_symbols"],
+        source_as_of=source_as_of,
+        observed_at=observed_at,
+        records=records,
+    )
+    candidate_subset = _apply_bankruptcy_screen_to_candidate_subset(
+        candidate_artifact=candidate_subset,
+        bankruptcy_screen=bankruptcy_screen,
+        expected_decision_date=expected_decision_date,
+        source_as_of=source_as_of,
+        observed_at=observed_at,
+        eligibility_governance=eligibility_governance,
+    )
+    selected_symbols = list(candidate_subset["eligible_tickers"])
+    if not selected_symbols:
+        raise FullCandidateLiveSourcePacketError(
+            "Pass2 bankruptcy screening excluded every candidate target"
+        )
+    bankruptcy_screening["candidate_bankruptcy_excluded_count"] = sum(
+        1 for row in candidate_subset["rows"] if row.get("bankruptcy") is True
+    )
     resolved_sources = _resolved_source_artifacts(
         selected_symbols=selected_symbols,
         source_as_of=source_as_of,
@@ -2299,6 +2562,7 @@ def run_full_candidate_live_source_packet(
         source_as_of=source_as_of,
         observed_at=observed_at,
         records=records,
+        bankruptcy_screen=bankruptcy_screen,
     )
     theme_selection_contract = _build_theme_selection_contract(
         candidate_subset=candidate_subset,
@@ -2375,6 +2639,7 @@ def run_full_candidate_live_source_packet(
         preflight_total_call_forecast=preflight["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"],
         candidate_artifact_path=candidate_path,
         candidate_artifact=candidate_subset,
+        bankruptcy_screening=bankruptcy_screening,
         pass2_target_universe=verified_targets,
         endpoint_records=records,
         retry_count_allowed=max_retries_per_call,

@@ -1313,7 +1313,7 @@ def default_pipeline(
         Stage("pass2_fetch", True, lambda c: [c.preflight_summary_path, c.overextension_projection_path,
                                                c.yfinance_grade_actions_path, c.ohlcv_series_packet_path],
               lambda c: [c.source_packet_path, c.context_components_path], st.run_pass2_fetch,
-              contract_version="2.1.0"),
+              contract_version="2.2.0"),
         Stage("vix_regime", True, lambda c: [], lambda c: [c.vix_regime_summary_path], st.run_vix_regime),
         Stage("forward_policy_shadow", False,
               lambda c: [c.data_context_path, c.context_components_path, c.ohlcv_series_packet_path,

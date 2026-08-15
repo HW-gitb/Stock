@@ -191,7 +191,7 @@ class CapstoneDryRunTest(unittest.TestCase):
                           # rather than sneaking a request in behind an ungated stage.
                           "vix_regime", "forward_policy_corporate_actions", "market_diagnostic_fetch"])
         pass2 = next(stage for stage in plan["stages"] if stage["name"] == "pass2_fetch")
-        self.assertEqual(pass2["contract_version"], "2.1.0")
+        self.assertEqual(pass2["contract_version"], "2.2.0")
         self.assertIn(
             "state/us_short/us_short_batch5_full_universe_ohlcv_series_20260708_packet.json",
             pass2["inputs"],
@@ -2483,7 +2483,7 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
         from runners import us_short_weekly_capstone_stages as st
 
         checks = [
-            (st._universe.run_fetch, ["now_et", "candidate_list_path", "generated_at", "confirm_user_authorization", "scan_bankruptcy_for_eligible"]),
+            (st._universe.run_fetch, ["now_et", "candidate_list_path", "generated_at", "confirm_user_authorization"]),
             (st._mom_fetch.run_fetch, ["candidate_artifact_path", "series_packet_path", "ohlcv_series_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._sic.run_fetch, ["candidate_artifact_path", "classification_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._yfinance_grades.run_yfinance_grades_fetch, ["preflight_summary_path", "output_source_package_path", "output_resolved_actions_path", "summary_path", "raw_root", "confirm_user_authorization", "generated_at", "observed_at", "pace_seconds"]),
@@ -2500,7 +2500,7 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             bad = [k for k in kwargs if k not in params]
             self.assertEqual(bad, [], f"{fn.__module__}.{fn.__name__} rejects kwargs {bad}")
 
-    def test_capstone_universe_adapter_requires_integrated_fresh_bankruptcy_scan(self):
+    def test_capstone_universe_adapter_leaves_bankruptcy_scan_for_pass2(self):
         from runners import us_short_weekly_capstone_stages as st
         from runners.us_short_weekly_capstone import resolve_capstone_context
 
@@ -2514,7 +2514,7 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
         with mock.patch.object(st._universe, "run_fetch", return_value={}) as run_fetch:
             st.run_universe(ctx)
 
-        self.assertIs(run_fetch.call_args.kwargs["scan_bankruptcy_for_eligible"], True)
+        self.assertNotIn("scan_bankruptcy_for_eligible", run_fetch.call_args.kwargs)
 
     def test_capstone_adapters_thread_same_window_ohlcv_to_projection_and_pass2(self):
         from dataclasses import replace
