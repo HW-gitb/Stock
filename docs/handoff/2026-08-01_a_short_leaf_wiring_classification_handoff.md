@@ -7835,6 +7835,39 @@ runners/weekly_screening.cmd → Windows PowerShell 5.1 runners/weekly_screening
 **未验证 / 交接**：a-short full lane 不能记为 PASS，失败归因是 full-pack parallel discovery/import 形态而非本切片三调用；不得以 `2208/3097` 宣称 A-short 全量关闭。focused 73/73 与 direct target 24/24 只证明本切片和独立失败模块；US-short full lane 5879/5879 只证明离线测试 lane。provider、live、weekly production、capsule、ship-gate、review、commit、push、merge 均未执行或未完成。下一步是 Claude Code 独立审查；若 reviewer 发现 full-pack infrastructure 必须另开其类问题，不在本 slice 顺手修复。
 
 **文档门禁**：固定 launcher 执行 `tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard tests.test_readme_route_row_length`，`Ran 66 tests ... OK`，`RESULT tier=focused status=PASS exit=0 tests=66`；该结果作为本轮 pre-commit/reviewer door 证据，未 stage/commit。
+
+## 2026-08-15 追加：A-short full-pack worker import-path repair (8c7a)
+
+**Status and boundary**: This is an independent tooling repair for the earlier A-short full-lane terminal state `discovered=3097 / ran=2208 / equal=false`; it does not change the three production PowerShell call sites from `1a_testrun0815.md`. Current status is `repaired / OPEN-NOT-VERIFIED`, pending independent Claude Code reviewer/committer; no stage, commit, push, or merge. Work stayed in `D:\cnhea\Codex\worktrees\8c7a\Stock`; provider/live, real weekly, capsule, and account actions were not started.
+
+**Problem and root-cause boundary**: The full-pack worker launches the discovered module name (for example `phase6.test_forward_tracker_cache_guard`) through `python -m unittest`. The prior worker environment relied on discovery-time transient `sys.path` entries and did not explicitly bind the same `cwd` and `start_dir` for the child process. The direct correctly rooted module passed, so the old failure is recorded as a full-pack import-path/integrity boundary and is not attributed to the production weekly call-site repair.
+
+**Minimal change**: `.tools/parallel_lane_runner.py` now resolves, normalizes, and deduplicates the same `cwd`, discovery `path_entries`, and `start_dir` into worker `PYTHONPATH`, then preserves inherited `PYTHONPATH`. `.tools` selector, worker count, timeout, runtime flags, serial tail, count gate, receipt/ledger behavior, and artifact paths are unchanged. `tests/test_parallel_lane_runner.py` adds a real nested `phase6.test_guard` child-process regression while retaining synthetic green/red/vanish/timeout/count-gate negative controls.
+
+**Call chain / consumers / schema / source-binding / cache and write boundary**: `full_pack_ledger.py -> parallel_lane_runner.discover_modules -> worker_environment(cwd,start_dir) -> fixed Python -m unittest module -> ModuleOutcome -> worker sidecar/count gate -> full_pack_ledger`. The consumer is only the offline full-pack test worker and its existing sidecar/ledger accounting. No schema, source-binding, provider selection, cache semantics, production state, or live-data boundary changed; only the existing `.tools/state/runs`/duration/ledger writes used by the lane remain in scope.
+
+**Exact commands and raw terminal state**:
+
+```text
+& 'D:\cnhea\Codex\worktrees\8c7a\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' tests.test_parallel_lane_runner tests.test_a_short_weekly_screening_m67_failure_closeout tests.test_us_short_paper_one_click tests.phase6.test_weekly_screening_guardrails tests.test_a_short_preflight
+→ Ran 91 tests in 41.757s ... OK
+→ [bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=91
+→ FOCUSED_RECEIPT token=receipt:2b4a1036024521fe8b0151cd python=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe
+
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\8c7a\Stock\.tools\full_pack_ledger.py' run a_short 'A-short full-pack worker import path now binds cwd and start directory explicitly' 'receipt:2b4a1036024521fe8b0151cd' 860 -- discover -s tests -p 'test_a_short*.py'
+→ STATIC status=PASS diff_check=PASS py_compile=2
+→ RESULT status=PASS exit=0 tests=3097 elapsed=145.3s deadline=860s mode=parallel
+→ COUNT_GATE discovered=3097 ran=3097 equal=True; `phase6.test_forward_tracker_cache_guard` and `test_a_short_weekly_screening_m67_failure_closeout` both actually PASS.
+
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\8c7a\Stock\.tools\full_pack_ledger.py' run us_short 'Shared full-pack worker import path now binds cwd and start directory explicitly' 'receipt:2b4a1036024521fe8b0151cd' 860 -- discover -s tests -p 'test_us_short*.py'
+→ STATIC status=PASS diff_check=PASS py_compile=2
+→ RESULT status=PASS exit=0 tests=5879 elapsed=444.1s deadline=860s mode=parallel
+→ COUNT_GATE discovered=5879 ran=5879 equal=True.
+```
+
+**Self-review and conclusion**: Nested-package worker import, synthetic red/timeout/count-gate controls, and target weekly-module dispatch all passed. Current fingerprint is `f2700818d74f` for both lanes. The prior `2208/3097` failure is superseded by current A-short `3097/3097 PASS`; US-short was rerun on the same shared-tool fingerprint and reached `5879/5879 PASS`. This is offline full-pack evidence only, not provider/live/production/ship-gate evidence. The next action is Claude Code independent review; only reviewer/committer may commit after PASS.
+
+**This slice's document gate**: fixed launcher ran `tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard tests.test_readme_route_row_length`, `Ran 66 tests ... OK`, `RESULT tier=focused status=PASS exit=0 tests=66`; no stage/commit.
 ## 2026-08-15 追加：PowerShell→python 传参吞引号三处同类修复的独立审查 = PASS（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
 
 **判定**：PASS，零 Required，两条 Optional。正文只在 `docs/system_risk_register.md`。
@@ -7846,3 +7879,14 @@ runners/weekly_screening.cmd → Windows PowerShell 5.1 runners/weekly_screening
 **值得记的两点做法**：三段片段同时把内部引号改回双引号，等于给传输方式装了 canary——哪天退回 `-c` 会立刻炸而不是静默降级；新测试遍历 `runners/*.ps1` 断言 `-c $变量` 零命中并带植入对照，是类守卫而不是行守卫。
 
 **未覆盖维度**：没有再跑真实周实盘，所以"这次能不能真的走到 `stage_status=complete`"未证；`Set-M67Failure → Invalidate-M67Artifact` 那条"校验失败即销毁已发布周报"的路本轮一行未改（`O-STDIN-2`）。本树落后 master 且有未提交工作，本轮未 ff，合并时以 master 为准。
+## 2026-08-15 追加：并行 lane worker import 路径绑定的独立审查 = PASS（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：PASS，零 Required，三条 Optional。正文只在 `docs/system_risk_register.md`。
+
+**为什么按高风险档审**：改的是 `parallel_lane_runner` —— 给所有 lane 绿灯背书的东西。worker 若导入了与 discovery 计数时不同的模块对象，count gate 未必看得出来（只有用例数不同才会暴露）。所以除整读改动外，我用临时目录搭了 `suite/phase6/test_guard.py` 真起 worker 子进程做四格：新绑定 PASS(2)；完全不绑路径 FAIL；**只绑 cwd 不绑 start_dir 仍 FAIL**——后两格证明这个绑定的每一半都承重。
+
+**最值得记的一格是 D**：我在 cwd 放了个同名诱饵包（只有 1 个用例），worker 导入的是**诱饵**而不是 start_dir 下的真模块。因为 `cwd` 被排在 `PYTHONPATH` 最前。本仓当前不可达（根目录没有与 `tests/` 下重名的包），且用例数不同的话 count gate 会抓到；但诱饵用例数若恰好相同就是静默跑错文件。建议把 discovery 自己的 `path_entries`/`start_dir` 排到 `cwd` 之前。
+
+**证据形态**：两条 lane 都在同一 fingerprint 上跑过（a_short 3097 / us_short 5879，均 discovered==ran），我独立重算指纹一致、mtime 早于记账，按 rule 4 未重跑。
+
+**顺带查实的两件与本刀无关的事**：`tests/test_review_tiering_enforcement.py` 那条 stop-hook 用例在 master 上同样红，且该模块**两条 lane 都不覆盖**（既不匹配 `test_a_short*` 也不匹配 `test_us_short*`），与 phase6 盲区同类；另外 bounded runner 的 receipt 计数会被测试自己拉起的嵌套 unittest 子进程带偏——本轮外层是 65 OK，receipt 却记成 3。
