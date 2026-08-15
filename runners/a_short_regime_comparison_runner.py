@@ -1078,6 +1078,8 @@ def main(argv=None) -> int:
     ap.add_argument("--iv-feed", default=None, help="path to the a_short_iv_feed.json artifact")
     ap.add_argument("--run-revision-id", default=None,
                     help="V5 immutable weekly revision id; revision-scoped research outputs are required")
+    ap.add_argument("--sidecar-outcome-run-revision-id", default=None,
+                    help="weekly launcher revision id emitted only in sidecar outcome lines")
     ap.add_argument("--confirm-fetch-authorized", action="store_true",
                     help="required to perform any real Tushare fetch")
     args = ap.parse_args(argv)
@@ -1092,6 +1094,13 @@ def main(argv=None) -> int:
                                 if args.run_revision_id is not None else None)
     except ValueError as exc:
         raise SystemExit(f"--run-revision-id is invalid: {exc}") from exc
+    try:
+        args.sidecar_outcome_run_revision_id = (
+            validate_run_revision_id(args.sidecar_outcome_run_revision_id)
+            if args.sidecar_outcome_run_revision_id is not None else None
+        )
+    except ValueError as exc:
+        raise SystemExit(f"--sidecar-outcome-run-revision-id is invalid: {exc}") from exc
     paths = lane_paths(decision_as_of=as_of, run_revision_id=args.run_revision_id)
     ledger0 = load_ledger(paths["ledger"])
     has_ledger = bool(ledger0.get("rows"))
@@ -1178,13 +1187,13 @@ def main(argv=None) -> int:
             print(f"[candidate-effect] {candidate_effect['status']}: {candidate_effect['reason']}; "
                   "this week is not counted and no prior result was overwritten")
     _emit_sidecar_outcome(
-        name="regime_daily", as_of=as_of, run_revision_id=args.run_revision_id,
+        name="regime_daily", as_of=as_of, run_revision_id=args.sidecar_outcome_run_revision_id,
         progress_status=out.get("regime_daily_progress_status", "unavailable"),
         observed_data_through=effective_as_of,
     )
     if action_comparison:
         _emit_sidecar_outcome(
-            name="regime_action", as_of=as_of, run_revision_id=args.run_revision_id,
+            name="regime_action", as_of=as_of, run_revision_id=args.sidecar_outcome_run_revision_id,
             progress_status=out.get("regime_action_progress_status", "unavailable"),
         )
     return 0

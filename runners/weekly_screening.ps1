@@ -1198,7 +1198,8 @@ if ($SkipRegime) {
     $DesignCompletionAuthorization = Get-DesignCompletionAuthorized
     $DesignCompletionAuthorized = ($DesignCompletionAuthorization -eq 'authorized')
     $RegimeArgs = @('runners\a_short_regime_comparison_runner.py', '--as-of', $AsOf,
-                    '--v14_2-regime', $EffectiveV142Regime)
+                    '--v14_2-regime', $EffectiveV142Regime,
+                    '--sidecar-outcome-run-revision-id', $RunRevisionId)
     if ($M67InvocationState -eq 'complete' -and $DesignCompletionAuthorized) {
         try {
             $RawV142Regime = (Get-Content -Raw -Encoding UTF8 $SemAnalysisInput | ConvertFrom-Json).market_context.market_regime.status

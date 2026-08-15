@@ -893,6 +893,25 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertEqual(result["advanced_count"], 0)
         self.assertEqual(result["already_current_count"], 1)
 
+    def test_theme_packet_without_evidence_date_keeps_launcher_clock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            packet = root / "research" / "results" / "a_short_theme_forward_comparison.json"
+            packet.parent.mkdir(parents=True)
+            packet.write_text(json.dumps({"latest_evidence_as_of": None}), encoding="utf-8")
+            manifest = _manifest([_row(
+                "theme_forward_comparison",
+                progress="already_current",
+                observed_decision_as_of="20260727",
+            )])
+            with patch("engine.a_short_theme_forward_comparison.validate_comparison_packet"):
+                result = build_health(
+                    as_of="20260727", launcher_manifest=manifest, project_root=root
+                )
+        self.assertEqual(result["overall"], "healthy")
+        self.assertEqual(result["sidecars"][0]["observed_decision_as_of"], "20260727")
+        self.assertEqual(result["sidecars"][0]["progress_status"], "already_current")
+
     def test_theme_comparison_epoch_mismatch_is_stalled_even_when_fresh(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

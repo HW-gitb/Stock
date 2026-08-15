@@ -388,7 +388,8 @@ def _theme_packet_progress(
     if date_error:
         _set_contract_failure(item, date_error, "theme_packet_latest_evidence_as_of=invalid")
         return
-    item["observed_decision_as_of"] = latest
+    if latest is not None:
+        item["observed_decision_as_of"] = latest
     rejected = packet.get("rejected_atomic_cohorts")
     if isinstance(rejected, dict) and rejected.get(as_of):
         # V3-A owns this reason.  The health consumer only chooses the state.
