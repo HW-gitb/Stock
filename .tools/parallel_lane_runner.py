@@ -342,18 +342,40 @@ def schedule_order(counts: dict[str, int], durations: dict[str, float]) -> list[
     )
 
 
-def worker_environment(path_entries: list[str]) -> dict[str, str]:
+def worker_environment(path_entries: list[str], *, cwd: Path = ROOT,
+                       start_dir: str | None = None) -> dict[str, str]:
     """Give a worker discovery's own import path, and the nested-run marker.
 
     The marker matters because several tests legitimately spawn the bounded
     launcher; without it, eight concurrent workers would each let their child
     overwrite the single acceptance receipt -- the failure already recorded as
     R-TOOLS-PRECOMMIT-RECEIPT-SELF-CLOBBER, multiplied by the pool size.
+
+    Discovery may resolve a package through a transient ``sys.path`` entry that
+    is not present in the parent environment.  Keep the worker independent of
+    that transient state by also binding the caller's cwd and start directory
+    explicitly, after resolving relative entries against the same cwd.
     """
     env = {NESTED_RUN_MARKER: "1"}
-    if path_entries:
-        inherited = os.environ.get("PYTHONPATH", "")
-        entries = [*path_entries, inherited] if inherited else list(path_entries)
+    entries: list[str] = []
+
+    def add_entry(entry: str | Path) -> None:
+        path = Path(entry) if str(entry) else cwd
+        if not path.is_absolute():
+            path = cwd / path
+        value = str(path.resolve())
+        if value not in entries:
+            entries.append(value)
+
+    add_entry(cwd)
+    for entry in path_entries:
+        add_entry(entry)
+    if start_dir:
+        add_entry(start_dir)
+    inherited = os.environ.get("PYTHONPATH", "")
+    if inherited:
+        entries.append(inherited)
+    if entries:
         env["PYTHONPATH"] = os.pathsep.join(entries)
     return env
 
@@ -500,7 +522,7 @@ def run_parallel_pack(
             f"discovery reported {len(counts)} modules but did not report "
             f"{len(unreported)} file(s) the selector matches; first: {unreported[0].name}"
         )
-    worker_env = worker_environment(path_entries)
+    worker_env = worker_environment(path_entries, cwd=cwd, start_dir=start_dir)
     discovered_total = sum(counts.values())
     stamp = time.strftime("%Y%m%dT%H%M%S")
     log_dir = runs_dir / f"{stamp}_{lane}_parallel"

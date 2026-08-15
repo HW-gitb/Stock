@@ -303,13 +303,36 @@ class ParallelLaneRunnerTests(unittest.TestCase):
         self.assertIn(str(root), path_entries)
 
         with patch.dict("os.environ", {"PYTHONPATH": "existing_entry"}):
-            env = driver.worker_environment(["resolved_entry"])
+            env = driver.worker_environment(
+                ["resolved_entry"], cwd=Path(tmp), start_dir="tests"
+            )
         self.assertEqual(env[NESTED_RUN_MARKER], "1")
         # Prepended, not replaced: the launcher already puts the vendored
         # library directory here and a worker still needs it.
         self.assertEqual(
-            env["PYTHONPATH"], "resolved_entry" + os.pathsep + "existing_entry",
+            env["PYTHONPATH"],
+            os.path.abspath(tmp) + os.pathsep
+            + os.path.abspath(os.path.join(tmp, "resolved_entry")) + os.pathsep
+            + os.path.abspath(os.path.join(tmp, "tests")) + os.pathsep
+            + "existing_entry",
         )
+
+    def test_worker_can_import_nested_discovery_package_from_explicit_start_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp)
+            root = parent / "suite"
+            package = root / "phase6"
+            package.mkdir(parents=True)
+            (package / "__init__.py").write_text("", encoding="utf-8")
+            (package / "test_guard.py").write_text(
+                _passing_module(2), encoding="utf-8"
+            )
+            env = driver.worker_environment([], cwd=parent, start_dir=str(root))
+            outcome = driver._run_module(
+                "phase6.test_guard", 60, None, cwd=parent, worker_env=env
+            )
+        self.assertEqual(outcome.status, "PASS")
+        self.assertEqual(outcome.tests, 2)
 
     def test_modules_reaching_a_cross_process_lock_are_derived_into_the_serial_tail(self):
         with tempfile.TemporaryDirectory() as tmp:
