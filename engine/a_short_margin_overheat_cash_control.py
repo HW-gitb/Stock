@@ -3709,6 +3709,13 @@ def settle_and_summarize_margin_overheat_weekly(*, root: str | Path | None,
         )
         if sidecar_result is not None:
             sidecar_result["outcomes_updated"] = result.get("outcomes_updated")
+        if result.get("status") == "no_official_margin_captures":
+            _clear_private_margin_reminder(private_root)
+            return _public_margin_summary(
+                PUBLIC_STATUS_UNAVAILABLE,
+                as_of=as_of,
+                official_revision_id=(run_revision_id if official_project_root is not None else None),
+            )
         reminder = result["reminder"]
         validate_margin_reminder(reminder)
         adjudication = result["adjudication"]
