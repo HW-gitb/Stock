@@ -1635,6 +1635,10 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         ctx.soft_discovery_receipt_path.mkdir(parents=True, exist_ok=True)
         _write_json(ctx.account_state_path, {"positions": []})
         _write_json(
+            ctx.account_state_path.with_name(ctx.account_state_path.stem + "_lineage.json"),
+            {"facts_as_of": "20260612", "facts_staleness": "current"},
+        )
+        _write_json(
             ctx.batch4_template_path,
             json.loads(
                 (ROOT / "schemas" / "examples" / "us_short_weekend_batch4_context_packet.nonempty.example.json")
@@ -1680,7 +1684,8 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
                     "engine.us_short_live_provider_preflight._now_et_wall_clock",
                     return_value=datetime(2026, 6, 15, 7, 0, 0),
                 ), \
-                mock.patch("runners.us_short_account_state_from_manual_tables.validate_account_state"):
+                mock.patch("runners.us_short_account_state_from_manual_tables.validate_account_state"), \
+                mock.patch("runners.us_short_account_state_from_manual_tables.validate_account_lineage"):
             summary = capstone.run_weekly_capstone(
                 now_et=datetime(2026, 6, 15, 7, 0, 0),
                 private_root=self.state_dir / "private",
@@ -1703,6 +1708,10 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         ctx = self._ctx(enabled=True)
         ctx.soft_discovery_receipt_path.mkdir(parents=True, exist_ok=True)
         _write_json(ctx.account_state_path, {"positions": []})
+        _write_json(
+            ctx.account_state_path.with_name(ctx.account_state_path.stem + "_lineage.json"),
+            {"facts_as_of": "20260612", "facts_staleness": "current"},
+        )
         _write_json(
             ctx.batch4_template_path,
             json.loads(
@@ -1739,7 +1748,8 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
                 mock.patch.object(
                     capstone.checkpoint_store, "record_stage", side_effect=record_stage_with_optional_oserror,
                 ), \
-                mock.patch("runners.us_short_account_state_from_manual_tables.validate_account_state"):
+                mock.patch("runners.us_short_account_state_from_manual_tables.validate_account_state"), \
+                mock.patch("runners.us_short_account_state_from_manual_tables.validate_account_lineage"):
             summary = capstone.run_weekly_capstone(
                 now_et=datetime(2026, 6, 15, 7, 0, 0),
                 private_root=self.state_dir / "private",

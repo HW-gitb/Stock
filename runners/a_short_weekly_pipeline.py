@@ -337,7 +337,7 @@ def validate_account_state(account: dict, as_of: str) -> dict:
     return account
 
 
-def load_account_bundle(path: str, decision_as_of: str, price_data_through: str) -> tuple[dict, dict, dict]:
+def load_account_bundle(path: str, decision_as_of: str, price_data_through: str | None) -> tuple[dict, dict, dict]:
     """Load the only production-facing A-short account input: one bound account+lineage bundle.
 
     Legacy bare ``a_short_account_state`` files are rejected because they cannot prove the true facts
@@ -353,6 +353,11 @@ def load_account_bundle(path: str, decision_as_of: str, price_data_through: str)
         raise SystemExit(
             "[FATAL] --account 必须是 a_short_account_bundle；旧裸 account_state 无法证明真实 facts_as_of/"
             "account-lineage 同批，须先用转换器重新生成")
+    if price_data_through is None:
+        lineage = bundle.get("lineage")
+        price_data_through = lineage.get("expected_facts_as_of") if isinstance(lineage, dict) else None
+        if not isinstance(price_data_through, str):
+            raise SystemExit("[FATAL] --account bundle 缺失有效 expected_facts_as_of；拒跑")
     from runners.a_short_account_state_from_manual_tables import ConvertError, validate_account_bundle
     try:
         validate_account_bundle(bundle, decision_as_of, price_data_through)
@@ -372,6 +377,31 @@ def load_bucket_ceiling_pct(path: Path = PRESET_PATH) -> float:
     if value is None or not (0 < value <= 1):
         raise SystemExit("[FATAL] presets/a_short.yaml capital.bucket_ceiling_pct 缺失/非法")
     return value
+
+
+def _account_sizing_from_state(acct: dict, account_path: str) -> tuple[float, float, dict]:
+    """Validate the account sizing fields and return the two downstream limits plus audit context."""
+    available_cash = acct.get("available_cash")
+    if isinstance(available_cash, bool) or not isinstance(available_cash, (int, float)) or available_cash < 0:
+        raise SystemExit(f"[FATAL] --account {account_path} 提供但 available_cash 缺失/为负数;拒跑")
+    total_equity = acct.get("total_equity")
+    current_gross_exposure = acct.get("current_gross_exposure")
+    if (isinstance(total_equity, bool) or not isinstance(total_equity, (int, float)) or
+            total_equity <= 0 or isinstance(current_gross_exposure, bool) or
+            not isinstance(current_gross_exposure, (int, float)) or current_gross_exposure < 0):
+        raise SystemExit("[FATAL] --account 缺 total_equity/current_gross_exposure,无法执行 bucket 敞口门")
+    bucket_ceiling_pct = load_bucket_ceiling_pct()
+    bucket_capital = float(total_equity) * bucket_ceiling_pct
+    new_exposure_capacity = max(0.0, bucket_capital - float(current_gross_exposure))
+    return available_cash, new_exposure_capacity, {
+        "available_cash": available_cash,
+        "total_equity": total_equity,
+        "current_gross_exposure": current_gross_exposure,
+        "bucket_ceiling_pct": bucket_ceiling_pct,
+        "bucket_capital": bucket_capital,
+        "new_exposure_capacity": new_exposure_capacity,
+        "positions_count": len(acct.get("positions") or []),
+    }
 
 
 def account_integrity_from_lineage(lineage: dict) -> dict:
@@ -6531,9 +6561,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if args.overlay and set(overlay) != set(weekly_candidates):
         raise SystemExit(f"[FATAL] overlay 候选集 {sorted(overlay)} != 周报候选 {sorted(weekly_candidates)}"
                          "(同日错批/缺行/多行,缺行会被静默降级;须同一批全覆盖,拒跑)")
+    # 市场 regime 只取自 analysis_input(EGS 分类)。unknown/missing 不允许被账户配置覆盖成进攻期;
+    # 按 2026-06-14 用户决策:unknown → 震荡期 + 降级 + 保守减半 + M6.7 明确提示。
     if args.account:
         acct, account_lineage, account_bundle = load_account_bundle(
-            args.account, args.as_of, price_data_through)
+            args.account, args.as_of, price_data_through if clock_explicit else None)
     else:
         acct, account_lineage, account_bundle = {}, {}, {}
     holding_regulatory_confirmations = {}
@@ -6555,39 +6587,21 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             raise SystemExit(
                 f"[FATAL] invalid/stale --holding-regulatory-confirmations: {type(exc).__name__}"
             ) from exc
-    account_integrity = account_integrity_from_lineage(account_lineage)
-    # 市场 regime 只取自 analysis_input(EGS 分类)。unknown/missing 不允许被账户配置覆盖成进攻期;
-    # 按 2026-06-14 用户决策:unknown → 震荡期 + 降级 + 保守减半 + M6.7 明确提示。
     regime, regime_fallback = resolve_market_regime(ai)
     pre_holiday_control = _pre_holiday_control_from_analysis(ai, args.as_of)
     northbound_control = None
     margin_overheat_control = None
     # available_cash 是用户必填输入。零现金仍须管理已有持仓,但不得建立新仓;
     # 未提供 --account → observation-only(sizing_mode 标进 run_lineage,读者不会把 sizing 假象的「观察」当真 avoid 信号)。
-    available_cash = acct.get("available_cash")
     if args.account:
-        if isinstance(available_cash, bool) or not isinstance(available_cash, (int, float)) or available_cash < 0:
-            raise SystemExit(f"[FATAL] --account {args.account} 提供但 available_cash 缺失/为负数;拒跑")
+        available_cash, new_exposure_capacity, account = _account_sizing_from_state(acct, args.account)
         account_status, sizing_mode = "provided", "sized"
     else:
+        available_cash, new_exposure_capacity = None, None
         account_status, sizing_mode = "absent", "observation_only_no_account"
-    bucket_ceiling_pct = load_bucket_ceiling_pct() if args.account else None
-    total_equity = acct.get("total_equity")
-    current_gross_exposure = acct.get("current_gross_exposure")
-    if args.account and (isinstance(total_equity, bool) or not isinstance(total_equity, (int, float)) or
-                         total_equity <= 0 or isinstance(current_gross_exposure, bool) or
-                         not isinstance(current_gross_exposure, (int, float)) or current_gross_exposure < 0):
-        raise SystemExit("[FATAL] --account 缺 total_equity/current_gross_exposure,无法执行 bucket 敞口门")
-    bucket_capital = (float(total_equity) * bucket_ceiling_pct) if args.account else None
-    new_exposure_capacity = (max(0.0, bucket_capital - float(current_gross_exposure))
-                             if args.account else None)
-    account = {"available_cash": available_cash,
-               "total_equity": total_equity,
-               "current_gross_exposure": current_gross_exposure,
-               "bucket_ceiling_pct": bucket_ceiling_pct,
-               "bucket_capital": bucket_capital,
-               "new_exposure_capacity": new_exposure_capacity,
-               "positions_count": len(acct.get("positions") or [])}
+        account = {"available_cash": None, "total_equity": None, "current_gross_exposure": None,
+                   "bucket_ceiling_pct": None, "bucket_capital": None,
+                   "new_exposure_capacity": None, "positions_count": 0}
     # 价格序列:注入(测试)或执行期抓取(需授权)
     prior_settled = None     # 实际接受的前一交易日(仅 intraday_prior_settled 模式;记进 lineage)
     # Validate source-bound auxiliary controls before opening any authorized
@@ -6726,6 +6740,42 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         cands = []
     else:
         cands = eligible_cands
+    if clock_explicit and price_clock_date != price_data_through:
+        raise SystemExit(
+            f"[FATAL] observed candidate price clock {price_clock_date} != price_data_through {price_data_through}"
+        )
+    if not clock_explicit:
+        price_data_through = price_clock_date
+    northbound_control = _northbound_control_from_analysis(
+        ai, args.as_of, price_data_through=price_data_through
+    )
+    margin_overheat_control = _margin_overheat_control_from_analysis(
+        ai, args.as_of, price_data_through=price_data_through
+    )
+    if args.account and not clock_explicit:
+        acct, account_lineage, account_bundle = load_account_bundle(
+            args.account, args.as_of, price_data_through)
+        available_cash, new_exposure_capacity, account = _account_sizing_from_state(acct, args.account)
+        account_status, sizing_mode = "provided", "sized"
+    if args.holding_regulatory_confirmations and not clock_explicit:
+        try:
+            holding_confirmation_payload = _load(args.holding_regulatory_confirmations)
+            with open(HOLDING_REGULATORY_CONFIRMATION_SCHEMA_PATH, encoding="utf-8") as handle:
+                jsonschema.validate(holding_confirmation_payload, json.load(handle))
+            positions = acct.get("positions") or []
+            holding_regulatory_confirmations = validate_holding_confirmation_document(
+                holding_confirmation_payload,
+                args.as_of,
+                account_bundle["snapshot_digest"],
+                holding_universe_digest(positions),
+                {str(position.get("ts_code")) for position in positions},
+            )
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError,
+                jsonschema.ValidationError, RegulatoryAdvisoryContractError) as exc:
+            raise SystemExit(
+                f"[FATAL] invalid/stale --holding-regulatory-confirmations: {type(exc).__name__}"
+            ) from exc
+    account_integrity = account_integrity_from_lineage(account_lineage)
     for candidate in cands:
         candidate["_weekly_as_of"] = price_data_through
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
@@ -6793,21 +6843,6 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                          f"(unmatched={len(unmatched_regulatory_confirmations)})")
     # 价格覆盖门(#2/14C):四种明确的单票排除可在前段隔离；其余价格不足仍整批中止，绝不退化成观察。
     # 价格时钟 lineage 在隔离前就由所有非已证停牌候选对账，避免短历史票掩盖混合时钟。
-    if clock_explicit and price_clock_date != price_data_through:
-        raise SystemExit(
-            f"[FATAL] observed candidate price clock {price_clock_date} != price_data_through {price_data_through}"
-        )
-    if not clock_explicit:
-        price_data_through = price_clock_date
-    # The injected/test seam and the real fetcher may establish the final
-    # batch price clock only after candidate bars are observed.  Rebind these
-    # two source-bound controls to that settled clock before building M6.7.
-    northbound_control = _northbound_control_from_analysis(
-        ai, args.as_of, price_data_through=price_data_through
-    )
-    margin_overheat_control = _margin_overheat_control_from_analysis(
-        ai, args.as_of, price_data_through=price_data_through
-    )
     # The list window is a price-derived fact.  It must be computed only after
     # the candidate bars settle the one batch price clock, not from the earlier
     # decision-date placeholder used to request those bars.

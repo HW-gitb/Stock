@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "us_short_account_state_lineage",
-  "description": "Provenance sidecar for us_short_account_state: which CSV each fact came from (sha256 + row_count), facts-vs-decision as-of separation, and how the US-short bucket capital was derived. This sidecar is NOT consumed by the engine/report; it exists for audit/reproducibility only. It carries real account figures, so it MUST be written to a gitignored private path (same fail-closed guard as the state file).",
+  "description": "Provenance sidecar for us_short_account_state: which CSV each fact came from (sha256 + row_count), facts-vs-decision as-of separation, and how the US-short bucket capital was derived. The live/budget capstone consumes the default sibling or explicit --account-lineage-path before any stage, requires non-empty source provenance, and binds its dates plus bucket_basis amounts to the account state. It carries real account figures, so it MUST be written to a gitignored private path (same fail-closed guard as the state file).",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_name", "schema_version", "decision_as_of", "expected_facts_as_of", "facts_as_of", "facts_staleness",

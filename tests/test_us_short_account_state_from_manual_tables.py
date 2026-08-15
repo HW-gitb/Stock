@@ -44,6 +44,15 @@ def _build(account=None, positions=None, as_of="20260622", expected_facts_as_of=
     return conv.build_account_state(_tables(account, positions), as_of, expected)
 
 
+def _with_source_tables(lineage):
+    result = dict(lineage)
+    result["source_tables"] = [
+        {"name": "account", "path": "account.csv", "sha256": "0" * 64, "row_count": 1},
+        {"name": "positions", "path": "positions.csv", "sha256": "1" * 64, "row_count": 1},
+    ]
+    return result
+
+
 _GOOD_ACCOUNT_CSV = (
     "as_of,us_market_equity,us_short_available_cash,portfolio_total_equity,manual_order_only,broker_connection_allowed\n"
     "20260622,30000,4000,90000,TRUE,FALSE\n")
@@ -205,6 +214,49 @@ class BuildTests(unittest.TestCase):
             _build(account=_acct(as_of="20260815"), as_of="20260817", expected_facts_as_of="20260814")
         with self.assertRaises(CE):
             _build(as_of="20260817", expected_facts_as_of="2026-08-14")
+
+    def test_validate_account_lineage_binds_capstone_clocks_and_freshness(self):
+        state, lineage = _build(as_of="20260817", expected_facts_as_of="20260814")
+        lineage = _with_source_tables(lineage)
+        conv.validate_account_lineage(lineage, state, "20260817", "20260814")
+        with self.assertRaisesRegex(CE, "expected_facts_as_of"):
+            conv.validate_account_lineage(lineage, state, "20260817", "20260813")
+        forged = dict(lineage)
+        forged["facts_staleness"] = "current"
+        with self.assertRaisesRegex(CE, "facts_staleness"):
+            conv.validate_account_lineage(forged, state, "20260817", "20260814")
+
+    def test_validate_account_lineage_rejects_unpaired_state_and_empty_provenance(self):
+        state_a, lineage_a = _build(as_of="20260817", expected_facts_as_of="20260814")
+        lineage_a = _with_source_tables(lineage_a)
+        state_b, _ = _build(
+            account=_acct(as_of="20260622", us_market_equity="90000"),
+            as_of="20260817",
+            expected_facts_as_of="20260814",
+        )
+        with self.assertRaisesRegex(CE, "does not match account_state"):
+            conv.validate_account_lineage(lineage_a, state_b, "20260817", "20260814")
+
+        tampered = dict(state_a)
+        tampered["us_market_equity"] = 900000
+        tampered["us_short_bucket_capital"] = 300000
+        conv.validate_account_state(tampered, "20260817")
+        with self.assertRaisesRegex(CE, "does not match account_state"):
+            conv.validate_account_lineage(lineage_a, tampered, "20260817", "20260814")
+
+        empty = dict(lineage_a)
+        empty["source_tables"] = []
+        with self.assertRaisesRegex(CE, "source_tables"):
+            conv.validate_account_lineage(empty, state_a, "20260817", "20260814")
+
+        stale_state, stale_lineage = _build(
+            account=_acct(as_of="20260813"),
+            as_of="20260817",
+            expected_facts_as_of="20260814",
+        )
+        stale_lineage = _with_source_tables(stale_lineage)
+        conv.validate_account_lineage(stale_lineage, stale_state, "20260817", "20260814")
+        self.assertEqual(stale_lineage["facts_staleness"], "stale_warning")
 
     def test_account_must_be_one_row(self):
         with self.assertRaises(CE):

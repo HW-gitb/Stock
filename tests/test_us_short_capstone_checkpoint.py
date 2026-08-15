@@ -213,6 +213,10 @@ class CapstoneResumeIntegrationTest(unittest.TestCase):
         self.inputs = self.private / "_run_inputs"
         _write(self.inputs / "account.json", {"positions": []})
         _write(
+            self.inputs / "account_lineage.json",
+            {"facts_as_of": "20260708", "facts_staleness": "current"},
+        )
+        _write(
             self.inputs / "template.json",
             json.loads(
                 (capstone.ROOT / "schemas" / "examples" / "us_short_weekend_batch4_context_packet.nonempty.example.json")
@@ -278,7 +282,8 @@ class CapstoneResumeIntegrationTest(unittest.TestCase):
                     "engine.us_short_live_provider_preflight._now_et_wall_clock",
                     return_value=now_et.replace(tzinfo=None),
                 ), \
-                mock.patch("runners.us_short_account_state_from_manual_tables.validate_account_state"):
+                mock.patch("runners.us_short_account_state_from_manual_tables.validate_account_state"), \
+                mock.patch("runners.us_short_account_state_from_manual_tables.validate_account_lineage"):
             return capstone.run_weekly_capstone(
                 now_et=now_et,
                 private_root=self.private,

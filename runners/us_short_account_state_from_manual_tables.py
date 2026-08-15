@@ -645,6 +645,46 @@ def _validate_lineage(lineage: dict) -> None:
         raise ConvertError(f"us_short_account_state_lineage failed schema: {e.message} (at {list(e.absolute_path)})")
 
 
+def validate_account_lineage(
+    lineage: dict,
+    account_state: dict,
+    decision_as_of: str,
+    expected_facts_as_of: str,
+) -> None:
+    """Validate one account/lineage pair against the capstone's canonical clocks."""
+    _validate_lineage(lineage)
+    if not lineage["source_tables"]:
+        raise ConvertError("lineage.source_tables must contain the converter input provenance")
+    for field in ("us_market_equity", "us_short_bucket_capital"):
+        state_value = account_state[field]
+        lineage_value = lineage["bucket_basis"][field]
+        if abs(lineage_value - state_value) > _REL_EPS * max(1.0, abs(state_value)):
+            raise ConvertError(
+                f"lineage.bucket_basis.{field} does not match account_state.{field}"
+            )
+    decision_as_of = _parse_date(decision_as_of, "run decision_as_of")
+    expected_facts_as_of = _parse_date(expected_facts_as_of, "run price_basis_date")
+    if lineage["decision_as_of"] != decision_as_of:
+        raise ConvertError(
+            f"lineage.decision_as_of {lineage['decision_as_of']} != run decision_as_of {decision_as_of}"
+        )
+    if lineage["expected_facts_as_of"] != expected_facts_as_of:
+        raise ConvertError(
+            f"lineage.expected_facts_as_of {lineage['expected_facts_as_of']} != run price_basis_date {expected_facts_as_of}"
+        )
+    if lineage["expected_facts_as_of"] > lineage["decision_as_of"]:
+        raise ConvertError("lineage.expected_facts_as_of is after lineage.decision_as_of")
+    if lineage["facts_as_of"] > lineage["expected_facts_as_of"]:
+        raise ConvertError("lineage.facts_as_of is after lineage.expected_facts_as_of")
+    expected_staleness = (
+        "current" if lineage["facts_as_of"] == lineage["expected_facts_as_of"] else "stale_warning"
+    )
+    if lineage["facts_staleness"] != expected_staleness:
+        raise ConvertError(
+            f"lineage.facts_staleness {lineage['facts_staleness']} does not match the two facts dates"
+        )
+
+
 def _write_json_atomic(path: Path, payload) -> None:
     # Fail-closed privacy guard on EVERY write of account/lineage data (§11.6: "绕过脚本直接调管线也拦得住").
     # main() also pre-checks both paths up front (fail-fast atomicity); this guards any direct/future caller
@@ -699,7 +739,7 @@ def main(argv=None) -> int:
     if out_path.resolve() == lineage_path.resolve():
         raise ConvertError(f"--out and --lineage-out must be different paths (both resolve to {out_path.resolve()}); "
                            f"the lineage write would silently overwrite the account_state")
-    _validate_lineage(lineage)   # lineage must satisfy its own schema at runtime (account_state already validated above)
+    validate_account_lineage(lineage, account_state, args.as_of, args.price_basis_date)
     for _p in (out_path, lineage_path):
         _reject_nonprivate_account_output_path(str(_p))   # fail-fast: check both before any write (atomicity)
     _write_json_atomic(out_path, account_state)

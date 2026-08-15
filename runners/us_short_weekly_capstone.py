@@ -277,6 +277,7 @@ class CapstoneContext:
     budget_approval: Pass2BudgetApproval | None = None
     catalyst_recall_tickers: tuple[str, ...] = ()
     frozen_holding_tickers: tuple[str, ...] | None = None
+    account_lineage_status: dict[str, str] | None = None
     confirm_user_authorization: bool = False
     provider_pace_seconds: float = 0.0
     live_provider_preflight: dict[str, Any] | None = None
@@ -2444,6 +2445,7 @@ def _run_pass2_budget_preview(ctx: CapstoneContext, pipeline: list[Stage]) -> di
         "operational_use": "not_authorized",
         "decision_date": ctx.decision_date,
         "price_basis_date": ctx.price_basis_date,
+        "account_lineage": copy.deepcopy(ctx.account_lineage_status),
         "pass2_call_budget": forecast,
         "pass2_target_count": target_count,
         "next_required": (
@@ -2462,6 +2464,7 @@ def run_weekly_capstone(
     private_root: Path,
     batch4_template_path: Path,
     account_state_path: Path,
+    account_lineage_path: Path | None = None,
     authorized_momentum_top_k: int = 200,
     authorized_pass2_call_budget: int | None = None,
     catalyst_recall_tickers: tuple[str, ...] = (),
@@ -2686,13 +2689,48 @@ def run_weekly_capstone(
             settlement = serenity_quality.ledger_rejected_settlement(exc)
         ctx = replace(ctx, serenity_settlement_result=dict(settlement))
     if (production_run or budget_preview_run) and not _model_paper_enabled(ctx):
-        from runners.us_short_account_state_from_manual_tables import validate_account_state
+        from runners.us_short_account_state_from_manual_tables import (
+            ConvertError,
+            validate_account_lineage,
+            validate_account_state,
+        )
 
-        account_state = json.loads(ctx.account_state_path.read_text(encoding="utf-8"))
-        validate_account_state(account_state, ctx.decision_date)
+        lineage_path = (
+            Path(account_lineage_path)
+            if account_lineage_path is not None
+            else ctx.account_state_path.with_name(ctx.account_state_path.stem + "_lineage.json")
+        )
+        try:
+            account_state = json.loads(ctx.account_state_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise WeeklyCapstoneError(
+                f"cannot read --account-state-path {ctx.account_state_path}: {type(exc).__name__}"
+            ) from None
+        try:
+            lineage = json.loads(lineage_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise WeeklyCapstoneError(
+                f"cannot read --account-lineage-path {lineage_path}: {type(exc).__name__}"
+            ) from None
+        try:
+            validate_account_state(account_state, ctx.decision_date)
+        except ConvertError as exc:
+            raise WeeklyCapstoneError(
+                f"invalid --account-state-path {ctx.account_state_path}: {exc}"
+            ) from None
+        try:
+            validate_account_lineage(lineage, account_state, ctx.decision_date, ctx.price_basis_date)
+        except ConvertError as exc:
+            raise WeeklyCapstoneError(
+                f"invalid --account-lineage-path {lineage_path}: {exc}"
+            ) from None
         ctx = replace(
             ctx,
             frozen_holding_tickers=tuple(sorted(position["ticker"] for position in account_state["positions"])),
+            account_lineage_status={
+                "facts_as_of": lineage["facts_as_of"],
+                "facts_staleness": lineage["facts_staleness"],
+            },
         )
     if budget_preview_run:
         return _run_pass2_budget_preview(ctx, pipeline)
@@ -3033,6 +3071,7 @@ def run_weekly_capstone(
                     "operational_use": "not_authorized",
                     "decision_date": ctx.decision_date,
                     "price_basis_date": ctx.price_basis_date,
+                    "account_lineage": copy.deepcopy(ctx.account_lineage_status),
                     "emitted": False,
                     "no_emit_reason": _bridge_no_emit_reason(result),
                     "superseded_prior_outputs": {
@@ -3260,6 +3299,7 @@ def run_weekly_capstone(
         "operational_use": "not_authorized",
         "decision_date": ctx.decision_date,
         "price_basis_date": ctx.price_basis_date,
+        "account_lineage": copy.deepcopy(ctx.account_lineage_status),
         "authorized_momentum_top_k": ctx.authorized_momentum_top_k,
         "authorized_pass2_call_budget": ctx.authorized_pass2_call_budget,
         "emitted": True,
@@ -3308,6 +3348,11 @@ def main(argv: list[str] | None = None) -> int:
                              "D:/cnhea/Stock/state/us_short/; a feature worktree writes under its own tree.")
     parser.add_argument("--batch4-template-path", required=True, type=Path)
     parser.add_argument("--account-state-path", required=True, type=Path)
+    parser.add_argument(
+        "--account-lineage-path",
+        type=Path,
+        help="account lineage sidecar; default <account-state stem>_lineage.json",
+    )
     parser.add_argument("--momentum-top-k", type=int, default=200)
     parser.add_argument("--pass2-call-budget", type=int)
     parser.add_argument("--catalyst-recall-ticker", action="append", default=[])
@@ -3359,6 +3404,7 @@ def main(argv: list[str] | None = None) -> int:
         summary = run_weekly_capstone(
             now_et=args.now_et, private_root=args.private_root,
             batch4_template_path=args.batch4_template_path, account_state_path=args.account_state_path,
+            account_lineage_path=args.account_lineage_path,
             authorized_momentum_top_k=args.momentum_top_k,
             authorized_pass2_call_budget=args.pass2_call_budget,
             catalyst_recall_tickers=tuple(args.catalyst_recall_ticker),
