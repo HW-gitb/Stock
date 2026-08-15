@@ -541,6 +541,106 @@ class WebFetchTests(unittest.TestCase):
         ):
             fetch._validate_builder_receipt_evidence(receipt)
 
+    def test_legacy_receipt_early_return_requires_exact_frozen_slot_and_bytes(self):
+        _, current, _ = fetch.build_web_fetch_packet(
+            queries=["power"], search_results=[], llm_response='{"themes":[]}',
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        legacy = copy.deepcopy(current)
+        legacy["schema_version"] = "1.0.0"
+        legacy.pop("provider_response_refs", None)
+        legacy.pop("member_binding_ledger", None)
+        legacy.pop("member_binding_summary", None)
+        receipt_path = fetch.default_receipt_path("20260725")
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        receipt_path.write_text(json.dumps(legacy, ensure_ascii=False), encoding="utf-8")
+        fetch._validate_builder_receipt_evidence(legacy, receipt_path=receipt_path)
+        with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "frozen receipt path"):
+            fetch._validate_builder_receipt_evidence(legacy)
+        with self.assertRaises(fetch.WebThemeDiscoveryError):
+            fetch._validate_builder_receipt_evidence(legacy, receipt_path=receipt_path.with_name("other.json"))
+        tampered = copy.deepcopy(legacy)
+        tampered["summary"]["query_count"] = 2
+        with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "frozen evidence"):
+            fetch._validate_builder_receipt_evidence(tampered, receipt_path=receipt_path)
+
+    def test_member_binding_ledger_records_rejections_and_diagnostic_ticker_check(self):
+        payload = json.loads(self._llm())
+        payload["themes"][0]["members"][0]["ticker"] = "ZZZZ"
+        _, receipt, _ = fetch.build_web_fetch_packet(
+            queries=["power"], search_results=ROWS[:2], llm_response=json.dumps(payload),
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        rows = receipt["member_binding_ledger"]
+        self.assertEqual(receipt["schema_version"], "1.2.0")
+        self.assertEqual(receipt["member_binding_summary"]["parsed_chunk_indexes"], [0])
+        self.assertEqual(receipt["member_binding_summary"]["member_claim_count"], len(rows))
+        zzzz = next(row for row in rows if row["canonical_ticker"] == "ZZZZ")
+        self.assertEqual(zzzz["binding_status"], "accepted")
+        self.assertEqual(zzzz["binding_reason"], "accepted_member_binding")
+        self.assertEqual(zzzz["ticker_token_check_status"], "not_observed")
+
+        unknown = json.loads(self._llm())
+        unknown["themes"][0]["members"][0]["source_ref_ids"].append("web:" + "f" * 64)
+        _, unknown_receipt, _ = fetch.build_web_fetch_packet(
+            queries=["power"], search_results=ROWS[:2], llm_response=json.dumps(unknown),
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        rejected = next(
+            row for row in unknown_receipt["member_binding_ledger"]
+            if row["member_index_in_theme"] == 0
+        )
+        self.assertEqual(rejected["binding_reason"], "member_source_ref_not_in_chunk_sources")
+        self.assertEqual(rejected["binding_status"], "rejected")
+
+    def test_member_binding_cannot_borrow_source_from_another_chunk(self):
+        refs, prompt_rows, _ = fetch._normalize_search_results(
+            ROWS[:2], expected_decision_date="20260725",
+            fetched_at=datetime(2026, 7, 25, 8, tzinfo=timezone.utc),
+            raw_root=None, persist_raw=False,
+        )
+        source_ids = [ref["source_id"] for ref in refs]
+        self.assertEqual(len(source_ids), 2)
+        payload = {"themes": [{
+            "theme_id": "cross_chunk_theme",
+            "display_name": "Cross chunk",
+            "summary": "Cross chunk control",
+            "source_ref_ids": source_ids,
+            "members": [{"ticker": "AAPL", "source_ref_ids": [source_ids[0]]}],
+        }]}
+        source_rows = {row["source_id"]: row for row in prompt_rows}
+
+        borrowed = fetch._llm_to_discovery_input(
+            payload, refs, drop_ledger=[], generated_at=datetime(2026, 7, 25, 8, tzinfo=timezone.utc),
+            chunk_index=1, chunk_source_ids={source_ids[1]}, source_rows=source_rows,
+        )
+        self.assertEqual(borrowed["themes"], [])
+        borrowed_row = borrowed["member_binding_ledger"][0]
+        self.assertEqual(borrowed_row["binding_reason"], "member_source_ref_not_in_chunk_sources")
+        self.assertEqual(borrowed_row["unknown_source_ref_ids"], [source_ids[0]])
+
+        control = fetch._llm_to_discovery_input(
+            payload, refs, drop_ledger=[], generated_at=datetime(2026, 7, 25, 8, tzinfo=timezone.utc),
+            chunk_index=0, chunk_source_ids={source_ids[0]}, source_rows=source_rows,
+        )
+        self.assertEqual(len(control["themes"]), 1)
+        self.assertEqual(control["member_binding_ledger"][0]["binding_status"], "accepted")
+
+    def test_member_binding_ledger_keeps_members_when_parent_theme_is_dropped(self):
+        payload = json.loads(self._llm())
+        payload["themes"][0]["display_name"] = ""
+        discovery, receipt, _ = fetch.build_web_fetch_packet(
+            queries=["power"], search_results=ROWS[:2], llm_response=json.dumps(payload),
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        self.assertEqual(discovery["themes"], [])
+        self.assertTrue(receipt["member_binding_ledger"])
+        self.assertTrue(all(
+            row["binding_status"] == "accepted"
+            and row["parent_theme_status"] == "rejected"
+            for row in receipt["member_binding_ledger"]
+        ))
+
     def test_invalid_llm_is_empty_but_packet_is_still_valid(self):
         packet, receipt, _ = fetch.build_web_fetch_packet(
             queries=["x"], search_results=ROWS[:2], llm_response="not json",
@@ -776,7 +876,7 @@ class WebFetchTests(unittest.TestCase):
         self.assertEqual(calls, 1)
         self.assertFalse(consumed)
 
-    def test_live_writer_emits_1_1_receipt_with_deepseek_refs_and_completed_status(self):
+    def test_live_writer_emits_1_2_receipt_with_deepseek_refs_and_completed_status(self):
         response = {
             "model": "deepseek-v4-flash",
             "choices": [{"message": {"content": '{"themes":[]}'}, "finish_reason": "stop"}],
@@ -805,11 +905,15 @@ class WebFetchTests(unittest.TestCase):
                     regroup_model_identity=fetch._regroup_model_identity(served_model="deepseek-v4-flash"),
                     regroup_attempted=True, regroup_failed=False,
                     regroup_chunk_counts={"attempted": 1, "successful": 1, "failed": 0, "failed_indexes": []},
+                    regroup_chunks=[{
+                        "chunk_index": 0, "themes": [],
+                        "input_source_ids": [fetch._source_id(ROWS[0]["url"])],
+                    }],
                     **receipt_kwargs,
                 )
             finally:
                 paid_gateway.revoke_ticket(ticket)
-        self.assertEqual(receipt["schema_version"], "1.1.0")
+        self.assertEqual(receipt["schema_version"], "1.2.0")
         self.assertEqual(len(receipt["provider_response_refs"]), 1)
         self.assertEqual(summary["status"], "live_authorized_completed")
 

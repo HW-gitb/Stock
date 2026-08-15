@@ -244,7 +244,7 @@ class ProvisionalThemeValidationTests(unittest.TestCase):
         self.assertEqual(saved["summary"]["validated_member_count"], 3)
         self.assertIn("missing_independent_web_x_evidence", [row["reason"] for row in saved["drop_ledger"]])
 
-    def test_not_in_active_pass1_eligible_universe_drops_only_member(self):
+    def test_not_in_same_date_candidate_universe_drops_only_member(self):
         payload = _discovery()
         payload["themes"][0]["members"][0]["ticker"] = "ZZZZ"
         _write(self.paths["discovery"], payload)
@@ -252,7 +252,22 @@ class ProvisionalThemeValidationTests(unittest.TestCase):
         self.assertEqual(result["validated_theme_count"], 1)
         saved = json.loads(self.paths["output"].read_text(encoding="utf-8"))
         self.assertEqual(saved["summary"]["validated_member_count"], 3)
-        self.assertIn("not_in_active_pass1_eligible_universe", [row["reason"] for row in saved["drop_ledger"]])
+        self.assertIn("not_in_same_date_candidate_universe", [row["reason"] for row in saved["drop_ledger"]])
+
+    def test_candidate_but_pass1_ineligible_keeps_source_refs_and_reasons(self):
+        payload = _discovery()
+        themes, drops = self.runner().validate_provisional_themes(
+            payload,
+            eligible_tickers=set(_ALL_ELIGIBLE[1:]),
+            candidate_tickers=set(_ALL_ELIGIBLE),
+            candidate_reasons_by_ticker={"AAPL": ["market_cap_below_minimum"]},
+            sectors_by_ticker={"AAPL": "10", "MSFT": "10", "GOOG": "10", "JPM": "20", "AMZN": "20"},
+        )
+        self.assertEqual(len(themes), 1)
+        dropped = next(row for row in drops if row.get("ticker") == "AAPL")
+        self.assertEqual(dropped["reason"], "in_same_date_candidate_but_pass1_ineligible")
+        self.assertEqual(dropped["source_ref_ids"], ["web:theme", "x:theme"])
+        self.assertEqual(dropped["candidate_reasons"], ["market_cap_below_minimum"])
 
     def test_missing_sec_sic_classification_drops_only_member(self):
         classification = _classification_packet({"MSFT": "10", "GOOG": "10", "JPM": "20", "AMZN": "20"})

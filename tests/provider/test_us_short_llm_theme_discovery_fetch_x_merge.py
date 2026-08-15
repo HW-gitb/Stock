@@ -707,6 +707,22 @@ class XFetchAndMergeTests(unittest.TestCase):
         with self.assertRaises(ThemeDiscoveryMergeError):
             merge_web_x_discovery(web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr, expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
 
+    def test_merge_rejects_tampered_web_member_binding_ledger(self):
+        wa, wr, _ = web.build_web_fetch_packet(
+            queries=["power"], search_results=[], llm_response='{"themes":[]}',
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        xa, xr, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=[], grok_response='{"themes":[]}',
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        wr["member_binding_summary"]["member_claim_count"] = 1
+        with self.assertRaises(ThemeDiscoveryMergeError):
+            merge_web_x_discovery(
+                web_artifact=wa, web_receipt=wr, x_artifact=xa, x_receipt=xr,
+                expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+            )
+
     def test_merge_rejects_inconsistent_execution_attestation(self):
         wa, wr, _ = web.build_web_fetch_packet(queries=["power"], search_results=[], llm_response='{"themes":[]}', expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
         xa, xr, _ = xfetch.build_x_fetch_packet(queries=["power"], results=[], grok_response='{"themes":[]}', expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z")
@@ -844,19 +860,20 @@ class XFetchAndMergeTests(unittest.TestCase):
         w_rows = [{"url": "https://web.example/power", "title": "Power", "content": "AAPL MSFT JPM power", "published_date": "2026-07-24T10:00:00Z"}]
         x_rows = [{"url": "https://x.example/photo", "title": "Photo", "text": "MSFT JPM power\nhttps://images.example/AAPL\nDisclaimer: AAPL is not evidence", "created_at": "2026-07-24T10:00:00Z"}]
         w_ref, x_ref = web._source_id(w_rows[0]["url"]), xfetch._source_id(x_rows[0]["url"])
-        payload = json.dumps({"themes": [{
-            "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
-            "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [w_ref, x_ref],
-            "members": [{"ticker": ticker, "source_ref_ids": [w_ref, x_ref]} for ticker in ("AAPL", "MSFT", "JPM")],
-        }]})
+        def lane_payload(source_ref):
+            return json.dumps({"themes": [{
+                "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
+                "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [source_ref],
+                "members": [{"ticker": ticker, "source_ref_ids": [source_ref]} for ticker in ("AAPL", "MSFT", "JPM")],
+            }]})
         with temporary_provider_directory(web.ROOT) as td:
             wa, wr, _ = web.build_web_fetch_packet(
-                queries=["power"], search_results=w_rows, llm_response=payload,
+                queries=["power"], search_results=w_rows, llm_response=lane_payload(w_ref),
                 expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
                 raw_root=Path(td) / "web", persist_raw=True,
             )
             xa, xr, _ = xfetch.build_x_fetch_packet(
-                queries=["power"], results=x_rows, grok_response=payload,
+                queries=["power"], results=x_rows, grok_response=lane_payload(x_ref),
                 expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
                 raw_root=Path(td) / "x", persist_raw=True,
             )
@@ -1003,20 +1020,21 @@ class XFetchAndMergeTests(unittest.TestCase):
         x_rows = [{"url": "https://x.example/power", "title": "Power",
                    "text": "AAPL MSFT JPM power demand", "created_at": "2026-07-24T10:00:00Z"}]
         w_ref, x_ref = web._source_id(w_rows[0]["url"]), xfetch._source_id(x_rows[0]["url"])
-        payload = json.dumps({"themes": [{
+        def lane_payload(source_ref):
+            return json.dumps({"themes": [{
             "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
-            "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [w_ref, x_ref],
-            "members": [{"ticker": ticker, "source_ref_ids": [w_ref, x_ref]}
+            "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [source_ref],
+            "members": [{"ticker": ticker, "source_ref_ids": [source_ref]}
                         for ticker in ("AAPL", "MSFT", "JPM", "NVDA")],
         }]})
         with temporary_provider_directory(web.ROOT) as td:
             wa, wr, _ = web.build_web_fetch_packet(
-                queries=["power"], search_results=w_rows, llm_response=payload,
+                queries=["power"], search_results=w_rows, llm_response=lane_payload(w_ref),
                 expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
                 raw_root=Path(td) / "web", persist_raw=True,
             )
             xa, xr, _ = xfetch.build_x_fetch_packet(
-                queries=["power"], results=x_rows, grok_response=payload,
+                queries=["power"], results=x_rows, grok_response=lane_payload(x_ref),
                 expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
                 raw_root=Path(td) / "x", persist_raw=True,
             )
@@ -1050,20 +1068,21 @@ class XFetchAndMergeTests(unittest.TestCase):
             "text": "AAPL MSFT JPM power demand keeps climbing.", "created_at": "2026-07-24T10:00:00Z",
         }
         web_ref, x_ref = web._source_id(web_row["url"]), xfetch._source_id(x_row["url"])
-        payload = json.dumps({"themes": [{
+        def lane_payload(source_ref):
+            return json.dumps({"themes": [{
             "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
-            "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [web_ref, x_ref],
-            "members": [{"ticker": ticker, "source_ref_ids": [web_ref, x_ref]}
+            "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [source_ref],
+            "members": [{"ticker": ticker, "source_ref_ids": [source_ref]}
                         for ticker in ("AAPL", "MSFT", "JPM")],
         }]})
         with temporary_provider_directory(web.ROOT) as td:
             web_artifact, web_receipt, _ = web.build_web_fetch_packet(
-                queries=["power"], search_results=[web_row], llm_response=payload,
+                queries=["power"], search_results=[web_row], llm_response=lane_payload(web_ref),
                 expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
                 raw_root=Path(td) / "web", persist_raw=True,
             )
             x_artifact, x_receipt, _ = xfetch.build_x_fetch_packet(
-                queries=["power"], results=[x_row], grok_response=payload,
+                queries=["power"], results=[x_row], grok_response=lane_payload(x_ref),
                 expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
                 raw_root=Path(td) / "x", persist_raw=True,
             )

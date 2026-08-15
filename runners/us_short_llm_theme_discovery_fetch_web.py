@@ -78,6 +78,34 @@ SOURCE_RAW_PUBLISH_FAILURE_REASONS = frozenset({
     "immutable_raw_content_conflict",
 })
 THEME_OBSERVED_AFTER_GENERATED_AT_REASON = "theme_observed_after_generated_at"
+MEMBER_BINDING_REASON_ENUM = frozenset({
+    "accepted_member_binding",
+    "malformed_member",
+    "invalid_canonical_us_ticker",
+    "duplicate_member_ticker",
+    "malformed_member_source_refs",
+    "member_source_ref_not_in_chunk_sources",
+    "member_source_ref_outside_theme_refs",
+    "member_without_bound_source_refs",
+    "member_source_after_theme_observation",
+})
+MEMBER_TICKER_TOKEN_STATUS_ENUM = frozenset({
+    "observed", "not_observed", "not_checkable",
+})
+MEMBER_BINDING_LEDGER_KEYS = frozenset({
+    "chunk_index", "theme_index_in_chunk", "member_index_in_theme", "theme_id",
+    "raw_ticker", "canonical_ticker", "claimed_source_ref_ids",
+    "malformed_source_ref_count", "known_source_ref_ids", "unknown_source_ref_ids",
+    "outside_theme_source_ref_ids", "bound_source_ref_ids",
+    "ticker_token_check_status", "ticker_token_source_ref_ids", "binding_status",
+    "binding_reason", "parent_theme_status", "parent_theme_reason",
+})
+MEMBER_BINDING_SUMMARY_KEYS = frozenset({
+    "parsed_chunk_indexes", "unparsed_chunk_indexes", "member_claim_count",
+    "accepted_binding_count", "rejected_binding_count",
+    "accepted_parent_theme_member_count", "rejected_parent_theme_member_count",
+    "binding_reason_counts",
+})
 THEME_SOURCE_AFTER_OBSERVATION_REASON = "theme_source_after_observation"
 # A provider credential is validated for AMBIGUITY, not against the one key we happened to observe.
 # The property that protects a paid week is "exactly one credential" — two keys concatenated with no
@@ -747,9 +775,39 @@ def _validated_regroup_chunk_counts(value: Any) -> dict[str, Any]:
     return dict(value)
 
 
-def _validate_builder_receipt_evidence(receipt: dict[str, Any]) -> None:
-    """Require new writers to emit audit counts without invalidating old frozen receipts."""
+def _validate_builder_receipt_evidence(
+    receipt: dict[str, Any], *, receipt_path: Path | None = None,
+) -> None:
+    """Require new writers to emit audit counts without invalidating old frozen receipts.
+
+    A legacy receipt is exempt only when the caller proves it is the exact frozen
+    decision-date slot.  New writers never take this branch.
+    """
     if receipt.get("schema_version") == "1.0.0":
+        if receipt_path is None:
+            raise WebThemeDiscoveryError(
+                "legacy Web receipt requires its frozen receipt path"
+            )
+        expected_date = (
+            receipt.get("decision_clock", {}).get("expected_decision_date")
+            if isinstance(receipt.get("decision_clock"), dict) else None
+        )
+        if not isinstance(expected_date, str):
+            raise WebThemeDiscoveryError(
+                "legacy Web receipt lacks a decision-date identity"
+            )
+        expected_path = default_receipt_path(expected_date).resolve()
+        actual_path = Path(receipt_path).resolve()
+        if actual_path != expected_path or not actual_path.is_file():
+            raise WebThemeDiscoveryError(
+                "legacy Web receipt is not bound to its frozen decision-date slot"
+            )
+        try:
+            _existing_packet_matches(receipt, actual_path)
+        except WebThemeDiscoveryError as exc:
+            raise WebThemeDiscoveryError(
+                "legacy Web receipt does not match its frozen evidence"
+            ) from exc
         return
     contract = receipt.get("fetch_contract")
     if not isinstance(contract, dict):
@@ -1328,89 +1386,436 @@ def _validate_theme_observation_bounds(
         )
 
 
+def _raw_member_ticker(value: Any) -> str:
+    if isinstance(value, str):
+        return _safe_text(value, limit=12)
+    return type(value).__name__
+
+
+def _valid_theme_id(value: Any) -> str | None:
+    return value if isinstance(value, str) and re.fullmatch(
+        r"[a-z0-9][a-z0-9_-]{1,63}", value
+    ) else None
+
+
+def _ticker_token_observation(
+    canonical_ticker: str | None, bound_source_ids: list[str],
+    source_rows: Mapping[str, Mapping[str, Any]],
+) -> tuple[str, list[str]]:
+    if canonical_ticker is None or not bound_source_ids:
+        return "not_checkable", []
+    token = re.compile(
+        rf"(?<![A-Za-z0-9]){re.escape(canonical_ticker)}(?![A-Za-z0-9])"
+    )
+    observed_ids = []
+    for source_id in bound_source_ids:
+        row = source_rows.get(source_id)
+        if not isinstance(row, Mapping):
+            continue
+        text = "\n".join(
+            value for value in (row.get("title"), row.get("content"))
+            if isinstance(value, str)
+        )
+        if token.search(text):
+            observed_ids.append(source_id)
+    return ("observed" if observed_ids else "not_observed"), sorted(observed_ids)
+
+
 def _llm_to_discovery_input(
     llm_payload: dict[str, Any], refs: list[dict[str, Any]],
     *, drop_ledger: list[dict[str, str]] | None = None, source_type: str = "web",
-    generated_at: datetime,
+    generated_at: datetime, chunk_index: int = 0,
+    chunk_source_ids: set[str] | None = None,
+    source_rows: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    """Bind one regroup chunk and emit one ledger row for every model member claim."""
     def drop(reason: str, detail: str) -> None:
         if drop_ledger is not None:
             drop_ledger.append({"stage": "llm", "reason": reason, "detail": detail[:240]})
-    allowed_ids = {ref["source_id"] for ref in refs}
-    ref_times = {ref["source_id"]: _parse_dt(ref["observed_at"], field="source_ref.observed_at") for ref in refs}
+
+    source_rows = source_rows or {}
+    allowed_ids = {
+        ref["source_id"] for ref in refs
+        if isinstance(ref, dict) and isinstance(ref.get("source_id"), str)
+    }
+    if chunk_source_ids is None:
+        chunk_source_ids = set(allowed_ids)
+    else:
+        chunk_source_ids = set(chunk_source_ids)
+    local_refs = [ref for ref in refs if ref.get("source_id") in chunk_source_ids]
+    local_allowed_ids = {ref["source_id"] for ref in local_refs}
+    ref_times = {
+        ref["source_id"]: _parse_dt(ref["observed_at"], field="source_ref.observed_at")
+        for ref in local_refs
+    }
     generated_clock = generated_at.astimezone(timezone.utc)
     themes: list[dict[str, Any]] = []
-    for index, raw_theme in enumerate(llm_payload["themes"]):
-        def ingest_theme() -> dict[str, Any]:
+    ledger: list[dict[str, Any]] = []
+    theme_ledger_groups: list[tuple[dict[str, Any], list[int]]] = []
+
+    def set_parent(rows: list[int], status: str, reason: str | None) -> None:
+        for row_index in rows:
+            ledger[row_index]["parent_theme_status"] = status
+            ledger[row_index]["parent_theme_reason"] = reason
+
+    for theme_index, raw_theme in enumerate(llm_payload["themes"]):
+        theme_rows: list[int] = []
+        theme_id_value = raw_theme.get("theme_id") if isinstance(raw_theme, dict) else None
+        theme_id = _valid_theme_id(theme_id_value)
+        try:
             if type(raw_theme) is not dict:
                 raise _ProviderItemRejected("malformed_theme", "not_an_object")
-            theme_id = raw_theme.get("theme_id")
             display_name = _safe_text(raw_theme.get("display_name"), limit=120)
             summary = _safe_text(raw_theme.get("summary"), limit=1000)
-            # The model's clock is diagnostic only.  It must not affect acceptance,
-            # frozen identity, or the persisted artifact; the source-bound clock below
-            # is the sole deterministic value.
-            _model_observed_at_diagnostic = raw_theme.get("observed_at")
             raw_theme_refs = raw_theme.get("source_ref_ids")
             if not isinstance(raw_theme_refs, list):
-                raise _ProviderItemRejected("malformed_theme_source_refs", type(raw_theme_refs).__name__)
-            theme_refs = [ref for ref in raw_theme_refs if isinstance(ref, str) and ref in allowed_ids]
+                raise _ProviderItemRejected(
+                    "malformed_theme_source_refs", type(raw_theme_refs).__name__
+                )
+            theme_refs = [
+                ref for ref in raw_theme_refs
+                if isinstance(ref, str) and ref in local_allowed_ids
+            ]
             if not theme_refs:
-                raise _ProviderItemRejected("theme_without_bound_source_refs", str(theme_id))
-            theme_observed_at = _max_bound_source_observed_at(ref_times, theme_refs)
-            _validate_theme_observation_bounds(theme_observed_at, ref_times, theme_refs, generated_clock)
+                raise _ProviderItemRejected(
+                    "theme_without_bound_source_refs", str(theme_id_value)
+                )
+            theme_observed_at = _max_bound_source_observed_at(
+                ref_times, theme_refs,
+            )
+            _validate_theme_observation_bounds(
+                theme_observed_at, ref_times, theme_refs, generated_clock,
+            )
             raw_members = raw_theme.get("members")
             if not isinstance(raw_members, list):
-                raise _ProviderItemRejected("malformed_theme_members", str(theme_id or "unknown"))
+                raise _ProviderItemRejected(
+                    "malformed_theme_members", str(theme_id_value or "unknown")
+                )
             members: list[dict[str, Any]] = []
             seen_tickers: set[str] = set()
             for member_index, raw_member in enumerate(raw_members):
-                def ingest_member() -> dict[str, Any]:
-                    if type(raw_member) is not dict:
-                        raise _ProviderItemRejected("malformed_member", str(theme_id or "unknown"))
-                    raw_ticker = _safe_text(raw_member.get("ticker"), limit=12)
-                    ticker = canonical_us_ticker(raw_member.get("ticker"))
-                    if ticker is None:
-                        raise _ProviderItemRejected("invalid_canonical_us_ticker", raw_ticker or type(raw_member.get("ticker")).__name__)
-                    if ticker in seen_tickers:
-                        raise _ProviderItemRejected("duplicate_member_ticker", ticker)
-                    raw_member_refs = raw_member.get("source_ref_ids")
-                    if not isinstance(raw_member_refs, list):
-                        raise _ProviderItemRejected("malformed_member_source_refs", ticker)
-                    member_refs = [ref for ref in raw_member_refs if isinstance(ref, str) and ref in allowed_ids]
-                    if not member_refs or any(ref not in theme_refs for ref in member_refs):
-                        raise _ProviderItemRejected("member_without_bound_source_refs", ticker)
-                    if any(ref_times[ref] > theme_observed_at for ref in member_refs):
-                        raise _ProviderItemRejected("member_source_after_theme_observation", ticker)
-                    seen_tickers.add(ticker)
-                    return {"ticker": ticker, "membership_status": "provisional_unvalidated", "source_ref_ids": member_refs}
-                member = _ingest_provider_item(
-                    drop_ledger if drop_ledger is not None else [], stage="llm",
-                    fallback_detail=f"theme[{index}].member[{member_index}]", ingest=ingest_member,
-                )
-                if member is not None:
-                    members.append(member)
-            if not isinstance(theme_id, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,63}", theme_id):
-                raise _ProviderItemRejected("malformed_theme_id", str(theme_id))
+                row_index = len(ledger)
+                if type(raw_member) is not dict:
+                    raw_ticker = _raw_member_ticker(raw_member)
+                    canonical_ticker = None
+                    claimed: list[str] = []
+                    malformed_count = 0
+                    known: list[str] = []
+                    unknown: list[str] = []
+                    outside: list[str] = []
+                    bound: list[str] = []
+                    token_status, token_ids = "not_checkable", []
+                    reason = "malformed_member"
+                else:
+                    raw_ticker = _raw_member_ticker(raw_member.get("ticker"))
+                    canonical_ticker = canonical_us_ticker(raw_member.get("ticker"))
+                    raw_refs = raw_member.get("source_ref_ids")
+                    if isinstance(raw_refs, list):
+                        claimed = sorted({ref for ref in raw_refs if isinstance(ref, str)})
+                        malformed_count = sum(
+                            1 for ref in raw_refs if not isinstance(ref, str)
+                        )
+                    else:
+                        claimed = []
+                        malformed_count = 0
+                    known = sorted(set(claimed) & local_allowed_ids)
+                    unknown = sorted(set(claimed) - local_allowed_ids)
+                    outside = sorted(set(known) - set(theme_refs))
+                    bound = sorted(set(known) & set(theme_refs))
+                    token_status, token_ids = _ticker_token_observation(
+                        canonical_ticker, bound, source_rows,
+                    )
+                    if canonical_ticker is None:
+                        reason = "invalid_canonical_us_ticker"
+                    elif canonical_ticker in seen_tickers:
+                        reason = "duplicate_member_ticker"
+                    elif not isinstance(raw_refs, list) or malformed_count:
+                        reason = "malformed_member_source_refs"
+                    elif unknown:
+                        reason = "member_source_ref_not_in_chunk_sources"
+                    elif outside:
+                        reason = "member_source_ref_outside_theme_refs"
+                    elif not bound:
+                        reason = "member_without_bound_source_refs"
+                    elif any(ref_times[ref] > theme_observed_at for ref in bound):
+                        reason = "member_source_after_theme_observation"
+                    else:
+                        reason = "accepted_member_binding"
+                ledger.append({
+                    "chunk_index": chunk_index,
+                    "theme_index_in_chunk": theme_index,
+                    "member_index_in_theme": member_index,
+                    "theme_id": theme_id,
+                    "raw_ticker": raw_ticker,
+                    "canonical_ticker": canonical_ticker,
+                    "claimed_source_ref_ids": claimed,
+                    "malformed_source_ref_count": malformed_count,
+                    "known_source_ref_ids": known,
+                    "unknown_source_ref_ids": unknown,
+                    "outside_theme_source_ref_ids": outside,
+                    "bound_source_ref_ids": bound,
+                    "ticker_token_check_status": token_status,
+                    "ticker_token_source_ref_ids": token_ids,
+                    "binding_status": "accepted" if reason == "accepted_member_binding" else "rejected",
+                    "binding_reason": reason,
+                    "parent_theme_status": "rejected",
+                    "parent_theme_reason": None,
+                })
+                theme_rows.append(row_index)
+                detail = f"chunk[{chunk_index}].theme[{theme_index}].member[{member_index}]"
+                if reason != "accepted_member_binding":
+                    drop(reason, detail)
+                    continue
+                seen_tickers.add(canonical_ticker)
+                members.append({
+                    "ticker": canonical_ticker,
+                    "membership_status": "provisional_unvalidated",
+                    "source_ref_ids": [
+                        ref for ref in raw_refs if ref in set(bound)
+                    ],
+                })
+            if theme_id is None:
+                raise _ProviderItemRejected("malformed_theme_id", str(theme_id_value))
             if not members:
                 raise _ProviderItemRejected("theme_without_bound_members", theme_id)
             if not display_name or not summary:
                 raise _ProviderItemRejected("theme_missing_display_or_summary", theme_id)
-            return {
+            theme = {
                 "theme_id": theme_id, "display_name": display_name, "summary": summary,
                 "status": "provisional_discovered", "observed_at": theme_observed_at.isoformat(),
                 "source_ref_ids": theme_refs, "members": members,
                 "cross_industry_validation_status": "not_run", "market_confirmation_status": "not_run",
             }
-        theme = _ingest_provider_item(
-            drop_ledger if drop_ledger is not None else [], stage="llm",
-            fallback_detail=f"theme[{index}]", ingest=ingest_theme,
-        )
-        if theme is not None:
             themes.append(theme)
-    return {"source_refs": [
-        {"source_id": ref["source_id"], "source_type": source_type, "observed_at": ref["observed_at"]} for ref in refs
-    ], "themes": themes}
+            set_parent(theme_rows, "accepted", None)
+            theme_ledger_groups.append((theme, theme_rows))
+        except _ProviderItemRejected as exc:
+            drop(exc.reason, f"chunk[{chunk_index}].theme[{theme_index}]")
+            set_parent(theme_rows, "rejected", exc.reason)
+        except Exception as exc:
+            drop(
+                "provider_item_exception_dropped",
+                f"chunk[{chunk_index}].theme[{theme_index}]:{type(exc).__name__}",
+            )
+            set_parent(theme_rows, "rejected", "provider_item_exception_dropped")
+    return {
+        "source_refs": [
+            {"source_id": ref["source_id"], "source_type": source_type,
+             "observed_at": ref["observed_at"]}
+            for ref in refs
+        ],
+        "themes": themes,
+        "member_binding_ledger": ledger,
+        "_theme_ledger_groups": theme_ledger_groups,
+    }
+
+
+def _member_binding_summary(
+    ledger: list[dict[str, Any]], *, parsed_chunk_indexes: list[int],
+    unparsed_chunk_indexes: list[int],
+) -> dict[str, Any]:
+    reason_counts: dict[str, int] = {}
+    for row in ledger:
+        reason = row["binding_reason"]
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+    return {
+        "parsed_chunk_indexes": sorted(parsed_chunk_indexes),
+        "unparsed_chunk_indexes": sorted(unparsed_chunk_indexes),
+        "member_claim_count": len(ledger),
+        "accepted_binding_count": sum(
+            row["binding_status"] == "accepted" for row in ledger
+        ),
+        "rejected_binding_count": sum(
+            row["binding_status"] == "rejected" for row in ledger
+        ),
+        "accepted_parent_theme_member_count": sum(
+            row["binding_status"] == "accepted"
+            and row["parent_theme_status"] == "accepted"
+            for row in ledger
+        ),
+        "rejected_parent_theme_member_count": sum(
+            row["binding_status"] == "accepted"
+            and row["parent_theme_status"] == "rejected"
+            for row in ledger
+        ),
+        "binding_reason_counts": {
+            key: reason_counts[key] for key in sorted(reason_counts)
+        },
+    }
+
+
+def _validate_member_binding_ledger(
+    receipt: dict[str, Any], discovery: dict[str, Any] | None = None,
+) -> None:
+    """Recompute the Web 1.2 member ledger from receipt/discovery structure only."""
+    if receipt.get("schema_version") != "1.2.0":
+        return
+    ledger = receipt.get("member_binding_ledger")
+    summary = receipt.get("member_binding_summary")
+    source_refs = receipt.get("source_refs")
+    if not isinstance(ledger, list) or not isinstance(summary, dict) or not isinstance(source_refs, list):
+        raise WebThemeDiscoveryError("Web member binding ledger is missing")
+    if set(summary) != MEMBER_BINDING_SUMMARY_KEYS:
+        raise WebThemeDiscoveryError("Web member binding summary shape is invalid")
+    source_ids = [
+        ref.get("source_id") for ref in source_refs if isinstance(ref, dict)
+    ]
+    if any(not isinstance(source_id, str) for source_id in source_ids):
+        raise WebThemeDiscoveryError("Web member binding source IDs are malformed")
+    if len(source_ids) != len(set(source_ids)):
+        raise WebThemeDiscoveryError("Web member binding source IDs are duplicated")
+    contract = receipt.get("fetch_contract")
+    counts = contract.get("regroup_chunk_counts") if isinstance(contract, dict) else None
+    if not isinstance(counts, dict):
+        raise WebThemeDiscoveryError("Web member binding chunk counts are missing")
+    ordered_source_ids = sorted(source_ids)
+    if contract.get("execution_mode") == "live_authorized":
+        chunk_source_ids = {
+            index: set(ordered_source_ids[start:start + MAX_REGROUP_SOURCES_PER_CALL])
+            for index, start in enumerate(
+                range(0, len(ordered_source_ids), MAX_REGROUP_SOURCES_PER_CALL)
+            )
+        }
+    else:
+        # The offline seam historically makes one fake regroup call over the complete fixture.
+        # There is no paid chunk envelope to reconstruct in that mode.
+        chunk_source_ids = {0: set(ordered_source_ids)}
+    parsed = summary["parsed_chunk_indexes"]
+    unparsed = summary["unparsed_chunk_indexes"]
+    if (
+        not isinstance(parsed, list) or not isinstance(unparsed, list)
+        or any(type(index) is not int or index < 0 for index in parsed + unparsed)
+        or len(parsed) != len(set(parsed))
+        or len(unparsed) != len(set(unparsed))
+        or set(parsed) & set(unparsed)
+    ):
+        raise WebThemeDiscoveryError("Web member binding chunk summary is malformed")
+    if contract.get("execution_mode") == "live_authorized":
+        attempted = counts.get("attempted")
+        failed = counts.get("failed_indexes")
+        if (
+            type(attempted) is not int or attempted < 0
+            or not isinstance(failed, list)
+            or set(parsed) != set(range(attempted)) - set(failed)
+            or set(unparsed) != set(failed)
+        ):
+            raise WebThemeDiscoveryError("Web member binding chunks are not conserved")
+        provider_indexes = {
+            row.get("chunk_index") for row in receipt.get("provider_response_refs", [])
+            if isinstance(row, dict)
+        }
+        if provider_indexes != set(parsed):
+            raise WebThemeDiscoveryError(
+                "Web member binding chunks do not match provider response refs"
+            )
+    elif set(parsed) - set(chunk_source_ids):
+        raise WebThemeDiscoveryError("offline Web member binding chunk is out of range")
+    elif (set(parsed) | set(unparsed)) - {0}:
+        raise WebThemeDiscoveryError("offline Web member binding chunk summary is out of range")
+    if any(type(row) is not dict or set(row) != MEMBER_BINDING_LEDGER_KEYS for row in ledger):
+        raise WebThemeDiscoveryError("Web member binding ledger row shape is invalid")
+    expected_summary = _member_binding_summary(
+        ledger, parsed_chunk_indexes=parsed, unparsed_chunk_indexes=unparsed,
+    )
+    if summary != expected_summary:
+        raise WebThemeDiscoveryError("Web member binding summary is not conserved")
+    for row in ledger:
+        if type(row) is not dict or set(row) != MEMBER_BINDING_LEDGER_KEYS:
+            raise WebThemeDiscoveryError("Web member binding ledger row shape is invalid")
+        chunk_index = row["chunk_index"]
+        if type(chunk_index) is not int or chunk_index not in set(parsed):
+            raise WebThemeDiscoveryError("Web member binding row has an unparsed chunk")
+        if type(row["theme_index_in_chunk"]) is not int or row["theme_index_in_chunk"] < 0:
+            raise WebThemeDiscoveryError("Web member binding theme index is invalid")
+        if type(row["member_index_in_theme"]) is not int or row["member_index_in_theme"] < 0:
+            raise WebThemeDiscoveryError("Web member binding member index is invalid")
+        if row["theme_id"] is not None and _valid_theme_id(row["theme_id"]) is None:
+            raise WebThemeDiscoveryError("Web member binding theme ID is invalid")
+        if not isinstance(row["raw_ticker"], str) or len(row["raw_ticker"]) > 12:
+            raise WebThemeDiscoveryError("Web member binding raw ticker is invalid")
+        canonical = row["canonical_ticker"]
+        if canonical is not None and canonical_us_ticker(canonical) != canonical:
+            raise WebThemeDiscoveryError("Web member binding canonical ticker is invalid")
+        fields = (
+            "claimed_source_ref_ids", "known_source_ref_ids",
+            "unknown_source_ref_ids", "outside_theme_source_ref_ids",
+            "bound_source_ref_ids", "ticker_token_source_ref_ids",
+        )
+        if any(
+            not isinstance(row[field], list)
+            or any(not isinstance(value, str) for value in row[field])
+            or row[field] != sorted(set(row[field]))
+            for field in fields
+        ):
+            raise WebThemeDiscoveryError("Web member binding source list is invalid")
+        if type(row["malformed_source_ref_count"]) is not int or row["malformed_source_ref_count"] < 0:
+            raise WebThemeDiscoveryError("Web member binding malformed ref count is invalid")
+        claimed = set(row["claimed_source_ref_ids"])
+        local = chunk_source_ids.get(chunk_index, set())
+        known = set(row["known_source_ref_ids"])
+        unknown = set(row["unknown_source_ref_ids"])
+        outside = set(row["outside_theme_source_ref_ids"])
+        bound = set(row["bound_source_ref_ids"])
+        if (
+            known != claimed & local
+            or unknown != claimed - local
+            or outside & bound
+            or outside | bound != known
+            or not outside.issubset(known)
+            or not bound.issubset(known)
+        ):
+            raise WebThemeDiscoveryError("Web member binding source sets are inconsistent")
+        status = row["ticker_token_check_status"]
+        if status not in MEMBER_TICKER_TOKEN_STATUS_ENUM:
+            raise WebThemeDiscoveryError("Web member ticker observation status is invalid")
+        token_ids = set(row["ticker_token_source_ref_ids"])
+        if not token_ids.issubset(bound):
+            raise WebThemeDiscoveryError("Web member ticker observation refs are unbound")
+        if status == "observed" and not token_ids:
+            raise WebThemeDiscoveryError("Web member observed ticker has no source")
+        if status == "not_observed" and token_ids:
+            raise WebThemeDiscoveryError("Web member not_observed ticker has source refs")
+        if status == "not_checkable" and (canonical is not None and bound):
+            raise WebThemeDiscoveryError("Web member ticker observation is unexpectedly unchecked")
+        binding_status = row["binding_status"]
+        reason = row["binding_reason"]
+        if binding_status not in {"accepted", "rejected"} or reason not in MEMBER_BINDING_REASON_ENUM:
+            raise WebThemeDiscoveryError("Web member binding decision is invalid")
+        if binding_status == "accepted":
+            if (
+                reason != "accepted_member_binding"
+                or canonical is None or not bound
+                or unknown or outside or row["malformed_source_ref_count"]
+            ):
+                raise WebThemeDiscoveryError("accepted Web member binding is not structurally valid")
+        elif reason == "accepted_member_binding":
+            raise WebThemeDiscoveryError("rejected Web member binding has an accepted reason")
+        parent_status = row["parent_theme_status"]
+        parent_reason = row["parent_theme_reason"]
+        if parent_status not in {"accepted", "rejected"}:
+            raise WebThemeDiscoveryError("Web member parent theme status is invalid")
+        if (parent_status == "accepted") != (parent_reason is None):
+            raise WebThemeDiscoveryError("Web member parent theme reason is inconsistent")
+        if parent_reason is not None and not isinstance(parent_reason, str):
+            raise WebThemeDiscoveryError("Web member parent theme reason is invalid")
+    if discovery is not None:
+        for theme in discovery.get("themes", []):
+            for member in theme.get("members", []):
+                canonical = member.get("ticker")
+                matching = [
+                    row for row in ledger
+                    if row["theme_id"] == theme.get("theme_id")
+                    and row["canonical_ticker"] == canonical
+                    and row["binding_status"] == "accepted"
+                    and row["parent_theme_status"] == "accepted"
+                    and set(member.get("source_ref_ids", [])).issubset(
+                        set(row["bound_source_ref_ids"])
+                    )
+                ]
+                if not matching:
+                    raise WebThemeDiscoveryError(
+                        "Web discovery member is not covered by its binding ledger"
+                    )
 
 
 def _discovery_hash(discovery_artifact: dict[str, Any]) -> str:
@@ -1433,6 +1838,7 @@ def build_web_fetch_packet(
     regroup_attempted: bool = False,
     regroup_chunk_counts: dict[str, Any] | None = None,
     provider_response_refs: list[dict[str, Any]] | None = None,
+    regroup_chunks: list[dict[str, Any]] | None = None,
     budget_aborted: bool = False,
     plan_binding: dict[str, Any] | None = None,
     _pending_raw_writes: list[tuple[Path, dict[str, Any]]] | None = None,
@@ -1521,14 +1927,94 @@ def build_web_fetch_packet(
         fetched_at=fetched, raw_root=raw_root, persist_raw=persist_raw,
         pending_raw_writes=pending_raw_writes,
     )
-    try:
-        llm_payload = _parse_llm_json(llm_response, drop_ledger=drops)
-        discovery_input = _llm_to_discovery_input(
-            llm_payload, refs, drop_ledger=drops, generated_at=generated,
+    prompt_rows_by_id = {row["source_id"]: row for row in prompt_rows}
+    expected_chunk_source_ids = {
+        index: [row["source_id"] for row in chunk]
+        for index, chunk in enumerate(_chunk_regroup_rows(prompt_rows))
+    }
+    parsed_chunk_indexes: list[int] = []
+    unparsed_chunk_indexes: list[int] = []
+    regroup_inputs: list[dict[str, Any]] = []
+    if regroup_chunks is None:
+        if execution_mode == "live_authorized":
+            if regroup_chunk_counts["attempted"]:
+                raise WebThemeDiscoveryError(
+                    "live Web receipt requires out-of-band regroup chunks"
+                )
+        else:
+            try:
+                llm_payload = _parse_llm_json(llm_response, drop_ledger=drops)
+                regroup_inputs.append({
+                    "chunk_index": 0,
+                    "themes": llm_payload["themes"],
+                    "input_source_ids": sorted(prompt_rows_by_id),
+                })
+            except Exception as exc:
+                unparsed_chunk_indexes.append(0)
+                drops.append({
+                    "stage": "llm", "reason": "invalid_or_unusable_response",
+                    "detail": type(exc).__name__,
+                })
+    else:
+        if type(regroup_chunks) is not list:
+            raise WebThemeDiscoveryError("regroup chunks must be a list")
+        seen_chunk_indexes: set[int] = set()
+        for raw_chunk in regroup_chunks:
+            if type(raw_chunk) is not dict or set(raw_chunk) != {
+                "chunk_index", "themes", "input_source_ids",
+            }:
+                raise WebThemeDiscoveryError("regroup chunk identity is malformed")
+            chunk_index = raw_chunk["chunk_index"]
+            input_source_ids = raw_chunk["input_source_ids"]
+            if (
+                type(chunk_index) is not int or chunk_index < 0
+                or chunk_index in seen_chunk_indexes
+                or not isinstance(raw_chunk["themes"], list)
+                or not isinstance(input_source_ids, list)
+                or any(not isinstance(source_id, str) for source_id in input_source_ids)
+                or input_source_ids != sorted(set(input_source_ids))
+                or input_source_ids != expected_chunk_source_ids.get(chunk_index)
+            ):
+                raise WebThemeDiscoveryError("regroup chunk identity is inconsistent with prompt rows")
+            seen_chunk_indexes.add(chunk_index)
+            regroup_inputs.append({
+                "chunk_index": chunk_index,
+                "themes": raw_chunk["themes"],
+                "input_source_ids": input_source_ids,
+            })
+    if execution_mode == "live_authorized":
+        failed_indexes = set(regroup_chunk_counts["failed_indexes"])
+        expected_parsed = set(range(regroup_chunk_counts["attempted"])) - failed_indexes
+        if {chunk["chunk_index"] for chunk in regroup_inputs} != expected_parsed:
+            raise WebThemeDiscoveryError("live regroup chunks do not match audited chunk indexes")
+        unparsed_chunk_indexes = sorted(failed_indexes)
+
+    all_themes: list[dict[str, Any]] = []
+    member_binding_ledger: list[dict[str, Any]] = []
+    theme_ledger_groups: list[tuple[dict[str, Any], list[int]]] = []
+    for chunk in sorted(regroup_inputs, key=lambda row: row["chunk_index"]):
+        chunk_index = chunk["chunk_index"]
+        chunk_input = _llm_to_discovery_input(
+            {"themes": chunk["themes"]}, refs, drop_ledger=drops,
+            generated_at=generated, chunk_index=chunk_index,
+            chunk_source_ids=set(chunk["input_source_ids"]),
+            source_rows=prompt_rows_by_id,
         )
-    except Exception as exc:
-        discovery_input = {"source_refs": [{"source_id": ref["source_id"], "source_type": "web", "observed_at": ref["observed_at"]} for ref in refs], "themes": []}
-        drops.append({"stage": "llm", "reason": "invalid_or_unusable_response", "detail": type(exc).__name__})
+        parsed_chunk_indexes.append(chunk_index)
+        ledger_offset = len(member_binding_ledger)
+        member_binding_ledger.extend(chunk_input["member_binding_ledger"])
+        theme_ledger_groups.extend(
+            (theme, [index + ledger_offset for index in row_indexes])
+            for theme, row_indexes in chunk_input["_theme_ledger_groups"]
+        )
+        all_themes.extend(chunk_input["themes"])
+    discovery_input = {
+        "source_refs": [
+            {"source_id": ref["source_id"], "source_type": "web", "observed_at": ref["observed_at"]}
+            for ref in refs
+        ],
+        "themes": all_themes,
+    }
     # Import lazily so the producer remains a pure offline helper in minimal environments.
     from runners.us_short_llm_theme_discovery import normalize_discovery_payload
     # Validate themes independently so one malformed LLM theme is dropped without killing
@@ -1536,10 +2022,22 @@ def build_web_fetch_packet(
     accepted_themes: list[dict[str, Any]] = []
     normalized_drops: list[dict[str, str]] = []
     seen_theme_ids: set[str] = set()
+    discarded_theme_groups: set[int] = set()
+
+    def set_parent_rows(rows: list[int], status: str, reason: str | None) -> None:
+        for row_index in rows:
+            member_binding_ledger[row_index]["parent_theme_status"] = status
+            member_binding_ledger[row_index]["parent_theme_reason"] = reason
+
     for theme in discovery_input["themes"]:
         theme_id = theme.get("theme_id") if isinstance(theme, dict) else "unknown"
         if theme_id in seen_theme_ids:
             normalized_drops.append({"stage": "llm", "reason": "duplicate_theme_dropped", "detail": str(theme_id)})
+            for grouped_theme, row_indexes in theme_ledger_groups:
+                if grouped_theme is theme:
+                    discarded_theme_groups.add(id(theme))
+                    set_parent_rows(row_indexes, "rejected", "duplicate_theme_dropped")
+                    break
             continue
         try:
             one = normalize_discovery_payload(
@@ -1550,6 +2048,11 @@ def build_web_fetch_packet(
             seen_theme_ids.add(theme_id)
         except Exception as exc:
             normalized_drops.append({"stage": "llm", "reason": "invalid_theme_dropped", "detail": str(theme.get("theme_id", type(exc).__name__))})
+            for grouped_theme, row_indexes in theme_ledger_groups:
+                if grouped_theme is theme:
+                    discarded_theme_groups.add(id(theme))
+                    set_parent_rows(row_indexes, "rejected", "invalid_theme_dropped")
+                    break
     try:
         discovery_artifact = normalize_discovery_payload(
             {"source_refs": discovery_input["source_refs"], "themes": accepted_themes},
@@ -1561,6 +2064,20 @@ def build_web_fetch_packet(
             expected_decision_date=expected_decision_date, generated_at=generated.isoformat(),
         )
         normalized_drops.append({"stage": "llm", "reason": "discovery_normalization_rejected", "detail": type(exc).__name__})
+    final_theme_ids = {theme["theme_id"] for theme in discovery_artifact["themes"]}
+    for grouped_theme, row_indexes in theme_ledger_groups:
+        theme_id = grouped_theme.get("theme_id")
+        if id(grouped_theme) in discarded_theme_groups:
+            continue
+        if theme_id in final_theme_ids:
+            set_parent_rows(row_indexes, "accepted", None)
+        else:
+            set_parent_rows(row_indexes, "rejected", "invalid_theme_dropped")
+    member_binding_summary = _member_binding_summary(
+        member_binding_ledger,
+        parsed_chunk_indexes=parsed_chunk_indexes,
+        unparsed_chunk_indexes=unparsed_chunk_indexes,
+    )
     drops.extend(normalized_drops)
     if extra_drop_ledger:
         drops.extend(extra_drop_ledger)
@@ -1592,7 +2109,7 @@ def build_web_fetch_packet(
         receipt_refs.append(receipt_ref)
     receipt = {
         "schema_name": "us_short_llm_theme_discovery_fetch_web",
-        "schema_version": "1.1.0", "generated_at": generated.isoformat(),
+        "schema_version": "1.2.0", "generated_at": generated.isoformat(),
         "decision_clock": {
             "expected_decision_date": expected_decision_date,
             "cutoff_policy": "before_decision_open_et", "pit_enforced": True,
@@ -1611,6 +2128,8 @@ def build_web_fetch_packet(
         },
         "queries": queries, "source_refs": receipt_refs,
         "provider_response_refs": [dict(ref) for ref in provider_response_refs],
+        "member_binding_ledger": member_binding_ledger,
+        "member_binding_summary": member_binding_summary,
         "discovery_artifact_sha256": _discovery_hash(discovery_artifact), "drop_ledger": drops,
         "summary": {
             "query_count": len(queries), "accepted_source_count": len(refs),
@@ -1625,6 +2144,7 @@ def build_web_fetch_packet(
     _assert_receipt_secret_free(receipt)
     _validate_builder_receipt_evidence(receipt)
     _validate_schema(receipt)
+    _validate_member_binding_ledger(receipt, discovery_artifact)
     summary = {
         "schema_name": "us_short_llm_theme_discovery_fetch_web_execution_summary",
         "schema_version": "1.0.0",
@@ -1749,6 +2269,7 @@ def execute_live_web_orchestration(
     results: list[dict[str, Any]] = []
     query_drops: list[dict[str, str]] = []
     provider_response_refs: list[dict[str, Any]] = []
+    regroup_chunks: list[dict[str, Any]] = []
     stage1_batch = gateway.dispatch_web_search_all(
         tavily, query_records,
         transport=transport,
@@ -1891,6 +2412,11 @@ def execute_live_web_orchestration(
             if fingerprint is not None:
                 fingerprints.append(fingerprint)
             merged_themes.extend(themes)
+            regroup_chunks.append({
+                "chunk_index": chunk_index,
+                "themes": themes,
+                "input_source_ids": [row["source_id"] for row in chunks[chunk_index]],
+            })
             successful_chunks += 1
         if fatal_budget_error is None and stage2_batch.stop_error is not None:
             budget_failure = plan_budget.coerce_budget_error(stage2_batch.stop_error)
@@ -1922,6 +2448,7 @@ def execute_live_web_orchestration(
         "fetched_at": fetched_now, "regroup_model_identity": model_identity,
         "regroup_failed": regroup_failed, "regroup_attempted": regroup_attempted,
         "regroup_chunk_counts": regroup_chunk_counts,
+        "regroup_chunks": regroup_chunks,
         "provider_response_refs": provider_response_refs,
         "budget_error": fatal_budget_error,
         "provider_call_count": attempted_tavily_calls + attempted_deepseek_calls,
@@ -2021,6 +2548,7 @@ def _run_web_fetch(
                 regroup_failed=outcome["regroup_failed"], regroup_attempted=outcome["regroup_attempted"],
                 regroup_chunk_counts=outcome["regroup_chunk_counts"],
                 provider_response_refs=outcome.get("provider_response_refs", []),
+                regroup_chunks=outcome.get("regroup_chunks", []),
                 budget_aborted=budget_error is not None, plan_binding=plan_binding,
             )
             if receipt["summary"]["query_count"] != outcome["stage1_dispatch_count"]:

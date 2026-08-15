@@ -10,7 +10,7 @@
   ],
   "properties": {
     "schema_name": {"const": "us_short_provisional_theme_validation"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"enum": ["1.0.0", "1.1.0"]},
     "generated_at": {"type": "string", "format": "date-time"},
     "decision_clock": {
       "type": "object", "additionalProperties": false,
@@ -131,7 +131,9 @@
         "stage": {"enum": ["member", "theme", "truncation"]},
         "theme_id": {"type": "string"},
         "ticker": {"type": "string"},
-        "reason": {"type": "string", "minLength": 1}
+        "reason": {"type": "string", "minLength": 1},
+        "source_ref_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "candidate_reasons": {"type": "array", "items": {"type": "string"}}
       }
     }
   }
