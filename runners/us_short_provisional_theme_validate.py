@@ -269,6 +269,16 @@ def load_inputs_from_discovery(
         raise ProvisionalThemeValidationError("classification observed_at is not before the decision open")
 
     eligible = set(candidate["eligible_tickers"])
+    candidate_tickers = {
+        canonical_us_ticker(row["ticker"])
+        for row in candidate["rows"]
+        if canonical_us_ticker(row["ticker"]) is not None
+    }
+    candidate_reasons = {
+        canonical_us_ticker(row["ticker"]): list(row["reasons"])
+        for row in candidate["rows"]
+        if canonical_us_ticker(row["ticker"]) is not None
+    }
     sectors = _canonical_map(
         classification["sector_by_ticker"], field="classification.sector_by_ticker", allowed=eligible
     )
@@ -279,14 +289,21 @@ def load_inputs_from_discovery(
             "candidate": candidate_hash,
             "classification": classification_hash,
         },
-        "eligible": eligible, "sectors": sectors,
+        "eligible": eligible, "universe": candidate_tickers,
+        "candidate_reasons": candidate_reasons, "sectors": sectors,
     }
 
 
 def validate_provisional_themes(
     discovery: dict[str, Any], *, eligible_tickers: set[str], sectors_by_ticker: dict[str, str],
+    candidate_tickers: set[str] | None = None,
+    candidate_reasons_by_ticker: dict[str, list[str]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Apply the knife-2 member/theme gates without scoring or downstream effects."""
+    if candidate_tickers is None:
+        candidate_tickers = set(eligible_tickers)
+    if candidate_reasons_by_ticker is None:
+        candidate_reasons_by_ticker = {}
     source_types = {ref["source_id"]: ref["source_type"] for ref in discovery["source_refs"]}
     accepted: list[dict[str, Any]] = []
     drops: list[dict[str, Any]] = []
@@ -313,17 +330,23 @@ def validate_provisional_themes(
                 reason = "duplicate_member_ticker"
             elif not raw_refs or not raw_refs.issubset(theme_refs):
                 reason = "unbound_member_source_ref"
+            elif ticker not in candidate_tickers:
+                reason = "not_in_same_date_candidate_universe"
             elif ticker not in eligible_tickers:
-                reason = "not_in_active_pass1_eligible_universe"
+                reason = "in_same_date_candidate_but_pass1_ineligible"
             elif not ({"web", "x"} & types):
                 reason = "missing_independent_web_x_evidence"
             elif ticker not in sectors_by_ticker or canonical_industry_code(sectors_by_ticker[ticker]) is None:
                 reason = "missing_sec_sic_classification"
             if reason:
-                drops.append({
+                drop = {
                     "stage": "member", "theme_id": theme_id,
                     "ticker": ticker or str(raw_member["ticker"]), "reason": reason,
-                })
+                    "source_ref_ids": sorted(raw_refs),
+                }
+                if reason == "in_same_date_candidate_but_pass1_ineligible":
+                    drop["candidate_reasons"] = list(candidate_reasons_by_ticker.get(ticker, []))
+                drops.append(drop)
                 continue
             seen_tickers.add(ticker)
             evidence_tier = "both" if {"web", "x"}.issubset(types) else "single"
@@ -394,11 +417,14 @@ def validate_provisional_themes(
 def build_artifact(inputs: dict[str, Any], *, generated_at: str) -> dict[str, Any]:
     generated = _parse_instant(generated_at, "generated_at")
     themes, drops = validate_provisional_themes(
-        inputs["discovery"], eligible_tickers=inputs["eligible"], sectors_by_ticker=inputs["sectors"]
+        inputs["discovery"], eligible_tickers=inputs["eligible"],
+        candidate_tickers=inputs.get("universe", inputs["eligible"]),
+        candidate_reasons_by_ticker=inputs.get("candidate_reasons", {}),
+        sectors_by_ticker=inputs["sectors"],
     )
     payload = {
         "schema_name": "us_short_provisional_theme_validation",
-        "schema_version": "1.0.0", "generated_at": generated.isoformat(),
+        "schema_version": "1.1.0", "generated_at": generated.isoformat(),
         "decision_clock": {
             "expected_decision_date": inputs["candidate"]["decision_date"],
             "candidate_price_basis_date": inputs["candidate"]["price_basis_date"],

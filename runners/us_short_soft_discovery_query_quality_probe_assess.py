@@ -524,7 +524,18 @@ def _validate_discovery_and_receipt(
 ) -> list[str]:
     _validate_schema(discovery, DISCOVERY_SCHEMA_PATH, label=f"{lane} discovery")
     receipt_schema = web.SCHEMA_PATH if lane == "web" else xfetch.SCHEMA_PATH
-    _validate_schema(receipt, receipt_schema, label=f"{lane} receipt")
+    web_ledger_invalid = False
+    try:
+        _validate_schema(receipt, receipt_schema, label=f"{lane} receipt")
+    except QueryQualityProbeAssessmentError as exc:
+        if (
+            lane == "web"
+            and receipt.get("schema_version") == "1.2.0"
+            and any(field in str(exc) for field in ("member_binding_ledger", "member_binding_summary"))
+        ):
+            web_ledger_invalid = True
+        else:
+            raise
     if discovery["decision_clock"]["expected_decision_date"] != decision_date:
         raise QueryQualityProbeAssessmentError(f"{lane} discovery decision date mismatch")
     if receipt["decision_clock"]["expected_decision_date"] != decision_date:
@@ -565,6 +576,8 @@ def _validate_discovery_and_receipt(
 
     contract = receipt["fetch_contract"]
     reasons: list[str] = []
+    if web_ledger_invalid:
+        reasons.append("web_member_binding_ledger_invalid")
     if contract["execution_mode"] != "live_authorized":
         reasons.append("execution_mode_not_live_authorized")
     if not contract["network_access_performed"] or not contract["provider_calls_performed"]:
@@ -597,6 +610,12 @@ def _validate_discovery_and_receipt(
             if reason in xfetch.PROVIDER_RESPONSE_DROP_REASONS:
                 reasons.append(f"x_provider_response_failure:{reason}")
     else:
+        if receipt.get("schema_version") == "1.2.0":
+            try:
+                web._validate_member_binding_ledger(receipt, discovery)
+            except web.WebThemeDiscoveryError:
+                if "web_member_binding_ledger_invalid" not in reasons:
+                    reasons.append("web_member_binding_ledger_invalid")
         regroup_counts = contract.get("regroup_chunk_counts")
         if (
             type(regroup_counts) is not dict

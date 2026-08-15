@@ -348,6 +348,8 @@ def _verify_receipt(
     try:
         if source_type == "web":
             web._validate_schema(receipt)
+            if receipt.get("schema_version") == "1.2.0":
+                web._validate_member_binding_ledger(receipt, artifact)
         else:
             xfetch._validate_schema(receipt)
     except Exception as exc:

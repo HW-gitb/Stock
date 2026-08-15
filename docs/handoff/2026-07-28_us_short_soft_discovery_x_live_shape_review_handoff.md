@@ -2890,3 +2890,20 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_s
 5. 08-22 建槽刀单独成刀，不要与上述任何一条捆在一起。
 
 **不要开始的**：任何 provider / 付费调用（需用户逐次授权）、4d-iii 正式一键激活、把 v0.3.0 接上付费路。
+
+## 2026-08-15 第二刀执行结果（Codex；repaired / OPEN-NOT-VERIFIED）
+
+- 已严格按桌面 `C:\Users\cnhea\Desktop\usshort_软通道收尾.md` 第二刀执行；本刀只处理 Web Stage-2 的逐成员绑定账本、chunk 身份和下游 fail-closed，不改 Stage-1/v0.3、ratio、阈值、槽、预算、X、4diii 或生产评分。
+- Web receipt 升为 `1.2.0`，保留 `1.0.0/1.1.0` 可读；每个模型成员都有一条固定字段的 `member_binding_ledger`。未知 source ref、跨主题 ref、坏 ticker、重复 ticker、无绑定来源分别留痕并拒绝成员，不静默过滤；ticker 原文 token 只作诊断，不作硬门。
+- 写入前校验 chunk index、input source IDs、parsed/unparsed 守恒和 ledger summary；assessor 遇 ledger 无效判 `inconclusive`，merge 遇 ledger 无效 fail-closed；被丢主题的成员账仍保留。临时验证器已拆开“同日候选池外 / 同日候选池但 Pass1 不合格 / 缺 SEC-SIC”，成员丢弃仍保留 source refs。
+- Optional `O-K1-1` 只做最小修复：旧 Web receipt 只有在默认日期槽的默认路径、文件存在且冻结字节完全一致时才允许读取；路径、别名、缺失或篡改均 fail-closed。不增加旁路或新防御层。
+- 固定主 Python 回归 `239 OK`；另通过 `py_compile` 与 `git diff --check`。未联网、未调用 provider、未付费、未建槽、未提交。
+
+本轮状态仍为 `repaired / OPEN-NOT-VERIFIED`：下一步是 Claude Code 独立审查；审查通过前不做第三刀、不做 provider/live/付费调用、不接 4diii。
+
+## 2026-08-15 第二刀审查 Required 修复（Codex；repaired / OPEN-NOT-VERIFIED）
+
+- Claude Code 审查指出唯一 Required：§5.4 的“成员只能绑定本 chunk 来源”虽有实现，却没有反向控制；把 per-chunk 过滤挖空为全局来源集时，原有 248 测试仍全绿。
+- 按闭合判据只补一个既有 Web 测试：两个来源 A/B，chunk 1 的成员借用 A 必须以 `member_source_ref_not_in_chunk_sources` 拒绝；同一 payload 放回 chunk 0 的正向控制必须接受。
+- 结果：正常代码 Web `81 OK`；临时挖空过滤后点名测试 `1 FAILED`；还原后生产文件 SHA-256 回到 `F8494BE7A22CE7B6D61B98E44297885A3081904BE3913EB8C5C92D570E25D396`。
+- 本轮只改测试和交接记录；未改生产逻辑、未联网、未调用 provider、未付费、未建槽、未提交。仍待 Claude Code 复审；通过前不开始下一刀。

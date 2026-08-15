@@ -31,6 +31,8 @@ class WebFetchSchemaTests(unittest.TestCase):
         legacy = self._receipt()
         legacy["schema_version"] = "1.0.0"
         legacy.pop("provider_response_refs", None)
+        legacy.pop("member_binding_ledger", None)
+        legacy.pop("member_binding_summary", None)
         self.assertEqual(list(Draft7Validator(schema).iter_errors(legacy)), [])
 
     def test_effect_flags_and_live_proof_are_const_pinned(self):

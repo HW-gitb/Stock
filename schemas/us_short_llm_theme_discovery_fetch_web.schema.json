@@ -7,7 +7,7 @@
   "required": ["schema_name", "schema_version", "generated_at", "decision_clock", "fetch_contract", "queries", "source_refs", "discovery_artifact_sha256", "drop_ledger", "summary"],
   "properties": {
     "schema_name": {"const": "us_short_llm_theme_discovery_fetch_web"},
-    "schema_version": {"enum": ["1.0.0", "1.1.0"]},
+    "schema_version": {"enum": ["1.0.0", "1.1.0", "1.2.0"]},
     "generated_at": {"type": "string", "format": "date-time"},
     "decision_clock": {
       "type": "object", "additionalProperties": false,
@@ -35,14 +35,83 @@
     "plan_binding": {"$ref": "#/definitions/plan_binding"},
     "source_refs": {"type": "array", "items": {"$ref": "#/definitions/source_ref"}},
     "provider_response_refs": {"type": "array", "items": {"$ref": "#/definitions/provider_response_ref"}},
+    "member_binding_ledger": {"type": "array", "items": {"$ref": "#/definitions/member_binding_row"}},
+    "member_binding_summary": {"$ref": "#/definitions/member_binding_summary"},
     "discovery_artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "drop_ledger": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["stage", "reason", "detail"], "properties": {"stage": {"enum": ["search_result", "llm"]}, "reason": {"type": "string", "minLength": 1}, "detail": {"type": "string"}}}},
     "summary": {"type": "object", "additionalProperties": false, "required": ["query_count", "accepted_source_count", "validated_theme_count", "validated_member_count", "dropped_result_count", "prompt_source_count"], "properties": {"query_count": {"type": "integer", "minimum": 0}, "accepted_source_count": {"type": "integer", "minimum": 0}, "validated_theme_count": {"type": "integer", "minimum": 0}, "validated_member_count": {"type": "integer", "minimum": 0}, "dropped_result_count": {"type": "integer", "minimum": 0}, "prompt_source_count": {"type": "integer", "minimum": 0}}}
   },
   "allOf": [
-    {"if": {"properties": {"schema_version": {"const": "1.1.0"}}}, "then": {"required": ["provider_response_refs"]}}
+    {"if": {"properties": {"schema_version": {"const": "1.1.0"}}}, "then": {"required": ["provider_response_refs"]}},
+    {"if": {"properties": {"schema_version": {"const": "1.2.0"}}}, "then": {"required": ["provider_response_refs", "member_binding_ledger", "member_binding_summary"]}}
   ],
   "definitions": {
+    "member_binding_row": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "chunk_index", "theme_index_in_chunk", "member_index_in_theme", "theme_id",
+        "raw_ticker", "canonical_ticker", "claimed_source_ref_ids", "malformed_source_ref_count",
+        "known_source_ref_ids", "unknown_source_ref_ids", "outside_theme_source_ref_ids",
+        "bound_source_ref_ids", "ticker_token_check_status", "ticker_token_source_ref_ids",
+        "binding_status", "binding_reason", "parent_theme_status", "parent_theme_reason"
+      ],
+      "properties": {
+        "chunk_index": {"type": "integer", "minimum": 0},
+        "theme_index_in_chunk": {"type": "integer", "minimum": 0},
+        "member_index_in_theme": {"type": "integer", "minimum": 0},
+        "theme_id": {"type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9_-]{1,63}$"},
+        "raw_ticker": {"type": "string", "maxLength": 12},
+        "canonical_ticker": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9]{0,5}([.\\-][A-Z]{1,3})?$"},
+        "claimed_source_ref_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "malformed_source_ref_count": {"type": "integer", "minimum": 0},
+        "known_source_ref_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "unknown_source_ref_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "outside_theme_source_ref_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "bound_source_ref_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "ticker_token_check_status": {"enum": ["observed", "not_observed", "not_checkable"]},
+        "ticker_token_source_ref_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "binding_status": {"enum": ["accepted", "rejected"]},
+        "binding_reason": {"enum": [
+          "accepted_member_binding", "malformed_member", "invalid_canonical_us_ticker",
+          "duplicate_member_ticker", "malformed_member_source_refs",
+          "member_source_ref_not_in_chunk_sources", "member_source_ref_outside_theme_refs",
+          "member_without_bound_source_refs", "member_source_after_theme_observation"
+        ]},
+        "parent_theme_status": {"enum": ["accepted", "rejected"]},
+        "parent_theme_reason": {"type": ["string", "null"]}
+      }
+    },
+    "member_binding_summary": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "parsed_chunk_indexes", "unparsed_chunk_indexes", "member_claim_count",
+        "accepted_binding_count", "rejected_binding_count", "accepted_parent_theme_member_count",
+        "rejected_parent_theme_member_count", "binding_reason_counts"
+      ],
+      "properties": {
+        "parsed_chunk_indexes": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 0}},
+        "unparsed_chunk_indexes": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 0}},
+        "member_claim_count": {"type": "integer", "minimum": 0},
+        "accepted_binding_count": {"type": "integer", "minimum": 0},
+        "rejected_binding_count": {"type": "integer", "minimum": 0},
+        "accepted_parent_theme_member_count": {"type": "integer", "minimum": 0},
+        "rejected_parent_theme_member_count": {"type": "integer", "minimum": 0},
+        "binding_reason_counts": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "accepted_member_binding": {"type": "integer", "minimum": 0},
+            "malformed_member": {"type": "integer", "minimum": 0},
+            "invalid_canonical_us_ticker": {"type": "integer", "minimum": 0},
+            "duplicate_member_ticker": {"type": "integer", "minimum": 0},
+            "malformed_member_source_refs": {"type": "integer", "minimum": 0},
+            "member_source_ref_not_in_chunk_sources": {"type": "integer", "minimum": 0},
+            "member_source_ref_outside_theme_refs": {"type": "integer", "minimum": 0},
+            "member_without_bound_source_refs": {"type": "integer", "minimum": 0},
+            "member_source_after_theme_observation": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
     "plan_binding": {
       "type": "object", "additionalProperties": false,
       "required": ["parent_plan_identity", "provider", "stage", "parent_plan_artifact", "stage1_queries", "provider_envelope"],

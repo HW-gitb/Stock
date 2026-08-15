@@ -38,7 +38,7 @@ PRODUCTION_DISCOVERY_KEYS = frozenset({
 PRODUCTION_WEB_RECEIPT_KEYS = frozenset({
     "schema_name", "schema_version", "generated_at", "decision_clock", "fetch_contract",
     "queries", "plan_binding", "source_refs", "provider_response_refs", "discovery_artifact_sha256", "drop_ledger",
-    "summary",
+    "summary", "member_binding_ledger", "member_binding_summary",
 })
 PRODUCTION_X_RECEIPT_KEYS = frozenset({
     "schema_name", "schema_version", "generated_at", "decision_clock", "fetch_contract",
@@ -1457,6 +1457,18 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
             built["execution_evidence"]["web_regroup_chunk_counts"],
             {"attempted": 4, "successful": 4, "failed": 0, "failed_indexes": []},
         )
+
+    def test_missing_web_member_binding_ledger_is_typed_inconclusive(self):
+        discovery, receipt, _ = web.build_web_fetch_packet(
+            queries=["q"], search_results=[], llm_response='{"themes":[]}',
+            expected_decision_date="20260802", generated_at="2026-08-01T08:00:00Z",
+        )
+        receipt.pop("member_binding_ledger")
+        reasons = assess._validate_discovery_and_receipt(
+            lane="web", discovery=discovery, receipt=receipt,
+            decision_date="20260802", queries=["q"],
+        )
+        self.assertIn("web_member_binding_ledger_invalid", reasons)
 
     def test_web_single_multiple_and_all_chunk_drops_are_inconclusive(self):
         path = web.default_receipt_path("20260802")
