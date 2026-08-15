@@ -17,7 +17,7 @@ import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import jsonschema
 import numpy as np
@@ -1560,6 +1560,50 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(loaded["reports"][0]["m67"]["table"]["操作"], "观察")
         self.assertEqual(loaded["reports"][0]["machine"]["rule6_gate"]["disposition"], "manual_review")
 
+    def test_main_binds_unannounced_account_to_observed_candidate_clock(self):
+        observed_price_date = "20260608"
+        with tempfile.TemporaryDirectory() as td:
+            feed = _feed()
+            feed["series"][-1]["trade_date"] = observed_price_date
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+            ai["generated_at"] = "2026-06-09T12:00:00+08:00"
+            for candidate in ai["candidates"]:
+                candidate["quote"]["source_trade_date"] = observed_price_date
+                candidate["quote"]["price_time"] = "2026-06-08T15:00:00+08:00"
+            self._write_inputs(td, feed=feed, ai=ai)
+            account = _account()
+            account["as_of"] = observed_price_date
+            _write_account(Path(td) / "acct.json", account, AS_OF, observed_price_date)
+            out = Path(td) / "weekly.json"
+            main([
+                "--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                "--out", str(out),
+            ], price_provider=lambda code: (_series(), observed_price_date))
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(weekly["price_data_through"], observed_price_date)
+        self.assertEqual(weekly["run_lineage"]["account_snapshot"]["facts_as_of"], observed_price_date)
+
+    def test_main_rejects_missing_unannounced_account_before_price_provider(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            provider = Mock(return_value=_series())
+            with self.assertRaisesRegex(SystemExit, "FileNotFoundError"):
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"),
+                    "--account", str(Path(td) / "missing-account.json"),
+                    "--out", str(Path(td) / "weekly.json"),
+                ], price_provider=provider)
+            provider.assert_not_called()
+
+    def test_account_sizing_wiring_has_one_validator_and_no_known_mojibake(self):
+        source = (ROOT / "runners" / "a_short_weekly_pipeline.py").read_text(encoding="utf-8")
+        self.assertEqual(source.count("_account_sizing_from_state("), 3)  # definition + preflight + final rebind
+        for marker in ("鎻", "缂哄", "涓鸿"):
+            self.assertNotIn(marker, source)
+
     def test_v2_comparison_weekly_order_is_pre_publish_summary_then_post_publish_capture(self):
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td)
@@ -2670,6 +2714,9 @@ class MainWiringTests(unittest.TestCase):
                 feed = _feed()
                 feed["series"][-1]["trade_date"] = "20260608"
                 self._write_inputs(td, feed=feed)
+                account = _account()
+                account["as_of"] = "20260608"
+                _write_account(Path(td) / "acct.json", account, AS_OF, "20260608")
                 out = Path(td) / "weekly_m67.json"
                 main(["--as-of", AS_OF, "--run-date", AS_OF, "--price-freshness-mode", "intraday_prior_settled",
                       "--analysis-input", str(Path(td) / "ai.json"), "--iv-feed", str(Path(td) / "feed.json"),

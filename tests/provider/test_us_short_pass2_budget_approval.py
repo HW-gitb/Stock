@@ -319,16 +319,22 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
         from runners import us_short_weekly_capstone as capstone
         from runners import us_short_weekly_capstone_stages as stage_adapters
         from engine import us_short_capstone_checkpoint as checkpoint_store
-        from tests.test_us_short_account_state_from_manual_tables import _build
+        from tests.test_us_short_account_state_from_manual_tables import _build, _with_source_tables
 
         private_root = Path(tempfile.mkdtemp(prefix="pass2_resume_priv_"))
         state_dir = Path(tempfile.mkdtemp(prefix="pass2_resume_state_"))
         self.addCleanup(shutil.rmtree, private_root, ignore_errors=True)
         self.addCleanup(shutil.rmtree, state_dir, ignore_errors=True)
-        account_state, _ = _build(positions=[], as_of="20260709")
+        account_state, lineage = _build(
+            positions=[], as_of="20260709", expected_facts_as_of="20260708"
+        )
+        lineage = _with_source_tables(lineage)
         account_path = private_root.parent / f"pass2_resume_account_{os.getpid()}.json"
+        lineage_path = account_path.with_name(account_path.stem + "_lineage.json")
         account_path.write_text(json.dumps(account_state), encoding="utf-8")
+        lineage_path.write_text(json.dumps(lineage), encoding="utf-8")
         self.addCleanup(account_path.unlink, missing_ok=True)
+        self.addCleanup(lineage_path.unlink, missing_ok=True)
 
         ctx = capstone.resolve_capstone_context(
             now_et=datetime(2026, 7, 9, 8, 0, 0),

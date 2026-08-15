@@ -8108,3 +8108,109 @@ exit=0
 **未覆盖维度与诚实边界**：未跑真实周实盘、未跑真实的「转换器 → 周跑」端到端；未复跑 793 焦点超集（引执行方 ledger）；两条 deferred Optional（研究路径日期兜底、US 侧无下游复核）风险未变，后者是方案既定边界。
 
 **下一步**：桌面 `1a_testrun0815.md` 只剩问题 5（P4a 当周捕获缺失），它需要下一次真实周跑把失败原因留在机器记录里才能诊断。
+
+## 2026-08-15 追加：桌面 `1a_testrun0815.md` 问题 6 Optional 最小修复（Codex executor/fixer；8c7a；repaired / OPEN-NOT-VERIFIED）
+
+### Scope and disposition
+
+User authorized repair of the two previously accepted Optional findings as one minimal slice:
+
+- `O-P6-RESEARCH-PATH-EXPECTED-DATE-DEGRADES`: repaired. An unannounced A-short price clock no longer binds the account to the provisional `args.as_of`; candidate bars establish the observed clock first, then account validation/sizing uses that clock.
+- `O-P6-US-EXPECTED-DATE-HAS-NO-DOWNSTREAM-CHECK`: repaired. US weekly capstone now consumes the canonical account-lineage sibling and validates its dates/staleness before frozen holdings and stages.
+
+No new Required item was introduced. The first final-diff full-lane attempt exposed an ordering regression in the existing holding-confirmation pre-provider guard; that was repaired in the final code state and covered by the expanded focused pack and final full lane.
+
+### Root cause, minimal repair, and call chains
+
+The A-short path previously loaded the account bundle before the candidate price bars had established `price_clock_date`. When no `--price-as-of` or analysis-input clock was present, the provisional decision date could be used as `price_data_through`. The repair keeps explicit-clock behavior strict, defers the final account load for the unannounced-clock path, computes the candidate-bar clock, rebinds `price_data_through` plus northbound/margin controls, and then calls `load_account_bundle` with the observed date before sizing/report construction. Holding confirmation files are identity-checked before provider access using the bundle's own declared expected-facts date, then checked again after the final observed-clock load; this preserves missing/wrong snapshot/universe fail-closed behavior without using a provisional date as the production facts date.
+
+The A-short producer-to-consumer chain is `main -> candidate price provider -> _candidate_price_clock -> price_data_through -> source-bound controls -> final load_account_bundle -> sizing/report`. The identity-only preflight is not a production date binding; it exists only to preserve the existing confirmation gate before provider access.
+
+The US path adds `validate_account_lineage(lineage, decision_as_of, expected_facts_as_of)` after schema validation. `run_weekly_capstone` derives `<account_state_stem>_lineage.json`, reads both account state and lineage, validates account state plus lineage dates/staleness, and only then proceeds to frozen holdings/stage execution. A missing, malformed, mismatched, future, or forged-staleness sidecar fails closed.
+
+### Schema, source-binding, cache/write boundary, and controls
+
+- `schemas/us_short_account_state_lineage.schema.json` now documents that the canonical sibling is consumed by the live/budget capstone clock-binding preflight; it is not treated as a standalone M6.7 input.
+- A-short account identity remains bound by the account bundle schema, account/lineage digest, snapshot ID, and the final observed candidate-bar clock. The `None` argument to `load_account_bundle` is limited to the pre-provider identity check and resolves only the bundle's own declared expected-facts date; final operation uses the observed clock.
+- No production account, weekly report, provider raw payload, cache, or private state was refreshed. Test outputs use temporary directories; full-lane ledger and worker sidecars are local ignored verification metadata.
+- Positive controls: prior-settled candidate clock with matching account facts; valid account/lineage dates; valid canonical US sibling. Negative controls: expected/facts date inversion, facts after expected, forged `facts_staleness`, missing/malformed/mismatched US sibling, missing holding confirmation, wrong snapshot digest, wrong holding-universe digest, and PIT-inconsistent `price_time` vs `generated_at`.
+
+### Self-review and exact verification
+
+Fixed interpreter: `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` (Python 3.13.8). Direct `py_compile` for the touched runner/test files exited `0`. The final focused command was:
+
+`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\8c7a\Stock'; & 'D:\cnhea\Codex\worktrees\8c7a\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' tests.test_a_short_weekly_pipeline tests.test_us_short_account_state_from_manual_tables tests.provider.test_us_short_weekly_capstone tests.schema.test_us_short_account_state_schema tests.test_a_short_holdings_in_m67`
+
+Result: `Ran 828 tests in 59.685s ... OK`, fixed-Python receipt `receipt:c7b9dce22a1f3375c69ea30f`.
+
+The final full-lane command was:
+
+`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\8c7a\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\8c7a\Stock\.tools\full_pack_ledger.py' run a_short "final top-level runner account-clock and lineage fail-closed repair after focused regression fix" 860 -- discover -s tests -p 'test_a_short*.py'`
+
+Result: static `diff_check=PASS`, `py_compile=6`, `discovered=3119`, `ran=3119`, `equal=True`, `Ran 3119 tests in 157.880s`, ledger `status=PASS`, fingerprint `2637c002474d`, deadline `860s`. The prior attempt on fingerprint `86159466a413` stopped at `1372/3119` on `test_a_short_holdings_in_m67`; the final repair restored the confirmation-before-provider ordering and the final fingerprint passed.
+
+### Original terminal state and handoff
+
+The slice started at clean `HEAD d946a910`; no stage/commit/push/merge was performed. The final code slice is intentionally uncommitted and consists of:
+
+`runners/a_short_weekly_pipeline.py`, `runners/us_short_account_state_from_manual_tables.py`, `runners/us_short_weekly_capstone.py`, `schemas/us_short_account_state_lineage.schema.json`, `tests/provider/test_us_short_weekly_capstone.py`, `tests/test_a_short_weekly_pipeline.py`, and `tests/test_us_short_account_state_from_manual_tables.py`.
+
+The final documentation update is this handoff append plus the new risk-register and SESSION_LOG entries. No CURRENT update is needed because review/commit state is transient. Independent reviewer/committer must inspect the final seven-file code/test/schema slice, the exact call chains and negative controls above, and the final ledger evidence; until that happens the status remains `OPEN-NOT-VERIFIED`.
+
+## 2026-08-15 追加：问题 6 两条 Optional 收口刀的独立审查 = FAIL（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：FAIL，三条 Required、四条 Optional。正文只在 `docs/system_risk_register.md`。
+
+**这一刀的性质**：它把我上一轮记为「方案既定边界、本刀不做」的 US 硬门做了。执行方 entry 记为 user-authorized，故我不以越界判 FAIL——但方案当初推迟它的**技术理由**是「US 无原子 account↔lineage 绑定」，那条理由归审查核实，而它正是本轮第一条 Required：门装了，原子性没装。
+
+**我实际验了什么（区别于 agent 转述）**：按 capstone 的同一调用顺序自跑配对探针——两份诚实产物错配 GATE PASSED、手改金额 ×30 的 state 配原封 lineage 也 GATE PASSED；实读主树真实 `_run_inputs` 目录确认零个 `*_lineage.json` 且 ps1 按最新时间戳挑中的是 paper adapter；在真文件上比对乱码行与其正确孪生行的原始字节，确认字符已丢失、不可还原，并做全文件扫描确认仅此一处。A 股侧另跑 None-clock 四格与「两块之间是否有人消费半成品 account」的静态核查。
+
+**没有被我判为缺陷的三件事**（写下来免得下轮重复讨论）：`stale_warning` 诚实配对实测仍 GATE PASSED，说明 advisory 没被升成交易门；`load_account_bundle(..., None)` 的自供期望日只弱在跨周一维且随后被观测钟重载覆盖；`--holding-regulatory-confirmations` 无 `--account` 的裸 KeyError 经核为 HEAD 既有。
+
+**未覆盖维度与诚实边界**：未跑真实 US 周实盘，R-2 由真实目录清单 + 代码路径推得；agent 报的 TOCTOU 我构造不出可达路径，未计为 finding；full lane 未复跑，按 rule 4 引执行方 ledger 并独立核过指纹与时序。
+
+**下一步**：Codex 按 register 三条 Required 修；第一条不做真配对绑定就不要在文档里声称「mismatched sidecar 不能通过」。
+
+## 2026-08-15 追加：问题 6 审查 3 Required + 4 Optional 同类收口（Codex executor/fixer；8c7a；OPEN-NOT-VERIFIED）
+
+### 本切片做了什么
+
+用户授权 Required 与 Optional 全修。复核后将漏洞归成两类并按类一次处理，没有逐条堆补丁：
+
+1. A-short no-clock 账户路径存在“预检太晚 + sizing 判据复制”的共同根因。现改为 `account identity preflight -> provider -> observed price clock -> final account reload -> one sizing helper`；holding confirmation 的 provider 前身份门和最终钟复核都保留。乱码 FATAL 随重复块删除，文件增加已知乱码静态控制。
+2. US-short capstone 把 account 与 lineage 当作两个独立合法文档，而不是一对转换器产物。现用双方已有的 `us_market_equity` / `us_short_bucket_capital` 做最小配对校验，要求 `source_tables` 非空，保留日期/staleness 合同；CLI/PS1 接受显式 lineage 路径，默认才派生 sibling，PS1 不再 latest-glob 账户文件。已验证 freshness 进入 budget/no-emit/emitted summaries。
+
+### 受影响文件与消费者
+
+- 生产实现：`runners/a_short_weekly_pipeline.py`、`runners/us_short_account_state_from_manual_tables.py`、`runners/us_short_weekly_capstone.py`、`runners/us_short_weekly_capstone.ps1`。
+- 契约/owner doc：`schemas/us_short_account_state_lineage.schema.json`、`docs/us_short_system_design.md`。
+- 测试：`tests/test_a_short_weekly_pipeline.py`、`tests/test_us_short_account_state_from_manual_tables.py`、`tests/provider/test_us_short_weekly_capstone.py`，以及首次 US full 暴露的全部同类执行 fixture：`tests/provider/test_us_short_pass2_budget_approval.py`、`tests/test_us_short_capstone_checkpoint.py`、`tests/provider/test_us_short_weekly_capstone_soft_discovery.py`。
+- 消费链：A-short 最终 sizing/report 只消费 helper 的统一校验结果；US frozen holdings/stages 和周末 sizing 只能在 account state 与 lineage 金额、来源及日期全部配对后运行。
+
+### 负向控制与原始终态
+
+- US：两次真实转换器输出交叉配对拒绝；state 金额 ×30 配旧 lineage 拒绝；空 provenance 拒绝；缺 sibling 点名路径；显式 custom lineage 通过；日期错配拒绝；诚实 stale pair 仍通过且 summary 标记 `stale_warning`。
+- A：no-clock 缺/坏 account 在 provider 前拒绝；观测价格钟最终绑定；单 helper 调用；既有 holding confirmation 与 PIT 控制回归；已知乱码标记为零。
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。
+- `py_compile`：exit 0。
+- expanded focused：`Ran 822 tests in 70.918s / OK`，receipt `d7808655fe9a57c5e2a98d03`。
+- 首次 US full：在 `4552/5906` 因同类执行 fixture 缺 lineage 失败；这不是最终绿证据。枚举全部执行调用点并补同合同 fixture 后，same-class superpack `Ran 192 tests in 135.660s / OK`，receipt `50faba5e5b2661ac84d9a572`。
+- 最终 fingerprint `22cfcc04d998`：US-short `discovered=5906 ran=5906 equal=True`，`Ran 5906 tests in 430.030s`，PASS；A-short `discovered=3121 ran=3121 equal=True`，`Ran 3121 tests in 124.121s`，PASS。
+
+### 边界与交接
+
+所有读取、修改、测试和验证均在 `D:\cnhea\Codex\worktrees\8c7a\Stock`。未访问或修改主树/其他工作树，未运行 provider/live、真实周跑、测试胶囊或自动下单，未 stage/commit/push/merge；测试只写临时目录，full-pack ledger/worker sidecar 为 gitignored 验证元数据。`docs/CURRENT.md` 未写瞬态 review/commit 状态。风险 register 顶部保留完整修复记录，SESSION_LOG 顶部仅放最小状态指针。当前仍是 `OPEN-NOT-VERIFIED`；Claude Code 作为独立 reviewer/committer 应复核最终 diff、3R+4O 矩阵、两条 full lane 原始终态与文档门禁，通过后再提交。
+
+## 2026-08-15 追加：问题 6 收口刀三条 Required 的复审 = PASS（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：PASS，三条 Required 全 resolved，四条 Optional 三 fixed 一 deferred。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**：自跑八格验收探针，按 capstone 的同一调用顺序（`validate_account_state` → `validate_account_lineage`）逐格对照上一轮的结果——上轮放行的三格现在全部拒绝，两格「必须仍通过」的（`stale_warning` 诚实配对、浮点噪声 equity）仍然通过。另核 `validate_account_lineage` 签名变更后的全部生产调用点已同步、旧签名零残留；核 ps1 那条 glob 确已删除。
+
+**两处比修好更值得记的做法**：①乱码那条 Required，执行方没有只把字重打一遍，而是把产生它的手抄重复块抽成单一 helper `_account_sizing_from_state`，等于把 `O-P6R3-DUPLICATED-ACCOUNT-SIZING-BLOCK` 一并根治——这正是"修类不修实例"。②修 R-2 时顺手删掉了按时间戳挑 `*account*state*.json` 的 glob；那条 glob 会在真周跑里挑中 paper adapter，上一轮只是被"缺 lineage"意外遮住，现在是真关掉了。
+
+**探针教训（记下来免得重犯）**：八格首跑全被新加的 `source_tables` 非空检查挡住，因为我的 fixture 用纯 `build_account_state()` 造 lineage，而 `source_tables` 是 `main()` 事后填的。这是探针不承重、不是产品缺陷；补 fixture 后各格才真正分开。以后对"转换器产物"做探针，先确认纯函数与 `main()` 各自填了哪些字段。
+
+**未覆盖维度与诚实边界**：未跑真实 US 周实盘——`_run_inputs` 目前仍无 `*_lineage.json`，操作者须先用带 `--price-basis-date` 的转换器重生成一对，新 ps1 会把缺失路径列进报错并给出生成命令，但这条真实序列本轮未实跑。full lane 未复跑，按 rule 4 引执行方记录并独立核过指纹与时序。
+
+**下一步**：桌面 `1a_testrun0815.md` 只剩问题 5（P4a 当周捕获缺失），需下一次真实周跑把失败原因留在机器记录里才能诊断。

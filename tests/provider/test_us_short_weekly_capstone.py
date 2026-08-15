@@ -1153,11 +1153,14 @@ class CapstoneFakeChainTest(unittest.TestCase):
     def test_budget_preview_uses_default_prefix_only_and_never_authorizes_pass2(self):
         # P2 end-to-end control: the one-click preview uses the real default-pipeline shape, stops immediately after
         # preflight, emits the forecast, and does not mint a checkpoint/output transaction or run later stages.
-        from tests.test_us_short_account_state_from_manual_tables import _build
+        from tests.test_us_short_account_state_from_manual_tables import _build, _with_source_tables
 
-        state, _ = _build(positions=[], as_of="20260709")
+        state, lineage = _build(positions=[], as_of="20260709", expected_facts_as_of="20260708")
+        lineage = _with_source_tables(lineage)
         account_path = self.private_root / "account.json"
         account_path.write_text(json.dumps(state), encoding="utf-8")
+        account_lineage_path = account_path.with_name(account_path.stem + "_lineage.json")
+        account_lineage_path.write_text(json.dumps(lineage), encoding="utf-8")
         bad_template_payload = json.loads(e2e_fixture.TEMPLATE.read_text(encoding="utf-8"))
         bad_template_payload["report_context"] = {}
         bad_template_path = self.private_root / "budget_preview_bad_template.json"
@@ -1187,6 +1190,10 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertEqual(summary["pass2_call_budget"], 11)
         self.assertEqual(summary["pass2_target_count"], 2)
         self.assertEqual(summary["operational_use"], "not_authorized")
+        self.assertEqual(
+            summary["account_lineage"],
+            {"facts_as_of": "20260622", "facts_staleness": "stale_warning"},
+        )
         self.assertIn("--pass2-call-budget 11", summary["next_required"])
         self.assertEqual(
             [row["stage"] for row in summary["stage_outcomes"]],
@@ -1195,6 +1202,55 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertTrue(all(row["execution_mode"] == "executed_budget_preview" for row in summary["stage_outcomes"]))
         self.assertEqual(sum(summary["stage_outcome_counts"].values()), len(summary["stage_outcomes"]))
         self.assertFalse((self.private_root / "weekly_private" / "20260709").exists())
+
+    def test_budget_preview_requires_clock_bound_account_lineage(self):
+        from tests.test_us_short_account_state_from_manual_tables import _build, _with_source_tables
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            state, lineage = _build(positions=[], as_of="20260709", expected_facts_as_of="20260708")
+            lineage = _with_source_tables(lineage)
+            account_path = root / "account.json"
+            lineage_path = root / "custom-lineage.json"
+            account_path.write_text(json.dumps(state), encoding="utf-8")
+            lineage_path.write_text(json.dumps(lineage), encoding="utf-8")
+
+            def run_preview():
+                with mock.patch.object(capstone, "_run_pass2_budget_preview", return_value={"ok": True}) as preview:
+                    result = run_weekly_capstone(
+                        now_et=datetime(2026, 7, 9, 8, 0, 0),
+                        private_root=root,
+                        batch4_template_path=root / "template.json",
+                        account_state_path=account_path,
+                        account_lineage_path=lineage_path,
+                        dry_run=False,
+                        confirm_user_authorization=True,
+                        prepare_pass2_budget=True,
+                        authorized_momentum_top_k=2,
+                        state_dir=root / "state",
+                        sample_root=root,
+                    )
+                    preview.assert_called_once()
+                    return result
+
+            self.assertEqual(run_preview(), {"ok": True})
+            lineage_path.unlink()
+            with self.assertRaisesRegex(WeeklyCapstoneError, str(lineage_path).replace("\\", "\\\\")):
+                run_preview()
+
+            lineage_path.write_text(
+                json.dumps({**lineage, "expected_facts_as_of": "20260707"}),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(WeeklyCapstoneError, "invalid --account-lineage-path"):
+                run_preview()
+
+    def test_account_lineage_operator_path_is_explicit_and_default_account_is_not_globbed(self):
+        script = (ROOT / "runners" / "us_short_weekly_capstone.ps1").read_text(encoding="utf-8")
+        self.assertIn("[string]$AccountLineage", script)
+        self.assertIn('"--account-lineage-path", $AccountLineage', script)
+        self.assertIn('Join-Path $runInputs "us_short_account_state.json"', script)
+        self.assertNotIn('-Filter "*account*state*.json"', script)
 
     def test_production_rejects_bad_nested_template_before_first_stage(self):
         payload = json.loads(e2e_fixture.TEMPLATE.read_text(encoding="utf-8"))

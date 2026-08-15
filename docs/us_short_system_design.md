@@ -462,7 +462,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 1. `.gitignore` 私密路径覆盖：`weekly_private` / `account_state_csv` / `runs_private` / `model_paper_private` / `lifecycle` / `shadow_compare_private` / `capstone_checkpoints_private` 各行（§11.6）+ fail-closed 护栏测试（覆盖所有 private 路径）。
 2. 两遍打分可行性：先验 FMP 基础档速率限内每周跑完 Pass 1（全 universe）+ Pass 2（候选集+持仓）；定 universe 上限/候选集大小为可跑值。**前置：全 universe FMP 调用须先过 §18.0 provider 授权门（SR-PROVIDER-001），未授权只在已批准小样本上跑。**
 3. provider 分层健康检查（FMP/SEC）：关键源坏 → restricted/blocked/data_degraded、不输出 clean；**未授权源（yfinance/Web/X）只记 `disabled_unapproved`、不探活/不调用/不参与 clean**（单测：健康检查绝不触达未授权源）。
-4. 手动状态输入层（§3.6）：CSV(ASCII 列名) + 转换器 + lineage(sha256/row_count/facts_as_of/expected_facts_as_of/decision_as_of) + trades↔positions 对账；同一次 dry-run 的 `price_basis_date` 必须绑定转换器 `--price-basis-date`。
+4. 手动状态输入层（§3.6）：CSV(ASCII 列名) + 转换器 + lineage(sha256/row_count/facts_as_of/expected_facts_as_of/decision_as_of) + trades↔positions 对账；同一次 dry-run 的 `price_basis_date` 必须绑定转换器 `--price-basis-date`。Live/budget capstone 同时需要 account JSON 与默认同 stem 的 `_lineage.json`；转换器若使用自定义 `--lineage-out`，启动时须显式传 `--account-lineage-path`，两份产物的资金基数与日期必须配对。
 5. 价格层单测：有效支撑/压力去插针、tick 取整、取整后 RR 复校、突破 tp 兜底、加仓分支、持仓价位映射(stop_clear/tp_reduce/tp_exit/event_clear_ref)。
 6. 两轴环境 + 强赛道试探仓封顶（极防/veto/cooldown 不放行）。
 7. 仓位：组合熔断（主用 paper track；**paper 因数据门 not_evaluable → portfolio_guard 不得 clean、默认 restricted/caution**）+ 单票冷静期 + 全局现金分配 + model_size 与 live_permission 分开 + `theme_probe` 最小仓成本地板（小到无效 → observe=`cost_inefficient_min_size`）。

@@ -11,12 +11,13 @@
 #                       周末/周一盘前跑都收敛到即将到来的决策日;若跑在美股盘中(死区)runner fail-closed 拒跑。
 #   --private-root      不传 = 用 runner 默认 state/us_short → 报告落
 #                       <repo>\state\us_short\weekly_private\<决策日>\weekly_report.md(从 D:\cnhea\Stock 跑即该绝对路径)。
-#   --batch4-template-path / --account-state-path
+#   --batch4-template-path / --account-state-path / --account-lineage-path
 #                       默认指向 gitignored 私密输入位置 state\us_short\weekly_private\_run_inputs\(C3-safe,不在按决策日归档的目录内)。
 #                       账户状态含真实持仓 → 必私密;其 as_of 必须 == 本周决策日(先 dry-run 看决策日,再用
 #                       先 dry-run 读取 decision_date + price_basis_date，再用两者调用
 #                       runners\us_short_account_state_from_manual_tables.py --as-of <决策日> --price-basis-date <已收盘日>
-#                       生成到该路径；否则 -Live 会被拒。
+#                       生成 account JSON 与同 stem 的 _lineage.json；若转换器用了自定义 --lineage-out，
+#                       本启动器必须显式传 -AccountLineage 指向它。两份文件缺一或不配对，-Live 都会被拒。
 #
 # Usage:
 #   .\runners\us_short_weekly_capstone.ps1                          # dry-run:打印本周计划(默认,安全)
@@ -39,6 +40,7 @@ param(
     [string]$PrivateRoot = "",
     [string]$BatchTemplate = "",
     [string]$AccountState = "",
+    [string]$AccountLineage = "",
     [switch]$Live,
     [int]$MomentumTopK = 0,
     [string]$PythonExe = "",
@@ -92,9 +94,10 @@ if ([string]::IsNullOrWhiteSpace($BatchTemplate)) {
     if ([string]::IsNullOrWhiteSpace($BatchTemplate)) { $BatchTemplate = Join-Path $runInputs "batch4_action_template.json" }
 }
 if ([string]::IsNullOrWhiteSpace($AccountState)) {
-    $AccountState = Get-ChildItem -LiteralPath $runInputs -Recurse -File -Filter "*account*state*.json" -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
-    if ([string]::IsNullOrWhiteSpace($AccountState)) { $AccountState = Join-Path $runInputs "us_short_account_state.json" }
+    $AccountState = Join-Path $runInputs "us_short_account_state.json"
+}
+if ([string]::IsNullOrWhiteSpace($AccountLineage)) {
+    $AccountLineage = Join-Path (Split-Path -Parent $AccountState) (([IO.Path]::GetFileNameWithoutExtension($AccountState)) + "_lineage.json")
 }
 
 # 真跑才需要真实输入文件;dry-run 不读它们。
@@ -102,10 +105,12 @@ if ($Live) {
     $missing = @()
     if (-not (Test-Path $BatchTemplate)) { $missing += $BatchTemplate }
     if (-not (Test-Path $AccountState))  { $missing += $AccountState }
+    if (-not (Test-Path $AccountLineage)) { $missing += $AccountLineage }
     if ($missing.Count -gt 0) {
         throw ("非 dry-run 需要真实输入文件,但缺失:`n  " + ($missing -join "`n  ") +
                "`n补齐后重跑:先用 dry-run 的 decision_date + price_basis_date 调用 " +
-               "runners\us_short_account_state_from_manual_tables.py --as-of <决策日> --price-basis-date <已收盘日> 生成。")
+               "runners\us_short_account_state_from_manual_tables.py --as-of <决策日> --price-basis-date <已收盘日> " +
+               "生成 account JSON 与同 stem 的 _lineage.json；自定义 --lineage-out 时传 -AccountLineage。")
     }
     if ($Live -and ($MomentumTopK -le 0)) {
         Write-Host "[提醒] 未传 -MomentumTopK(1..250);本次沿用 runner 默认 200。Pass2 预算由本次运行自动派生。" -ForegroundColor Yellow
@@ -117,7 +122,8 @@ $cliArgs = @(
     $runner,
     "--now-et", $NowEt,
     "--batch4-template-path", $BatchTemplate,
-    "--account-state-path", $AccountState
+    "--account-state-path", $AccountState,
+    "--account-lineage-path", $AccountLineage
 )
 if (-not [string]::IsNullOrWhiteSpace($PrivateRoot)) { $cliArgs += @("--private-root", $PrivateRoot) }
 if ($MomentumTopK -gt 0) { $cliArgs += @("--momentum-top-k", "$MomentumTopK") }
