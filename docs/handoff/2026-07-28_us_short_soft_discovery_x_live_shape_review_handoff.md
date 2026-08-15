@@ -2831,3 +2831,55 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_s
 - `stash@{0}`（`io-inventory-retirement-parked`）里是 I/O 退役刀的三个文件，**不要在问题10 合入前 pop**。合入并同步后再 pop，届时基线用它自己的退役版 generator 自然生成，验收数字是 187 / 71（见 register `R-USSHORT-IO-INVENTORY-BASELINE-CARRIES-ANOTHER-KNIFE-S-TREE-STATE` 的 `2026-08-13 更新` 节）。
 - 全量用例数 5831→5829 是停刀带来的（退役版新增的两条闭合用例暂时不在扫描面内），pop 之后会回到 5831 量级，不要误当回归。
 - `O-P10-22`~`O-P10-26` 仍 pending，留待后续刀。
+
+
+## 2026-08-15 追加：20260815 探针已开枪 —— 全景交接给 Codex（判断待你复核，方案由你设计）
+
+**这一节的性质**：reviewer（Claude）打完了 0815 那一枪并做了诊断，但**方案设计权交给你**。下面把事实、判断、空白分开标注。**FACT 请复算，JUDGMENT 请判伪，GAP 请补齐或明确接受。** 不要默认 reviewer 是对的——他在同一轮里已经自我更正过一次（把 `ratio=0.2647` 当成模板变差的证据，实际是被本轮失败自己压低的）。
+
+### 一、这一枪发生了什么（FACT）
+
+按 `docs/us_short_soft_discovery_probe_20260815_runbook.md` 五步走完，从主树 `D:\cnhea\Stock` 执行（运行单正文写的 `000e` 工作树已不存在，而历次付费冻结件只在主树的 gitignored `state/us_short/` 累积）。
+
+- 付费 12 次 / 上限 12（`tavily=4 / deepseek=4 / xai=4`），两条 lane 各预留 1 次，零重试、零 unknown、零 recovery，`all_exact_slots_bound=true`、`all_budget_scopes_bound=true`。
+- 裁决 `provider_or_execution_inconclusive_do_not_grade_templates`，`inconclusive_reasons` 恰一条 `web_regroup_failed`。产物 `docs/us_short_soft_discovery_query_quality_probe_assessment_20260815.json`（不可变，已提交）。
+- `prohibited_effects` 十项全 false：未确认主题、未加分、未动 Top15 / 席位 / 试探仓 / 生命周期 / 操作意见、未起 forward 钟。
+- 唯一被这枪证实的事：`days=7` 真的被 Tavily 采纳——web 侧 `published_at_outside_decision_week` 由 0809 的 33 条降到 **0 条**。这是 08-09 那刀留下、任何离线测试都够不着的一条。
+
+### 二、两条待你处理的 register 条目
+
+1. `R-USSHORT-SOFT-DISCOVERY-ONE-TRUNCATED-REGROUP-CHUNK-VOIDS-THE-WHOLE-PAID-PROBE`（截断废枪）
+2. `R-USSHORT-SOFT-DISCOVERY-PROBE-RATIO-GATE-MEASURES-A-DIFFERENT-THING-THAN-PRODUCTION`（ratio 门设计问题）
+
+**两条的完整正文、FACT / JUDGMENT / GAP 逐条标注、复算口径与数据表都在 `docs/system_risk_register.md`，本节不复述。**
+
+### 三、reviewer 的推荐（**这是判断，请判伪**）
+
+- 截断那条：推荐**抬 `max_tokens`**（`engine/us_short_llm_theme_discovery_paid_gateway.py:350` 与 `:708`，现为 2500，两处同值，全仓无测试 / packet / policy 钉过它）。理由是它是实测根因、不动 packet、不改 call 数、不需要为修复本身另建槽。明确**不推荐**缩 `MAX_REGROUP_SOURCES_PER_CALL`（10→5 会让 chunk 数 4→7，撞破 packet 冻的 `structural_max_actual_calls=4` 且与 `rows_per_regroup_call=10` 冲突，同目标而代价高得多），**不推荐** chunk 级重试（与 PIT 冻结、「同 scope 重试只增 attempt 不增 planned」正面冲突）。
+- ratio 那条：推荐把门换成量「本周产出了几个能过生产门的主题」（逐主题 ≥3 boostable 成员且跨 ≥2 行业），ratio 降级为成本诊断项；另新增跨周复现率并从现在起逐周记。
+- **但 reviewer 同时指出自己这条推荐的已知缺口**：只换成结构性计数门会放进 `post_earnings_stock_moves` 这种「财报后异动的股票」——结构两门全过、语义上根本不是跨行业主题。**新门若不带语义约束会引入新的假阳性，reviewer 没有任何语义质量的度量。这是方案设计里最需要你解决的一点。**
+
+### 四、你需要知道的约束（别踩）
+
+- 0815 槽已烧且不可变；下一个非交易槽是 **08-22（六）/ 08-23（日）**，无论走哪条路都**必须另起一把建槽刀**（前例：0808→0809、0809→0815）。所以「要不要新槽」不构成方案之间的区别，别拿它当取舍理由。
+- 阈值、metric 定义、槽映射、预算都是 packet 的 schema `const`。**不得在无 packet 冻结阈值的情况下放宽裁决门。**
+- 冻结项四条不变：确认器、赛道席、试探仓、生命周期。`theme_soft_boost_enabled` **不在**冻结项内——正式一键路径默认 ON，只要该决策日有合格冻结件，≤5 分就会进 `core_score` 并可能换掉 Top15 边界票。
+- v0.3.0 policy 仍是 `candidate_offline` / `provider_execution_allowed=False`，未接付费路；0815 打的仍是 v0.2.0。
+- 唯一付费出口是 `engine/us_short_llm_theme_discovery_paid_gateway.py`；真实 `.search()` / `.create()` / `urlopen()` 与三个 client 构造只许在那里。
+- 探针目的只答「问法能否捞回带个股、来源绑定的有效材料」；它不确认主题、不加分、不起 12 周钟。
+
+### 五、验证命令
+
+- 焦点包（reviewer 本轮亲跑 `Ran 123 / 7.3s / OK receipt:9c9a6216b2044d0bd8560eb6`）：`.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.provider.test_us_short_soft_discovery_query_quality_probe_assess tests.schema.test_us_short_soft_discovery_query_quality_probe_packet_20260809_schema tests.schema.test_us_short_soft_discovery_query_quality_probe_packet_schema tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency`
+- 只读复算裁决 payload 而不写盘：`build_assessment(packet_path=..., generated_at=...)`（`runners/us_short_soft_discovery_query_quality_probe_assess.py:1020`）。
+- 生产结构门重算所需的冻结件全在 `state/us_short/`（`..._web_20260809.json` / `..._x_20260809.json` / `..._web_20260815.json` / `..._x_20260815.json` 及各自 receipt），SIC 取 `state/us_short/sec_sic_classification_snapshots/` 最新快照。全部离线。
+
+### 六、交给你做的
+
+1. 复算第一节与 register 两条里的每一个 FACT，不采信 reviewer 转述。
+2. 逐条判伪 register 里标 JUDGMENT 的条目；**明确写出哪几条你不同意、依据是什么**。
+3. 补齐或明确接受标 GAP 的空白——其中 GAP-1（单 chunk 实际 `usage.completion_tokens`）与 GAP-7（调小 `max_results_per_query` 的反事实重算）都能用盘上冻结件离线做出来，代价很低，做了能把两条推荐从主张变成有基准值的提案。
+4. 在此基础上**自行设计方案**并写成执行方案，不必沿用 reviewer 的推荐。方案须回答：截断怎么根治、ratio 门换不换（换的话新门如何避免 `post_earnings_stock_moves` 这类结构过关但语义不是主题的假阳性）、跨周复现率要不要现在开始记、这些改动如何分刀（一刀一个风险面）。
+5. 08-22 建槽刀单独成刀，不要与上述任何一条捆在一起。
+
+**不要开始的**：任何 provider / 付费调用（需用户逐次授权）、4d-iii 正式一键激活、把 v0.3.0 接上付费路。
