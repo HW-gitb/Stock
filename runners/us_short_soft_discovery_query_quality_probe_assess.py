@@ -631,6 +631,23 @@ def _validate_discovery_and_receipt(
             raise QueryQualityProbeAssessmentError(
                 "web receipt regroup counts do not bind completed DeepSeek responses"
             )
+        if "provider_response_refs" in receipt:
+            try:
+                web._validate_provider_response_refs(
+                    receipt["provider_response_refs"],
+                    regroup_chunk_counts=(
+                        regroup_counts
+                        if contract["execution_mode"] == "live_authorized" else None
+                    ),
+                    completed_response_count=(
+                        deepseek_completed
+                        if contract["execution_mode"] == "live_authorized" else None
+                    ),
+                )
+            except web.WebThemeDiscoveryError as exc:
+                raise QueryQualityProbeAssessmentError(
+                    f"web receipt provider response evidence is incomplete: {exc}"
+                ) from exc
         failed_indexes: list[int] = []
         provider_item_failed_indexes: list[int] = []
         for row in receipt["drop_ledger"]:

@@ -18,6 +18,9 @@ from engine.us_short_persisted_text_safety import persisted_text_violation
 TAVILY_ENDPOINT = "https://api.tavily.com/search"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
+DEEPSEEK_REGROUP_MAX_TOKENS = 16_384
+DEEPSEEK_REGROUP_MAX_THEMES_PER_CHUNK = 4
+DEEPSEEK_RESPONSE_FORMAT = {"type": "json_object"}
 XAI_BASE_URL = "https://api.x.ai/v1"
 GROK_MODEL = "grok-4.3"
 
@@ -346,10 +349,20 @@ def offline_web_regroup(
     prompt_builder: Callable[[str, list[dict[str, Any]]], str],
 ) -> Any:
     require_offline_fake_client(client)
-    return client.chat.completions.create(
-        model=DEEPSEEK_MODEL, temperature=0, max_tokens=2500,
-        messages=[{"role": "user", "content": prompt_builder(expected_decision_date, rows)}],
-    )
+    return client.chat.completions.create(**_deepseek_regroup_request_kwargs(
+        prompt_builder(expected_decision_date, rows),
+    ))
+
+
+def _deepseek_regroup_request_kwargs(prompt: str) -> dict[str, Any]:
+    """Build the one frozen request shape shared by offline and live regroup calls."""
+    return {
+        "model": DEEPSEEK_MODEL,
+        "temperature": 0,
+        "max_tokens": DEEPSEEK_REGROUP_MAX_TOKENS,
+        "response_format": dict(DEEPSEEK_RESPONSE_FORMAT),
+        "messages": [{"role": "user", "content": prompt}],
+    }
 
 
 def offline_x_search(client: Any, query: str, expected_decision_date: str) -> Any:
@@ -580,11 +593,14 @@ class PaidDispatchGateway:
             if request._gateway_token is not self._request_token:
                 raise PaidProviderError("dispatch request was not issued by this gateway")
             self._validate_plan_bound_request(request)
-            # Stage1 is the paid evidence lane: no request may reserve budget before
-            # the caller has supplied the single raw-evidence write door.  Stage2
-            # regrouping remains an explicit non-raw contract when no sink is given.
-            if request.stage == "stage1" and not callable(persist_response):
-                raise PaidProviderError("stage1 paid dispatch requires a persistence sink")
+            # No paid provider response may advance the loop before the caller has supplied
+            # the single raw-evidence write door.  This applies to both Web Stage-1 search and
+            # Web Stage-2 DeepSeek regrouping; X has its own response-persistence contract.
+            requires_persistence = request.stage == "stage1" or (
+                request.provider == "web" and request.stage == "stage2"
+            )
+            if requires_persistence and not callable(persist_response):
+                raise PaidProviderError("paid dispatch requires a persistence sink")
             try:
                 outcome = self._budget.dispatch_with_outcome(
                     request.provider, scope=request.scope, stage=request.stage, call=request.call,
@@ -704,13 +720,9 @@ class PaidDispatchGateway:
             (
                 self._request(
                     "web", f"stage2:{chunk_index}", "stage2",
-                    lambda chunk=chunk: client.chat.completions.create(
-                        model=DEEPSEEK_MODEL, temperature=0, max_tokens=2500,
-                        messages=[{
-                            "role": "user",
-                            "content": prompt_builder(expected_decision_date, chunk),
-                        }],
-                    ),
+                    lambda chunk=chunk: client.chat.completions.create(**_deepseek_regroup_request_kwargs(
+                        prompt_builder(expected_decision_date, chunk),
+                    )),
                 )
                 for chunk_index, chunk in chunks
             ),

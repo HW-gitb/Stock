@@ -37,7 +37,7 @@ PRODUCTION_DISCOVERY_KEYS = frozenset({
 })
 PRODUCTION_WEB_RECEIPT_KEYS = frozenset({
     "schema_name", "schema_version", "generated_at", "decision_clock", "fetch_contract",
-    "queries", "plan_binding", "source_refs", "discovery_artifact_sha256", "drop_ledger",
+    "queries", "plan_binding", "source_refs", "provider_response_refs", "discovery_artifact_sha256", "drop_ledger",
     "summary",
 })
 PRODUCTION_X_RECEIPT_KEYS = frozenset({
@@ -1814,8 +1814,20 @@ class ProductionQueryQualityProbeSeamTest(unittest.TestCase):
 
         def _create(self, **kwargs):
             self.calls.append(kwargs)
+            response_payload = {
+                "model": "deepseek-v4-flash",
+                "choices": [{"message": {"content": self.text}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
+                "system_fingerprint": "fp_fixture",
+            }
             return SimpleNamespace(
-                choices=[SimpleNamespace(message=SimpleNamespace(content=self.text))],
+                model=response_payload["model"],
+                choices=[SimpleNamespace(
+                    message=SimpleNamespace(content=self.text), finish_reason="stop",
+                )],
+                usage=response_payload["usage"],
+                system_fingerprint=response_payload["system_fingerprint"],
+                model_dump=lambda mode="json": copy.deepcopy(response_payload),
             )
 
         @property

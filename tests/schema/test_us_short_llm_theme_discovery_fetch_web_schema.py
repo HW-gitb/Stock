@@ -26,6 +26,13 @@ class WebFetchSchemaTests(unittest.TestCase):
         schema = json.loads((Path(fetch.ROOT) / "schemas/us_short_llm_theme_discovery_fetch_web.schema.json").read_text(encoding="utf-8"))
         self.assertEqual(list(Draft7Validator(schema).iter_errors(self._receipt())), [])
 
+    def test_frozen_1_0_receipt_without_provider_refs_remains_readable(self):
+        schema = json.loads((Path(fetch.ROOT) / "schemas/us_short_llm_theme_discovery_fetch_web.schema.json").read_text(encoding="utf-8"))
+        legacy = self._receipt()
+        legacy["schema_version"] = "1.0.0"
+        legacy.pop("provider_response_refs", None)
+        self.assertEqual(list(Draft7Validator(schema).iter_errors(legacy)), [])
+
     def test_effect_flags_and_live_proof_are_const_pinned(self):
         schema = json.loads((Path(fetch.ROOT) / "schemas/us_short_llm_theme_discovery_fetch_web.schema.json").read_text(encoding="utf-8"))
         bad = self._receipt()
