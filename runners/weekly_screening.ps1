@@ -150,14 +150,33 @@ function Get-DesignCompletionAuthorized {
     # The Python epoch module is the single authority for this gate.  Keep the
     # PowerShell wrapper as a fail-closed transport only; it must not duplicate
     # the registry's status/directive interpretation.
-    $Probe = "from engine.a_short_evidence_epoch_mode import design_completion_authorized; print('1' if design_completion_authorized() else '0')"
+    $Probe = @'
+import sys
+sys.stderr = sys.stdout
+from engine.a_short_evidence_epoch_mode import design_completion_authorized
+print("1" if design_completion_authorized() else "0")
+'@
     try {
-        $ProbeOutput = & $PythonExe -c $Probe 2>$null
+        $ProbeOutput = $Probe | & $PythonExe -
         $ProbeExitCode = $LASTEXITCODE
-        if ($ProbeExitCode -ne 0) { return $false }
-        return (($ProbeOutput | Select-Object -Last 1).ToString().Trim() -eq '1')
+        if ($null -eq $ProbeExitCode) { $ProbeExitCode = 1 }
+        if ($ProbeExitCode -ne 0) {
+            Write-Host "[regime] design completion authorization probe failed (exit $ProbeExitCode); fail-closed" -ForegroundColor Yellow
+            return 'probe_failed'
+        }
+        $ProbeValue = $ProbeOutput | Select-Object -Last 1
+        if ($null -eq $ProbeValue) {
+            Write-Host "[regime] design completion authorization probe failed (no output); fail-closed" -ForegroundColor Yellow
+            return 'probe_failed'
+        }
+        $ProbeValue = $ProbeValue.ToString().Trim()
+        if ($ProbeValue -eq '1') { return 'authorized' }
+        if ($ProbeValue -eq '0') { return 'not_authorized' }
+        Write-Host "[regime] design completion authorization probe failed (invalid output); fail-closed" -ForegroundColor Yellow
+        return 'probe_failed'
     } catch {
-        return $false
+        Write-Host "[regime] design completion authorization probe failed; fail-closed" -ForegroundColor Yellow
+        return 'probe_failed'
     }
 }
 
@@ -1035,6 +1054,7 @@ if ($SkipSemanticRisk) {
                     $OperationLoaderCode = @'
 import json
 import sys
+sys.stderr = sys.stdout
 
 sys.path.insert(0, sys.argv[1])
 from runners.a_short_weekly_pipeline import validate_published_weekly_operation_bundle
@@ -1049,7 +1069,7 @@ print(json.dumps({
     "markdown_path": str(bundle.markdown_path),
 }, ensure_ascii=False))
 '@
-                    $OperationLoaderOutput = & $PythonExe -c $OperationLoaderCode $ProjectRoot $M67Out
+                    $OperationLoaderOutput = $OperationLoaderCode | & $PythonExe - $ProjectRoot $M67Out
                     $OperationLoaderExitCode = $LASTEXITCODE
                     if ($null -eq $OperationLoaderExitCode) { $OperationLoaderExitCode = 1 }
                     try {
@@ -1099,7 +1119,8 @@ if ($SkipRegime) {
     # additionally bind the raw analysis-input regime and published weekly bundle.
     $EffectiveV142Regime = 'shock'
     $RawV142Regime = 'unknown'
-    $DesignCompletionAuthorized = Get-DesignCompletionAuthorized
+    $DesignCompletionAuthorization = Get-DesignCompletionAuthorized
+    $DesignCompletionAuthorized = ($DesignCompletionAuthorization -eq 'authorized')
     $RegimeArgs = @('runners\a_short_regime_comparison_runner.py', '--as-of', $AsOf,
                     '--v14_2-regime', $EffectiveV142Regime)
     if ($M67InvocationState -eq 'complete' -and $DesignCompletionAuthorized) {
@@ -1115,7 +1136,11 @@ if ($SkipRegime) {
         # D2 and candidate-effect are source-bound to this same complete bundle.
         $RegimeArgs += @('--v14_2-raw-regime', $RawV142Regime, '--m67-report', $M67Out)
     } elseif ($M67InvocationState -eq 'complete') {
-        Write-Host "[regime] design completion is not authorized; running daily-only audit and not freezing D2/candidate-effect evidence" -ForegroundColor DarkGray
+        if ($DesignCompletionAuthorization -eq 'probe_failed') {
+            Write-Host "[regime] design completion authorization probe failed; running daily-only audit and not freezing D2/candidate-effect evidence" -ForegroundColor Yellow
+        } else {
+            Write-Host "[regime] design completion is not authorized; running daily-only audit and not freezing D2/candidate-effect evidence" -ForegroundColor DarkGray
+        }
     } elseif ($M67InvocationState -in @('degraded_no_new_entries', 'partial_holdings_only')) {
         Write-Host "[regime] M6.7 stage=$M67InvocationState; running daily-only regime evidence without M6.7-dependent action/effect binding" -ForegroundColor Yellow
     } elseif ($M67InvocationState -eq 'failed') {
@@ -1147,7 +1172,14 @@ if ($SkipRegime) {
     $RegimeProgress = if($RegimeExitCode -eq 0){'advanced'}else{'unavailable'}
     $RegimeError = if($RegimeExitCode -eq 0){$null}else{'process_failed'}
     Add-SidecarOutcome -Name 'regime_daily' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ExpectedDataThrough $PriceAsOf -ObservedDataThrough $(if($RegimeExitCode -eq 0){$PriceAsOf}else{$null})
-    if ($M67InvocationState -eq 'complete' -and -not $DesignCompletionAuthorized) {
+    if ($M67InvocationState -eq 'complete' -and $DesignCompletionAuthorization -eq 'probe_failed') {
+        # A broken authorization probe is not the same business state as an
+        # explicit pre-freeze registry decision.  Keep the comparison lane
+        # daily-only, but expose the failed dependency instead of recording a
+        # misleading explicit-decision skip.
+        Add-SidecarOutcome -Name 'regime_action' -Expected $true -Attempted $false -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'design_completion_probe_failed'
+        Add-SidecarOutcome -Name 'candidate_effect' -Expected $true -Attempted $false -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'design_completion_probe_failed'
+    } elseif ($M67InvocationState -eq 'complete' -and -not $DesignCompletionAuthorized) {
         # The M6.7 bundle is complete, but the user has not yet declared the
         # A-short design complete. D2 and candidate-effect remain unstarted,
         # rather than looking like a failed or countable weekly observation.

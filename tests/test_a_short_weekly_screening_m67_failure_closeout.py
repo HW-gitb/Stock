@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "runners" / "weekly_screening.ps1"
+US_SHORT_SCRIPT = ROOT / "runners" / "us_short_paper_one_click.ps1"
 
 
 class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
@@ -81,7 +82,11 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
             "from engine.a_short_evidence_epoch_mode import design_completion_authorized",
             self.text,
         )
-        self.assertIn("$DesignCompletionAuthorized = Get-DesignCompletionAuthorized", self.stage5)
+        self.assertIn("$DesignCompletionAuthorization = Get-DesignCompletionAuthorized", self.stage5)
+        self.assertIn(
+            "$DesignCompletionAuthorized = ($DesignCompletionAuthorization -eq 'authorized')",
+            self.stage5,
+        )
         self.assertIn("$ProbeExitCode -ne 0", self.text)
         self.assertNotIn(
             "[string]$EpochModeAuthorization.design_completion_authorization.status -eq 'authorized'",
@@ -91,6 +96,47 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
             "IsNullOrWhiteSpace([string]$EpochModeAuthorization.design_completion_authorization.directive)",
             self.text,
         )
+
+    def test_all_three_powershell_python_source_calls_use_stdin(self) -> None:
+        us_short = US_SHORT_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("$Probe | & $PythonExe -", self.text)
+        self.assertIn("$OperationLoaderCode | & $PythonExe -", self.stage4)
+        self.assertIn("$stderrToStdoutBootstrap | & $PythonExe - @cliArgs", us_short)
+        self.assertNotRegex(self.text, r"(?:-c|[\"']-c[\"'])\s+\$(?:Probe|OperationLoaderCode)")
+        self.assertNotRegex(us_short, r"(?:-c|[\"']-c[\"'])\s+\$stderrToStdoutBootstrap")
+
+        source_argument_hazard = re.compile(
+            r"(?<![\w])(?:-c|[\"']-c[\"'])\s+\$[A-Za-z_][A-Za-z0-9_]*"
+        )
+        stale = []
+        for path in sorted((ROOT / "runners").glob("*.ps1")):
+            for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if source_argument_hazard.search(line):
+                    stale.append(f"{path.name}:{line_no}:{line.strip()}")
+        self.assertEqual([], stale)
+
+        planted = (
+            "& $PythonExe -c $Probe",
+            "& $PythonExe -c $OperationLoaderCode $ProjectRoot $M67Out",
+            '& $PythonExe "-c" $stderrToStdoutBootstrap @cliArgs',
+        )
+        for old_call in planted:
+            with self.subTest(old_call=old_call):
+                self.assertIsNotNone(source_argument_hazard.search(old_call))
+
+    def test_design_completion_probe_has_explicit_three_state_fail_closed_handling(self) -> None:
+        for marker in ("return 'authorized'", "return 'not_authorized'", "return 'probe_failed'"):
+            self.assertIn(marker, self.text)
+        self.assertIn("$DesignCompletionAuthorization -eq 'probe_failed'", self.stage5)
+        self.assertIn("design_completion_probe_failed", self.stage5)
+        probe_start = self.stage5.index(
+            "if ($M67InvocationState -eq 'complete' -and $DesignCompletionAuthorization -eq 'probe_failed')"
+        )
+        probe_end = self.stage5.index(
+            "} elseif ($M67InvocationState -eq 'complete' -and -not $DesignCompletionAuthorized)",
+            probe_start,
+        )
+        self.assertNotIn("design_not_complete", self.stage5[probe_start:probe_end])
 
     def test_skip_and_history_state_matrix_remains_explicit(self) -> None:
         self.assertIn("-SkipReason 'skip_regime'", self.stage5)
@@ -102,6 +148,7 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
     def test_successful_m67_reads_actual_operation_stage_and_paths(self) -> None:
         self.assertIn("validate_published_weekly_operation_bundle", self.stage4)
         self.assertIn('"stage_status": stage', self.stage4)
+        self.assertIn("sys.stderr = sys.stdout", self.stage4)
         self.assertIn("$script:M67InvocationState = $OperationStage", self.stage4)
         self.assertIn("JSON=$M67Out Markdown=$OperationMarkdown", self.stage4)
         self.assertNotIn("$script:M67InvocationState = 'complete'", self.stage4)

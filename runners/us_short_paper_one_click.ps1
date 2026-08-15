@@ -63,6 +63,14 @@ Write-Host "[US-SHORT PAPER] python = $PythonExe" -ForegroundColor DarkGray
 # into a terminating RemoteException before redirection can help.  Start the
 # same pinned Python with a tiny bootstrap that redirects Python's stderr to
 # stdout before the runner loads; the native exit code remains authoritative.
-$stderrToStdoutBootstrap = "import runpy, sys; sys.stderr = sys.stdout; script = sys.argv[1]; sys.argv = sys.argv[1:]; runpy.run_path(script, run_name='__main__')"
-& $PythonExe "-c" $stderrToStdoutBootstrap @cliArgs
-exit $LASTEXITCODE
+$stderrToStdoutBootstrap = @'
+import runpy, sys
+sys.stderr = sys.stdout
+script = sys.argv[1]
+sys.argv = sys.argv[1:]
+runpy.run_path(script, run_name="__main__")
+'@
+$stderrToStdoutBootstrap | & $PythonExe - @cliArgs
+$RunExitCode = $LASTEXITCODE
+if ($null -eq $RunExitCode) { $RunExitCode = 1 }
+exit $RunExitCode
