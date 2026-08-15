@@ -34,6 +34,16 @@ class UsShortAccountStateSchema(unittest.TestCase):
         jsonschema.validate(self.example, self.schema)
         jsonschema.validate(self.lineage_example, self.lineage_schema)
 
+    def test_lineage_expected_facts_as_of_is_required_and_yyyymmdd(self):
+        missing = copy.deepcopy(self.lineage_example)
+        missing.pop("expected_facts_as_of")
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(missing, self.lineage_schema)
+        bad = copy.deepcopy(self.lineage_example)
+        bad["expected_facts_as_of"] = "2026-06-22"
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(bad, self.lineage_schema)
+
     def test_us_short_owns_its_schema_not_a_share(self):
         # US-short must NOT reuse the A-share contract; its title/const are us_short-specific.
         self.assertEqual(self.schema["properties"]["schema_name"]["const"], "us_short_account_state")

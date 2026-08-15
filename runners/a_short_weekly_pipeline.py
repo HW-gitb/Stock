@@ -337,7 +337,7 @@ def validate_account_state(account: dict, as_of: str) -> dict:
     return account
 
 
-def load_account_bundle(path: str, decision_as_of: str) -> tuple[dict, dict, dict]:
+def load_account_bundle(path: str, decision_as_of: str, price_data_through: str) -> tuple[dict, dict, dict]:
     """Load the only production-facing A-short account input: one bound account+lineage bundle.
 
     Legacy bare ``a_short_account_state`` files are rejected because they cannot prove the true facts
@@ -355,7 +355,7 @@ def load_account_bundle(path: str, decision_as_of: str) -> tuple[dict, dict, dic
             "account-lineage 同批，须先用转换器重新生成")
     from runners.a_short_account_state_from_manual_tables import ConvertError, validate_account_bundle
     try:
-        validate_account_bundle(bundle, decision_as_of)
+        validate_account_bundle(bundle, decision_as_of, price_data_through)
     except ConvertError as exc:
         raise SystemExit(str(exc)) from exc
     return bundle["account"], bundle["lineage"], bundle
@@ -6532,7 +6532,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit(f"[FATAL] overlay 候选集 {sorted(overlay)} != 周报候选 {sorted(weekly_candidates)}"
                          "(同日错批/缺行/多行,缺行会被静默降级;须同一批全覆盖,拒跑)")
     if args.account:
-        acct, account_lineage, account_bundle = load_account_bundle(args.account, args.as_of)
+        acct, account_lineage, account_bundle = load_account_bundle(
+            args.account, args.as_of, price_data_through)
     else:
         acct, account_lineage, account_bundle = {}, {}, {}
     holding_regulatory_confirmations = {}

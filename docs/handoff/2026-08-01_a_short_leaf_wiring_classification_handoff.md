@@ -8023,3 +8023,88 @@ ledger fingerprint=ffabae004898fb2b0a4bf64720a11253b0a6c11ff118a4233a5ec26336727
 **未覆盖维度与诚实边界**：无回归未验（见上）；真实周实盘未跑；`Read-SidecarOutcomeLine` 只有源码文本守卫、无行为测试（已记 Optional，本仓有真跑 PowerShell 的先例可参照）。
 
 **下一步**：本刀收口；桌面 `1a_testrun0815.md` 的问题 5、问题 6 尚未开工。
+
+## 2026-08-15 追加：桌面 `1a_testrun0815.md` 问题6三日期契约修复（Codex executor/fixer；8c7a；OPEN-NOT-VERIFIED）
+
+**范围与结论**：本条是问题6“账户 facts stale 警告误把正常周一/周五事实差异当成陈旧”的完整最小修复切片。当前实现已修复并通过执行者精确自审，但仍不是 Claude Code 独立 reviewer PASS、commit、merge、provider/live、production 或 ship-gate 证据。
+
+### 根因与三日期合同
+
+- 原判据是 `facts_as_of == decision_as_of`。这把“决策/状态推进日”和“最近已完整收盘的事实日”混成一个钟，正常周一决策读取周五事实时会错误告警。
+- `decision_as_of` 是决策/状态推进日；A-short 与 weekly `--as-of` 同日，US-short 与 weekly decision date 同日。
+- `expected_facts_as_of` 是本轮最近一个已完整结算的事实/价格日：A-short 取已有 `price_data_through`，手工转换 CLI 显式传 `--price-as-of`；US-short 取同一次 dry-run 的 canonical `price_basis_date`，显式传 `--price-basis-date`。转换器不联网、不猜日历、不复制日期服务。
+- `facts_as_of` 是手工 `account.csv` 的真实最后更新日。相等才是 `current`，更早是 `stale_warning`；expected 晚于 decision、facts 晚于 expected、非法日期都在写盘前拒绝。
+
+### 最小改动与调用链
+
+- A-short `runners/a_short_account_state_from_manual_tables.py`：`build_account_state(tables, decision_as_of, expected_facts_as_of, config)`、`build_account_bundle(...)`、`validate_account_bundle(...)` 均显式接收 expected，无生产默认值；CLI 强制 `--price-as-of`；lineage 写入 expected，bundle validator 绑定 expected、facts、status 并继续重算 digest/id；summary 显示三日期并只对比 facts 与 latest settled date。
+- A-short weekly `runners/a_short_weekly_pipeline.py`：`load_account_bundle(path, decision_as_of, price_data_through)` 将已有价格时钟作为 expected 传入 validator，账户在正式消费前完成日期/status/digest/schema 校验。
+- US-short `runners/us_short_account_state_from_manual_tables.py`：纯函数显式接收 expected，CLI 强制 `--price-basis-date`，lineage 写入 expected，summary 改为三日期；`runners/us_short_weekly_capstone.ps1` 只更新 dry-run 先取 `decision_date + price_basis_date` 再调用转换器的操作说明，不新增 capstone lineage consumer。
+- `tests/test_us_short_corporate_action_event_recorder.py` 的既有 converter 调用同步补齐 expected，避免生产 API 的仓内邻接测试调用点落后。
+
+### schema、source-binding、缓存/写盘边界与负向控制
+
+- `schemas/a_short_account_state_lineage.schema.json`、`schemas/us_short_account_state_lineage.schema.json` 及两个 example 升为 lineage `1.1.0`，`expected_facts_as_of` 必填且为 `YYYYMMDD`；账户 state/bundle 主 schema 不扩字段。A-short bundle digest 仍覆盖 account + lineage，因此 expected/status 不能脱离同批来源。
+- 调用链是“手工 CSV → converter pure build → lineage/bundle →（A）weekly `price_data_through` validator /（US）账户 state consumer”。没有 provider、broker、live、paper、自动下单、缓存升级或正式输出扩张；账户金额/持仓仍只落原有私密路径，所有新日期门在原子写盘前执行。
+- 反控覆盖：周一决策日 20260817 + 周五 expected/facts 20260814 得 `current`；facts 更早得 `stale_warning` 但持仓仍可加载；expected/facts 错钟、lineage expected 缺失、伪造 status、非法日期、CLI 缺 required date 均拒绝且不写输出；A/US lineage schema 缺字段和连字符日期均拒绝。
+
+### 精确测试与原始终态
+
+固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `3.13.8`。桌面指定的 focused 模块最终原始终态：
+
+```text
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -c "import os,runpy,sys; os.chdir(r'D:\cnhea\Codex\worktrees\8c7a\Stock'); sys.argv=['-m','unittest','tests.test_a_short_account_state_from_manual_tables','tests.test_a_short_review1_knives_1_5','tests.test_a_short_weekly_pipeline','tests.schema.test_a_short_account_state_lineage_schema','tests.test_us_short_account_state_from_manual_tables','tests.schema.test_us_short_account_state_schema','tests.phase6.test_weekly_screening_guardrails']; runpy.run_module('unittest.__main__', run_name='__main__')"
+Ran 786 tests in 57.283s
+OK
+exit=0
+```
+
+首轮同一精确包曾为 `Ran 786 / FAILED (errors=1)`；唯一红是价格时钟为 20260608 的既有 weekly 夹具仍生成 facts 20260609，已将该夹具绑定到 20260608 后重跑通过。受影响的 US corporate-action 邻接回归为 `Ran 7 tests in 0.086s / OK`；固定 Python 对修改后的 runner/test 执行 `py_compile` exit 0；`git diff --check` 无 whitespace error（仅 Git 的 LF→CRLF 提示）。
+
+**最终边界**：所有修改、测试和记录均在 `D:\cnhea\Codex\worktrees\8c7a\Stock`；主树和其他工作树未修改。当前不启动 full lane、provider/live、sub-agent，不 stage/commit/push/merge。当前实现者完成最小修复、fail-closed、按类修复、自审和精确测试；下一步由 Claude Code 独立 reviewer/committer 复核，PASS 后再进入提交流程。
+
+## 2026-08-15 追加：问题 6（账户事实新鲜度三日期合同）的独立审查 = FAIL（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：FAIL，一条 Required、四条 Optional。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**：整读两个转换器的 `build_account_state` / `_build_account_fields` / `validate_account_bundle` 与周报侧 `load_account_bundle` 及其调用点的 `price_data_through` 绑定链；自跑全仓类完整性扫描（旧公式零残留、四份 schema/example 同步、SKILL 与 4_3 owner 文档跟进情况）。按 rule 8 本轮未跑 full lane，焦点超集亲跑 793 OK。
+
+**探针与反向控制**：本刀是一次**放松**（周五事实配周一决策由 `stale_warning` 变 `current`），故强制腿在反方向。十格里最承重的三格：真正过旧的表仍判 `stale_warning`（警告没有被做哑）；旧代码允许的「事实晚于已收盘钟但早于决策日」现在 FATAL；真过旧的 bundle 仍能通过 `load_account_bundle`（证明 advisory 没被偷偷升成交易硬门）。另有伪造 `facts_staleness=current` 被重算判据拒（不只靠 digest）、legacy 1.0.0 bundle 被拒不补默认值、错周期望日被拒。
+
+**独立 agent 的处置**：按 §6a 最高危档起 1 个（只读当前工作树）。它报 3 条，我逐条复核：F-1（研究路径期望日兜底 + 账户门早于真实价格钟定案）复核成立但属 fail-closed 方向、降 Optional；F-2（US 侧无下游复核）复核成立，但方案自己写明 US lineage 保持 advisory，故记为残留风险而非缺陷；F-3（操作者拿不到 `price_as_of`）复核后**升为唯一 Required**——我另查实 SKILL.md 缺的正是方案 §5.2 点名要写的那句话，且同段还让操作者省略 `-AsOf` 由 wrapper 解析，两处叠加使「先手工给两个日期」无从下手。
+
+**未覆盖维度与诚实边界**：未跑真实周实盘、未跑一次真实的「转换器 → 周跑」端到端；未跑 full lane；US 侧「操作者会倾向填成 as_of」是激励推断而非实测。
+
+**下一步**：Codex 按 register 的 Required 修文档取值路径并补一条守卫；四条 Optional 按判断取舍。
+
+## 2026-08-15 追加：问题6 FAIL Required + 同类文档缺陷修复（Codex executor/fixer；8c7a；repaired / OPEN-NOT-VERIFIED）
+
+### Verdict / scope
+
+本条落实 `docs/system_risk_register.md` 顶部 closure，保留下方历史 FAIL 原文。两条 Required 已修；同类文档面一次补齐；研究路径兜底与 US lineage 无下游复核仍按方案边界保留为残留风险。本条不是 reviewer PASS、commit、merge、provider/live、production 或 ship-gate 证据。
+
+### 最小改动、调用链与 source-binding
+
+- `skills/a_short_analysis/SKILL.md` 与 `docs/a_short_account_state_manual_tables_4_3.md §5` 明确：同一次 `runners/resolve_canonical_asof.py::resolve_price_as_of` 输出中的 `decision_as_of` 传 `--as-of`、`price_as_of` 传 `--price-as-of`；日期示例是占位；weekly 用 `price_data_through` 复核，不能复制日期。
+- `runners/us_short_account_state_from_manual_tables.py` usage 补 `--price-basis-date`，并绑定同一次 capstone dry-run 的 `decision_date + price_basis_date`；`schemas/a_short_account_state_lineage.schema.json` description 改为准确描述 weekly `load_account_bundle -> validate_account_bundle` 的消费边界。
+- 新增 `tests.test_doc_governance_guard` source-binding 守卫：正向要求 converter command section 同时有 `--price-as-of`、resolver 指针、日期映射和 `price_data_through`；删除 resolver 指针的植入对照必须变红。未改问题6核心判据、运行时 CLI/schema 字段契约、provider/live 或写盘边界。
+
+### Self-review / exact verification / original terminal state
+
+- Pre-Codex self-review：A-F checked / N-A；matrix=两条 Required + O-P6-RESEARCH deferred + O-P6-US downstream deferred-by-design + O-P6-LINEAGE fixed + O-P6-US usage fixed + source-pointer negative；register=updated；handoff=updated；focused=793 OK；full-lane=not_triggered: AGENTS rule 3; reason=docs/schema-description/docstring/doc-guard repair only；door=PASS: route-doc/readme 25 OK + doc-governance 42 OK。
+- 固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）原始结果：精确 focused 8 模块 `Ran 793 tests in 56.032s / OK`；doc governance `Ran 42 tests / OK`；route-doc + README `Ran 25 tests / OK`。测试中的 argparse error/resource warning 来自既有负向用例/既有 fixture，不是失败；进程退出码均为 0。
+- 没有运行 full lane、provider/live、真实周跑、测试胶囊或 sub-agent；没有 stage/commit/push/merge；主树和其他工作树未访问或修改。下一步交 Claude Code 独立 reviewer/committer 复核。
+
+## 2026-08-15 追加：问题 6 文档面与交接门收口的独立审查 = PASS（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：PASS，两条 Required 全 resolved。正文只在 `docs/system_risk_register.md`。
+
+**本轮为什么走快档**：改动面只剩文档、schema 顶层描述、一段 docstring 和一条新 doc 守卫；判据逻辑、schema 字段集与 `validate_account_bundle` 重算逻辑一行未动（我按 numstat 与逐处 diff 核过）。按 rule 8 未起独立 agent、未跑 full lane，避免对低危改动付全量税。
+
+**我实际验了什么（区别于执行方转述）**：①在**真** `SKILL.md` 上做植入对照——执行方自带的那条只在内存副本上 replace，证明不了守卫接在磁盘文件上；我把四条断言腿逐条从真文件抽掉，每次都转 FAIL，恢复后字节一致、numstat 未变。四条腿全部承重。②重跑上一轮十格合同探针作回归，逐格输出与上轮逐字一致，确认文档轮没碰坏判据。③亲跑文档三守卫 67 OK，确认上轮那两条 `repair-closeout-fields` / `door-field-missing` 已消失。
+
+**值得记的一点**：这轮最有价值的不是"文档写全了"，而是新增的那条守卫把「操作者文档」这一面第一次纳入机器强制。上一轮的教训是——代码有测试当反向控制、文档没有，所以洞全堆在文档侧；现在这一面也有反向控制了，而且我验证了它不是只钉住被点名的那一条腿。
+
+**未覆盖维度与诚实边界**：未跑真实周实盘、未跑真实的「转换器 → 周跑」端到端；未复跑 793 焦点超集（引执行方 ledger）；两条 deferred Optional（研究路径日期兜底、US 侧无下游复核）风险未变，后者是方案既定边界。
+
+**下一步**：桌面 `1a_testrun0815.md` 只剩问题 5（P4a 当周捕获缺失），它需要下一次真实周跑把失败原因留在机器记录里才能诊断。

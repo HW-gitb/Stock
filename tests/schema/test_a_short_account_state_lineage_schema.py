@@ -37,6 +37,16 @@ class AShortAccountStateLineageSchemaTests(unittest.TestCase):
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate(bad, self.schema)
 
+    def test_expected_facts_as_of_is_required_and_yyyymmdd(self):
+        missing = copy.deepcopy(self.example)
+        missing.pop("expected_facts_as_of")
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(missing, self.schema)
+        bad = copy.deepcopy(self.example)
+        bad["expected_facts_as_of"] = "2026-06-15"
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(bad, self.schema)
+
     def test_rule13_source_enum_enforced(self):
         bad = copy.deepcopy(self.example)
         bad["rule13_cooldowns"][0]["source"] = "made_up"

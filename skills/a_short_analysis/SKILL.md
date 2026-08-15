@@ -29,11 +29,15 @@ A default run that fails preflight before canonical resolution has no as-of iden
 First convert the five manually maintained CSV tables into one private atomic bundle, then run the weekly screening and M6.7 operation report:
 
 ```powershell
-.\runners\a_short_account_state_from_manual_tables.py --input-dir state\a_short\account_state_csv --as-of 20260522 --out state\a_short\account_bundle.json
+# Read both dates from one `runners/resolve_canonical_asof.py::resolve_price_as_of` output:
+# `decision_as_of` -> `--as-of`; `price_as_of` -> `--price-as-of`.
+# The weekly run rechecks `price_data_through` against the bundle's expected date.
+# The dates below are placeholders only; do not copy `--as-of` into `--price-as-of`.
+.\runners\a_short_account_state_from_manual_tables.py --input-dir state\a_short\account_state_csv --as-of 20260522 --price-as-of 20260521 --out state\a_short\account_bundle.json
 .\runners\weekly_screening.cmd -AsOf 20260522 -L3Mode pit -Account state\a_short\account_bundle.json
 ```
 
-Do not hand-author a bare account JSON for `-Account`; the converter's output is the required `a_short_account_bundle`. CSV columns and boundary details belong to `docs/a_short_account_state_manual_tables_4_3.md`. For the normal live cadence, omit `-AsOf` and `-L3Mode` so the wrapper resolves the canonical decision date. Use `runners/run_analysis_report.py` only for explicit research/replay work.
+Do not hand-author a bare account JSON for `-Account`; the converter's output is the required `a_short_account_bundle`. CSV columns and boundary details belong to `docs/a_short_account_state_manual_tables_4_3.md`. For the normal live cadence, derive both dates from the same resolver output before conversion; omit `-AsOf` and `-L3Mode` only when the wrapper is allowed to resolve that same canonical decision date. Use `runners/run_analysis_report.py` only for explicit research/replay work.
 
 State replay is deterministic by default: circuit-breaker expiry is evaluated at the as-of A-share close timestamp. Pass `--state-now <ISO timestamp>` only when intentionally replaying a different state evaluation time.
 

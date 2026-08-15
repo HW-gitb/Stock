@@ -29,9 +29,11 @@ Design boundaries (us_short_system_design §3.6 / §1 / §8 / §11.6 / §18):
 
 Usage (--out / --lineage-out MUST be ABSOLUTE — the §11.6 / §18.0 privacy guard rejects a relative /
 CWD-dependent path; use an absolute path inside the gitignored state/us_short/ dir, or an external private
-location. --input-dir may stay relative):
+location. --input-dir may stay relative. `--as-of` and `--price-basis-date` must come from the same
+capstone dry-run's `decision_date` and `price_basis_date`; the dates below are placeholders only):
     python runners/us_short_account_state_from_manual_tables.py \
         --input-dir state/us_short/account_state_csv --as-of 20260622 \
+        --price-basis-date 20260619 \
         --out <ABSOLUTE_PRIVATE_DIR>/us_short_account_state.json
 """
 from __future__ import annotations
@@ -60,7 +62,7 @@ from engine.us_short_theme_selection import THEME_SOURCES  # noqa: E402
 ACCOUNT_SCHEMA_NAME = "us_short_account_state"
 ACCOUNT_SCHEMA_VERSION = "1.0.0"
 LINEAGE_SCHEMA_NAME = "us_short_account_state_lineage"
-LINEAGE_SCHEMA_VERSION = "1.0.0"
+LINEAGE_SCHEMA_VERSION = "1.1.0"
 BUCKET_DIVISOR = 3  # per-market capital policy: US-short bucket = us_market_equity / 3
 _REL_EPS = 1e-9
 
@@ -258,19 +260,23 @@ def _build_holding_theme_reconciliation(rows, positions, decision_as_of):
     }
 
 
-# -- pure core: tables(dict[str, list[dict]]) + decision_as_of -> (account_state, lineage) -----------
-def build_account_state(tables: dict, decision_as_of: str) -> tuple:
+# -- pure core: tables(dict[str, list[dict]]) + decision_as_of + expected_facts_as_of -> (account_state, lineage) -----------
+def build_account_state(tables: dict, decision_as_of: str, expected_facts_as_of: str) -> tuple:
     """Build a schema-valid account_state dict + lineage dict from already-parsed table rows.
 
-    Pure & deterministic: same tables + decision_as_of -> identical output (positions sorted by
+    Pure & deterministic: same tables + decision_as_of + expected_facts_as_of -> identical output (positions sorted by
     ticker; no wall-clock). Raises ConvertError (FATAL) on any malformed / out-of-contract input.
     """
     decision_as_of = _parse_date(decision_as_of, "--as-of")
+    expected_facts_as_of = _parse_date(expected_facts_as_of, "--price-basis-date")
+    if expected_facts_as_of > decision_as_of:
+        raise ConvertError(
+            f"--price-basis-date {expected_facts_as_of} > --as-of {decision_as_of} (latest settled facts are in the future; refusing to run)")
     for _name in ("account", "positions", "trades", "holding_themes"):  # strict input (pure path too)
         for _row in tables.get(_name, []):
             _reject_unknown_columns(_row.keys(), _name)
-    facts_as_of, acct = _build_account_fields(tables["account"], decision_as_of)
-    facts_staleness = "current" if facts_as_of == decision_as_of else "stale_warning"
+    facts_as_of, acct = _build_account_fields(tables["account"], decision_as_of, expected_facts_as_of)
+    facts_staleness = "current" if facts_as_of == expected_facts_as_of else "stale_warning"
     positions = _build_positions(tables["positions"], decision_as_of)
     consistency_warnings = reconcile_trades_positions(tables.get("trades", []), positions, decision_as_of)
     holding_action_reconciliation = _build_holding_action_reconciliation(
@@ -307,6 +313,7 @@ def build_account_state(tables: dict, decision_as_of: str) -> tuple:
         "schema_version": LINEAGE_SCHEMA_VERSION,
         "generated_at": None,
         "decision_as_of": decision_as_of,
+        "expected_facts_as_of": expected_facts_as_of,
         "facts_as_of": facts_as_of,
         "facts_staleness": facts_staleness,
         "bucket_basis": {
@@ -320,13 +327,14 @@ def build_account_state(tables: dict, decision_as_of: str) -> tuple:
     return account_state, lineage
 
 
-def _build_account_fields(rows: list, decision_as_of: str) -> tuple:
+def _build_account_fields(rows: list, decision_as_of: str, expected_facts_as_of: str) -> tuple:
     if len(rows) != 1:
         raise ConvertError(f"account table must have exactly 1 row (portfolio-level state is unique), got {len(rows)}")
     a = rows[0]
     facts_as_of = _parse_date(a.get("as_of"), "account.as_of")
-    if facts_as_of > decision_as_of:
-        raise ConvertError(f"account.as_of {facts_as_of} > --as-of {decision_as_of} (future facts; refusing to run)")
+    if facts_as_of > expected_facts_as_of:
+        raise ConvertError(
+            f"account.as_of {facts_as_of} > --price-basis-date {expected_facts_as_of} (facts are after the latest settled clock; refusing to run)")
     if not _parse_bool(a.get("manual_order_only"), "account.manual_order_only"):
         raise ConvertError("account.manual_order_only must be TRUE")
     if _parse_bool(a.get("broker_connection_allowed"), "account.broker_connection_allowed"):
@@ -654,6 +662,8 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="US-short manual tables -> us_short_account_state.json converter")
     p.add_argument("--input-dir", required=True, help="dir containing account.csv + positions.csv")
     p.add_argument("--as-of", required=True, help="decision date YYYYMMDD (= account_state.as_of = weekly --as-of)")
+    p.add_argument("--price-basis-date", required=True,
+                   help="latest fully settled price/facts date YYYYMMDD (= expected_facts_as_of; must be <= --as-of)")
     p.add_argument("--out", required=True, help="output us_short_account_state.json path — must be ABSOLUTE "
                    "(privacy guard rejects relative/CWD-dependent paths); inside the gitignored state/us_short/ "
                    "dir, or an external private location")
@@ -678,7 +688,7 @@ def main(argv=None) -> int:
         source_tables.append({"name": name, "path": str(path).replace("\\", "/"),
                               "sha256": _sha256(path), "row_count": len(rows)})
 
-    account_state, lineage = build_account_state(tables, args.as_of)
+    account_state, lineage = build_account_state(tables, args.as_of, args.price_basis_date)
     lineage["source_tables"] = source_tables
     lineage["generated_at"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -703,13 +713,15 @@ def main(argv=None) -> int:
 
 def _print_plain_summary(account_state: dict, lineage: dict) -> None:
     """Plain-language summary of what the tables produced (US-short §11-style honesty)."""
-    print(f"[US-short 4.x] decision {account_state['as_of']}; facts as-of {lineage['facts_as_of']} "
+    print(f"[US-short 4.x] decision {account_state['as_of']}; latest settled facts date "
+          f"{lineage['expected_facts_as_of']}; facts as-of {lineage['facts_as_of']} "
           f"({lineage['facts_staleness']}). {len(account_state['positions'])} position(s); "
           f"US-short bucket = ${account_state['us_short_bucket_capital']:.2f} "
           f"(= us_market_equity ${account_state['us_market_equity']:.2f} / {BUCKET_DIVISOR}); "
           f"available cash ${account_state['us_short_available_cash']:.2f}.")
     if lineage["facts_staleness"] == "stale_warning":
-        print(f"[WARN] facts as-of {lineage['facts_as_of']} is earlier than decision {account_state['as_of']}: "
+        print(f"[WARN] facts as-of {lineage['facts_as_of']} is earlier than latest settled facts date "
+              f"{lineage['expected_facts_as_of']}: "
               "later fills/holding changes may be missing; confirm the tables are up to date.")
     for w in (lineage.get("consistency_warnings") or []):   # slice 1b advisory reconcile (never overrides)
         print(f"[reconcile] {w['message']}")

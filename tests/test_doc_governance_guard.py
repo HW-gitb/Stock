@@ -1273,6 +1273,22 @@ class DocGovernanceGuard(unittest.TestCase):
                                         "- **Verdict/Action**: PASS\n"), [],
             "a non-修复 entry is out of this gate's scope")
 
+    def test_a_short_usage_binds_price_date_to_canonical_resolver(self):
+        skill = (ROOT / "skills" / "a_short_analysis" / "SKILL.md").read_text(encoding="utf-8")
+        quick_start = skill.split("## Quick Start", 1)[1].split("## ", 1)[0]
+
+        def assert_bound(text):
+            self.assertIn("runners/resolve_canonical_asof.py::resolve_price_as_of", text)
+            self.assertIn("decision_as_of` -> `--as-of`", text)
+            self.assertIn("price_as_of` -> `--price-as-of`", text)
+            self.assertIn("--price-as-of", text)
+            self.assertIn("price_data_through", text)
+
+        assert_bound(quick_start)
+        with self.assertRaises(AssertionError):
+            assert_bound(quick_start.replace(
+                "runners/resolve_canonical_asof.py::resolve_price_as_of", "", 1))
+
     # R-DOCGOV-SESSIONLOG-ORPHANED-REVIEW-ENTRY-GAP: one SESSION_LOG `##` entry records ONE review-cycle
     # action → exactly one `Verdict/Action` bullet. >1 means a prior entry's review bullets were ORPHANED
     # under this heading (e.g. a prepend whose old_string ate the previous `##` heading). The minimal-

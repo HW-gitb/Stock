@@ -14,7 +14,9 @@
 #   --batch4-template-path / --account-state-path
 #                       默认指向 gitignored 私密输入位置 state\us_short\weekly_private\_run_inputs\(C3-safe,不在按决策日归档的目录内)。
 #                       账户状态含真实持仓 → 必私密;其 as_of 必须 == 本周决策日(先 dry-run 看决策日,再用
-#                       runners\us_short_account_state_from_manual_tables.py --as-of <决策日> 生成到该路径),否则 -Live 会被拒。
+#                       先 dry-run 读取 decision_date + price_basis_date，再用两者调用
+#                       runners\us_short_account_state_from_manual_tables.py --as-of <决策日> --price-basis-date <已收盘日>
+#                       生成到该路径；否则 -Live 会被拒。
 #
 # Usage:
 #   .\runners\us_short_weekly_capstone.ps1                          # dry-run:打印本周计划(默认,安全)
@@ -102,7 +104,8 @@ if ($Live) {
     if (-not (Test-Path $AccountState))  { $missing += $AccountState }
     if ($missing.Count -gt 0) {
         throw ("非 dry-run 需要真实输入文件,但缺失:`n  " + ($missing -join "`n  ") +
-               "`n补齐后重跑:账户状态用 runners\us_short_account_state_from_manual_tables.py --as-of <决策日> 生成(as_of 必须==本周决策日,先 dry-run 看决策日)。")
+               "`n补齐后重跑:先用 dry-run 的 decision_date + price_basis_date 调用 " +
+               "runners\us_short_account_state_from_manual_tables.py --as-of <决策日> --price-basis-date <已收盘日> 生成。")
     }
     if ($Live -and ($MomentumTopK -le 0)) {
         Write-Host "[提醒] 未传 -MomentumTopK(1..250);本次沿用 runner 默认 200。Pass2 预算由本次运行自动派生。" -ForegroundColor Yellow
