@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 from runners.us_short_weekly_capstone import (  # noqa: E402
     Stage,
     WeeklyCapstoneError,
+    prepare_live_provider_context,
     resolve_capstone_context,
     run_weekly_capstone,
 )
@@ -109,13 +110,17 @@ def _research_receipt(*, decision_date="20260709", source_path=None, generated_a
 
 class CapstoneDryRunTest(unittest.TestCase):
     def _run(self, now_et, **kw):
-        return run_weekly_capstone(
-            now_et=now_et,
-            private_root=Path(tempfile.gettempdir()) / "cap_priv",
-            batch4_template_path=Path("template.json"),
-            account_state_path=Path("account.json"),
-            **kw,
-        )
+        with mock.patch(
+            "engine.us_short_live_provider_preflight._now_et_wall_clock",
+            return_value=now_et,
+        ):
+            return run_weekly_capstone(
+                now_et=now_et,
+                private_root=Path(tempfile.gettempdir()) / "cap_priv",
+                batch4_template_path=Path("template.json"),
+                account_state_path=Path("account.json"),
+                **kw,
+            )
 
     def test_one_click_massive_retry_defaults_and_closed_override_matrix(self):
         self.assertEqual(
@@ -489,6 +494,126 @@ class CapstoneDryRunTest(unittest.TestCase):
                         self.assertEqual(st.classify_soft_boost_artifact_state(case_ctx), expected)
 
 
+class CapstoneProblem7PreflightTest(unittest.TestCase):
+    def test_current_window_replaces_requested_context_clock(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            requested = datetime(2026, 7, 9, 8, 0, 0)
+            actual = datetime(2026, 7, 9, 8, 30, 0)
+            ctx = resolve_capstone_context(
+                now_et=requested,
+                private_root=root,
+                batch4_template_path=root / "template.json",
+                account_state_path=root / "account.json",
+                state_dir=root / "state",
+                sample_root=root,
+            )
+            with mock.patch(
+                "engine.us_short_live_provider_preflight._now_et_wall_clock",
+                return_value=actual,
+            ):
+                resolved = prepare_live_provider_context(
+                    ctx,
+                    calendar_path=ROOT / "presets" / "us_short_market_calendar_2026_2027.json",
+                )
+            self.assertTrue(resolved.live_provider_preflight["compatible"])
+            self.assertEqual(resolved.now_et, actual)
+            self.assertEqual(resolved.decision_date, "20260709")
+            self.assertNotEqual(resolved.generated_at, ctx.generated_at)
+
+    def test_historical_live_and_prepare_budget_fail_before_stage(self):
+        entered: list[str] = []
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            stage = Stage(
+                "must_not_run", False, lambda _ctx: [], lambda _ctx: [],
+                lambda _ctx: entered.append("stage") or {},
+            )
+            with mock.patch(
+                "engine.us_short_live_provider_preflight._now_et_wall_clock",
+                return_value=datetime(2026, 7, 10, 8, 0, 0),
+            ), self.assertRaisesRegex(WeeklyCapstoneError, "live_provider_clock_incompatible"):
+                run_weekly_capstone(
+                    now_et=datetime(2026, 7, 9, 8, 0, 0),
+                    private_root=root,
+                    batch4_template_path=root / "template.json",
+                    account_state_path=root / "account.json",
+                    dry_run=False,
+                    confirm_user_authorization=True,
+                    prepare_pass2_budget=True,
+                    state_dir=root / "state",
+                    sample_root=root,
+                )
+            self.assertEqual(entered, [])
+            self.assertFalse(any(root.rglob("*.json")))
+
+    def test_dry_run_reports_clock_incompatibility_without_rejecting(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            with mock.patch(
+                "engine.us_short_live_provider_preflight._now_et_wall_clock",
+                return_value=datetime(2026, 8, 15, 8, 0, 0),
+            ):
+                plan = run_weekly_capstone(
+                    now_et=datetime(2026, 7, 9, 8, 0, 0),
+                    private_root=root,
+                    batch4_template_path=root / "template.json",
+                    account_state_path=root / "account.json",
+                    dry_run=True,
+                    state_dir=root / "state",
+                    sample_root=root,
+                )
+            self.assertFalse(plan["live_provider_preflight"]["compatible"])
+            self.assertFalse(any(root.rglob("*.json")))
+
+    def test_pace_and_recall_are_rejected_before_injected_stage(self):
+        for value in (-1.0, True, float("nan"), float("inf"), 61.0):
+            with self.subTest(provider_pace_seconds=value), tempfile.TemporaryDirectory() as td:
+                root = Path(td)
+                entered: list[str] = []
+                stage = Stage(
+                    "must_not_run", False, lambda _ctx: [], lambda _ctx: [],
+                    lambda _ctx: entered.append("stage") or {},
+                )
+                with self.assertRaises(WeeklyCapstoneError):
+                    run_weekly_capstone(
+                        now_et=datetime(2026, 7, 9, 8, 0, 0),
+                        private_root=root,
+                        batch4_template_path=root / "template.json",
+                        account_state_path=root / "account.json",
+                        dry_run=False,
+                        confirm_user_authorization=True,
+                        provider_pace_seconds=value,
+                        stages=[stage],
+                        state_dir=root / "state",
+                        sample_root=root,
+                    )
+                self.assertEqual(entered, [])
+
+        for recall in (["bad ticker!"], ["AAPL", "aapl"], "AAPL"):
+            with self.subTest(catalyst_recall_tickers=recall), tempfile.TemporaryDirectory() as td:
+                root = Path(td)
+                entered: list[str] = []
+                stage = Stage(
+                    "must_not_run", False, lambda _ctx: [], lambda _ctx: [],
+                    lambda _ctx: entered.append("stage") or {},
+                )
+                with self.assertRaises(WeeklyCapstoneError):
+                    run_weekly_capstone(
+                        now_et=datetime(2026, 7, 9, 8, 0, 0),
+                        private_root=root,
+                        batch4_template_path=root / "template.json",
+                        account_state_path=root / "account.json",
+                        dry_run=False,
+                        confirm_user_authorization=True,
+                        catalyst_recall_tickers=recall,
+                        stages=[stage],
+                        state_dir=root / "state",
+                        sample_root=root,
+                    )
+                self.assertEqual(entered, [])
+
+
 class CapstoneStageOutcomeNormalizerTest(unittest.TestCase):
     def test_typed_stage_exit_table_is_closed_world(self):
         cases = (
@@ -589,8 +714,14 @@ class CapstoneFakeChainTest(unittest.TestCase):
     def setUp(self):
         self.state_dir = Path(tempfile.mkdtemp(prefix="cap_state_"))
         self.private_root = Path(tempfile.mkdtemp(prefix="cap_priv_"))
+        self._actual_clock = mock.patch(
+            "engine.us_short_live_provider_preflight._now_et_wall_clock",
+            return_value=datetime(2026, 7, 9, 8, 0, 0),
+        )
+        self._actual_clock.start()
 
     def tearDown(self):
+        self._actual_clock.stop()
         shutil.rmtree(self.state_dir, ignore_errors=True)
         shutil.rmtree(self.private_root, ignore_errors=True)
 
@@ -726,10 +857,11 @@ class CapstoneFakeChainTest(unittest.TestCase):
 
     def _run(self, order_sink, **kw):
         account_state_path = kw.pop("account_state_path", self.private_root / "account.json")
+        batch4_template_path = kw.pop("batch4_template_path", e2e_fixture.TEMPLATE)
         runner = lambda: run_weekly_capstone(
             now_et=datetime(2026, 7, 9, 8, 0, 0),
             private_root=self.private_root,
-            batch4_template_path=Path("template.json"),
+            batch4_template_path=batch4_template_path,
             account_state_path=account_state_path,
             dry_run=False,
             confirm_user_authorization=True,
@@ -737,13 +869,17 @@ class CapstoneFakeChainTest(unittest.TestCase):
             sample_root=self.state_dir,   # keep the preflight provider_samples sidecar inside the tempdir (isolation)
             **kw,
         )
-        if kw.get("model_paper_store_root") is not None:
-            with mock.patch(
-                "engine.us_short_model_paper_activation.resolve_model_paper_activation",
-                return_value={"status": "authorized", "receipt": {}},
-            ):
-                return runner()
-        return runner()
+        with mock.patch(
+            "engine.us_short_live_provider_preflight._now_et_wall_clock",
+            return_value=datetime(2026, 7, 9, 8, 0, 0),
+        ):
+            if kw.get("model_paper_store_root") is not None:
+                with mock.patch(
+                    "engine.us_short_model_paper_activation.resolve_model_paper_activation",
+                    return_value={"status": "authorized", "receipt": {}},
+                ):
+                    return runner()
+            return runner()
 
     def test_unregistered_in_repo_root_fails_before_first_stage(self):
         from runners import us_short_weekly_capstone as cap
@@ -1022,6 +1158,10 @@ class CapstoneFakeChainTest(unittest.TestCase):
         state, _ = _build(positions=[], as_of="20260709")
         account_path = self.private_root / "account.json"
         account_path.write_text(json.dumps(state), encoding="utf-8")
+        bad_template_payload = json.loads(e2e_fixture.TEMPLATE.read_text(encoding="utf-8"))
+        bad_template_payload["report_context"] = {}
+        bad_template_path = self.private_root / "budget_preview_bad_template.json"
+        bad_template_path.write_text(json.dumps(bad_template_payload), encoding="utf-8")
         order: list[str] = []
         preflight_result = {
             "scope": {"status": "blocked_execution_constraints"},
@@ -1037,6 +1177,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
             summary = self._run(
                 order,
                 account_state_path=account_path,
+                batch4_template_path=bad_template_path,
                 prepare_pass2_budget=True,
                 authorized_momentum_top_k=2,
             )
@@ -1054,6 +1195,24 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertTrue(all(row["execution_mode"] == "executed_budget_preview" for row in summary["stage_outcomes"]))
         self.assertEqual(sum(summary["stage_outcome_counts"].values()), len(summary["stage_outcomes"]))
         self.assertFalse((self.private_root / "weekly_private" / "20260709").exists())
+
+    def test_production_rejects_bad_nested_template_before_first_stage(self):
+        payload = json.loads(e2e_fixture.TEMPLATE.read_text(encoding="utf-8"))
+        payload["report_context"].pop("price_clock", None)
+        bad_template_path = self.private_root / "bad_nested_template.json"
+        bad_template_path.write_text(json.dumps(payload), encoding="utf-8")
+        order: list[str] = []
+        fake_pipeline = self._fake_stages(order)
+
+        with mock.patch("runners.us_short_weekly_capstone.default_pipeline", return_value=fake_pipeline):
+            with self.assertRaisesRegex(WeeklyCapstoneError, "report_context.price_clock must be an object"):
+                self._run(
+                    order,
+                    batch4_template_path=bad_template_path,
+                    authorized_pass2_call_budget=1,
+                )
+
+        self.assertEqual(order, [])
 
     def test_one_click_production_shape_derives_and_threads_massive_physical_cap(self):
         # The operator wrapper must enter the real default-pipeline branch (stages=None), derive the approval from

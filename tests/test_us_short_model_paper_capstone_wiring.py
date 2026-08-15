@@ -405,6 +405,10 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
                 mock.patch.object(capstone, "default_pipeline", return_value=pipeline),
                 mock.patch.object(capstone, "_provider_execution_receipt", receipt),
                 mock.patch(
+                    "engine.us_short_live_provider_preflight._now_et_wall_clock",
+                    return_value=datetime(2026, 6, 15, 8, 0, 0),
+                ),
+                mock.patch(
                     "engine.us_short_model_paper_activation.resolve_model_paper_activation",
                     return_value={"status": "authorized", "receipt": {}},
                 ),
@@ -423,7 +427,7 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
                     private_root=private_root,
                     state_dir=root / "state",
                     sample_root=root,
-                    batch4_template_path=root / "inputs" / "batch4_template.md",
+                    batch4_template_path=capstone.ROOT / "schemas" / "examples" / "us_short_weekend_batch4_context_packet.empty.example.json",
                     account_state_path=root / "inputs" / "paper_account_state.adapter.json",
                     now_et=datetime(2026, 6, 15, 8, 0, 0),
                     model_paper_store_root=store_root,

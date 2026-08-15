@@ -54,6 +54,10 @@ sys.modules.setdefault("runners.us_short_weekly_capstone", sys.modules[__name__]
 
 from engine.us_short_canonical_asof import OutOfWindowError, resolve_canonical_asof  # noqa: E402
 from engine import us_short_capstone_checkpoint as checkpoint_store  # noqa: E402
+from engine.us_short_live_provider_preflight import (  # noqa: E402
+    inspect_live_provider_clock,
+    validate_provider_pace_seconds,
+)
 from engine.us_short_market_calendar import load_market_calendar, sessions_for_window  # noqa: E402
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
 from engine.us_short_regime import (
@@ -67,6 +71,10 @@ from engine.us_short_weekend_private_write import (
     resolve_prior_run_dir,
 )  # noqa: E402
 from runners import us_short_batch5_data_context_source_packet as source_packet_runner  # noqa: E402
+from runners.us_short_batch5_full_candidate_pass2_preflight import (  # noqa: E402
+    FullCandidatePass2PreflightError,
+    canonicalize_catalyst_recall_tickers,
+)
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 
 CALENDAR_PRESET = ROOT / "presets" / "us_short_market_calendar_2026_2027.json"
@@ -271,6 +279,7 @@ class CapstoneContext:
     frozen_holding_tickers: tuple[str, ...] | None = None
     confirm_user_authorization: bool = False
     provider_pace_seconds: float = 0.0
+    live_provider_preflight: dict[str, Any] | None = None
     max_retries_per_call: int = 0
     retry_backoff_seconds: float = 0.0
     max_total_http_attempts: int | None = None
@@ -1089,6 +1098,56 @@ def _tz_aware_et_or_fail(now_et: datetime) -> datetime:
     return aware
 
 
+def _format_live_provider_clock_error(preflight: dict[str, Any]) -> str:
+    requested = preflight.get("requested") if isinstance(preflight.get("requested"), dict) else {}
+    actual = preflight.get("actual") if isinstance(preflight.get("actual"), dict) else {}
+    return (
+        "live_provider_clock_incompatible "
+        f"[{preflight.get('reason_code', 'UNKNOWN')}] "
+        f"requested decision_date={requested.get('decision_date') or '<unresolved>'} "
+        f"price_basis_date={requested.get('price_basis_date') or '<unresolved>'}; "
+        f"actual decision_date={actual.get('decision_date') or '<unresolved>'} "
+        f"price_basis_date={actual.get('price_basis_date') or '<unresolved>'} "
+        f"window_state={preflight.get('actual_window_state') or '<unresolved>'}; "
+        "live provider only supports the real current canonical window; "
+        "historical analysis use frozen raw/offline replay"
+    )
+
+
+def prepare_live_provider_context(
+    ctx: CapstoneContext,
+    *,
+    calendar_path: Path,
+    requested_now_et: datetime | None = None,
+) -> CapstoneContext:
+    """Gate a provider run and replace requested clocks with the actual ET clock."""
+
+    calendar = load_market_calendar(calendar_path)
+    requested_clock = getattr(ctx, "now_et", requested_now_et)
+    if not isinstance(requested_clock, datetime):
+        raise WeeklyCapstoneError("live provider clock preflight requires a requested naive ET clock")
+    preflight = inspect_live_provider_clock(
+        requested_now_et=requested_clock,
+        calendar=calendar,
+    )
+    if preflight["compatible"] is not True:
+        raise WeeklyCapstoneError(_format_live_provider_clock_error(preflight))
+    actual_now_et = datetime.fromisoformat(preflight["actual"]["now_et"])
+    actual_generated_at = _tz_aware_et_or_fail(actual_now_et).isoformat(timespec="seconds")
+    values = {
+        "now_et": actual_now_et,
+        "generated_at": actual_generated_at,
+        "observed_at": actual_generated_at,
+        "live_provider_preflight": preflight,
+    }
+    if isinstance(ctx, CapstoneContext):
+        return replace(ctx, **values)
+    updated = copy.copy(ctx)
+    for name, value in values.items():
+        setattr(updated, name, value)
+    return updated
+
+
 def resolve_capstone_context(
     *,
     now_et: datetime,
@@ -1409,6 +1468,7 @@ def _plan(ctx: CapstoneContext, stages: list[Stage], *, resume_from: Path | None
         "decision_date": ctx.decision_date,
         "price_basis_date": ctx.price_basis_date,
         "run_date": ctx.now_et.strftime("%Y%m%d"),
+        "live_provider_preflight": copy.deepcopy(ctx.live_provider_preflight),
         "gated_stages_need_authorization": [s.name for s in stages if s.gated],
         "authorized": ctx.confirm_user_authorization,
         "resume_from": str(Path(resume_from).resolve()) if resume_from is not None else None,
@@ -2478,12 +2538,15 @@ def run_weekly_capstone(
     )
     if serenity_annotation_payload is not None:
         ctx = replace(ctx, serenity_annotation_payload=dict(serenity_annotation_payload))
-    _emit_diagnostic_event(
-        diagnostic_event,
-        "capstone_context_resolved",
-        decision_date=ctx.decision_date,
-        price_basis_date=ctx.price_basis_date,
-    )
+    try:
+        canonical_recall = canonicalize_catalyst_recall_tickers(catalyst_recall_tickers)
+    except FullCandidatePass2PreflightError as exc:
+        raise WeeklyCapstoneError(str(exc)) from None
+    try:
+        provider_pace_seconds = validate_provider_pace_seconds(provider_pace_seconds)
+    except ValueError as exc:
+        raise WeeklyCapstoneError(str(exc)) from None
+    ctx = replace(ctx, catalyst_recall_tickers=canonical_recall, provider_pace_seconds=provider_pace_seconds)
     if prepare_pass2_budget and dry_run:
         raise WeeklyCapstoneError(
             "--prepare-pass2-budget executes the upstream live preflight; use the ordinary dry-run to inspect its plan"
@@ -2518,6 +2581,15 @@ def run_weekly_capstone(
         _assert_input_outside_archived_outputs(ctx, Path(_input_path), _input_label)
 
     if dry_run:
+        if stages is None:
+            calendar = load_market_calendar(calendar_path)
+            ctx = replace(
+                ctx,
+                live_provider_preflight=inspect_live_provider_clock(
+                    requested_now_et=ctx.now_et,
+                    calendar=calendar,
+                ),
+            )
         return _plan(ctx, pipeline, resume_from=resume_from)
 
     if _model_paper_enabled(ctx):
@@ -2533,6 +2605,24 @@ def run_weekly_capstone(
             raise WeeklyCapstoneError("activation_gate_broken: model-paper activation result is invalid")
         if activation["status"] == "dormant":
             return _dormant_model_paper_summary(ctx)
+
+    if stages is None:
+        ctx = prepare_live_provider_context(
+            ctx, calendar_path=calendar_path, requested_now_et=now_et,
+        )
+        _emit_diagnostic_event(
+            diagnostic_event,
+            "capstone_context_resolved",
+            decision_date=ctx.decision_date,
+            price_basis_date=ctx.price_basis_date,
+        )
+    else:
+        _emit_diagnostic_event(
+            diagnostic_event,
+            "capstone_context_resolved",
+            decision_date=ctx.decision_date,
+            price_basis_date=ctx.price_basis_date,
+        )
 
     if not ctx.confirm_user_authorization:
         raise WeeklyCapstoneError(
@@ -2566,6 +2656,13 @@ def run_weekly_capstone(
             "--prepare-pass2-budget requires momentum_top_k (1..250) and no Pass2 call budget; "
             "it derives the exact execution budget"
         )
+    if production_run:
+        from runners import us_short_batch5_to_batch4_weekend_e2e as batch4_bridge
+
+        try:
+            batch4_bridge.load_batch4_action_template(ctx.batch4_template_path)
+        except Exception as exc:  # noqa: BLE001 - convert only the safe bridge error text
+            raise WeeklyCapstoneError(f"batch4 template preflight rejected: {exc}") from None
     # Prove every private leaf after operator/budget validation, but before any pre-stage settlement,
     # checkpoint, transaction, or provider stage.
     _preflight_private_output_paths(ctx)

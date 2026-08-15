@@ -963,5 +963,47 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             self.assertFalse((private_root / "lifecycle").exists())
 
 
+class Problem7Batch4TemplateShapeTest(unittest.TestCase):
+    def test_bridge_loader_rejects_nested_contexts_before_provider(self) -> None:
+        for key in ("report_context", "basket_context", "market_axis_regimes"):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as td:
+                payload = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+                payload[key] = []
+                path = _write_json(Path(td) / "bad.json", payload)
+                with self.assertRaisesRegex(e2e.Batch5ToBatch4E2EError, key):
+                    e2e.load_batch4_action_template(path)
+
+    def test_bridge_loader_rejects_missing_or_nonobject_price_clock(self) -> None:
+        cases = {
+            "missing_price_clock": None,
+            "string_price_clock": "bad",
+            "list_price_clock": [],
+            "empty_report_context": {},
+        }
+        for name, replacement in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as td:
+                payload = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+                if name == "missing_price_clock":
+                    payload["report_context"].pop("price_clock", None)
+                elif name == "empty_report_context":
+                    payload["report_context"] = replacement
+                else:
+                    payload["report_context"]["price_clock"] = replacement
+                path = _write_json(Path(td) / "bad.json", payload)
+                with self.assertRaisesRegex(
+                    e2e.Batch5ToBatch4E2EError,
+                    "report_context.price_clock must be an object",
+                ):
+                    e2e.load_batch4_action_template(path)
+
+    def test_bridge_loader_preserves_valid_template_and_expected_sha_gate(self) -> None:
+        loaded = e2e.load_batch4_action_template(TEMPLATE)
+        self.assertEqual(set(loaded), e2e._TEMPLATE_KEYS)
+        digest = hashlib.sha256(TEMPLATE.read_bytes()).hexdigest()
+        self.assertEqual(set(e2e.load_batch4_action_template(TEMPLATE, expected_sha256=digest)), e2e._TEMPLATE_KEYS)
+        with self.assertRaises(e2e.Batch5ToBatch4E2EError):
+            e2e.load_batch4_action_template(TEMPLATE, expected_sha256="0" * 64)
+
+
 if __name__ == "__main__":
     unittest.main()

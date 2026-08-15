@@ -296,10 +296,29 @@ class RuntestCapsuleTest(unittest.TestCase):
     def test_us_weekly_launcher_auto_derives_budget_and_rejects_manual_budget_flags(self) -> None:
         weekly_capstone = (ROOT / "runners" / "us_short_weekly_capstone.ps1").read_text(encoding="utf-8")
         self.assertIn('@("--live", "--confirm-user-authorization", "--auto-pass2-budget")', weekly_capstone)
-        self.assertIn("同次运行自动派生 Pass2 预算", weekly_capstone)
-        self.assertIn("--prepare-pass2-budget", weekly_capstone)
-        self.assertIn("--pass2-call-budget", weekly_capstone)
-        self.assertIn("用户侧入口已改为同次运行自动派生 Pass2 预算", weekly_capstone)
+        self.assertIn("if ($ExtraArgs.Count -gt 0)", weekly_capstone)
+        self.assertIn("Weekly capstone does not forward -ExtraArgs", weekly_capstone)
+        self.assertNotIn("$cliArgs += $ExtraArgs", weekly_capstone)
+
+    def test_us_weekly_launcher_rejects_raw_clock_override(self) -> None:
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        if powershell is None:
+            self.skipTest("PowerShell executable not available")
+        script = ROOT / "runners" / "us_short_weekly_capstone.ps1"
+        escaped_script = str(script).replace("'", "''")
+        command = (
+            f"& '{escaped_script}' -Live "
+            "-ExtraArgs @('--now-et','2026-01-01T08:00:00')"
+        )
+        result = subprocess.run(
+            [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            errors="replace",
+        )
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Weekly capstone does not forward -ExtraArgs", result.stdout + result.stderr)
 
     def test_us_launcher_rejects_raw_private_root_override_before_creating_capsule(self) -> None:
         powershell = shutil.which("powershell") or shutil.which("pwsh")
@@ -402,8 +421,9 @@ if command == \"create\":
                     f"-SourceRoot '{escaped(source_root)}'",
                     f"-CapsuleRoot '{escaped(capsule_root)}'",
                     f"-RunId 'worker-binding-{name}'",
-                    "-NowEt '2026-07-21T08:00:00'",
                 ]
+                if name != "live":
+                    command_parts.append("-NowEt '2026-07-21T08:00:00'")
                 for value in extra_args:
                     command_parts.append(str(value) if str(value).startswith("-") else f"'{escaped(value)}'")
                 environment = os.environ.copy()
@@ -420,10 +440,35 @@ if command == \"create\":
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 captured = json.loads(capture.read_text(encoding="utf-8-sig"))
                 capsule = capsule_root / "us_short" / f"worker-binding-{name}"
-                self.assertEqual(captured["now_et"], "2026-07-21T08:00:00")
+                if name == "dry_run":
+                    self.assertEqual(captured["now_et"], "2026-07-21T08:00:00")
+                else:
+                    self.assertEqual(captured["now_et"], "")
                 self.assertEqual(captured["private_root"], str(capsule / "private" / "us_short"))
                 self.assertEqual(captured["python_exe"].casefold(), PINNED_STOCK_PYTHON.casefold())
                 self.assertEqual(captured["batch_template"], str(capsule / "private_inputs" / "us_batch_template") if expected["live"] else "")
                 self.assertEqual(captured["account_state"], str(capsule / "private_inputs" / "us_account_state") if expected["live"] else "")
                 for key, value in expected.items():
                     self.assertEqual(captured[key], value)
+
+    def test_live_explicit_clock_override_rejects_before_capsule_creation(self) -> None:
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        if powershell is None:
+            self.skipTest("PowerShell executable not available")
+        script = ROOT / "runners" / "us_short_runtest.ps1"
+        capsule_root = self.base / "problem7_capsule_rejected"
+        escaped = str(script).replace("'", "''")
+        command = (
+            f"& '{escaped}' -ConfirmRuntest -CapsuleRoot '{str(capsule_root).replace(chr(39), chr(39) + chr(39))}' "
+            "-Live -NowEt '2026-07-21T08:00:00'"
+        )
+        result = subprocess.run(
+            [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            errors="replace",
+        )
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("actual current ET clock", result.stdout + result.stderr)
+        self.assertFalse(capsule_root.exists())

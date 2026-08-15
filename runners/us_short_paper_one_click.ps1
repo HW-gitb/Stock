@@ -25,6 +25,10 @@ if (-not (Test-Path -LiteralPath $runner -PathType Leaf)) {
 }
 . (Join-Path $repo ".tools\Resolve-AshortPython.ps1")
 $PythonExe = Resolve-AshortPython -Requested $PythonExe
+$ExplicitNowEt = -not [string]::IsNullOrWhiteSpace($NowEt)
+if ($ExplicitNowEt) {
+    throw 'Paper one-click always uses the actual current ET clock; do not pass -NowEt.'
+}
 
 if ([string]::IsNullOrWhiteSpace($NowEt)) {
     $etZone = [System.TimeZoneInfo]::FindSystemTimeZoneById("Eastern Standard Time")

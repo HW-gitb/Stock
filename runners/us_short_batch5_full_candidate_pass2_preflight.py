@@ -208,6 +208,22 @@ def _canonical_list_keys(value: Any, *, field: str) -> set[str]:
     return out
 
 
+def canonicalize_catalyst_recall_tickers(
+    value: list[str] | tuple[str, ...] | None,
+) -> tuple[str, ...]:
+    """Return the one canonical, duplicate-free catalyst-recall representation."""
+
+    if value is None:
+        raw: list[str] = []
+    elif type(value) in (list, tuple):
+        raw = list(value)
+    else:
+        raise FullCandidatePass2PreflightError(
+            "catalyst_recall_tickers must be an exact list/tuple or None"
+        )
+    return tuple(sorted(_canonical_list_keys(raw, field="catalyst_recall_tickers")))
+
+
 def _canonical_score_map(value: Any, *, field: str) -> dict[str, Any]:
     if type(value) is not dict:
         raise FullCandidatePass2PreflightError(f"{field} must be an exact dict")
@@ -315,13 +331,7 @@ def _pass2_target_universe(
     else:
         raise FullCandidatePass2PreflightError("forced_holding_tickers must be an exact list/tuple or None")
     forced = _canonical_list_keys(forced_raw, field="forced_holding_tickers")
-    if catalyst_recall_tickers is None:
-        recall_raw: list[str] = []
-    elif type(catalyst_recall_tickers) in (list, tuple):
-        recall_raw = list(catalyst_recall_tickers)
-    else:
-        raise FullCandidatePass2PreflightError("catalyst_recall_tickers must be an exact list/tuple or None")
-    recall = _canonical_list_keys(recall_raw, field="catalyst_recall_tickers")
+    recall = set(canonicalize_catalyst_recall_tickers(catalyst_recall_tickers))
     targets = select_pass2_targets(
         momentum_scores=momentum_scores,
         theme_scores=theme_coverage["_scored_score_map"],

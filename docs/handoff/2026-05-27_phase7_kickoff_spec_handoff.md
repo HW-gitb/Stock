@@ -5030,3 +5030,13 @@ Claude Code：独立审查问题4当前 diff，确认 Required 与 `O-P4-1` 均�
 
 - 本刀起，候选 artifact 里的 `status_provenance.observed_at` 会晚于该 artifact 自身的 `generated_at`（前者是 Pass2 观察钟、后者是 Universe 运行钟）。这是有意的：两者都在同一决策窗口内，破产证据确实观察得更晚。读该 artifact 的人别把这两个钟当成应该相等。
 - 全程禁网；offline replay 平价与真实 provider 稳定性仍未验证。
+
+## 2026-08-15 追加：问题7 t=0 live-provider preflight 的独立审查（dc41；Claude Code reviewer/committer；**审查 FAIL**）
+
+指针条目（细节不在此复制）：本刀新增 `engine/us_short_live_provider_preflight.py` 并把 t=0 门接到 capstone / 直连 Universe / paper one-click / 三个 PowerShell 入口。审查结论 FAIL，一条 Required（Batch4 模板 t=0 门漏了方案点名的嵌套 `report_context.price_clock`，该类错误仍烧完全部 provider 才在末阶段爆）加两条 Optional。完整现状、reviewer 复现证据与未验证边界只在 `docs/system_risk_register.md` 的同日 FAIL 小节；本轮验证命令与结果见 `docs/SESSION_LOG.md` 顶部条目。
+
+下一步注意：修复只需把嵌套判据加进 bridge owner 的同一个 `load_batch4_action_template`，别新建 template schema、别在 t=0 校验需要 provider 结果才能组成的最终 packet。
+
+## 2026-08-15 追加：问题7 Required 复修的独立审查（Claude Code reviewer/committer；**复审 PASS，已提交并合入 master**）
+
+指针条目：`report_context.price_clock` 的 object 检查已加进 bridge owner 的同一个 `load_batch4_action_template`；上一轮四种 t=0 放行的形状加上 `price_clock=null` 共五形现全部在 t=0 拒绝，两条对照组与合法模板正控不变。两条 Optional 亦被接受：weekly wrapper 直接拒绝 `-ExtraArgs`（与胶囊入口对齐），universe summary 的 `run_datetime_et` 改用实际观察钟。证据与边界见 `docs/system_risk_register.md` 同日 PASS 小节。

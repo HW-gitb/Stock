@@ -1634,7 +1634,13 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         ctx = self._ctx(enabled=True)
         ctx.soft_discovery_receipt_path.mkdir(parents=True, exist_ok=True)
         _write_json(ctx.account_state_path, {"positions": []})
-        _write_json(ctx.batch4_template_path, {"template": True})
+        _write_json(
+            ctx.batch4_template_path,
+            json.loads(
+                (ROOT / "schemas" / "examples" / "us_short_weekend_batch4_context_packet.nonempty.example.json")
+                .read_text(encoding="utf-8")
+            ),
+        )
         degraded = soft.run_offline_stage(ctx)
         self.assertEqual(degraded["reason_code"], "SOFT_DISCOVERY_IMMUTABLE_CONFLICT")
 
@@ -1670,6 +1676,10 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         ]
         with mock.patch.object(capstone, "default_pipeline", return_value=pipeline), \
                 mock.patch.object(capstone, "_provider_execution_receipt", return_value=object()), \
+                mock.patch(
+                    "engine.us_short_live_provider_preflight._now_et_wall_clock",
+                    return_value=datetime(2026, 6, 15, 7, 0, 0),
+                ), \
                 mock.patch("runners.us_short_account_state_from_manual_tables.validate_account_state"):
             summary = capstone.run_weekly_capstone(
                 now_et=datetime(2026, 6, 15, 7, 0, 0),
@@ -1693,7 +1703,13 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
         ctx = self._ctx(enabled=True)
         ctx.soft_discovery_receipt_path.mkdir(parents=True, exist_ok=True)
         _write_json(ctx.account_state_path, {"positions": []})
-        _write_json(ctx.batch4_template_path, {"template": True})
+        _write_json(
+            ctx.batch4_template_path,
+            json.loads(
+                (ROOT / "schemas" / "examples" / "us_short_weekend_batch4_context_packet.nonempty.example.json")
+                .read_text(encoding="utf-8")
+            ),
+        )
         degraded = soft.run_offline_stage(ctx)
         pipeline = [
             capstone.Stage(
@@ -1716,6 +1732,10 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
 
         with mock.patch.object(capstone, "default_pipeline", return_value=pipeline), \
                 mock.patch.object(capstone, "_provider_execution_receipt", return_value=object()), \
+                mock.patch(
+                    "engine.us_short_live_provider_preflight._now_et_wall_clock",
+                    return_value=datetime(2026, 6, 15, 7, 0, 0),
+                ), \
                 mock.patch.object(
                     capstone.checkpoint_store, "record_stage", side_effect=record_stage_with_optional_oserror,
                 ), \
