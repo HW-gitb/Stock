@@ -4656,7 +4656,8 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_t
 **为什么**：逐 key 精确计数钉的是测试代码的记账而非有没有越界，导致问题7/8/9/10 每轮都要重建快照；上一轮的 Required 是「基线必须能由它自己那次提交的代码态重新生成」，问题10 合入后本刀才具备这个前提。
 
 **验证命令**：
-- `.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_test_io_inventory tests.test_us_short_discovery_conformance`
+- `.tools
+un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_test_io_inventory tests.test_us_short_discovery_conformance`
 - `python -m unittest tests.test_us_short_test_io_inventory`（rule-1 直测）
 - reviewer 反向控制：① 从基线 allowlist 删一条 ② 往 modules 塞一行伪模块，各重跑一次该测试，`finally` 按字节还原并核 sha256 + `git diff --numstat`
 - 逐字节比对两处 `.py` 与 `stash@{0}`（我上轮已审内容）
@@ -4895,3 +4896,4 @@ Codex 按上一轮 FAIL 的两条 Required 修复，并自裁接受两条 Option
 
 - 新记 `O-P1-3`（不阻断）：异常路径的 `"crumb"` marker 仍是纯子串匹配，会命中普通 404 消息里内嵌的 Yahoo URL 查询参数（`&crumb=`），使整层提前停止。探针已实测。影响是「慢，不是错」——残余仍按精确残余交给 Massive，无错值、无守恒破。要收窄时把 `"crumb"` 改成只匹配 crumb **获取失败**的类名/文案。
 - 本轮全程禁网。真实 Yahoo 稳定性、0814 current-day 缺口恢复、production / ship-gate 仍未验证；要宣称 live 稳定仍需单独授权的 current-day 真跑。
+- 合并到 master 时 `docs/system_risk_register.md` 与并发窗口撞了顶部 prepend，已保留双方小节并按 reverse-chrono 复位（SESSION_LOG 同样复位）。pre-commit 的 merge 全量提醒是 advisory：两侧改动无代码交集（对侧只有一行 PowerShell 控制台文案 + 一个 a-short 测试），合并态已跑 focused 超集 355 OK（含完整 `a_short_effect_contract` bundle），故未再为本次合并起 full lane。
