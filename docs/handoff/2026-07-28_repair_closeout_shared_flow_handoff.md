@@ -42,7 +42,8 @@ The closure pack has named controls for: A-share provider absence blocks a_short
 
 ### 验证命令与结果
 
-- 审查方亲跑 focused 超集 `.toolsun_unittest_with_repo_pythonpath.cmd tests.test_full_pack_ledger tests.test_bounded_unittest tests.test_doc_governance_guard tests.test_review_tiering_enforcement tests.test_route_doc_ledger_status_consistency` = `104 OK / 5.9s / exit 0`。
+- 审查方亲跑 focused 超集 `.tools
+un_unittest_with_repo_pythonpath.cmd tests.test_full_pack_ledger tests.test_bounded_unittest tests.test_doc_governance_guard tests.test_review_tiering_enforcement tests.test_route_doc_ledger_status_consistency` = `104 OK / 5.9s / exit 0`。
 - 审查方自写 CLI 反向探针（固定主 Python 直调，六种错参形态）：`run`、`run <4 args>` → `REFUSED missing --`；`run … 30 --`（`--` 在第 6 位但其后为空）→ `REFUSED run requires unittest arguments after --`；`--` 错位 → `REFUSED expected run <lane> …`；把 discovery 收窄成 `test_bogus*.py` → `REFUSED must exactly use unittest args [...]`；`timeout=99999` → `REFUSED full timeout must be 1..1300`。六种全部 exit 2 且无进程起飞。
 - 静态核：`prepare()` 确实 `return fp`，故 `prepared_fingerprint[:12]` 不会炸；`record()` 仍只在 `status == "PASS"` 且前后 fingerprint 相等时写；旧 `len(argv) >= 8` 分支全仓零残留。
 
@@ -231,3 +232,17 @@ T1 的运行时观测**原理上抓不到它**（它写了又删，串行留不�
 **没做的事（明说边界）**：并发包里「残留守卫只看得见自己那一小段窗口」的结构性弱点仍在——整包级残留检查只有 harness 做得了，本轮不动 `.tools/parallel_lane_runner.py`。要搬进 harness 是另一刀。`serial_tail_modules` 也未改：把守卫塞进串行尾巴会让它的 import 时基线包含整波残留，等于把假红换成假绿。
 
 **验证**：焦点包 `Ran 87 tests in 23.5s PASS`（lifecycle stage + class guards + IO inventory + lifecycle store + discovery conformance）；4 植入 4 红；`docs/us_short_test_io_inventory_20260801.json` 随之减少一条 `class4_unresolved_write` 键（3 增 5 删的最小 diff，未重排整文件）。
+
+## 2026-08-15 追加：focused receipt 从硬门降为非阻塞审计记录
+
+**改了什么 / 为什么**：`full_pack_ledger run` 删除 receipt 参数与校验，`prepare()` 只绑定 trigger + 非文档代码指纹；pre-commit 的 receipt 检查改成 advisory。这样 receipt 仍记录固定 Python、代码指纹和测试数量，但缺失、过期、损坏或被后续 focused 覆盖时，不再阻断 full lane / cache / commit，也不再制造“只为刷新 receipt 再跑测试”。
+
+**验证命令 / 结果**：固定 Python 工具聚焦 `104/104 PASS`，新增 pre-commit advisory 定点断言 `1/1 PASS`；新命令不带 receipt 参数，实际完成 US-short full lane `discovered=5897 ran=5897 equal=True`、`5897/5897 PASS`。
+
+**失效旧结论**：本文件早期“full command 必须传 `receipt:<receipt-id>`”及 2026-08-04 receipt hardening 已被本节取代；旧运行记录仅作历史，不得恢复为当前硬门。固定 Python、代码指纹、计数门、只记 PASS 和一代码态一次 full lane 仍有效。
+
+**下一步注意事项**：reviewer 独立复跑 focused acceptance；不得因 receipt 状态单独重跑 full lane。receipt 工具可继续保留，除非用户另行授权全部删除。
+
+## 2026-08-15 追加：receipt 硬门降级的独立审查（Claude Code reviewer/committer；**PASS，已提交并合入 master**）
+
+指针条目：focused receipt 由硬阻塞降为非阻塞本地审计记录（pre-commit 不再 `exit 1`、ledger 删除 receipt 参数与校验、AGENTS rule 4/5 与自审 checklist 同步）。reviewer 自写 19 条放松腿反向控制全部 held——receipt 从两个写路径彻底移除且辅助函数不留孤儿，而 code fingerprint、exact-state cached green、860 秒上限、lane discovery selector、`git diff --check` + `py_compile` 静态门、只记 PASS 全部保留，doc-only 分类器是精确集合比对（子集/超集/换目标三种伪装均不被识别），pre-commit 更早的文档治理硬门未被顺手放松。取舍与边界（bundle widening 随之转为 advisory）见 `docs/system_risk_register.md` 同日 PASS 小节。

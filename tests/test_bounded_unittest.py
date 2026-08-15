@@ -259,9 +259,16 @@ class NestedRunDoesNotClobberReceiptTests(unittest.TestCase):
 
 class DocumentOnlyRunDoesNotClobberReceiptTests(unittest.TestCase):
     DOC_ARGS = [
+        "tests.test_a_short_preflight.PinnedStockPythonSmoke",
+        "tests.test_readme_route_row_length",
         "tests.test_route_doc_ledger_status_consistency",
         "tests.test_doc_governance_guard",
     ]
+
+    def test_classifier_matches_the_actual_document_process_launcher(self):
+        command = (bounded.ROOT / ".tools" / "verify_doc_process.cmd").read_text(encoding="utf-8")
+        modules = {token for token in command.split() if token.startswith("tests.")}
+        self.assertEqual(modules, set(self.DOC_ARGS))
 
     def test_document_gate_classifier_is_exact_and_bidirectional(self):
         self.assertTrue(bounded._is_document_only_focused_run(self.DOC_ARGS))

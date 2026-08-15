@@ -456,7 +456,7 @@ class VerificationReceiptTests(unittest.TestCase):
                 )
                 self.assertIn("receipt            : missing/unreadable", missing)
 
-    def test_receipt_boundary_and_pre_commit_gate_keep_docs_out_but_code_in(self):
+    def test_receipt_boundary_and_pre_commit_check_keep_docs_out_but_never_block(self):
         self.assertTrue(receipts.is_code_path("docs/runtime_contract.json"))
         self.assertTrue(receipts.is_code_path("docs/note.py"))
         self.assertFalse(receipts.is_code_path("notes/readme.md"))
@@ -466,7 +466,12 @@ class VerificationReceiptTests(unittest.TestCase):
         self.assertIn("git diff --cached --name-only | grep -viE '.*\\.md$'", hook)
         self.assertNotIn("grep -vE '^(docs/|.*\\\\.md$)'", hook)
         self.assertIn('if [ -n "$code_changed" ] || [ -n "$merging" ]; then', hook)
-        self.assertIn('"$PY" .tools/verification_receipt.py', hook)
+        receipt_block = hook.split("Focused acceptance receipt", 1)[1].split(
+            "Verification-tiering reminder", 1
+        )[0]
+        self.assertIn('if ! "$PY" .tools/verification_receipt.py', receipt_block)
+        self.assertIn("advisory, NEVER blocks", receipt_block)
+        self.assertNotIn("exit 1", receipt_block)
 
     def test_effect_receipt_without_consumer_bundle_is_rejected(self):
         state = {

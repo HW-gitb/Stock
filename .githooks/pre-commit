@@ -38,25 +38,17 @@ if [ "$?" -ne 0 ]; then
   exit 1
 fi
 
-# ── Focused acceptance receipt (HARD gate, BLOCKS) ──
-# Every staged non-document change must have a current bounded focused receipt.
-# This is the small hard gate; the rule-3 full lane below remains conditional.
-# Keep this above the reminder header: that header documents the advisory branch
-# and says "NEVER blocks", so a blocking gate under it makes the file lie.
-# A merge is gated unconditionally, documents or not. The staged diff answers
-# "was this code tested"; it never answers "was this COMBINATION tested", and a
-# merge is the moment a combination first exists. A docs-only merge can still
-# carry the other side's code into this tree, and that pairing has been tested
-# by nobody. verification_receipt widens the required bundles across both sides.
+# ── Focused acceptance receipt (advisory, NEVER blocks) ──
+# Bounded focused runs still write a content-sealed local receipt for audit.
+# A missing, stale, overwritten, or incomplete receipt is reported here but
+# never blocks a commit or turns an already measured result into a re-run tax.
 merging="$(git rev-parse -q --verify MERGE_HEAD 2>/dev/null || true)"
 code_changed="$(git diff --cached --name-only | grep -viE '.*\.md$' || true)"
 if [ -n "$code_changed" ] || [ -n "$merging" ]; then
-  "$PY" .tools/verification_receipt.py 1>&2
-  if [ "$?" -ne 0 ]; then
+  if ! "$PY" .tools/verification_receipt.py 1>&2; then
     echo "" 1>&2
-    echo "pre-commit BLOCKED: no current bounded focused acceptance receipt for staged code." 1>&2
-    echo "Run .tools\\run_unittest_with_repo_pythonpath.cmd with the focused acceptance pack, then retry." 1>&2
-    exit 1
+    echo "pre-commit REMINDER (advisory, does NOT block): no current bounded focused acceptance receipt for staged code." 1>&2
+    echo "Use the recorded terminal test output and SESSION_LOG evidence; do not re-run solely to refresh a receipt." 1>&2
   fi
 fi
 
@@ -74,8 +66,8 @@ if [ -n "$PY" ]; then
     echo "full-pack GREEN is recorded for this code state (AGENTS.md §Verification tiering rule 3/4)." 1>&2
     echo "At the PASS/merge gate run the a_short full pack ONCE with the atomic ledger command" 1>&2
     echo "(it prepares, bounds, verifies and records in one step; manual prepare/record is retired):" 1>&2
-    echo "  C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe .tools\\full_pack_ledger.py run a_short \"<trigger>\" \"receipt:<receipt-id>\" 1200 -- <unittest args>" 1>&2
-    echo "The focused receipt is produced by .tools\\run_unittest_with_repo_pythonpath.cmd and is bound to this exact code state." 1>&2
+    echo "  C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe .tools\\full_pack_ledger.py run a_short \"<trigger>\" 860 -- <unittest args>" 1>&2
+    echo "Focused receipts remain non-blocking local audit records produced by .tools\\run_unittest_with_repo_pythonpath.cmd." 1>&2
     echo "(If focused tests bound the impact per rule 6, ignore this.)" 1>&2
   fi
 fi

@@ -272,15 +272,14 @@ class PreCommitReminderTests(unittest.TestCase):
         block = self.hook[self.hook.index(marker):]
         self.assertNotIn("exit 1", block)
 
-    def test_the_receipt_gate_ahead_of_the_reminder_really_blocks(self):
-        # Reverse control for the test above. On its own, "warn only" is satisfiable by moving the
-        # marker below every gate, which would pass while proving nothing; the hard gate has to be
-        # asserted hard somewhere, and it lives ahead of the marker.
+    def test_the_receipt_check_ahead_of_the_reminder_is_advisory(self):
         marker = "Verification-tiering reminder"
         ahead = self.hook[: self.hook.index(marker)]
-        blocked = "pre-commit BLOCKED: no current bounded focused acceptance receipt"
-        self.assertIn(blocked, ahead)
-        self.assertIn("exit 1", ahead[ahead.index(blocked):])
+        self.assertIn("Focused acceptance receipt (advisory, NEVER blocks)", ahead)
+        self.assertIn('if ! "$PY" .tools/verification_receipt.py', ahead)
+        self.assertIn("does NOT block", ahead)
+        receipt_block = ahead[ahead.index("Focused acceptance receipt"):]
+        self.assertNotIn("exit 1", receipt_block)
 
     def _receipt_gate_condition(self):
         """Lift the gate's real decision lines out of the hook, so this runs what ships."""

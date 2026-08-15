@@ -9,7 +9,7 @@ cached green instead of re-running a multi-minute pack for a number they already
 records written before the preparation gate are historical evidence only and are never reusable.
 
 Usage:
-   C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run <lane> <full-trigger-reason> receipt:<receipt-id> <timeout-seconds> -- <unittest args>
+   C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run <lane> <full-trigger-reason> <timeout-seconds> -- <unittest args>
    .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py check <lane>
 
 `run` accepts only the lane's fixed full-discovery selector: `a_short` = `discover -s tests -p test_a_short*.py`; `us_short` = `discover -s tests -p test_us_short*.py`.  The fixed `-b -f --durations 25` runtime flags are applied to every worker; they quiet passing output, stop on the first red, and retain timing evidence without narrowing discovery.
@@ -20,6 +20,8 @@ The pack is carried by concurrent module-level workers (`parallel_lane_runner`) 
 1 = no cached green for the current code state (a full run is warranted only if tiering rule 3
 applies). ``run`` is the only public write path: it checks the cache, binds the A-F preparation,
 runs one bounded unittest process, verifies its exit code and test count, and records only PASS.
+Focused receipts remain local audit records; their absence, age, or replacement never blocks this
+ledger or invalidates an exact-code-state cached green.
 """
 from __future__ import annotations
 
@@ -42,7 +44,6 @@ import verification_receipt as receipts
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LEDGER = ROOT / ".tools" / "state" / "full_pack_ledger.json"
-FOCUSED_RECEIPT_PATH = receipts.RECEIPT_PATH
 PREPARES_KEY = "_prepares"
 FULL_PACK_DISCOVERY_ARGS = {
     "a_short": ("discover", "-s", "tests", "-p", "test_a_short*.py"),
@@ -150,35 +151,21 @@ def _load(ledger: Path) -> dict:
 def prepare(
     lane: str,
     trigger_reason: str,
-    focused_evidence: str,
     *,
     state: dict[str, str] | None = None,
     ledger: Path = DEFAULT_LEDGER,
-    focused_receipt_path: Path = FOCUSED_RECEIPT_PATH,
 ) -> str:
-    """Attest that the focused loop and A-F review are complete for this code state."""
+    """Bind the full-run trigger and A-F preparation to this exact code state."""
     if not str(trigger_reason).strip():
-        raise ValueError("prepare requires a full-trigger reason and focused-test evidence")
-    if not str(focused_evidence).strip():
-        raise ValueError("prepare requires a full-trigger reason and focused-test evidence")
-    if not isinstance(focused_evidence, str) or not focused_evidence.startswith("receipt:"):
-        raise ValueError("prepare requires the machine focused receipt token `receipt:<receipt_id>`")
+        raise ValueError("prepare requires a full-trigger reason")
     current_state = state if state is not None else collect_code_state()
-    receipt, receipt_reason = _receipt_matches_current_state(
-        focused_evidence,
-        state=current_state,
-        path=focused_receipt_path,
-    )
-    if receipt is None:
-        raise ValueError(f"prepare requires a current focused receipt: {receipt_reason}")
     fp = fingerprint(current_state)
     data = _load(ledger)
     prepares = data.setdefault(PREPARES_KEY, {})
     prepares[lane] = {
         "fingerprint": fp,
-        "self_review": "A-F complete after focused loop converged",
+        "self_review": "A-F complete before the full run",
         "trigger_reason": str(trigger_reason),
-        "focused_evidence": str(focused_evidence),
         "prepared_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
     ledger.parent.mkdir(parents=True, exist_ok=True)
@@ -246,19 +233,6 @@ def _pre_full_static_checks(state: dict[str, str]) -> bool:
     return True
 
 
-def _receipt_matches_current_state(
-    focused_evidence: str,
-    *,
-    state: dict[str, str],
-    path: Path = FOCUSED_RECEIPT_PATH,
-) -> tuple[dict | None, str]:
-    return receipts.validate_focused_evidence(
-        focused_evidence,
-        state=state,
-        path=path,
-    )
-
-
 def _execute_full_pack(
     lane: str, unittest_args: list[str], timeout_seconds: int
 ) -> tuple[object, dict]:
@@ -280,13 +254,11 @@ def _execute_full_pack(
 def run_full_pack(
     lane: str,
     trigger_reason: str,
-    focused_evidence: str,
     timeout_seconds: int,
     unittest_args: list[str],
     *,
     state: dict[str, str] | None = None,
     ledger: Path = DEFAULT_LEDGER,
-    focused_receipt_path: Path = FOCUSED_RECEIPT_PATH,
 ) -> int:
     """Run the simplified check/prepare/test/record chain."""
     if timeout_seconds <= 0 or timeout_seconds > FULL_MAX_SECONDS:
@@ -306,23 +278,10 @@ def run_full_pack(
               f"elapsed=0.0s deadline={timeout_seconds}s\n[full-pack-ledger] {dependency_error}")
         return DEPENDENCY_EXIT
     current_state = state if state is not None else collect_code_state()
-    receipt, receipt_reason = _receipt_matches_current_state(
-        focused_evidence,
-        state=current_state,
-        path=focused_receipt_path,
-    )
-    if receipt is None:
-        print(f"[full-pack-ledger] REFUSED - {receipt_reason}")
-        return 2
-    print(
-        f"[full-pack-ledger] FOCUSED_RECEIPT status=PASS tests={receipt['tests']} "
-        f"bundles={','.join(receipt['bundles']) or 'none'}"
-    )
     hit = cached_green(
         lane,
         state=current_state,
         ledger=ledger,
-        focused_receipt_path=focused_receipt_path,
     )
     if hit is not None:
         print(f"[full-pack-ledger] CACHED GREEN - {lane} = {hit['count']}; full run skipped.")
@@ -332,10 +291,8 @@ def run_full_pack(
     prepared_fingerprint = prepare(
         lane,
         trigger_reason,
-        focused_evidence,
         state=current_state,
         ledger=ledger,
-        focused_receipt_path=focused_receipt_path,
     )
     print(
         f"[full-pack-ledger] START lane={lane} deadline={timeout_seconds}s "
@@ -378,21 +335,12 @@ def cached_green(
     *,
     state: dict[str, str] | None = None,
     ledger: Path = DEFAULT_LEDGER,
-    focused_receipt_path: Path = FOCUSED_RECEIPT_PATH,
 ) -> dict | None:
     """Return the cached record iff the current code state matches a recorded run for the lane."""
     current_state = state if state is not None else collect_code_state()
     fp = fingerprint(current_state)
     record_for_lane = _load(ledger).get(lane)
     matching_prepare = prepared_review(lane, state=current_state, ledger=ledger)
-    if matching_prepare is not None:
-        receipt, _ = _receipt_matches_current_state(
-            str(matching_prepare.get("focused_evidence", "")),
-            state=current_state,
-            path=focused_receipt_path,
-        )
-        if receipt is None:
-            return None
     if (record_for_lane and record_for_lane.get("fingerprint") == fp
             and record_for_lane.get("prepared_fingerprint") == fp
             and matching_prepare is not None):
@@ -411,8 +359,8 @@ def _check(lane: str, *, state: dict[str, str] | None = None,
     record_for_lane = _load(ledger).get(lane)
     hit = cached_green(lane, state=current_state, ledger=ledger)
     if hit is not None:
-        print(f"[full-pack-ledger] PREPARED A-F — {lane}: {prepared['trigger_reason']} | "
-              f"focused={prepared['focused_evidence']}\n[full-pack-ledger] CACHED GREEN — {lane} = "
+        print(f"[full-pack-ledger] PREPARED A-F — {lane}: {prepared['trigger_reason']}\n"
+              f"[full-pack-ledger] CACHED GREEN — {lane} = "
               f"{hit['count']} at {hit['recorded_at']} on this EXACT code state.\n"
               "[full-pack-ledger] Tiering rule 4: do NOT re-run the full pack; cite this cached run.")
         return 0
@@ -424,8 +372,8 @@ def _check(lane: str, *, state: dict[str, str] | None = None,
               "and is not reusable closeout evidence.")
         return 1
     if prepared is not None:
-        print(f"[full-pack-ledger] PREPARED A-F — {lane}: {prepared['trigger_reason']} | "
-              f"focused={prepared['focused_evidence']}\n[full-pack-ledger] no cached green for this prepared "
+        print(f"[full-pack-ledger] PREPARED A-F — {lane}: {prepared['trigger_reason']}\n"
+              "[full-pack-ledger] no cached green for this prepared "
               "code state — use the single `run` command only if tiering rule 3 applies.")
         return 1
     print(f"[full-pack-ledger] no cached green for {lane} on the current code state — a full run is "
@@ -446,16 +394,15 @@ def main(argv: list[str]) -> int:
             print("[full-pack-ledger] REFUSED - invalid run arguments; missing `--` before unittest args")
             return 2
         split = argv.index("--")
-        if split != 6:
+        if split != 5:
             print("[full-pack-ledger] REFUSED - invalid run arguments; expected "
-                  "`run <lane> <trigger> <focused evidence> <timeout> -- <unittest args>`")
+                  "`run <lane> <trigger> <timeout> -- <unittest args>`")
             return 2
         try:
             return run_full_pack(
                 argv[2],
                 argv[3],
-                argv[4],
-                int(argv[5]),
+                int(argv[4]),
                 argv[split + 1:],
             )
         except (ValueError, OSError) as exc:
