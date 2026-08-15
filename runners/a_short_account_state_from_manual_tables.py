@@ -10,7 +10,7 @@
 
 用法：
     python runners/a_short_account_state_from_manual_tables.py \
-        --input-dir state/a_short/account_state_csv --as-of 20260615 \
+        --input-dir state/a_short/account_state_csv --as-of 20260615 --price-as-of 20260614 \
         --out state/a_short/account_bundle.json
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ from engine.data.a_share_board_scope import is_a_share_main_board  # noqa: E402
 ACCOUNT_SCHEMA_NAME = "a_short_account_state"
 ACCOUNT_SCHEMA_VERSION = "1.1.0"
 LINEAGE_SCHEMA_NAME = "a_short_account_state_lineage"
-LINEAGE_SCHEMA_VERSION = "1.0.0"
+LINEAGE_SCHEMA_VERSION = "1.1.0"
 ACCOUNT_BUNDLE_SCHEMA_NAME = "a_short_account_bundle"
 ACCOUNT_BUNDLE_SCHEMA_VERSION = "1.0.0"
 ACCOUNT_BUNDLE_SCHEMA_PATH = ROOT / "schemas" / "a_short_account_bundle.schema.json"
@@ -174,12 +174,13 @@ def _add_calendar_days(yyyymmdd: str, n: int) -> str:
     return (datetime.strptime(yyyymmdd, "%Y%m%d") + timedelta(days=n)).strftime("%Y%m%d")
 
 
-# ── 核心纯函数：tables(dict[str, list[dict]]) + decision_as_of + config → (account_state, lineage)──
-def build_account_state(tables: dict, decision_as_of: str, config: dict) -> tuple:
+# ── 核心纯函数：tables(dict[str, list[dict]]) + decision_as_of + expected_facts_as_of + config → (account_state, lineage)──
+def build_account_state(tables: dict, decision_as_of: str, expected_facts_as_of: str, config: dict) -> tuple:
     """Build the schema-valid account_state dict + lineage dict from already-parsed table rows.
 
     `tables` maps table name → list of raw-string row dicts (csv.DictReader output). Pure & deterministic:
-    same tables + decision_as_of + config → identical output (rows sorted by ts_code; no wall-clock).
+    same tables + decision_as_of + expected_facts_as_of + config → identical output
+    (rows sorted by ts_code; no wall-clock).
     Raises ConvertError (FATAL) on any malformed / out-of-contract input.
     """
     if not isinstance(config, dict):
@@ -187,9 +188,14 @@ def build_account_state(tables: dict, decision_as_of: str, config: dict) -> tupl
     cfg = dict(config)
     _validate_config(cfg)
     decision_as_of = _parse_date(decision_as_of, "--as-of")
+    expected_facts_as_of = _parse_date(expected_facts_as_of, "--price-as-of")
+    if expected_facts_as_of > decision_as_of:
+        raise ConvertError(
+            f"--price-as-of {expected_facts_as_of} > --as-of {decision_as_of}（最近已收盘事实日晚于决策日，拒跑）")
 
-    facts_as_of, account_fields = _build_account_fields(tables["account"], decision_as_of)
-    facts_staleness = "current" if facts_as_of == decision_as_of else "stale_warning"
+    facts_as_of, account_fields = _build_account_fields(
+        tables["account"], decision_as_of, expected_facts_as_of)
+    facts_staleness = "current" if facts_as_of == expected_facts_as_of else "stale_warning"
 
     positions, held = _build_positions(tables["positions"], decision_as_of)
     rule12, rule12_lineage = _build_rule12(tables.get("portfolio_rule12") or [], decision_as_of, cfg)
@@ -215,6 +221,7 @@ def build_account_state(tables: dict, decision_as_of: str, config: dict) -> tupl
         "schema_version": LINEAGE_SCHEMA_VERSION,
         "generated_at": None,
         "decision_as_of": decision_as_of,
+        "expected_facts_as_of": expected_facts_as_of,
         "facts_as_of": facts_as_of,
         "facts_staleness": facts_staleness,
         "config": dict(cfg),
@@ -235,7 +242,7 @@ def _bundle_digest(account: dict, lineage: dict) -> str:
     return _canonical_json_sha256({"account": account, "lineage": lineage})
 
 
-def build_account_bundle(tables: dict, decision_as_of: str, config: dict,
+def build_account_bundle(tables: dict, decision_as_of: str, expected_facts_as_of: str, config: dict,
                          source_tables: list | None = None, generated_at: str | None = None) -> dict:
     """Build one atomically publishable account+lineage snapshot.
 
@@ -243,7 +250,7 @@ def build_account_bundle(tables: dict, decision_as_of: str, config: dict,
     bundle/lineage level, so a Friday snapshot used for a Monday-before-open decision cannot be
     relabelled as Monday facts.  The digest binds account and lineage in the same JSON object.
     """
-    account, lineage = build_account_state(tables, decision_as_of, config)
+    account, lineage = build_account_state(tables, decision_as_of, expected_facts_as_of, config)
     facts_as_of = lineage["facts_as_of"]
     account["as_of"] = facts_as_of
     lineage["source_tables"] = list(source_tables or [])
@@ -259,13 +266,18 @@ def build_account_bundle(tables: dict, decision_as_of: str, config: dict,
         "account": account,
         "lineage": lineage,
     }
-    validate_account_bundle(bundle, str(decision_as_of))
+    validate_account_bundle(bundle, str(decision_as_of), str(expected_facts_as_of))
     return bundle
 
 
-def validate_account_bundle(bundle: dict, decision_as_of: str) -> dict:
+def validate_account_bundle(bundle: dict, decision_as_of: str, expected_facts_as_of: str) -> dict:
     """Validate schema, date identity and account/lineage digest binding."""
     import jsonschema
+    decision_as_of = _parse_date(decision_as_of, "decision_as_of")
+    expected_facts_as_of = _parse_date(expected_facts_as_of, "expected_facts_as_of")
+    if expected_facts_as_of > decision_as_of:
+        raise ConvertError(
+            f"expected_facts_as_of {expected_facts_as_of} > decision_as_of {decision_as_of}（错钟，拒跑）")
     if not isinstance(bundle, dict):
         raise ConvertError("account bundle 须为 JSON object")
     try:
@@ -282,11 +294,19 @@ def validate_account_bundle(bundle: dict, decision_as_of: str) -> dict:
     if (isinstance(total_equity, bool) or not isinstance(total_equity, (int, float)) or total_equity <= 0 or
             isinstance(gross_exposure, bool) or not isinstance(gross_exposure, (int, float)) or gross_exposure < 0):
         raise ConvertError("account bundle 必须提供有效 total_equity/current_gross_exposure，供 bucket 敞口门使用")
-    facts = bundle["facts_as_of"]
+    facts = _parse_date(bundle["facts_as_of"], "bundle.facts_as_of")
+    if facts > expected_facts_as_of:
+        raise ConvertError(
+            f"bundle.facts_as_of {facts} > expected_facts_as_of {expected_facts_as_of}（事实晚于已收盘事实钟，拒跑）")
     if account.get("as_of") != facts or lineage.get("facts_as_of") != facts:
         raise ConvertError("account bundle facts_as_of / account.as_of / lineage.facts_as_of 不一致")
     if lineage.get("decision_as_of") != str(decision_as_of):
         raise ConvertError("account bundle lineage.decision_as_of 与本次决策日不一致")
+    if lineage.get("expected_facts_as_of") != expected_facts_as_of:
+        raise ConvertError("account bundle lineage.expected_facts_as_of 未绑定本轮最近已收盘事实日")
+    expected_staleness = "current" if facts == expected_facts_as_of else "stale_warning"
+    if lineage.get("facts_staleness") != expected_staleness:
+        raise ConvertError("account bundle lineage.facts_staleness 与事实日期合同不一致")
     expected = _bundle_digest(account, lineage)
     if bundle.get("snapshot_digest") != expected:
         raise ConvertError("account bundle snapshot_digest 与 account+lineage 内容不一致（疑似错配/篡改）")
@@ -317,13 +337,14 @@ def _validate_config(cfg: dict) -> None:
             raise ConvertError(f"config.{key}={v!r} 须在 (0, 1]")
 
 
-def _build_account_fields(rows: list, decision_as_of: str) -> tuple:
+def _build_account_fields(rows: list, decision_as_of: str, expected_facts_as_of: str) -> tuple:
     if len(rows) != 1:
         raise ConvertError(f"account 表须恰好 1 行（组合账户级状态唯一），实际 {len(rows)} 行")
     a = rows[0]
     facts_as_of = _parse_date(a.get("as_of"), "account.as_of")
-    if facts_as_of > decision_as_of:
-        raise ConvertError(f"account.as_of {facts_as_of} > --as-of {decision_as_of}（用了未来事实，拒跑）")
+    if facts_as_of > expected_facts_as_of:
+        raise ConvertError(
+            f"account.as_of {facts_as_of} > --price-as-of {expected_facts_as_of}（事实晚于已收盘事实钟，拒跑）")
     if not _parse_bool(a.get("manual_order_only"), "account.manual_order_only"):
         raise ConvertError("account.manual_order_only 必须为 TRUE")
     if _parse_bool(a.get("broker_connection_allowed"), "account.broker_connection_allowed"):
@@ -609,6 +630,8 @@ def main(argv=None) -> int:
     p.add_argument("--input-dir", required=True,
                    help="含 account/positions/trades/manual_controls/portfolio_rule12.csv 五张必需表的目录")
     p.add_argument("--as-of", required=True, help="决策日 YYYYMMDD（= bundle.decision_as_of = 周报 --as-of）")
+    p.add_argument("--price-as-of", required=True,
+                   help="本轮最近一个已完整收盘的事实日 YYYYMMDD（= expected_facts_as_of；必须 <= --as-of）")
     p.add_argument("--out", required=True, help="输出原子 account bundle JSON 路径（内含 account + lineage）")
     p.add_argument("--lineage-out", help=argparse.SUPPRESS)
     p.add_argument("--allow-nonprivate-account-out", action="store_true",
@@ -636,7 +659,7 @@ def main(argv=None) -> int:
                               "sha256": _sha256(path), "row_count": len(rows)})
 
     bundle = build_account_bundle(
-        tables, args.as_of, _load_preset_config(), source_tables=source_tables,
+        tables, args.as_of, args.price_as_of, _load_preset_config(), source_tables=source_tables,
         generated_at=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
     account_state, lineage = bundle["account"], bundle["lineage"]
 
@@ -705,11 +728,13 @@ def _load_preset_config(preset_path: Path | str | None = None) -> dict:
 
 def _print_plain_summary(account_state: dict, lineage: dict) -> None:
     """大白话解释：这次表格里哪些事实导致了什么状态（满足 4.3 §11 大白话要求）。"""
-    print(f"[4.3] 决策日 {lineage['decision_as_of']}；事实截止 {lineage['facts_as_of']}"
+    print(f"[4.3] 决策日 {lineage['decision_as_of']}；最近已收盘日 {lineage['expected_facts_as_of']}；"
+          f"事实截止 {lineage['facts_as_of']}"
           f"（{lineage['facts_staleness']}）。持仓 {len(account_state['positions'])} 只，"
           f"Rule12={account_state['rule12']['status']}，Rule13 冷静 {len(account_state['rule13_cooldowns'])} 只。")
     if lineage["facts_staleness"] == "stale_warning":
-        print(f"[WARN] 事实截止日 {lineage['facts_as_of']} 早于决策日 {lineage['decision_as_of']}："
+        print(f"[WARN] 事实截止日 {lineage['facts_as_of']} 早于最近已收盘日 "
+              f"{lineage['expected_facts_as_of']}："
               "可能漏了之后的成交/持仓变化，请确认表格已更新。")
     if lineage["rule12"]["progressed"]:
         pr = lineage["rule12"]["progressed"]

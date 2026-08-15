@@ -252,7 +252,7 @@ class CorporateActionEventRecorderTest(unittest.TestCase):
                 "account": [{"as_of": "20260713", "us_market_equity": "30000", "us_short_available_cash": "4000", "manual_order_only": "TRUE", "broker_connection_allowed": "FALSE"}],
                 "positions": [{"ticker": "TWTR", "shares": "5", "avg_cost_usd": "10", "entry_date": "20260601"}],
             },
-            "20260713",
+            "20260713", "20260713",
         )
         confirmed = recorder.record_manual_corporate_action(item, account_state=converter_state, confirm=True)
         self.assertEqual(confirmed["record_status"], "confirmed_event")

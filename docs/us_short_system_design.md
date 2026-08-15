@@ -108,7 +108,7 @@ load config / state / data  (+ provider 健康检查 §3.7；不健康→restric
   - `trades.csv`（= §12 `manual_actual_track` / `execution_log_private` 落地文件）：`decision_date / ticker / suggested_action / executed / fill_price / fill_shares / skip_reason / manual_override`；
   - `account.csv`：`us_market_equity` + `us_short_available_cash` + 可选 `portfolio_total_equity`（仅参考）；短线桶 = `us_market_equity ÷ 3`，系统自己算，不从含糊"总额"瞎猜。
 - **转换器 → `us_short_account_state`**（US 自有 schema，不共用 A 股）→ 周报/持仓重评/成绩单消费；公司行动录入器只在显式 `--confirm-account-read` 下读取同一私有 schema 的 `old_ticker` long 持仓，confirmed record 仅留 digest binding，实际处置票据只写 gitignored/external private path。
-- **lineage**：每张 CSV 记 `sha256 / row_count / facts_as_of / decision_as_of`；trades↔positions 一致性对账（advisory WARN，不覆盖 positions）。转换器同时生成 `holding_action_reconciliation`：`remaining_shares / tp1_completed / tp1_completed_at / source_reconciliation_ref`；其中 `tp1_completed` 只能由人工表中已执行的`减仓`成交记录确认，建议本身绝不当作成交。CSV canonical 防 Excel 强转。
+- **lineage**：每张 CSV 记 `sha256 / row_count / facts_as_of / expected_facts_as_of / decision_as_of`；`expected_facts_as_of` 必须来自同一次 dry-run 的 canonical `price_basis_date`，转换器不联网、不猜日历；`facts_as_of == expected_facts_as_of` 才标 `current`，更早才标 `stale_warning`，晚于该事实钟或事实钟晚于决策日直接拒绝写盘。trades↔positions 一致性对账（advisory WARN，不覆盖 positions）。转换器同时生成 `holding_action_reconciliation`：`remaining_shares / tp1_completed / tp1_completed_at / source_reconciliation_ref`；其中 `tp1_completed` 只能由人工表中已执行的`减仓`成交记录确认，建议本身绝不当作成交。CSV canonical 防 Excel 强转。
 
 ### 3.7 数据源分层健康检查（跑前必做）
 每周跑前分层探活：FMP 接口 / SEC EDGAR parser / 价格·状态·财报·事件字段够不够，并按 endpoint family 分别判 criticality，不能把同一 provider 的所有接口绑成一个硬门。当前 capstone 中 `FMP grades` 按 §3.2 为 advisory，异常时透明降级为 `usable_with_fallback`；SEC submissions 仍 critical，异常时 `restricted / blocked` 并 NO-EMIT。**未单独批准的源（yfinance / Web / X，§3 边界）：健康检查只记 `disabled_unapproved`——不探活、不调用、不参与 clean 判定**（防"健康检查"被当成调用未授权源的后门）。只查真实 weekly 会用的、已授权的接口、不打印 token、不假 OK。关键源异常 → **不许输出 clean 建仓**，只能 `restricted / observe / data_degraded`。
@@ -462,7 +462,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 1. `.gitignore` 私密路径覆盖：`weekly_private` / `account_state_csv` / `runs_private` / `model_paper_private` / `lifecycle` / `shadow_compare_private` / `capstone_checkpoints_private` 各行（§11.6）+ fail-closed 护栏测试（覆盖所有 private 路径）。
 2. 两遍打分可行性：先验 FMP 基础档速率限内每周跑完 Pass 1（全 universe）+ Pass 2（候选集+持仓）；定 universe 上限/候选集大小为可跑值。**前置：全 universe FMP 调用须先过 §18.0 provider 授权门（SR-PROVIDER-001），未授权只在已批准小样本上跑。**
 3. provider 分层健康检查（FMP/SEC）：关键源坏 → restricted/blocked/data_degraded、不输出 clean；**未授权源（yfinance/Web/X）只记 `disabled_unapproved`、不探活/不调用/不参与 clean**（单测：健康检查绝不触达未授权源）。
-4. 手动状态输入层（§3.6）：CSV(ASCII 列名) + 转换器 + lineage(sha256/row_count/as_of) + trades↔positions 对账。
+4. 手动状态输入层（§3.6）：CSV(ASCII 列名) + 转换器 + lineage(sha256/row_count/facts_as_of/expected_facts_as_of/decision_as_of) + trades↔positions 对账；同一次 dry-run 的 `price_basis_date` 必须绑定转换器 `--price-basis-date`。
 5. 价格层单测：有效支撑/压力去插针、tick 取整、取整后 RR 复校、突破 tp 兜底、加仓分支、持仓价位映射(stop_clear/tp_reduce/tp_exit/event_clear_ref)。
 6. 两轴环境 + 强赛道试探仓封顶（极防/veto/cooldown 不放行）。
 7. 仓位：组合熔断（主用 paper track；**paper 因数据门 not_evaluable → portfolio_guard 不得 clean、默认 restricted/caution**）+ 单票冷静期 + 全局现金分配 + model_size 与 live_permission 分开 + `theme_probe` 最小仓成本地板（小到无效 → observe=`cost_inefficient_min_size`）。

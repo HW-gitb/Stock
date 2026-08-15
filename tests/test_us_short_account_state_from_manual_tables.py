@@ -39,8 +39,9 @@ def _tables(account=None, positions=None):
             "positions": positions if positions is not None else [_pos()]}
 
 
-def _build(account=None, positions=None, as_of="20260622"):
-    return conv.build_account_state(_tables(account, positions), as_of)
+def _build(account=None, positions=None, as_of="20260622", expected_facts_as_of=None):
+    expected = as_of if expected_facts_as_of is None else expected_facts_as_of
+    return conv.build_account_state(_tables(account, positions), as_of, expected)
 
 
 _GOOD_ACCOUNT_CSV = (
@@ -109,7 +110,7 @@ class BuildTests(unittest.TestCase):
 
     def test_optional_holding_themes_builds_exact_private_reconciliation(self):
         state, _ = conv.build_account_state(
-            {**_tables(), "holding_themes": [_holding_theme()]}, "20260622")
+            {**_tables(), "holding_themes": [_holding_theme()]}, "20260622", "20260622")
         conv.validate_account_state(state, "20260622")
         item = state["holding_theme_reconciliation"]["positions"][0]
         self.assertEqual(item["ticker"], "AAPL")
@@ -121,15 +122,16 @@ class BuildTests(unittest.TestCase):
         with self.assertRaises(CE):
             conv.build_account_state(
                 {**_tables(positions=[_pos(ticker="AAPL"), _pos(ticker="MSFT")]),
-                 "holding_themes": [_holding_theme("AAPL")]}, "20260622")
+                 "holding_themes": [_holding_theme("AAPL")]}, "20260622", "20260622")
         with self.assertRaises(CE):
             conv.build_account_state(
                 {**_tables(), "holding_themes": [_holding_theme(theme_source="gics_guessed")]},
-                "20260622")
+                "20260622", "20260622")
 
     def test_only_executed_manual_reduce_completes_tp1(self):
         state, _ = conv.build_account_state(
-            {**_tables(), "trades": [_trade(suggested_action="减仓", executed="TRUE", fill_shares="3")]}, "20260622")
+            {**_tables(), "trades": [_trade(suggested_action="减仓", executed="TRUE", fill_shares="3")]},
+            "20260622", "20260622")
         item = state["holding_action_reconciliation"]["positions"][0]
         self.assertTrue(item["tp1_completed"])
         self.assertEqual(item["tp1_completed_at"], "20260601")
@@ -189,11 +191,27 @@ class BuildTests(unittest.TestCase):
         _, lineage = _build(account=_acct(as_of="20260601"), as_of="20260622")
         self.assertEqual(lineage["facts_staleness"], "stale_warning")
 
+    def test_monday_decision_uses_latest_settled_facts_clock(self):
+        state, lineage = _build(
+            account=_acct(as_of="20260814"), as_of="20260817", expected_facts_as_of="20260814")
+        self.assertEqual(lineage["expected_facts_as_of"], "20260814")
+        self.assertEqual(lineage["facts_staleness"], "current")
+        conv.validate_account_state(state, "20260817")
+
+    def test_expected_facts_clock_is_fail_closed(self):
+        with self.assertRaisesRegex(CE, "price-basis-date"):
+            _build(as_of="20260817", expected_facts_as_of="20260818")
+        with self.assertRaisesRegex(CE, "account.as_of"):
+            _build(account=_acct(as_of="20260815"), as_of="20260817", expected_facts_as_of="20260814")
+        with self.assertRaises(CE):
+            _build(as_of="20260817", expected_facts_as_of="2026-08-14")
+
     def test_account_must_be_one_row(self):
         with self.assertRaises(CE):
-            conv.build_account_state({"account": [], "positions": [_pos()]}, "20260622")
+            conv.build_account_state({"account": [], "positions": [_pos()]}, "20260622", "20260622")
         with self.assertRaises(CE):
-            conv.build_account_state({"account": [_acct(), _acct()], "positions": [_pos()]}, "20260622")
+            conv.build_account_state(
+                {"account": [_acct(), _acct()], "positions": [_pos()]}, "20260622", "20260622")
 
     def test_manual_order_only_false_fatal(self):
         with self.assertRaises(CE):
@@ -235,7 +253,8 @@ class BuildTests(unittest.TestCase):
     def test_pure_path_extra_key_rejected(self):
         # the pure build path must not bypass the CSV column gate
         with self.assertRaises(CE):
-            conv.build_account_state({"account": [_acct()], "positions": [_pos(foo="bar")]}, "20260622")
+            conv.build_account_state(
+                {"account": [_acct()], "positions": [_pos(foo="bar")]}, "20260622", "20260622")
 
     def test_optional_empty_fields_become_null(self):
         state, _ = _build(positions=[_pos(current_stop="", notes="")])
@@ -364,11 +383,13 @@ class ReconcileTests(unittest.TestCase):
     def test_trades_extra_column_rejected_pure_path(self):
         with self.assertRaises(CE):
             conv.build_account_state(
-                {"account": [_acct()], "positions": [_pos()], "trades": [_trade(foo="bar")]}, "20260622")
+                {"account": [_acct()], "positions": [_pos()], "trades": [_trade(foo="bar")]},
+                "20260622", "20260622")
 
     def test_build_populates_consistency_warnings(self):
         _, lineage = conv.build_account_state(
-            {"account": [_acct()], "positions": [_pos()], "trades": [_trade(fill_shares="7")]}, "20260622")
+            {"account": [_acct()], "positions": [_pos()], "trades": [_trade(fill_shares="7")]},
+            "20260622", "20260622")
         self.assertEqual([w["kind"] for w in lineage["consistency_warnings"]], ["shares_mismatch"])
 
     def test_action_vocab_matches_design_section9(self):
@@ -450,6 +471,18 @@ class PrivacyGuardTests(unittest.TestCase):
 
 
 class MainEndToEndTests(unittest.TestCase):
+    def test_main_requires_price_basis_date_before_write(self):
+        with tempfile.TemporaryDirectory() as d:
+            dp = Path(d)
+            (dp / "account.csv").write_text(_GOOD_ACCOUNT_CSV, encoding="utf-8")
+            (dp / "positions.csv").write_text(
+                "ticker,shares,avg_cost_usd,entry_date,current_stop,notes\n"
+                "AAPL,10,180,20260601,165,core_top\n", encoding="utf-8")
+            out = dp / "us_short_account_state.json"
+            with self.assertRaises(SystemExit):
+                conv.main(["--input-dir", str(dp), "--as-of", "20260622", "--out", str(out)])
+            self.assertFalse(out.exists())
+
     def test_main_writes_valid_output(self):
         with tempfile.TemporaryDirectory() as d:
             dp = Path(d)
@@ -461,12 +494,14 @@ class MainEndToEndTests(unittest.TestCase):
                 "AAPL,10,180,20260601,165,core_top\n"
                 "BRK.B,5,410,20260520,,\n", encoding="utf-8")
             out = dp / "us_short_account_state.json"   # under tempdir (outside repo) -> guard OK
-            rc = conv.main(["--input-dir", str(dp), "--as-of", "20260622", "--out", str(out)])
+            rc = conv.main(["--input-dir", str(dp), "--as-of", "20260622",
+                            "--price-basis-date", "20260622", "--out", str(out)])
             self.assertEqual(rc, 0)
             state = json.loads(out.read_text(encoding="utf-8"))
             conv.validate_account_state(state, "20260622")
             self.assertEqual([p["ticker"] for p in state["positions"]], ["AAPL", "BRK.B"])
             lineage = json.loads((dp / "us_short_account_state_lineage.json").read_text(encoding="utf-8"))
+            self.assertEqual(lineage["expected_facts_as_of"], "20260622")
             self.assertEqual(lineage["facts_staleness"], "current")
             names = {t["name"]: t for t in lineage["source_tables"]}
             self.assertEqual(names["positions"]["row_count"], 2)
@@ -480,7 +515,8 @@ class MainEndToEndTests(unittest.TestCase):
                 "ticker,shares,avg_cost_usd,entry_date,current_stop,notes,direction\n"
                 "AAPL,10,180,20260601,165,x,short\n", encoding="utf-8")
             with self.assertRaises(CE):
-                conv.main(["--input-dir", str(dp), "--as-of", "20260622", "--out", str(dp / "o.json")])
+                conv.main(["--input-dir", str(dp), "--as-of", "20260622",
+                           "--price-basis-date", "20260622", "--out", str(dp / "o.json")])
 
     def test_main_rejects_row_with_too_many_cells(self):
         with tempfile.TemporaryDirectory() as d:
@@ -490,7 +526,8 @@ class MainEndToEndTests(unittest.TestCase):
                 "ticker,shares,avg_cost_usd,entry_date,current_stop,notes\n"
                 "AAPL,10,180,20260601,165,x,EXTRA_CELL\n", encoding="utf-8")
             with self.assertRaises(CE):
-                conv.main(["--input-dir", str(dp), "--as-of", "20260622", "--out", str(dp / "o.json")])
+                conv.main(["--input-dir", str(dp), "--as-of", "20260622",
+                           "--price-basis-date", "20260622", "--out", str(dp / "o.json")])
 
     def test_main_rejects_duplicate_header(self):
         with tempfile.TemporaryDirectory() as d:
@@ -500,7 +537,8 @@ class MainEndToEndTests(unittest.TestCase):
                 "ticker,ticker,shares,avg_cost_usd,entry_date,current_stop,notes\n"
                 "AAPL,MSFT,10,180,20260601,165,x\n", encoding="utf-8")
             with self.assertRaises(CE):
-                conv.main(["--input-dir", str(dp), "--as-of", "20260622", "--out", str(dp / "o.json")])
+                conv.main(["--input-dir", str(dp), "--as-of", "20260622",
+                           "--price-basis-date", "20260622", "--out", str(dp / "o.json")])
 
     def test_main_without_trades_empty_warnings(self):
         with tempfile.TemporaryDirectory() as d:
@@ -509,7 +547,8 @@ class MainEndToEndTests(unittest.TestCase):
             (dp / "positions.csv").write_text(
                 "ticker,shares,avg_cost_usd,entry_date,current_stop,notes\nAAPL,10,180,20260601,165,x\n",
                 encoding="utf-8")
-            rc = conv.main(["--input-dir", str(dp), "--as-of", "20260622", "--out", str(dp / "o.json")])
+            rc = conv.main(["--input-dir", str(dp), "--as-of", "20260622",
+                            "--price-basis-date", "20260622", "--out", str(dp / "o.json")])
             self.assertEqual(rc, 0)
             lineage = json.loads((dp / "o_lineage.json").read_text(encoding="utf-8"))
             self.assertEqual(lineage["consistency_warnings"], [])   # trades.csv absent -> no reconcile
@@ -524,7 +563,8 @@ class MainEndToEndTests(unittest.TestCase):
             (dp / "trades.csv").write_text(   # AAPL net 7 vs positions 10 -> advisory mismatch
                 "decision_date,ticker,suggested_action,executed,fill_price,fill_shares,skip_reason,manual_override\n"
                 "20260601,AAPL,建仓,TRUE,180,7,,\n", encoding="utf-8")
-            conv.main(["--input-dir", str(dp), "--as-of", "20260622", "--out", str(dp / "o.json")])
+            conv.main(["--input-dir", str(dp), "--as-of", "20260622",
+                       "--price-basis-date", "20260622", "--out", str(dp / "o.json")])
             lineage = json.loads((dp / "o_lineage.json").read_text(encoding="utf-8"))
             self.assertEqual([w["kind"] for w in lineage["consistency_warnings"]], ["shares_mismatch"])
             self.assertIn("trades", {t["name"] for t in lineage["source_tables"]})
@@ -569,7 +609,8 @@ class ReviewHygieneFixTests(unittest.TestCase):
             same = dp / "same.json"
             with self.assertRaises(CE):
                 conv.main(["--input-dir", str(dp), "--as-of", "20260622",
-                           "--out", str(same), "--lineage-out", str(same)])
+                           "--price-basis-date", "20260622", "--out", str(same),
+                           "--lineage-out", str(same)])
 
     # F-5: the lineage sidecar is validated against its own schema at runtime
     def test_validate_lineage_rejects_malformed(self):

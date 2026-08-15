@@ -196,13 +196,15 @@ def _account():
     }
 
 
-def _account_bundle(account=None, decision_as_of=AS_OF):
+def _account_bundle(account=None, decision_as_of=AS_OF, expected_facts_as_of=None):
     account = copy.deepcopy(account or _account())
     facts_as_of = account["as_of"]
+    expected_facts_as_of = decision_as_of if expected_facts_as_of is None else expected_facts_as_of
     lineage = {
-        "schema_name": "a_short_account_state_lineage", "schema_version": "1.0.0",
-        "generated_at": None, "decision_as_of": decision_as_of, "facts_as_of": facts_as_of,
-        "facts_staleness": ("current" if facts_as_of == decision_as_of else "stale_warning"),
+        "schema_name": "a_short_account_state_lineage", "schema_version": "1.1.0",
+        "generated_at": None, "decision_as_of": decision_as_of,
+        "expected_facts_as_of": expected_facts_as_of, "facts_as_of": facts_as_of,
+        "facts_staleness": ("current" if facts_as_of == expected_facts_as_of else "stale_warning"),
         "config": {"rule13_cooldown_calendar_days": 5,
                    "rule13_default_max_reentry_position_pct": 0.5,
                    "rule12_default_recovery_position_multiplier": 0.5},
@@ -216,8 +218,9 @@ def _account_bundle(account=None, decision_as_of=AS_OF):
             "snapshot_digest": digest, "account": account, "lineage": lineage}
 
 
-def _write_account(path, account=None, decision_as_of=AS_OF):
-    Path(path).write_text(json.dumps(_account_bundle(account, decision_as_of)), encoding="utf-8")
+def _write_account(path, account=None, decision_as_of=AS_OF, expected_facts_as_of=None):
+    Path(path).write_text(
+        json.dumps(_account_bundle(account, decision_as_of, expected_facts_as_of)), encoding="utf-8")
 
 
 def _feed(last_pct=55.0):
@@ -1423,7 +1426,7 @@ class MainWiringTests(unittest.TestCase):
             bad = Path(td) / "private-account-bundle.json"
             bad.write_bytes(self._INVALID_UTF8)
             with self.assertRaisesRegex(SystemExit, "UnicodeDecodeError") as exc:
-                load_account_bundle(str(bad), AS_OF)
+                load_account_bundle(str(bad), AS_OF, AS_OF)
         message = str(exc.exception)
         # The whole point of this site: an OSError/decode failure must not print where the
         # operator's account state lives.
@@ -1437,10 +1440,47 @@ class MainWiringTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             missing = Path(td) / "private-account-bundle.json"
             with self.assertRaisesRegex(SystemExit, "FileNotFoundError") as exc:
-                load_account_bundle(str(missing), AS_OF)
+                load_account_bundle(str(missing), AS_OF, AS_OF)
         message = str(exc.exception)
         self.assertNotIn(str(missing), message)
         self.assertNotIn("private-account-bundle", message)
+
+    def test_load_account_bundle_binds_expected_facts_clock_and_allows_stale_holdings(self):
+        from runners.a_short_weekly_pipeline import load_account_bundle
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "account-bundle.json"
+            account = _account()
+            account["as_of"] = "20260813"
+            account["positions"] = [self._holding("600000.SH")]
+            _write_account(path, account, "20260817", "20260814")
+            loaded, lineage, _ = load_account_bundle(str(path), "20260817", "20260814")
+            self.assertEqual(loaded["positions"][0]["ts_code"], "600000.SH")
+            self.assertEqual(lineage["facts_staleness"], "stale_warning")
+
+    def test_load_account_bundle_rejects_expected_date_mismatch_missing_and_forged_status(self):
+        from runners.a_short_weekly_pipeline import load_account_bundle
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "account-bundle.json"
+            account = _account()
+            account["as_of"] = "20260813"
+            _write_account(path, account, "20260817", "20260814")
+            with self.assertRaisesRegex(SystemExit, "expected_facts_as_of"):
+                load_account_bundle(str(path), "20260817", "20260813")
+
+            bundle = json.loads(path.read_text(encoding="utf-8"))
+            bundle["lineage"].pop("expected_facts_as_of")
+            path.write_text(json.dumps(bundle), encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "expected_facts_as_of"):
+                load_account_bundle(str(path), "20260817", "20260814")
+
+            _write_account(path, account, "20260817", "20260814")
+            bundle = json.loads(path.read_text(encoding="utf-8"))
+            bundle["lineage"]["facts_staleness"] = "current"
+            path.write_text(json.dumps(bundle), encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "facts_staleness"):
+                load_account_bundle(str(path), "20260817", "20260814")
 
     def test_main_accepts_only_current_digest_bound_regulatory_confirmation(self):
         from engine.a_short_regulatory_advisory import event_fingerprint
@@ -2305,6 +2345,9 @@ class MainWiringTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td, ai=ai, feed=feed)
+            account = _account()
+            account["as_of"] = price_data_through
+            _write_account(Path(td) / "acct.json", account, AS_OF, price_data_through)
             out = Path(td) / AS_OF / "weekly_m67.json"
             with patch(
                 "engine.a_short_margin_overheat_cash_control.capture_margin_overheat_after_published_weekly",

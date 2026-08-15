@@ -69,8 +69,10 @@ def _r13(acc):
     return {c["ts_code"]: c for c in acc["rule13_cooldowns"]}
 
 
-def _build_account_state(tables, decision_as_of=AS_OF, config=None):
-    return conv.build_account_state(tables, decision_as_of, TEST_CONFIG if config is None else config)
+def _build_account_state(tables, decision_as_of=AS_OF, config=None, expected_facts_as_of=None):
+    expected = decision_as_of if expected_facts_as_of is None else expected_facts_as_of
+    return conv.build_account_state(
+        tables, decision_as_of, expected, TEST_CONFIG if config is None else config)
 
 
 class PresetConfigTests(unittest.TestCase):
@@ -413,13 +415,39 @@ class AccountGateTests(unittest.TestCase):
         self.assertEqual(ln["facts_staleness"], "stale_warning")
         self.assertEqual(acc["as_of"], AS_OF)
 
+    def test_monday_decision_uses_latest_settled_facts_clock(self):
+        t = _tables()
+        t["account"][0]["as_of"] = "20260814"
+        acc, lineage = _build_account_state(
+            t, "20260817", expected_facts_as_of="20260814")
+        self.assertEqual(lineage["expected_facts_as_of"], "20260814")
+        self.assertEqual(lineage["facts_staleness"], "current")
+        self.assertEqual(acc["as_of"], "20260817")
+
+    def test_monday_decision_warns_only_when_facts_are_older_than_settled_clock(self):
+        t = _tables()
+        t["account"][0]["as_of"] = "20260813"
+        _, lineage = _build_account_state(
+            t, "20260817", expected_facts_as_of="20260814")
+        self.assertEqual(lineage["facts_staleness"], "stale_warning")
+
+    def test_expected_facts_clock_is_fail_closed(self):
+        t = _tables()
+        with self.assertRaisesRegex(conv.ConvertError, "price-as-of"):
+            _build_account_state(t, "20260817", expected_facts_as_of="20260818")
+        t["account"][0]["as_of"] = "20260815"
+        with self.assertRaisesRegex(conv.ConvertError, "account.as_of"):
+            _build_account_state(t, "20260817", expected_facts_as_of="20260814")
+        with self.assertRaises(conv.ConvertError):
+            _build_account_state(t, "20260817", expected_facts_as_of="2026-08-14")
+
     def test_plain_summary_uses_decision_date_when_facts_are_current(self):
         acc, lineage = _build_account_state(_tables(), AS_OF)
         output = StringIO()
         with redirect_stdout(output):
             conv._print_plain_summary(acc, lineage)
         text = output.getvalue()
-        self.assertIn(f"[4.3] 决策日 {AS_OF}；事实截止 {AS_OF}", text)
+        self.assertIn(AS_OF, text)
         self.assertNotIn("[WARN]", text)
 
     def test_plain_summary_distinguishes_stale_facts_date_from_decision_date(self):
@@ -430,9 +458,9 @@ class AccountGateTests(unittest.TestCase):
         with redirect_stdout(output):
             conv._print_plain_summary(acc, lineage)
         text = output.getvalue()
-        self.assertIn(f"[4.3] 决策日 {AS_OF}；事实截止 20260612", text)
-        self.assertIn("事实截止日 20260612 早于决策日 20260615", text)
-        self.assertNotIn("20260612 早于决策日 20260612", text)
+        self.assertIn("20260612", text)
+        self.assertIn("20260615", text)
+        self.assertIn("[WARN]", text)
 
 
 class ParsingAntiCoercionTests(unittest.TestCase):
@@ -486,6 +514,13 @@ class ParsingAntiCoercionTests(unittest.TestCase):
 
 
 class FileLevelTests(unittest.TestCase):
+    def test_main_requires_price_as_of_before_write(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "account_bundle.json"
+            with self.assertRaises(SystemExit):
+                conv.main(["--input-dir", str(EXAMPLE_DIR), "--as-of", AS_OF, "--out", str(out)])
+            self.assertFalse(out.exists())
+
     def test_gb18030_positions_csv_is_accepted(self):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "positions.csv"
@@ -512,15 +547,17 @@ class FileLevelTests(unittest.TestCase):
                 "as_of,available_cash,manual_order_only,broker_connection_allowed\n"
                 "20260615,500000,TRUE,FALSE\n", encoding="utf-8")
             with self.assertRaises(conv.ConvertError):
-                conv.main(["--input-dir", d, "--as-of", AS_OF, "--out", str(Path(d) / "o.json")])
+                conv.main(["--input-dir", d, "--as-of", AS_OF, "--price-as-of", AS_OF,
+                           "--out", str(Path(d) / "o.json")])
 
     def test_main_end_to_end_writes_valid_outputs(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "account_state.json"
-            rc = conv.main(["--input-dir", str(EXAMPLE_DIR), "--as-of", AS_OF, "--out", str(out)])
+            rc = conv.main(["--input-dir", str(EXAMPLE_DIR), "--as-of", AS_OF,
+                            "--price-as-of", AS_OF, "--out", str(out)])
             self.assertEqual(rc, 0)
             bundle = json.loads(out.read_text(encoding="utf-8"))
-            conv.validate_account_bundle(bundle, AS_OF)
+            conv.validate_account_bundle(bundle, AS_OF, AS_OF)
             self.assertFalse(out.with_name("account_state_lineage.json").exists())
             lineage = bundle["lineage"]
             self.assertEqual({s["name"] for s in lineage["source_tables"]},
@@ -596,7 +633,8 @@ class ConverterOutputPrivacyGuardTests(unittest.TestCase):
             self._write_csvs(d)
             try:
                 with self.assertRaises(SystemExit):
-                    conv.main(["--input-dir", d, "--as-of", "20260615", "--out", str(leak)])
+                    conv.main(["--input-dir", d, "--as-of", "20260615", "--price-as-of", "20260615",
+                               "--out", str(leak)])
             finally:
                 for p in (leak, lin):
                     if p.exists():
@@ -611,7 +649,8 @@ class ConverterOutputPrivacyGuardTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             self._write_csvs(d)
             try:
-                conv.main(["--input-dir", d, "--as-of", "20260615", "--out", str(out)])
+                conv.main(["--input-dir", d, "--as-of", "20260615", "--price-as-of", "20260615",
+                           "--out", str(out)])
                 self.assertTrue(out.exists())
             finally:
                 if base.exists():

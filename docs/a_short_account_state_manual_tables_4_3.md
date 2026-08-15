@@ -72,12 +72,14 @@ bundle 内 `account.as_of` 保留真实 `facts_as_of`；决策日只写 bundle/l
 
 **Rule12（来自 portfolio_rule12）**：触发判断（回撤/连续止损/IV）**不自动算**，由用户填状态。仅自动推进：`active_cooldown` 且 `cooldown_until < 决策日` → 自动推进 `recovery_1`（更严格侧，带 `recovery_position_multiplier` 默认 0.5），**绝不**自动到 `inactive`（解除组合冷静须用户显式填 inactive）。`active_cooldown` 缺 `cooldown_until` → FATAL。
 
-## 5. 两个日期（facts_as_of vs decision_as_of）
+## 5. 三个日期（facts_as_of / expected_facts_as_of / decision_as_of）
 
 - `decision_as_of` = 转换器 `--as-of` = 周报 `--as-of`，也是状态推进基准日；只落 bundle/lineage。
+- `expected_facts_as_of` = 转换器 `--price-as-of` = 本轮最近一个已经完整收盘的事实/价格日。生成 bundle **之前**，从 `runners/resolve_canonical_asof.py::resolve_price_as_of` 的同一次输出取值：`decision_as_of` 传给 `--as-of`，`price_as_of` 传给 `--price-as-of`；转换器不联网、不猜日历。
 - `facts_as_of` = account.csv 的 `as_of`（用户最后更新事实的日期）。
-- `facts_as_of > decision_as_of` → FATAL（用了未来事实）；`< ` → 允许但 WARN + lineage 标 `stale_warning`（周一盘中用上周五持仓事实是合法常态，对齐周一收盘前 cadence）。
-- bundle 内 `account.as_of == facts_as_of`，周报验证 `decision_as_of == --as-of`、`facts_as_of ≤ decision_as_of`，并重算 `snapshot_digest/snapshot_id` 防错批或篡改。
+- `facts_as_of == expected_facts_as_of` → `current`；`facts_as_of < expected_facts_as_of` → 允许但 WARN + lineage 标 `stale_warning`。
+- `expected_facts_as_of > decision_as_of` 或 `facts_as_of > expected_facts_as_of` → FATAL，必须在写盘前拒绝；这两种都不能把错批/盘中事实伪装成已收盘事实。
+- bundle 内 `account.as_of == facts_as_of`，正式周报用本轮 `price_data_through` 复核 `expected_facts_as_of`，并重算 `snapshot_digest/snapshot_id` 防错批或篡改；不一致必须失败。任何示例日期都只是占位，不能把 `--as-of` 直接复制为 `--price-as-of`。
 
 ## 6. 三个 MINOR 决定（已定死）
 
@@ -87,7 +89,7 @@ bundle 内 `account.as_of` 保留真实 `facts_as_of`；决策日只写 bundle/l
 
 ## 7. provenance / lineage（不进 M6.7）
 
-provenance 与 account 同处一个原子 bundle；周报消费 `snapshot_id/digest/facts_as_of`，并把 lineage 的关键持仓对账告警转成 `account_integrity`。完整明细仍只留私密 bundle，不进入 tracked 周报。
+provenance 与 account 同处一个原子 bundle；周报在消费前校验 `snapshot_id/digest/facts_as_of/expected_facts_as_of`，并把 lineage 的关键持仓对账告警转成 `account_integrity`。完整明细仍只留私密 bundle，不进入 tracked 周报。
 
 ## 8. owner 文件
 
