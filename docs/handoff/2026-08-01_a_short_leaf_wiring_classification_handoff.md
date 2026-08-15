@@ -7790,3 +7790,59 @@ runners/weekly_screening.cmd → Windows PowerShell 5.1 runners/weekly_screening
 **Optional（`O-P5-1`）**：守卫钉的是那一行而不是那一类，将来新增一条带中文的 `Write-Host` 会同样花屏而测试全绿。窄守卫的自然形态是对该脚本所有 `Write-Host`/`Write-Warning`/`Write-Error` 行断言 `isascii()`——把我这次手工扫描固化下来即可。
 
 **边界**：只扫了这两个 A-short 入口，`runners/` 下其它 `.ps1`（含 us-short 侧）本轮未看；纯文案改动，零行为影响。
+
+## 2026-08-15 追加：桌面 `1a_testrun0815.md` 问题 1–2 同类调用修复（3-call slice，8c7a）
+
+**状态**：Codex executor/fixer 已完成最小实现，当前 `repaired / OPEN-NOT-VERIFIED`；未 stage、commit、push、merge，待 Claude Code 独立 reviewer/committer 复核。只在 `D:\cnhea\Codex\worktrees\8c7a\Stock` 工作，未访问或修改主树、其他工作树、provider/live、真实 weekly、测试胶囊或账户。
+
+**问题与根因**：桌面方案问题 1–2 是同一类 Windows PowerShell 5.1 native argv source-transport 缺陷，覆盖且仅覆盖三个生产调用点：`runners/weekly_screening.ps1` 的 operation-bundle loader（原 `$OperationLoaderCode` 经 `-c` 传参）、同文件的 design-completion probe（原 `$Probe` 经 `-c` 且吞 stderr）、`runners/us_short_paper_one_click.ps1` 的 stderr→stdout bootstrap（原 `$stderrToStdoutBootstrap` 经 `-c`）。PS 5.1 会在 native argv 传递中剥掉 source 内嵌双引号；loader 可在已有 M6.7 输出之后 SyntaxError，probe 则会把非零/异常误报成 not authorized，US bootstrap 同样可能在运行前破坏 Python source。
+
+**最小改动**：只改上述两个生产 `.ps1` 与直接既有测试文件 `tests/test_a_short_weekly_screening_m67_failure_closeout.py`、`tests/test_us_short_paper_one_click.py`。三个调用均改为 `$source | & $PythonExe - <原有参数>`；没有 helper、临时 `.py`、schema/config/state/cache/hash 改动。operation loader 增加 `sys.stderr = sys.stdout` 以让 import/validator 错误进入既有 invalid-bundle failure branch，保留原 code、args、stdout、允许 stages、exit 24、失效/清理既有正式产物边界且不打印 candidate/bundle data。design probe 变为 `authorized` / `not_authorized` / `probe_failed` 三态；nonzero/no output/invalid output/exception 均输出 fail-closed，`probe_failed` 只允许 daily-only regime，不传 `--v14_2-raw-regime` 或 `--m67-report`，并把 `regime_action`、`candidate_effect` 写为 `failed / unavailable / design_completion_probe_failed`，不制造 D2/candidate-effect evidence。US bootstrap 将 `run_name` 改为真实双引号 source，保留 CLI 顺序、stderr→stdout、Python exit code，立即保存 `$LASTEXITCODE` 再 `exit`。
+
+**调用链、消费者、schema/source-binding、缓存/写盘边界**：
+
+1. `weekly_screening.ps1 → stdin operation loader → validate_published_weekly_operation_bundle → M6.7 stage → existing receipt/JSON/Markdown transaction`。loader 仍以同一 `$ProjectRoot`、`$M67Out` 调 Python，stage/status/allowed-stage 判断和 exit 24 仍由既有路径控制；成功时下游继续消费同一 M6.7 JSON/Markdown，失败时既有 invalid-bundle 收口继续 fail-closed。
+2. `weekly_screening.ps1 → stdin design probe → engine.a_short_evidence_epoch_mode.design_completion_authorized → Stage 5 regime comparison runner → regime_daily/regime_action/candidate_effect sidecars`。`authorized` 保持 raw regime + M6.7 report 绑定；`not_authorized` 保持 daily-only 与原 `design_not_complete` skip；`probe_failed` 不进入 raw/M6.7 参数分支，daily regime 可运行但 action/effect 显式 failed/unavailable，错误码沿用现有 sidecar schema 可接受格式。
+3. `us_short_paper_one_click.ps1 → stdin bootstrap → runpy.run_path(runners/us_short_paper_one_click.py) → paper runner`。source 传输修复不改变 `cliArgs`、`sys.argv` 重排、Python stderr 汇入 stdout、或原生 exit code。
+
+没有修改 schema、字段枚举、provider/source selection、缓存键、state、hash、正式产物格式或任何生产数据；source-binding 仍落在原 M6.7 receipt/report、analysis input、regime sidecar 和 paper runner CLI 上。没有新增写盘点；probe failure 只新增既有 `Add-SidecarOutcome` 的显式失败记录，candidate/bundle 数据不打印，US bootstrap 不写临时脚本。
+
+**反向控制与自审**：
+
+- `tests.test_a_short_weekly_screening_m67_failure_closeout` 覆盖 valid/invalid operation loader、原有 stage/status/receipt 绑定、三态 probe、probe failure 不传 raw/M6.7 且不写 `design_not_complete`，以及 repo-wide `runners/*.ps1` 旧 `-c $Variable` 扫描和三个旧调用形态 planted control。
+- `tests.test_us_short_paper_one_click` 保留 Windows PowerShell 真实 integration，覆盖 exit 0/17、stdout/stderr、argv、无 `RemoteException`/`NativeCommandError`，并新增 stdin/no-old-bootstrap guard。
+- 最终 static old-form scan：`runners/*.ps1` 无 `-c` 后接 PowerShell variable；`git diff --check` PASS（仅 LF→CRLF 提示）。未改 `.cmd` launcher 的固定 Python 绑定。
+
+**精确命令与原始终态**：
+
+```text
+& 'D:\cnhea\Codex\worktrees\8c7a\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' tests.test_a_short_weekly_screening_m67_failure_closeout tests.test_us_short_paper_one_click tests.phase6.test_weekly_screening_guardrails tests.test_a_short_preflight
+→ Ran 73 tests ... OK
+→ [bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=73
+→ FOCUSED_RECEIPT token=receipt:8856336c6b83f886d0fadf26 python=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe
+
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\8c7a\Stock\.tools\full_pack_ledger.py' run a_short 'PowerShell Python source transport changed in production weekly entrypoint' 'receipt:8856336c6b83f886d0fadf26' 860 -- discover -s tests -p 'test_a_short*.py'
+→ STATIC status=PASS diff_check=PASS py_compile=2
+→ RESULT status=FAIL exit=1 tests=2208 elapsed=92.7s deadline=860s mode=parallel
+→ discovered=3097 ran=2208 equal=False；首个失败 `phase6.test_forward_tracker_cache_guard`，并行 worker import 名称为 `phase6...`；直接同一固定 launcher 的 `tests.phase6.test_forward_tracker_cache_guard` 为 `Ran 24 tests ... OK`。
+
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\8c7a\Stock\.tools\full_pack_ledger.py' run us_short 'PowerShell Python source transport changed in production paper one-click entrypoint' 'receipt:8856336c6b83f886d0fadf26' 860 -- discover -s tests -p 'test_us_short*.py'
+→ STATIC status=PASS diff_check=PASS py_compile=2
+→ RESULT status=PASS exit=0 tests=5879 elapsed=475.8s deadline=860s mode=parallel
+→ discovered=5879 ran=5879 equal=True
+```
+
+**未验证 / 交接**：a-short full lane 不能记为 PASS，失败归因是 full-pack parallel discovery/import 形态而非本切片三调用；不得以 `2208/3097` 宣称 A-short 全量关闭。focused 73/73 与 direct target 24/24 只证明本切片和独立失败模块；US-short full lane 5879/5879 只证明离线测试 lane。provider、live、weekly production、capsule、ship-gate、review、commit、push、merge 均未执行或未完成。下一步是 Claude Code 独立审查；若 reviewer 发现 full-pack infrastructure 必须另开其类问题，不在本 slice 顺手修复。
+
+**文档门禁**：固定 launcher 执行 `tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard tests.test_readme_route_row_length`，`Ran 66 tests ... OK`，`RESULT tier=focused status=PASS exit=0 tests=66`；该结果作为本轮 pre-commit/reviewer door 证据，未 stage/commit。
+## 2026-08-15 追加：PowerShell→python 传参吞引号三处同类修复的独立审查 = PASS（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：PASS，零 Required，两条 Optional。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么**：整读三处改动与 `Get-DesignCompletionAuthorized` 的全部 5 处引用——该函数由 bool 改成三态字符串，而 PowerShell 里非空字符串恒为真，只要有一处漏改就会把"未授权"读成"已授权"、把闸门打开；实测两处布尔判断都走 `($... -eq 'authorized')` 这个真布尔，没有漏网。新错误码也核过 sidecar schema 是 `^([a-z0-9_]+)?$` 自由串而非枚举。
+
+**四格探针（我自跑）**：`python -` 的 argv 下标与 `-c` 完全一致（`['-','ARG1','ARG2']`），loader 依赖的 `argv[1]/[2]` 不受影响；`$LASTEXITCODE` 穿过管道正确（`sys.exit(7)` → PS 读到 7）；真实 import 在 stderr→stdout 下只输出一行纯 JSON；反向控制是人为插一行 stderr → `ConvertFrom-Json` 立刻失败。第四格正是 `O-STDIN-1` 的依据：机制已重新武装，只是今天没有触发者。
+
+**值得记的两点做法**：三段片段同时把内部引号改回双引号，等于给传输方式装了 canary——哪天退回 `-c` 会立刻炸而不是静默降级；新测试遍历 `runners/*.ps1` 断言 `-c $变量` 零命中并带植入对照，是类守卫而不是行守卫。
+
+**未覆盖维度**：没有再跑真实周实盘，所以"这次能不能真的走到 `stage_status=complete`"未证；`Set-M67Failure → Invalidate-M67Artifact` 那条"校验失败即销毁已发布周报"的路本轮一行未改（`O-STDIN-2`）。本树落后 master 且有未提交工作，本轮未 ff，合并时以 master 为准。

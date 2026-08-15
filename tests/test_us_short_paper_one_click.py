@@ -416,6 +416,16 @@ class USShortPaperOneClickTest(unittest.TestCase):
         )
         self.assertIn("-ExecutionPolicy Bypass", text)
 
+    def test_powershell_source_bootstrap_uses_stdin_and_preserves_exit_code(self) -> None:
+        source = (Path(__file__).parents[1] / "runners" / "us_short_paper_one_click.ps1").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("$stderrToStdoutBootstrap | & $PythonExe - @cliArgs", source)
+        self.assertNotRegex(source, r"(?:-c|[\"']-c[\"'])\s+\$stderrToStdoutBootstrap")
+        self.assertIn('run_name="__main__"', source)
+        self.assertIn("$RunExitCode = $LASTEXITCODE", source)
+        self.assertIn("exit $RunExitCode", source)
+
     @unittest.skipUnless(os.name == "nt", "PowerShell native-stderr behavior is a Windows contract")
     def test_powershell_launcher_routes_stderr_without_changing_python_exit_code(self) -> None:
         powershell = shutil.which("powershell") or shutil.which("pwsh")
