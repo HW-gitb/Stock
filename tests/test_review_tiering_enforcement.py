@@ -96,7 +96,7 @@ class RecordedRepoRootTests(unittest.TestCase):
     """Both hooks must judge the tree the snapshot came from, not the tree they resolve now."""
 
     ENTRY = (
-        "# Session Log\n\n## 2026-07-27 审查 PASS (t)\n\n"
+        "# Session Log\n\n## 2026-07-27 — 审查 PASS (t)\n\n"
         "- **Verdict/Action**: PASS\n- **Verify**: review-evidence:deadbeef 1 OK\n\n"
         "REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER\n"
     )

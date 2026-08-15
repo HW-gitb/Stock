@@ -33,6 +33,19 @@ class BoundedUnittestTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.tests, 1)
 
+    def test_nested_terminal_count_cannot_replace_the_outer_count(self):
+        result = bounded.run_command(
+            [
+                sys.executable,
+                "-c",
+                "print('Ran 5 tests in 0.1s'); "
+                "print('[bounded-unittest nested] Ran 3 tests in 0.1s'); print('OK')",
+            ],
+            10,
+        )
+        self.assertEqual(result.status, "PASS")
+        self.assertEqual(result.tests, 5)
+
     def test_a_share_provider_dependencies_do_not_poison_us_short_full_gate(self):
         with (
             patch.object(
@@ -216,6 +229,7 @@ class NestedRunDoesNotClobberReceiptTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("NESTED - acceptance receipt left untouched", result.stdout)
+        self.assertRegex(result.stdout, r"\[bounded-unittest nested\] Ran \d+ tests? in")
 
         after = receipt_path.read_bytes() if receipt_path.exists() else None
         self.assertEqual(before, after, "a nested run overwrote the acceptance receipt")
