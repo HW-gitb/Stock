@@ -1266,7 +1266,7 @@ def default_pipeline(
     from runners import us_short_weekly_capstone_stages as st  # thin adapters over the real runners
     stages = [
         Stage("universe_fetch", True, lambda c: [], lambda c: [c.candidate_path], st.run_universe,
-              contract_version="1.0.0", reuse_policy="refresh_then_reuse_if_equivalent"),
+              contract_version="1.1.0", reuse_policy="refresh_then_reuse_if_equivalent"),
         Stage("momentum_fetch", True, lambda c: [c.candidate_path],
               lambda c: [c.series_packet_path, c.ohlcv_series_packet_path], st.run_momentum_fetch,
               contract_version="1.0.0", reuse_policy="frozen_inputs"),

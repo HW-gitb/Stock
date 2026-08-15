@@ -4801,3 +4801,97 @@ Claude Code：独立审查本节对应 Required/Additional；PASS 后按项目�
 - 实际 guard 契约要求严格经过 `cooldown → caution → recovery → normal`，且测试或运行规则证明扣留周首值会让下一周从 `caution` 直接到 `normal` 不可接受。此时必须在开钟前补回 recovery 过渡。
 
 若实际对账保留完整历史，且业务明确接受该直接放宽路径，则 O-16B-6 不触发；仅因 docstring 使用 `may` 或离线代码存在该路径，不单独开修复刀。
+
+## 2026-08-14 追加：桌面 `2us_testrun0814.md` 问题1 Universe 市值残差修复（dc41；Codex executor/fixer）
+
+### 范围与顺序
+
+- 本刀只处理 Universe 市值 provider 位置、来源优先级、lineage、summary/provider-health、checkpoint contract 和真正消费该 artifact 的兼容接线；未处理问题2/4/5/6/7，未改主树、其他工作树或桌面文档。
+- 当前生产链为 `SEC frames → targeted SEC CompanyFacts → yfinance Ticker.info → Massive ticker-overview → final candidate artifact`。SEC `shares × Massive close` 仍最高优先级；yfinance 和 Massive 都只接前一层的完整精确 residual。
+- yfinance 使用 lazy import 和一次 `Ticker.info` 读取；首票不 sleep，后续逻辑 ticker attempt 间固定 0.2 秒；普通失败继续，429/Too Many Requests/crumb 停止本层并把当前及剩余集合交给 Massive。逻辑 attempt 不冒充物理 HTTP call。
+
+### 代码、schema 与兼容
+
+- `runners/us_short_universe_fetch.py` 删除 Universe FMP profile/key/budget/summary 路径，加入 `sharesOutstanding ×` Massive 实际观测 close（通常为 price-basis，延迟时允许更早 `used_date`）与跨 `$300M` 阈值的 marketCap snapshot 规则；Yahoo 股数只写 candidate 私有 lineage，tracked summary 只聚合计数。
+- `schemas/us_short_universe_candidate_artifact.schema.json` 升至 1.3.0；两个 yfinance source 和 conditional lineage 有 schema/语义反控，SEC source 优先时拒绝 yfinance lineage。
+- `runners/us_short_weekly_capstone_stages.py` 读取新版 yfinance completion 并保留历史 FMP summary 只读兼容；`runners/us_short_weekly_capstone.py` 提升 Universe stage contract；`runners/us_short_forward_lifecycle_capture.py` 接受 1.1/1.2/1.3 artifact，不改变业务判定。
+
+### 验证与边界
+
+- 固定 Python focused wrapper：`receipt:11942f8e013d45e05dd13753`，273 tests PASS。适用 US-short full ledger：`5873/5873 PASS`，809.5s/860s，static diff-check PASS、py_compile=7。
+- 文档治理门随后固定 Python `tests.test_doc_governance_guard`、`tests.test_route_doc_ledger_status_consistency`、`tests.test_readme_route_row_length` 为 `66/66 PASS`，receipt：`receipt:4f5369f69c4a0eba68a97dde`。
+- provider 测试使用 fake client、注入 sleep 和临时根；未调用真实 yfinance/FMP/Massive/SEC/live/paper，未声称 0814 current-day 缺口恢复、provider 稳定性、production 或 ship-gate。
+- 当前状态 `repaired / OPEN-NOT-VERIFIED`；下一步由 Claude Code 独立审查，PASS 后按项目流程提交。`docs/CURRENT.md` 不写本轮 review/commit 瞬态门。
+
+## 2026-08-14 追加：问题1 Universe 市值残差修复的独立审查（dc41；Claude Code reviewer/committer；**审查 FAIL**）
+
+### 审了什么
+
+dc41 工作树 13 modified / 0 untracked（开工与收口两次 `git status --short --untracked-files=all` 一致，无并发脏改动）。整读被消费的函数体而非只读 diff：`fetch_yfinance_market_caps`、`_yfinance_market_cap_record`、`_load_yfinance_client`、`apply_pass1`、`validate_candidate_artifact`、`build_market_cap_completion`、`_build_run_fetch_provider_health`、`_universe_market_cap_health`。风险档按 §6a 判为**最高危**（真实 live provider 取数 + 新 fail-closed validator），起 1 个只读独立对抗 agent（工作树未提交，故只读而非 worktree 隔离）。
+
+### 结论
+
+FAIL，两条 Required：
+
+1. `R-USSHORT-PROBLEM1-YFINANCE-BENIGN-LOG-LINE-ABORTS-THE-WHOLE-MARKET-CAP-LAYER`（P1）——成功路径上对 stdout/stderr 做限流子串匹配，会把**已经成功取到**的市值丢弃并掐死整层。
+2. `R-USSHORT-PROBLEM1-README-ROUTE-ROW-DROPS-THE-BATCH5-PROVIDER-LIVE-POINTERS`（P2）——必读路由表的 col2 指针被删，8+ 个现存 provider-live 契约文件在 `docs/README.md` 中再无入口；而 `COL1_CAP` 只管 col1，删除并非 guard 所迫。
+
+另两条 Optional（`O-P1-1` price-basis 口径不对称、`O-P1-2` legacy FMP health 分支不可达）。完整 Required 正文/风险/边界/closure tests 只在 `docs/system_risk_register.md`，本节不复述。
+
+### 验证命令与结果
+
+- 独立复跑 focused 超集（rule 1 的 reviewer 独立测试义务）：`.tools/bounded_unittest.py focused 900 -- tests.provider.test_us_short_universe_fetch tests.schema.test_us_short_universe_candidate_artifact_schema tests.provider.test_us_short_provider_health_capstone_matrix tests.provider.test_us_short_weekly_capstone tests.provider.test_us_short_forward_lifecycle_capture` → `273 tests OK`，`receipt:244785382e97d79396126522`。
+- full lane 按 rule 4 **不复跑**，引 executor ledger 记录 `5873/5873 PASS`。
+- reviewer 自写 46 条反向/植入探针：36 条打 producer/validator（bool/NaN/inf/0/负/字符串/10**400 全拒；跨 `$300M` 阈值含边界；身份双字段；限流停止与普通失败分流；pacing N-1；`price_as_of` 绑定；去重；缺包降级；9 类伪造 artifact 全部 fail-closed + 3 组正控通过；守恒上下界），10 条打 `_universe_market_cap_health`（legacy/current/hybrid/缺字段/超额/残余未清）。
+- 静态：`git diff --check` clean（仅 CRLF 提示，行数无整文件翻转）、`py_compile` 4 个改动 runner 全过；新增行 secret/URL 扫描只命中 env 变量名与测试哨兵值。
+
+### 失效的旧结论
+
+- Codex 本刀 handoff 与 register 中「429/Too Many Requests/crumb 停止本层……如实降级」不成立：命中判定不区分「请求失败」与「请求成功但日志里有这几个字」，后者会把成功结果记成限流失败。修复前不得据此宣称限流语义已闭。
+- 「focused 273 全绿 = 该层行为已证」不成立：成功后扫日志这条腿零测试覆盖，缺陷正长在没测的那条腿上。
+
+### 下一步注意事项
+
+- 修复 R-1 时按整类扫：限流/异常信号的判定应统一收敛到「调用真的失败了吗」，并把 `stopped_on_rate_limit_or_crumb` / `ordinary_failure_count` 接进 tracked summary，否则误停无声。
+- 真实 Yahoo 联网行为本轮**未验证**（禁网）；R-1 的触发条件依赖运行环境是否装 `curl_cffi`（本机装了故本机不触发）。修复后若要宣称 live 稳定，仍需单独授权的 current-day 真跑。
+
+## 2026-08-15 追加：问题1 Required + Optional 四项最小修复（dc41；Codex executor/fixer）
+
+### 修复范围
+
+- `R-USSHORT-PROBLEM1-YFINANCE-BENIGN-LOG-LINE-ABORTS-THE-WHOLE-MARKET-CAP-LAYER`：成功的 `Ticker.info` 不再因 stdout/stderr 良性日志被误判为限流；限流/crumb 只看实际异常及 cause/context/status 信号；tracked summary 暴露普通失败、限流失败和停止态。
+- `R-USSHORT-PROBLEM1-README-ROUTE-ROW-DROPS-THE-BATCH5-PROVIDER-LIVE-POINTERS`：恢复 `docs/README.md` Batch5 provider/live 行的完整 schema、docs、runner、test col2 指针。
+- `O-P1-1`：yfinance shares×close 与 SEC 共享 Massive 实际观测 close；正常为 price-basis，延迟时允许不晚于 price-basis 的 `used_date`，schema/语义校验同步收紧并加正向测试。
+- `O-P1-2`：删除不可达的带 `market_cap_completion` legacy FMP 分支；历史无聚合 summary 仍只读兼容 `fmp_profile_market_cap`，不升级为当前 yfinance 证据。
+
+### 验证与边界
+
+- 固定 Python focused wrapper：278 tests PASS，`receipt:a8c18c867f4bbbae88f2e813`。
+- 最终 US-short full lane：`discovered=5878 ran=5878 equal=True`，`PASS`，596.2s/860s，fingerprint `d06e4715ff61feba028464b41959343d5d72ba6b316e92fc7f82cd80e50e4144`；static `diff_check=PASS`、`py_compile=7`。
+- 全程 fake/offline；未调用真实 Yahoo/FMP/Massive/SEC/provider/live/paper，未修改主树/桌面文档，未提交、未 merge；状态保持 `repaired / OPEN-NOT-VERIFIED`，下一步 Claude Code 独立审查。
+
+## 2026-08-15 追加：问题1 修复轮的独立复审（dc41；Claude Code reviewer/committer；**复审 PASS，已提交并合入 master**）
+
+### 改了什么 / 为什么
+
+Codex 按上一轮 FAIL 的两条 Required 修复，并自裁接受两条 Optional：
+
+1. **R-1**：删掉成功路径上对 stdout/stderr 的限流子串扫描；限流改由 `_looks_like_yfinance_rate_or_crumb_exception` 只在**异常路径**判定，沿 `__cause__ or __context__` 走链（带 id 环路守卫），signal 覆盖类名 / `str(exc)` / `status_code` / `status` / `code` / `response.status_code`。`ordinary_failure_count`、`rate_limit_or_crumb_failure_count`、`stopped_on_rate_limit_or_crumb` 三个计数接进 `market_cap_fallback_observability.yfinance_info`。
+2. **R-2**：`docs/README.md` Batch5 provider/live 行的 col2 指针集合完整恢复，只压 col1。
+3. **O-P1-1（放松类改动）**：`price_as_of` 由 `== price_basis_date` 放宽为 `_valid_iso_date(..., upper_bound=price_basis_date)`，clock 常量改名 `massive_observed_close_plus_retrieval_snapshot_shares`，schema enum / `if/then` / 语义 validator 三处同步。
+4. **O-P1-2**：删除 `_universe_market_cap_health` 里不可达的 legacy FMP `market_cap_completion` 分支，保留仍可达的 `provider_health.opportunistic_fallbacks.fmp_profile_market_cap` 只读兼容。
+
+### 验证命令与结果
+
+- reviewer 独立复跑 focused 超集（同上一轮 5 模块）：`278 tests OK`，`receipt:46f3653947b2b116339267e2`；doc-governance pack `66 OK`，`receipt:171fbf14d3ca7336631e35ba`；`git diff --check` clean、`py_compile` 4 个改动 runner 全过。
+- full lane 按 rule 4 **不复跑**，引 executor ledger `discovered=5878 ran=5878 PASS`。
+- reviewer 自写探针三组：①复审 11 条 —— 上一轮的复现用例（健康 provider + 良性 `rate-limit` WARNING）现 `rescued=4 / stopped=False`，`crumb` 日志与 `print` 噪声同样不再中止；真实 `YFRateLimitError`、仅 `.status_code=429`、仅 `.response.status_code=429`、仅类名、`__cause__` 包装五种真失败仍全部停止并把当前及剩余交给 Massive；普通异常继续；自引用 `__cause__` 环不递归。②放松腿反向控制 15 条全 held —— 未来日期 close 拒进 shares×close（无 look-ahead）、六种畸形 `price_as_of` 全拒、stale-close 端到端正控通过、四类伪造（未来日期 / 换 clock 标签 / `basis_shares` 不复现 cap / 沿用已退役 clock 字面量）全 fail-closed。③上轮 36 条回归重跑 34/36，两处差异均为本轮有意变更（类名限流现已可检出、`price_as_of` 放宽），非回归。
+
+### 失效的旧结论
+
+- 上一轮 register 里 `R-1` 的「成功路径扫日志」现状描述与 `O-P1-1`/`O-P1-2` 两条 Optional 均已被本轮修复取代，按 resolved 读；clock 字面量 `price_basis_date_close_plus_retrieval_snapshot_shares` **已退役**，validator 会拒绝它，任何引用请改用 `massive_observed_close_plus_retrieval_snapshot_shares`。
+
+### 下一步注意事项
+
+- 新记 `O-P1-3`（不阻断）：异常路径的 `"crumb"` marker 仍是纯子串匹配，会命中普通 404 消息里内嵌的 Yahoo URL 查询参数（`&crumb=`），使整层提前停止。探针已实测。影响是「慢，不是错」——残余仍按精确残余交给 Massive，无错值、无守恒破。要收窄时把 `"crumb"` 改成只匹配 crumb **获取失败**的类名/文案。
+- 本轮全程禁网。真实 Yahoo 稳定性、0814 current-day 缺口恢复、production / ship-gate 仍未验证；要宣称 live 稳定仍需单独授权的 current-day 真跑。

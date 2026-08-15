@@ -1123,13 +1123,13 @@ def _universe_market_cap_health(summary: Mapping[str, Any]) -> tuple[str, str]:
             or len(set(needs)) != len(needs)):
         return "universe_market_cap", "missing"
 
-    # Problem 7's current producer supplies one conserved aggregate. It is the only current market-cap health
-    # input; malformed/current aggregate evidence is down, never silently replaced by the historical FMP-only shape.
+    # The current producer supplies one conserved aggregate. Historical summaries predating this aggregate remain
+    # readable through the legacy provider-health path below; they must never be mistaken for current yfinance evidence.
     if "market_cap_completion" in summary:
         completion = summary.get("market_cap_completion")
         required = (
             "needed_count", "sec_companyfacts_target_count", "sec_companyfacts_request_count",
-            "sec_companyfacts_rescued_count", "fmp_attempted_count", "fmp_rescued_count",
+            "sec_companyfacts_rescued_count", "yfinance_attempted_count", "yfinance_rescued_count",
             "massive_overview_attempted_count", "massive_overview_rescued_count", "final_unresolved_count",
         )
         if not isinstance(completion, Mapping) or any(
@@ -1140,20 +1140,20 @@ def _universe_market_cap_health(summary: Mapping[str, Any]) -> tuple[str, str]:
         sec_target = completion["sec_companyfacts_target_count"]
         sec_calls = completion["sec_companyfacts_request_count"]
         sec_rescued = completion["sec_companyfacts_rescued_count"]
-        fmp_attempted = completion["fmp_attempted_count"]
-        fmp_rescued = completion["fmp_rescued_count"]
+        yfinance_attempted = completion["yfinance_attempted_count"]
+        yfinance_rescued = completion["yfinance_rescued_count"]
         massive_attempted = completion["massive_overview_attempted_count"]
         massive_rescued = completion["massive_overview_rescued_count"]
         unresolved = completion["final_unresolved_count"]
         if (
             sec_target > needed or sec_calls > sec_target
-            or fmp_attempted > _universe.UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET
-            or fmp_attempted > needed
-            or fmp_rescued > fmp_attempted
-            or massive_attempted > needed or massive_rescued > massive_attempted
+            or yfinance_attempted > needed - sec_rescued
+            or yfinance_rescued > yfinance_attempted
+            or massive_attempted > needed - sec_rescued - yfinance_rescued
+            or massive_rescued > massive_attempted
             or sec_rescued > needed
             or unresolved != len(needs)
-            or needed != sec_rescued + fmp_rescued + massive_rescued + unresolved
+            or needed != sec_rescued + yfinance_rescued + massive_rescued + unresolved
         ):
             return "universe_market_cap", "down"
         return "universe_market_cap", "ok" if unresolved == 0 else "degraded"
@@ -1161,7 +1161,13 @@ def _universe_market_cap_health(summary: Mapping[str, Any]) -> tuple[str, str]:
     unresolved = len(needs)
     fallback = ((summary.get("provider_health") or {}).get("opportunistic_fallbacks")
                 if isinstance(summary.get("provider_health"), Mapping) else None)
-    fallback = fallback.get("fmp_profile_market_cap") if isinstance(fallback, Mapping) else None
+    fallback = fallback.get("yfinance_market_cap") if isinstance(fallback, Mapping) else None
+    if fallback is None:
+        # Historical committed summaries used the retired FMP provider family; read them without upgrading the
+        # evidence to the current yfinance path.
+        legacy_health = ((summary.get("provider_health") or {}).get("opportunistic_fallbacks")
+                         if isinstance(summary.get("provider_health"), Mapping) else None)
+        fallback = legacy_health.get("fmp_profile_market_cap") if isinstance(legacy_health, Mapping) else None
     if isinstance(fallback, Mapping):
         raw_needed = fallback.get("needed_count")
         raw_unresolved = fallback.get("unresolved_count")

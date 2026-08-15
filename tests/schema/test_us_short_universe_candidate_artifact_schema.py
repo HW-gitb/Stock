@@ -62,7 +62,7 @@ def _row(ticker, *, eligible, adv_usd, reasons, status_sourced=False, status_val
         "otc": status_values.get("otc", False),
         "status_flags_sourced": bool(status_sourced),
         "eligible": eligible, "reasons": reasons,
-        "provider_id": "massive_grouped_daily+sec_xbrl_frames(+fmp_profile)",
+        "provider_id": "massive_grouped_daily+sec_xbrl_frames_or_companyfacts(+yfinance_info,+massive_ticker_overview)",
         "as_of": "2026-06-26", "observed_at": "2026-06-29T12:00:00+00:00",
         "coverage_status": "complete", "parser_status": "ok",
         "lineage": {
@@ -90,7 +90,7 @@ def _valid_artifact() -> dict:
             _row("LOW", eligible=False, adv_usd=1000.0, reasons=["adv_usd_below_floor"])]
     return {
         "schema_name": "us_short_universe_candidate_artifact",
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "authorization_ref": "user_chat_20260626_universe_fetch",
         "generated_at": "2026-06-29T12:00:00+00:00",
         "decision_date": "20260629",
@@ -176,6 +176,39 @@ class UsShortUniverseCandidateArtifactSchemaTest(unittest.TestCase):
     def test_bad_market_cap_source_enum_rejected(self):
         a = copy.deepcopy(_valid_artifact())
         a["rows"][0]["market_cap_source"] = "guess"
+        self.assertTrue(self._errors(a))
+
+    def test_yfinance_snapshot_requires_retrieval_lineage(self):
+        a = copy.deepcopy(_valid_artifact())
+        row = a["rows"][0]
+        row["shares"] = None
+        row["market_cap_source"] = "yfinance_info_market_cap_snapshot"
+        row["lineage"]["shares_source"] = "none"
+        row["lineage"]["market_cap_source"] = "yfinance_info_market_cap_snapshot"
+        row["lineage"]["market_cap_source_observed_at"] = "2026-06-29T12:00:00+00:00"
+        row["lineage"]["market_cap_clock_semantics"] = "retrieval_snapshot_no_historical_asof"
+        self.assertEqual(self._errors(a), [])
+        del row["lineage"]["market_cap_source_observed_at"]
+        self.assertTrue(self._errors(a))
+
+    def test_yfinance_shares_close_requires_basis_shares_and_clock(self):
+        a = copy.deepcopy(_valid_artifact())
+        row = a["rows"][0]
+        row["shares"] = None
+        row["market_cap_source"] = "yfinance_info_shares_x_massive_close"
+        row["lineage"]["shares_source"] = "none"
+        row["lineage"]["market_cap_source"] = "yfinance_info_shares_x_massive_close"
+        row["lineage"]["market_cap_basis_shares"] = 15_000_000_000.0
+        row["lineage"]["market_cap_source_observed_at"] = "2026-06-29T12:00:00+00:00"
+        row["lineage"]["market_cap_clock_semantics"] = "massive_observed_close_plus_retrieval_snapshot_shares"
+        self.assertEqual(self._errors(a), [])
+        del row["lineage"]["market_cap_basis_shares"]
+        self.assertTrue(self._errors(a))
+
+    def test_non_yfinance_source_rejects_yfinance_lineage(self):
+        a = copy.deepcopy(_valid_artifact())
+        row = a["rows"][0]
+        row["lineage"]["market_cap_source_observed_at"] = "2026-06-29T12:00:00+00:00"
         self.assertTrue(self._errors(a))
 
     def test_wrong_schema_name_rejected(self):
