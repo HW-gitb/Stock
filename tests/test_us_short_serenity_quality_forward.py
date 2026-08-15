@@ -76,8 +76,8 @@ class SerenityQualityForwardTest(unittest.TestCase):
     def _legacy_ledger(self):
         # Shape written before the two-action Blade5 fields were added; it deliberately has no pending arrays.
         return {
-            "schema_name": quality.SCHEMA_NAME,
-            "schema_version": quality.SCHEMA_VERSION,
+            "schema_name": quality.LEDGER_SCHEMA_NAME,
+            "schema_version": quality.LEGACY_LEDGER_SCHEMA_VERSION,
             "quality_policy_version": quality.QUALITY_POLICY_VERSION,
             "cross_cohort_aggregation_allowed": False,
             "cohorts": [],
@@ -168,21 +168,22 @@ class SerenityQualityForwardTest(unittest.TestCase):
             self.assertEqual(len(result["ledger"]["pending_annotations"]), 1)
             self.assertEqual(result["observation"]["settlement_status"], "pending_review")
 
-    def test_legacy_ledger_is_no_count_and_does_not_abort_or_get_rewritten(self):
+    def test_legacy_empty_ledger_is_migrated_once_and_week_continues(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             state = root / "state" / "us_short"
             state.mkdir(parents=True, exist_ok=True)
             ledger = state / "ledger.json"
-            legacy_bytes = (json.dumps(self._legacy_ledger(), ensure_ascii=False, indent=2) + "\n").encode("utf-8")
-            ledger.write_bytes(legacy_bytes)
+            ledger.write_text(json.dumps(self._legacy_ledger(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
             result = self._run(root, "20260810", ledger=ledger)
-            self.assertEqual(result["status"], "invalid_evidence")
-            self.assertEqual(result["error"]["code"], "SERENITY_QUALITY_LEDGER_REJECTED")
+            self.assertEqual(result["status"], "sleeping")
             self.assertFalse(result["main_task_should_abort"])
             self.assertEqual(result["quality_gate"]["window"]["eligible_week_count"], 0)
-            self.assertEqual(ledger.read_bytes(), legacy_bytes)
+            migrated = json.loads(ledger.read_text(encoding="utf-8"))
+            self.assertEqual(migrated["schema_version"], quality.LEDGER_SCHEMA_VERSION)
+            self.assertEqual(migrated["pending_annotations"], [])
+            self.assertEqual(migrated["closed_pending_annotations"], [])
 
             settlement = quality.settle_pending_review(
                 ledger_path=ledger,
@@ -192,10 +193,75 @@ class SerenityQualityForwardTest(unittest.TestCase):
                 root=root,
                 now=datetime(2026, 8, 17, 8, tzinfo=timezone.utc),
             )
-            self.assertEqual(settlement["status"], "no_count")
-            self.assertEqual(settlement["evidence_status"], "invalid_evidence")
-            self.assertEqual(settlement["reason_code"], "SERENITY_QUALITY_LEDGER_REJECTED")
-            self.assertFalse(settlement["main_task_should_abort"])
+            self.assertEqual(settlement["status"], "no_pending")
+            self.assertEqual(json.loads(ledger.read_text(encoding="utf-8")), migrated)
+
+    def test_complete_legacy_ledger_upgrades_without_losing_pending_state(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            state = root / "state" / "us_short"
+            annotation = self._formal_fixture()
+            with patch.object(annotation_contract, "validate_annotation", return_value=True):
+                self._run(
+                    root, "20260810", annotation=annotation,
+                    annotation_name="annotation_20260810.json", review_name="review_20260810.json",
+                )
+            ledger = state / "ledger.json"
+            legacy = json.loads(ledger.read_text(encoding="utf-8"))
+            legacy["schema_version"] = quality.LEGACY_LEDGER_SCHEMA_VERSION
+            ledger.write_text(json.dumps(legacy), encoding="utf-8")
+
+            target = quality.load_pending_review_target(ledger_path=ledger, state_dir=state)
+
+            migrated = json.loads(ledger.read_text(encoding="utf-8"))
+            self.assertEqual(target["pending"]["decision_date"], "20260810")
+            self.assertEqual(migrated["schema_version"], quality.LEDGER_SCHEMA_VERSION)
+            self.assertEqual(migrated["pending_annotations"], legacy["pending_annotations"])
+            self.assertEqual(migrated["cohorts"], legacy["cohorts"])
+
+    def test_complete_legacy_ledger_upgrades_without_losing_current_cohort(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            state = root / "state" / "us_short"
+            ledger = state / "ledger.json"
+            with patch.object(annotation_contract, "validate_annotation", return_value=True):
+                self._run(
+                    root, "20260810", annotation=self.fixture,
+                    review=self._review(self.fixture, "20260810"), ledger=ledger,
+                )
+            legacy = json.loads(ledger.read_text(encoding="utf-8"))
+            legacy["schema_version"] = quality.LEGACY_LEDGER_SCHEMA_VERSION
+            ledger.write_text(json.dumps(legacy), encoding="utf-8")
+
+            settlement = quality.settle_pending_review(
+                ledger_path=ledger,
+                current_decision_date="20260817",
+                observed_at="2026-08-17T08:00:00+00:00",
+                state_dir=state,
+                root=root,
+                now=datetime(2026, 8, 17, 8, tzinfo=timezone.utc),
+            )
+
+            migrated = json.loads(ledger.read_text(encoding="utf-8"))
+            self.assertEqual(settlement["status"], "no_pending")
+            self.assertEqual(migrated["schema_version"], quality.LEDGER_SCHEMA_VERSION)
+            self.assertEqual(migrated["cohorts"], legacy["cohorts"])
+
+    def test_unmigratable_legacy_cohort_is_rejected_without_rewrite(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            state = root / "state" / "us_short"
+            state.mkdir(parents=True, exist_ok=True)
+            ledger = state / "ledger.json"
+            legacy = self._legacy_ledger()
+            legacy["cohorts"] = [{"legacy_record": True}]
+            legacy_bytes = (json.dumps(legacy, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+            ledger.write_bytes(legacy_bytes)
+
+            result = self._run(root, "20260810", ledger=ledger)
+
+            self.assertEqual(result["status"], "invalid_evidence")
+            self.assertEqual(result["error"]["code"], "SERENITY_QUALITY_LEDGER_REJECTED")
             self.assertEqual(ledger.read_bytes(), legacy_bytes)
 
     def test_pending_target_requires_exactly_one_and_review_write_is_idempotent(self):

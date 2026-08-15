@@ -15,7 +15,7 @@
   ],
   "properties": {
     "schema_name": {"const": "us_short_serenity_quality_forward_ledger"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "1.1.0"},
     "quality_policy_version": {"const": "serenity_quality_policy_v0.1.0"},
     "cross_cohort_aggregation_allowed": {"const": false},
     "cohorts": {

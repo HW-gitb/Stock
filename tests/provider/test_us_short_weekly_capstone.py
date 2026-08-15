@@ -1096,13 +1096,13 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertEqual(summary["mode"], "live")
         self.assertEqual(summary["execution_mode"], "injected_pipeline")
 
-    def test_legacy_serenity_ledger_is_local_no_count_and_chain_continues(self):
+    def test_legacy_serenity_ledger_migrates_and_chain_continues(self):
         from engine import us_short_serenity_quality_forward as serenity_quality
 
         ledger = self.state_dir / "us_short_serenity_quality_forward_ledger.json"
         legacy = {
-            "schema_name": serenity_quality.SCHEMA_NAME,
-            "schema_version": serenity_quality.SCHEMA_VERSION,
+            "schema_name": serenity_quality.LEDGER_SCHEMA_NAME,
+            "schema_version": serenity_quality.LEGACY_LEDGER_SCHEMA_VERSION,
             "quality_policy_version": serenity_quality.QUALITY_POLICY_VERSION,
             "cross_cohort_aggregation_allowed": False,
             "cohorts": [],
@@ -1111,11 +1111,13 @@ class CapstoneFakeChainTest(unittest.TestCase):
         ledger.write_text(json.dumps(legacy, indent=2) + "\n", encoding="utf-8")
         order: list[str] = []
         settlement_result: dict[str, object] = {}
+        migrated_ledger: dict[str, object] = {}
         original_settle = serenity_quality.settle_pending_review
 
         def settle_and_capture(**kwargs):
             result = original_settle(**kwargs)
             settlement_result.update(result)
+            migrated_ledger.update(json.loads(ledger.read_text(encoding="utf-8")))
             return result
 
         with mock.patch(
@@ -1127,8 +1129,10 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertEqual(order, _STAGE_NAMES)
         self.assertEqual(summary["mode"], "live")
         self.assertEqual(settle.call_count, 1)
-        self.assertEqual(settlement_result["status"], "no_count")
-        self.assertEqual(settlement_result["evidence_status"], "invalid_evidence")
+        self.assertEqual(settlement_result["status"], "no_pending")
+        self.assertEqual(migrated_ledger["schema_version"], serenity_quality.LEDGER_SCHEMA_VERSION)
+        self.assertEqual(migrated_ledger["pending_annotations"], [])
+        self.assertEqual(migrated_ledger["closed_pending_annotations"], [])
 
     def test_decision_lock_is_bound_to_the_injected_state_root_and_reacquirable(self):
         from runners import us_short_weekly_capstone as cap

@@ -92,6 +92,12 @@ def _schema(name: str) -> dict:
 
 
 class SerenityQualityForwardSchemaTest(unittest.TestCase):
+    def test_mutable_ledger_has_its_own_bumped_contract_version(self):
+        schema = json.loads(quality.LEDGER_SCHEMA_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(schema["properties"]["schema_version"]["const"], quality.LEDGER_SCHEMA_VERSION)
+        self.assertEqual(quality.LEDGER_SCHEMA_VERSION, "1.1.0")
+        self.assertNotEqual(quality.LEDGER_SCHEMA_VERSION, quality.SCHEMA_VERSION)
+
     def test_policy_and_review_schema_are_closed_and_match_frozen_constants(self):
         policy = quality.load_quality_policy()
         policy_errors = list(Draft7Validator(_schema("us_short_serenity_quality_forward_policy.schema.json")).iter_errors(policy))
