@@ -249,6 +249,17 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
         self.assertNotIn("$SelectArgs += '--cutoff-passed'", self.text)
         self.assertIn("if ($FormalStateCommitted) { $SelectArgs += '--formal-state-committed' }", self.text)
 
+    def test_selected_official_revision_runs_the_standard_settlement_runner(self) -> None:
+        self.assertIn("if ($SelectionStatus -in @('selected', 'already_current'))", self.text)
+        self.assertIn("'runners\\a_short_official_settlement.py'", self.text)
+        self.assertIn("'--as-of', $AsOf, '--run-revision-id', $RunRevisionId", self.text)
+
+    def test_regime_sidecar_outcome_wiring_uses_the_current_revision(self) -> None:
+        self.assertIn(
+            "'--sidecar-outcome-run-revision-id', $RunRevisionId",
+            self.stage5,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

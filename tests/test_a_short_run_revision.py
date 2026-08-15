@@ -335,6 +335,13 @@ class AShortRunRevisionTest(unittest.TestCase):
                     run_revision_id="c" * 32, decision_as_of="20260810",
                     formal_state_committed=True,
                 )
+            with self.assertRaises(RevisionSelectionBlocked):
+                select_official_revision(
+                    pointer_path=pointer, selection_receipt_path=receipt,
+                    manifest_path=third_path, transaction_dir=transaction,
+                    run_revision_id="c" * 32, decision_as_of="20260810",
+                    cutoff_passed=True,
+                )
 
     def test_pointer_and_receipt_remain_unchanged_when_publish_transaction_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -354,19 +361,26 @@ class AShortRunRevisionTest(unittest.TestCase):
             self.assertFalse(pointer.exists())
             self.assertFalse(receipt.exists())
 
-    def test_cutoff_blocks_initial_official_selection(self):
+    def test_initial_official_selection_permits_settled_state_and_cutoff(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             manifest_path, manifest = self._bundle(root, "a" * 32)
             write_revision_manifest(manifest_path, manifest)
-            with self.assertRaises(RevisionSelectionBlocked):
-                select_official_revision(
-                    pointer_path=root / "research" / "results" / "a_short" / "20260810" / "official_revision.json",
-                    selection_receipt_path=root / "research" / "results" / "a_short" / "20260810" / "official_selection_receipt.json",
-                    manifest_path=manifest_path,
-                    transaction_dir=root / "state" / "a_short" / "revision_transactions" / "20260810",
-                    run_revision_id="a" * 32, decision_as_of="20260810", cutoff_passed=True,
-                )
+            pointer = root / "research" / "results" / "a_short" / "20260810" / "official_revision.json"
+            receipt = pointer.with_name("official_selection_receipt.json")
+            result = select_official_revision(
+                pointer_path=pointer,
+                selection_receipt_path=receipt,
+                manifest_path=manifest_path,
+                transaction_dir=root / "state" / "a_short" / "revision_transactions" / "20260810",
+                run_revision_id="a" * 32,
+                decision_as_of="20260810",
+                formal_state_committed=True,
+                cutoff_passed=True,
+            )
+            self.assertEqual(result["status"], "selected")
+            self.assertEqual(read_official_revision(pointer)["selected_revision_id"], "a" * 32)
+            self.assertEqual(json.loads(receipt.read_text(encoding="utf-8"))["selected_revision_id"], "a" * 32)
 
 
 if __name__ == "__main__":
