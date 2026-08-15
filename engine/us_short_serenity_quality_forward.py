@@ -33,6 +33,9 @@ G1_PREFLIGHT_SCHEMA_PATH = g1_preflight.SCHEMA_PATH
 
 SCHEMA_NAME = "us_short_serenity_quality_forward_observation"
 SCHEMA_VERSION = "1.0.0"
+LEDGER_SCHEMA_NAME = "us_short_serenity_quality_forward_ledger"
+LEDGER_SCHEMA_VERSION = "1.1.0"
+LEGACY_LEDGER_SCHEMA_VERSION = "1.0.0"
 QUALITY_POLICY_VERSION = "serenity_quality_policy_v0.1.0"
 REVIEW_SCHEMA_NAME = "us_short_serenity_quality_review"
 REVIEW_SCHEMA_VERSION = "1.0.0"
@@ -75,6 +78,14 @@ EFFECT_BOUNDARY = {
     "main_task_should_abort": False,
 }
 _MISSING = object()
+_LEGACY_EMPTY_LEDGER_KEYS = {
+    "schema_name",
+    "schema_version",
+    "quality_policy_version",
+    "cross_cohort_aggregation_allowed",
+    "cohorts",
+    "effects",
+}
 
 
 class SerenityQualityForwardError(ValueError):
@@ -270,8 +281,8 @@ def _metric_rows(value: Any, *, label: str) -> list[dict[str, Any]]:
 
 def _empty_ledger() -> dict[str, Any]:
     return {
-        "schema_name": "us_short_serenity_quality_forward_ledger",
-        "schema_version": SCHEMA_VERSION,
+        "schema_name": LEDGER_SCHEMA_NAME,
+        "schema_version": LEDGER_SCHEMA_VERSION,
         "quality_policy_version": QUALITY_POLICY_VERSION,
         "cross_cohort_aggregation_allowed": False,
         "cohorts": [],
@@ -281,14 +292,34 @@ def _empty_ledger() -> dict[str, Any]:
     }
 
 
+def _migrate_legacy_ledger(value: Mapping[str, Any]) -> dict[str, Any]:
+    if value.get("schema_version") != LEGACY_LEDGER_SCHEMA_VERSION:
+        return dict(value)
+
+    migrated = dict(value)
+    migrated["schema_version"] = LEDGER_SCHEMA_VERSION
+    if set(value) == _LEGACY_EMPTY_LEDGER_KEYS and value.get("cohorts") == []:
+        migrated["pending_annotations"] = []
+        migrated["closed_pending_annotations"] = []
+    _validate_payload(migrated, LEDGER_SCHEMA_PATH, label="quality ledger")
+    return migrated
+
+
 def _load_ledger(path: Path, policy: Mapping[str, Any]) -> dict[str, Any]:
     value = _read_object(path, label="quality ledger")
     if value is _MISSING:
         return _empty_ledger()
     assert isinstance(value, dict)
+    original_version = value.get("schema_version")
+    value = _migrate_legacy_ledger(value)
     _validate_payload(value, LEDGER_SCHEMA_PATH, label="quality ledger")
     if value["quality_policy_version"] != policy["quality_policy_version"]:
         raise SerenityQualityForwardError("quality ledger policy version is not the frozen policy")
+    if original_version == LEGACY_LEDGER_SCHEMA_VERSION:
+        try:
+            _write_json(path, value)
+        except OSError as exc:
+            raise SerenityQualityForwardError("quality ledger migration could not be persisted") from exc
     return value
 
 
@@ -1280,7 +1311,10 @@ __all__ = [
     "GATE_SCHEMA_PATH",
     "G1_PREFLIGHT_SCHEMA_PATH",
     "LEDGER_REJECTED_REASON_CODE",
+    "LEDGER_SCHEMA_NAME",
+    "LEDGER_SCHEMA_VERSION",
     "LEDGER_SCHEMA_PATH",
+    "LEGACY_LEDGER_SCHEMA_VERSION",
     "METRIC_IDS",
     "OBSERVATION_SCHEMA_PATH",
     "POLICY_PATH",

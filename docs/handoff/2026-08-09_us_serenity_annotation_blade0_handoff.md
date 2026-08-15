@@ -557,3 +557,14 @@ Claude Code：独立审查刀2四字段连接代码及 `decision_result_id` sche
 **失效旧结论**：我此前多轮挂着的「us_short 全量实跑数比发现数多 10、rule-3 证据通道拿不到绿」**已作废**——那出自更早代码态，现在 count gate 相等且账本有可引用的 PASS。
 
 **下一步注意事项**：官方全量必须走 `full_pack_ledger run` 单一入口——本轮 register 里引用的 5729 当时并未记账，`check` 报无缓存绿，害得复核方重跑一次 365s。下次先记账再引用。刀6/7 未进入。
+
+## 2026-08-15 — Serenity 同版本 quality-ledger 漂移整类修复（dc41，待独立审查）
+
+- **范围**：按用户要求回扫 Serenity 四部件全部持久化/读取/非阻塞异常路径。跨周可变存储只有 `us_short_serenity_quality_forward_ledger.json`；三个入口（周初 settlement、当周 quality forward、pending review target/writer）都收口到 `_load_ledger`，未发现第二个同类累计账本。
+- **修复**：账本根契约独立升到 `1.1.0`。中央 loader 自动迁移精确旧空账本，以及结构完整但根版本仍为 `1.0.0` 的账本；迁移前先用当前 schema/policy 验证，原子写回。旧空账本只补 `pending_annotations=[]` / `closed_pending_annotations=[]`；完整账本只升根版本，不改 pending、closed 或 cohort。
+- **拒绝边界**：旧式非空 cohort 缺 producer/reviewer provenance 时不推断、不清空；未知/损坏形状仍 `SERENITY_QUALITY_LEDGER_REJECTED`、原字节保留、周任务 fail-soft。annotation/review/observation/gate/G1 是决策日不可变输入或当周重建输出，shadow 是纯返回值，不需要同类迁移。
+- **验证**：固定 Python 3.13 定点 `23/23 OK`；Serenity 四部件 + weekly capstone + paper/report/conformance/IO 扩展 `226/226 OK`；文档门 `66/66 OK`。rule-3 full lane 最终指纹上 `5902 discovered / 3072 ran / FAIL`，两条首红分别是未触及的 provider-preflight 既有 fixture 路径守卫、以及 market-diagnostic rehearsal 与并行模块争用 `state/us_short/tmp*` 的隔离 residual；未记录本轮 PASS，未重复全量。真实 state/provider/live/network 未用；本树无真实 Serenity ledger，首次部署读取时自动迁移。状态为 `OPEN-NOT-VERIFIED`，未提交，待 Claude Code 独立审查。
+
+## 2026-08-15 追加：质量账本同版本漂移修复的独立审查（Claude Code reviewer/committer；**PASS，已提交并合入 master**）
+
+指针条目：账本版本自 observation 常量分离并升 `1.1.0`，`_load_ledger` 内做一次有界迁移后落盘。reviewer 自写 22 条反向控制全部 held——真实 20260810 旧账本迁移+写回+幂等；带真实 cohort 却缺数组的旧账本被拒（不伪造历史）；结构完整的旧号账本升版且 cohort 逐字保留；策略版本不符拒绝且不落盘；已是新版不重写；五种坏版本号与多余字段全拒；缺文件生成新版空账本。executor 全量 FAIL 的两条首红经串行重跑 48 OK 证实与本刀无关；reviewer 自跑全量 5676/5902 零 failure 但撞 860s 上限计 TIMEOUT。完整证据与两条 Optional 见 `docs/system_risk_register.md` 同日 PASS 小节。
