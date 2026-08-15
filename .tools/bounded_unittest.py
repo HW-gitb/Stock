@@ -170,13 +170,15 @@ def _parse(argv: list[str]) -> tuple[str, int, list[str]]:
 
 NESTED_RUN_MARKER = "STOCK_BOUNDED_UNITTEST_ACTIVE"
 DOCUMENT_ONLY_FOCUSED_ARGS = frozenset({
+    "tests.test_a_short_preflight.PinnedStockPythonSmoke",
+    "tests.test_readme_route_row_length",
     "tests.test_route_doc_ledger_status_consistency",
     "tests.test_doc_governance_guard",
 })
 
 
 def _is_document_only_focused_run(unittest_args: list[str]) -> bool:
-    """Recognise only the project's explicit two-module document gate."""
+    """Recognise only the project's exact document-process verification command."""
     return (
         len(unittest_args) == len(DOCUMENT_ONLY_FOCUSED_ARGS)
         and set(unittest_args) == DOCUMENT_ONLY_FOCUSED_ARGS
