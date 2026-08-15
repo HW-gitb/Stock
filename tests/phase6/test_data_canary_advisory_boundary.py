@@ -1,10 +1,30 @@
 import unittest
+import sys
 from pathlib import Path
+from unittest.mock import patch
 
 from runners import data_canary
 
 
 class DataCanaryAdvisoryBoundaryTest(unittest.TestCase):
+    def test_invalid_official_binding_is_skipped_and_bounded_fallback_continues(self) -> None:
+        with patch.object(data_canary, "_find_candidates",
+                          side_effect=[ValueError("binding drift"), Path("valid.csv")]) as find:
+            path, as_of = data_canary._find_latest_candidates_within(days=1)
+        self.assertEqual(path, Path("valid.csv"))
+        self.assertIsNotNone(as_of)
+        self.assertEqual(find.call_count, 2)
+
+    def test_direct_candidate_binding_failure_is_a_no_candidates_skip(self) -> None:
+        with patch.object(data_canary, "ak", object()), \
+                patch.object(data_canary, "_find_candidates",
+                             side_effect=ValueError("binding drift")), \
+                patch.object(data_canary, "_write_log", return_value=Path("canary.json")) as write_log, \
+                patch.object(sys, "argv", ["data_canary.py", "--as-of", "20260727"]):
+            result = data_canary.main()
+        self.assertEqual(result, 0)
+        self.assertEqual(write_log.call_args.args[0]["status"], "skipped_no_candidates")
+
     def test_skip_payload_carries_non_evidence_scope(self) -> None:
         payload = data_canary._skip_payload(
             "20260601",

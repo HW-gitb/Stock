@@ -674,6 +674,38 @@ def official_analysis_input_path(
     return official_public_revision_root(project_root, decision_as_of, run_revision_id) / "analysis_input.json"
 
 
+def official_egs_full_path(
+    project_root: str | Path,
+    decision_as_of: str,
+    run_revision_id: str | None = None,
+) -> Path:
+    """Return egs_full from the same official public revision as analysis_input."""
+    date = validate_decision_as_of(decision_as_of)
+    return official_public_revision_root(project_root, date, run_revision_id) / f"egs_full_{date}.csv"
+
+
+def validate_official_egs_full_binding(
+    path: str | Path, decision_as_of: str,
+) -> None:
+    """Fail closed unless an official full-rank file is bound by its publish marker."""
+    full_path = Path(path)
+    marker_path = full_path.parent / "official_publish.json"
+    if not full_path.is_file() or not marker_path.is_file():
+        raise FileNotFoundError(
+            f"official egs_full/publish marker missing for {decision_as_of}: {full_path}"
+        )
+    try:
+        marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"official publish marker unreadable: {marker_path}") from exc
+    full_ref = (marker.get("files") or {}).get("full_rank") or {}
+    if (marker.get("stage_status") != "complete"
+            or str(marker.get("trade_date")) != str(decision_as_of)
+            or full_ref.get("path") != full_path.name
+            or full_ref.get("sha256") != sha256_file(full_path)):
+        raise ValueError("official publish marker does not bind egs_full CSV")
+
+
 def _selection_payload(*, schema_name: str, decision_as_of: str, revision: str,
                        manifest_digest: str, content_digest: str, supersedes: str | None, reason: str,
                        status: str) -> dict:

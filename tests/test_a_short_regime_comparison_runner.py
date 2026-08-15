@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import sys
 import json
+from contextlib import redirect_stdout
+from io import StringIO
 import tempfile
 import unittest
 from datetime import date, timedelta
@@ -846,6 +848,48 @@ class BootstrapPolicyTests(unittest.TestCase):
 
 
 class CliGuardTests(unittest.TestCase):
+    def test_daily_sidecar_uses_ledger_progress_when_as_of_is_not_yet_settled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = {
+                "ledger": str(root / "ledger.json"),
+                "records": str(root / "records.json"),
+                "panel": str(root / "panel.md"),
+                "action_records": str(root / "actions.json"),
+                "action_summary": str(root / "action-summary.json"),
+                "candidate_effect_ledger": str(root / "candidate-effect.json"),
+                "candidate_effect_summary": str(root / "candidate-effect-summary.json"),
+                "candidate_effect_markdown": str(root / "candidate-effect-summary.md"),
+                "candidate_effect_outcome": str(root / "candidate-effect-outcome.json"),
+                "forward_tracker": str(root / "forward-tracker.csv"),
+            }
+            result = {
+                "ledger": {"coverage": {"n": 2}},
+                "evidence": "forward",
+                "regime_daily_progress_status": "advanced",
+            }
+            output = StringIO()
+            with patch("runners.a_short_regime_comparison_runner.lane_paths", return_value=paths), \
+                    patch("runners.a_short_regime_comparison_runner.load_ledger",
+                          return_value={"rows": [{}], "coverage": {"start": "20260701"}}), \
+                    patch("runners.a_short_regime_comparison_runner._init_pro", return_value=object()), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_trade_calendar",
+                          return_value=["20260724"]), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_daily",
+                          return_value=pd.DataFrame({"trade_date": ["20260724"]})), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_stk_limit",
+                          return_value=pd.DataFrame()), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_index",
+                          return_value=pd.DataFrame()), \
+                    patch("runners.a_short_regime_comparison_runner.run_regime_step",
+                          return_value=result), redirect_stdout(output):
+                self.assertEqual(main(["--as-of", "20260727", "--confirm-fetch-authorized"]), 0)
+        line = next(line for line in output.getvalue().splitlines()
+                    if line.startswith("[a-short-sidecar-outcome] "))
+        payload = json.loads(line.split("] ", 1)[1])
+        self.assertEqual(payload["progress_status"], "advanced")
+        self.assertEqual(payload["observed_data_through"], "20260724")
+
     def test_cli_does_not_pass_d2_source_to_writer_before_design_completion(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -926,6 +926,14 @@ class MainWiringTests(unittest.TestCase):
             _sidecar_result_fields({"status": "future_status"}),
             ("unavailable", "unexpected_sidecar_status", "status=future_status"),
         )
+        self.assertEqual(
+            _sidecar_result_fields({"status": "accumulating", "outcomes_updated": 0}, settlement=True),
+            ("already_current", None, None),
+        )
+        self.assertEqual(
+            _sidecar_result_fields({"status": "accumulating"}, settlement=True)[0],
+            "unavailable",
+        )
 
     def _write_inputs(self, td, feed=None, ai=None):
         ai = ai if ai is not None else _analysis_input(
@@ -1764,7 +1772,9 @@ class MainWiringTests(unittest.TestCase):
             # write suppressed, and once after the capture to commit the pair.
             self.assertEqual(settle.call_count, 2)
             self.assertIs(settle.call_args_list[0].kwargs["write_public"], False)
+            self.assertIn("sidecar_result", settle.call_args_list[0].kwargs)
             self.assertNotIn("write_public", settle.call_args_list[1].kwargs)
+            self.assertNotIn("sidecar_result", settle.call_args_list[1].kwargs)
             self.assertLess(settle.mock_calls.index(settle.call_args_list[0]),
                             settle.mock_calls.index(settle.call_args_list[1]))
 

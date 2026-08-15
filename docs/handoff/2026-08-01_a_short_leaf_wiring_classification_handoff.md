@@ -7927,6 +7927,65 @@ Ran 163 tests in 45.861s
 ```
 
 **交接结论**：这是离线验证和最小修复的终态记录；full-pack PASS 不等于 provider/live、production、ship-gate、独立 review 或 commit。下一步由 Claude Code 独立审查，PASS 后才进入 reviewer/committer 提交流程。
+
+## 2026-08-15 追加：桌面 `1a_testrun0815.md` 问题 3–4 及全部同类 + `O-LANEENV-3`（Codex executor/fixer；8c7a；OPEN-NOT-VERIFIED）
+
+**Status and boundary**：本条是当前工作树对桌面方案“第 3–4 条及全部同类缺陷”以及 `O-LANEENV-3` 的一个修复切片。所有读取、修改、检查、测试和产物均在 `D:\cnhea\Codex\worktrees\8c7a\Stock`；主树和其他工作树未访问或修改。固定解释器是 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `3.13.8`。未启动 provider/live、真实 weekly、测试胶囊、账户/持仓、sub-agent；未 stage、commit、push、merge。当前结论仍为 `repaired / OPEN-NOT-VERIFIED`，等待 Claude Code 独立 reviewer/committer。
+
+### 问题 3：官方/default reader 的 source-binding 与旧路径救援边界
+
+- **根因**：多个官方/default reader 仍把 date-root、任意旧 revision、backtest 或 glob/mtime 选择当作正式输入，无法证明当前 selected official revision、trade date、full-rank 文件和 publish marker 是同一组字节；显式 revision 缺失时还可能静默读取旧输入。该类问题会把 stale/foreign bytes 伪装成当前官方证据。
+- **最小修复**：中央 `engine/a_short_run_revision.py` 增加 official EGS full binding 校验（`official_publish.json`、`stage_status=complete`、trade date、`files.full_rank.path` 与 SHA-256 必须一致）。`engine/a_short_egs_full_adapter.py`、`runners/data_canary.py`、`runners/a_short_crash_veto_tracker.py`、`runners/forward_tracker.py`、`runners/run_analysis_report.py`、`runners/backtest_execution.py` 统一使用 official resolver；只有隐式选择且 official pointer 缺失时才允许既有 date-root 只读 fallback，显式 `run_revision_id` 不 fallback。data canary 使用合法日期 fallback，记录 requested/actual as-of 和 resolved revision，不能用 glob/mtime 救援。
+- **调用链 / 消费者**：`weekly_screening.ps1` / runner → `resolve_official_revision` / `official_analysis_input_path` / `official_egs_full_path` → publish marker + full-rank/source identity 校验 → `analysis_input`、candidates、canary、crash、forward、report、execution consumers。缺 marker、缺 full-rank、SHA/日期/路径/头部不符均 fail-closed；canary 仍是 advisory，不把缺输入伪装成 `advanced`。
+- **schema / source-binding / cache / write boundary**：沿用现有 analysis/EGS/canary contracts；没有新增 provider 或正式数据 schema。official revision、publish marker、full-rank SHA、analysis-input identity 是 source-binding；旧 date-root 仅只读 audit fallback；不读 `A-EGS/Result`、backtest/generated、任意 revision 或测试胶囊；没有扩大生产缓存或正式写盘边界。
+
+### 问题 4：capture 与 settlement 的 status/delta 不能互相冒充
+
+- **根因**：sidecar producer 的“调用成功”曾被当成“本轮产生新证据”，capture 失败与 settlement 失败也可能落入同一条“current-week capture unavailable”路径；`outcomes_updated=0`、缺失/负数/非法 delta、public summary 已存在等情况没有统一的 fail-closed 语义。
+- **最小修复**：`runners/a_short_weekly_pipeline.py` 通过 `_sidecar_result_fields(..., settlement=True)` 只接受安全的 settlement delta；`outcomes_updated > 0` 才是 `advanced`，0 是 `already_current`，缺失/负数/非法/未知状态是 `unavailable`。capture 失败与 settlement 失败分开报告：capture 成功但 settlement 不可用时保留 capture progress，不把它重写成 capture unavailable；industry/overlay/margin/final-action wrapper 只复制内部 settlement delta，final action 使用 `strict=True`。margin 使用 `settled_from_existing_cache` 的真实 delta，不用 summary 的 `evidence_current` 伪造进度；theme 不再因 generated_at/packet date 改变就 `advanced`。
+- **调用链 / 消费者**：producer capture/settle → `a_short_weekly_pipeline` sidecar result mapping → `a_short_weekly_sidecar_outcomes` → `a_short_weekly_sidecar_health.py` → health JSON/Markdown/receipt。健康汇总分开 `advanced_count` 与 `already_current_count`，继续沿用 sidecar contract；`schemas/a_short_weekly_sidecar_health.schema.json` 升为 `1.2.0`，只新增既有语义所需的 `already_current_count` 和 final-action settlement spec。
+- **负向控制**：capture unavailable、capture success + settlement unavailable、unknown status、missing/negative/non-int delta、date-only theme packet、same semantic rerun、public evidence-current summary 等路径均不产生伪 `advanced`，并保持 M6.7 authoritative output 不被覆盖。
+
+### `O-LANEENV-3`：嵌套 `Ran N` 不得污染外层 receipt
+
+- **根因**：bounded launcher 用未锚定的 `Ran N tests` 识别终态；测试内部再启动 `full_pack_ledger`/lane-runner 时，内层 `Ran N` 可能覆盖外层 focused receipt 的 count。
+- **最小修复**：保留行首锚定的 outer-count 规则；`.tools/parallel_lane_runner.py` 对 nested aggregate 行加 `[bounded-unittest nested]` 前缀；`.tools/full_pack_ledger.py` 在 nested marker 下对内部 `result.output` 的 `Ran N` 行加前缀后再输出。内层 receipt suppression、selector、workers、deadline、count gate 和 ledger 语义不变。
+- **调用链 / 消费者**：`bounded_unittest` → nested `full_pack_ledger`/`parallel_lane_runner` → merged output → outer receipt parser。前缀只解决证据显示/解析边界，不改变业务 runner、schema、source-binding、cache 或生产写盘。
+
+### 精确验证与原始终态
+
+固定 Python 的精确 focused launcher（最终 code state，含 effect-contract 必需 bundle）为：
+
+```text
+& '.tools\\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 600 tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe tests.test_a_short_run_revision tests.phase6.test_data_canary_advisory_boundary tests.test_a_short_holdings_in_m67 tests.test_a_short_crash_veto_tracker tests.phase6.test_forward_tracker_cache_guard tests.test_forward_tracker_analysis_role tests.skill.test_run_analysis_report tests.execution.test_backtest_execution tests.test_a_short_regime_comparison_runner tests.test_a_short_theme_forward_comparison_runner tests.test_a_short_weekly_pipeline tests.test_a_short_weekly_sidecar_health tests.test_a_short_v5_revision_matrix tests.test_a_short_weekly_screening_m67_failure_closeout tests.phase6.test_weekly_screening_guardrails tests.test_parallel_lane_runner tests.test_bounded_unittest tests.test_full_pack_ledger
+Ran 1025 tests in 173.132s
+OK
+[bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=1025 elapsed=174.7s deadline=600s
+[bounded-unittest] FOCUSED_RECEIPT token=receipt:c3bcb993ee6b869ca20b4892 tests=1025 bundles=a_short_effect_contract python=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe
+```
+
+修复回归中两个精确模块也分别通过：`tests.test_a_short_margin_overheat_cash_control` = `Ran 76 tests ... OK`；`tests.test_a_short_review1_knives_6_10` = `Ran 42 tests ... OK`。第二项的测试 fixture 已按官方 `result/a_short/<as_of>` 根绑定，未放宽生产 reader。
+
+full lane 唯一最终命令与原始终态：
+
+```text
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\8c7a\Stock\.tools\full_pack_ledger.py' run a_short '问题3/问题4及O-LANEENV-3同类缺陷完整修复切片' 'receipt:c3bcb993ee6b869ca20b4892' 860 -- discover -s tests -p 'test_a_short*.py'
+[full-pack-ledger] FOCUSED_RECEIPT status=PASS tests=1025 bundles=a_short_effect_contract
+[full-pack-ledger] STATIC status=PASS diff_check=PASS py_compile=24
+[parallel-lane] COUNT_GATE discovered=3099 ran=3099 equal=True
+Ran 3099 tests in 125.484s
+[full-pack-ledger] RESULT status=PASS exit=0 tests=3099 elapsed=125.5s deadline=860s mode=parallel
+ledger sidecar=.tools\\state\\runs\\20260815T140457_a_short_parallel.jsonl
+ledger fingerprint=ffabae004898fb2b0a4bf64720a11253b0a6c11ff118a4233a5ec26336727ac7
+```
+
+**Earlier raw states retained for audit**：第一次 full-pack 在启动前因 focused receipt 缺少 `a_short_effect_contract` 被拒绝，未运行全量；补 bundle 后第一次真实 full lane 为 `discovered=3099 / ran=899 / equal=false / FAIL`，首个真实错误是本次 settlement delta 改动漏了 `changed=0`，`UnboundLocalError`；补一行后第二次真实 full lane 为 `discovered=3099 / ran=1708 / equal=false / FAIL`，首个真实错误是旧测试临时目录仍未绑定新的 official `result/a_short` root；修正两处 fixture 后最终 full lane 如上 PASS。未把未派发模块计入任何通过数。
+
+### Self-review / handoff
+
+- A-F 自审覆盖：问题3 official reader 全类清单、explicit/implicit revision、marker/SHA/header/date 负控；问题4 capture/settlement 分离、delta allowlist、unknown/negative/missing status、already-current 负控；O-LANEENV-3 nested output/count-gate/red/timeout controls；schema/version 与实际消费者；cache/source/write boundary；最终 diff/status 与原始 ledger。
+- 最终代码/测试改动为 26 个 tracked 文件，另有本条、风险登记和 SESSION_LOG 三个 durable 文档，合计 29 个 tracked 文件 modified、0 staged、0 untracked；`git diff --check` 仅有正常 LF→CRLF 警告、无 whitespace error；CURRENT 未修改。本条之后仍不得把 full-pack PASS 解读成 provider/live、production、ship-gate、独立 review、commit 或 merge PASS。
+- 正确交接目标是本文件；material risk 与当前执行状态同步到 `docs/system_risk_register.md` 和 `docs/SESSION_LOG.md`。reviewer 只在 focused receipt、精确 full lane PASS、静态/负向控制、文档门和本条 handoff 均可核对后独立审查；Claude Code PASS 后才拥有 stage/commit 边界，Codex 不提交。
 ## 2026-08-15 追加：两刀（全量测试侧 / loader 侧）的独立审查（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
 
 **判定**：两刀分别 PASS，零 Required；但我上轮记的 `O-LANEENV-3` **不能记为已闭**。正文只在 `docs/system_risk_register.md`。
@@ -7936,3 +7995,31 @@ Ran 163 tests in 45.861s
 **`O-LANEENV-3` 为什么还开着**：修法给"嵌套 launcher"的输出加了前缀并锚定了正则，但我实测这轮焦点包外层 `Ran 126 tests`、receipt 仍是 `tests=3`，且全篇 `[bounded-unittest nested]` 前缀出现 **0 次**——末尾那段是 `tests.test_full_pack_ledger` 拉起的 ledger/lane-runner 子进程打的，不经过 bounded_unittest 的 nested 分支。它只是低报（偏保守、不产生假绿），所以不阻断 PASS，但要留在 register 里，别当已闭。最窄修法是让外层只采信自己那次 `run_unittest` 的 `result.output`，或把前缀下沉到 `run_command` 层。
 
 **刀 B 的边界**：解析改动我用同形片段做了三格实测（旧写法失败、新写法解出、坏 loader 仍拒）；保留已发布报告那条只由读码 + 源码文本守卫证到——只有 loader 那一处 catch 传 `-PreservePublishedWeeklyReport`，失败 receipt 照写，且 `--m67-report` 只在 stage=complete 时绑定，所以保住的报告不会被下游当权威。真跑一次失败路径仍未做。
+
+## 2026-08-15 追加：问题 3-4 子包 A+B 的独立审查 = FAIL（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：FAIL，三条 Required、六条 Optional。正文只在 `docs/system_risk_register.md`。
+
+**我实际验了什么（区别于执行方与 agent 的转述）**：整读了 `official_egs_full_path` / `validate_official_egs_full_binding` / `official_public_revision_root` / `resolve_official_revision` / `load_egs_full` / `_build_holdings` / `_sidecar_result_fields` / `build_health` / `write_health_bundle` 的完整函数体，以及 `weekly_screening.ps1` 五个 sidecar 分支的全部新逻辑。自跑全仓扫描确认正式 reader 对 `A-EGS/Result/egs_full_*` 零残留、`capture_unavailable` 的残留全部落在 capture 分支或 `blocked_by` skip 上。按 rule 4 未重跑 full lane：独立重算指纹与执行方 ledger 记录逐字一致（`ffabae004898…`），`count="3099 OK"`、`discovered==ran==3099`、`recorded_at` 晚于最新源码 mtime。
+
+**植入与 A/B 对照**：R-1 用的是真 A/B——唯一变量是输入 daily 面板，A 格（面板止于周五、as_of 为周一）走真实 emit 三元得 `stalled` 而 ledger 实际推进，B 格（面板含已结算决策日）得 `advanced`，C 格是反向控制（ledger 未推进）得 `already_current`，证明 `stalled` 纯粹来自日期比较而非进度判断；再用 `build_health` 的真实公式复算出 A 格 `overall=degraded`、B 格 `healthy`。`O-LANEENV-3` 的验证是天然 A/B：上轮同形焦点包外层 126 而 receipt 3，本轮外层 965 而 receipt 965。
+
+**独立 agent 的处置**：按 §6a 最高危档起 1 个（当前工作树只读，因本轮未提交）。它报 7 条，我逐条复现：F1（delta 量在第二次空跑上）、F2（比较体嵌运行时钟）、F3（`return` 后死代码）我读码坐实并写进 register；F4/F6/F7 降为 Optional；F3 的下游计数后果我未复现，明确标 NOT_VERIFIED。**不直接采信转述**这一条这次是有用的——F1 与 F2 必须一起修，只修 F1（把测量挪到第一次调用）会因 F2 翻成每周恒 advanced。
+
+**未覆盖维度与诚实边界**：没有跑真实周实盘，R-1 的「每周 degraded」由探针 + 真实公式复算证到而非实跑；三处 settlement 的 delta 只由读码 + 落盘点比对证到；theme packet 在 `latest_evidence_as_of < as_of` 时是否会退成 `stalled`，本树无 packet、构造不出可达路径，记为未证实风险。本树落后 master 17 个提交，本轮未 ff。
+
+**下一步**：Codex 按 register 三条 Required 修复；R-1 与 R-2 属同一类（新进度轴报不准），建议一轮做完并补上 R-3 要求的契约测试，否则下一轮仍会靠人读码发现。
+
+## 2026-08-15 追加：问题 3-4 子包 A+B 修复轮的独立审查 = PASS（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：PASS，三条 Required 全 resolved，上轮六条 Optional 全闭，新记一条 Optional。正文只在 `docs/system_risk_register.md`。
+
+**本轮的验证边界（重要）**：用户明确指示「不用考虑 focused acceptance 以及其带来的影响，只审查修复内容本身」，故 reviewer **未跑焦点超集、未跑 full lane**。因此「无回归」这一层本轮没有 reviewer 侧证据，只有修复内容本身的正确性证据。这是用户裁决的范围收窄，不是证据缺失被忽略——已同步写进 register 的 NOT_VERIFIED 节。
+
+**我实际验了什么**：整读 regime 的 emit 与 `run_regime_step` 进度赋值、pipeline 三处 settlement 的双调用与 `_measured` 守卫、industry/overlay 两个 `settle_from_daily_payload` 的比较体去时钟、final-action 的 record 白名单投影、theme 的 `_private_artifact_digest`、canary 的 binding 异常兜底、以及 launcher 的 candidate-effect 语义比对。逐格核对了我上一轮写进 register 的「两根轴 9 格」清单，其中我此前标 NOT_VERIFIED 的三处（candidate_effect / theme / final-action）本轮全部落实。
+
+**探针与 A/B 对照**：①复跑 FAIL 轮的原探针作回归——唯一变量仍是 daily 面板，A 格由 `stalled` 翻 `advanced`，C 格反向控制保持 `already_current`，并扫描确认日期腿零残留。②补一格**执行方用例没有的反方向**：执行方只证「只改时钟 → 0」，我补证「真改证据 → 仍 >0」，避免去时钟做成了过度剥离——首次 1 / 仅换 as_of 0 / 真实改动 96 个价格字段后 1。这一格是本轮唯一由 reviewer 独立提供的判据。
+
+**未覆盖维度与诚实边界**：无回归未验（见上）；真实周实盘未跑；`Read-SidecarOutcomeLine` 只有源码文本守卫、无行为测试（已记 Optional，本仓有真跑 PowerShell 的先例可参照）。
+
+**下一步**：本刀收口；桌面 `1a_testrun0815.md` 的问题 5、问题 6 尚未开工。

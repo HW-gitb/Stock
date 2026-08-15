@@ -270,6 +270,18 @@ class IndustryWeightComparisonTests(unittest.TestCase):
             progress = build_public_progress(root=root, as_of=SETTLE_AS_OF)
             self.assertTrue(all(row["progress"]["eligible_policy_weeks"] == 1 and row["progress"]["difference_weeks"] == 0 for row in progress["questions"]))
 
+    def test_settlement_clock_change_without_new_evidence_does_not_count_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _p5_root(tmp)
+            _capture(root, tmp, same_profiles=True)
+            capture = json.loads((root / "weeks" / DECISION / "capture.json").read_text(encoding="utf-8"))
+            codes = sorted({row["ts_code"] for arm in capture["payload"]["profiles"].values() for row in arm["selected"]})
+            daily = _daily_cache(codes)
+            first = settle_from_daily_payload(root=root, daily_payload=daily, as_of="20260227")
+            second = settle_from_daily_payload(root=root, daily_payload=daily, as_of="20260228")
+        self.assertGreater(first["outcomes_updated"], 0)
+        self.assertEqual(second["outcomes_updated"], 0)
+
     def test_missing_observed_adjustment_is_no_count_not_zero_or_backfill(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _p5_root(tmp)

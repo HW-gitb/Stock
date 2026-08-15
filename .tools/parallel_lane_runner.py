@@ -515,7 +515,10 @@ def _report(lane: str, outcomes: list[ModuleOutcome], skipped: list[str], discov
         f"[parallel-lane] COUNT_GATE discovered={discovered_total} ran={observed_total} "
         f"equal={discovered_total == observed_total}"
     )
-    lines.append(f"Ran {observed_total} tests in {elapsed:.3f}s")
+    summary_line = f"Ran {observed_total} tests in {elapsed:.3f}s"
+    if os.environ.get(NESTED_RUN_MARKER) == "1":
+        summary_line = f"[bounded-unittest nested] {summary_line}"
+    lines.append(summary_line)
     return "\n".join(lines) + "\n"
 
 

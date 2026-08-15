@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """A-short 持仓恒列入 M6.7 — Tier-2 egs_full adapter（S1）.
 
-把本轮 EGS 全量评分 `A-EGS/Result/egs_full_YYYYMMDD.csv`(扁平 CSV,粗筛后的全量 rank)读出,并把其中
+把本轮 EGS 官方全量评分 `result/a_short/<as_of>/[revisions/<run_revision_id>/]egs_full_<as_of>.csv`(扁平 CSV,粗筛后的全量 rank)读出,并把其中
 **一行**映射成 `a_short_weekly_pipeline.normalize_candidate` 能消费的候选 dict 结构,供"过了粗筛、没进
 top-N"的持仓(Tier-2)复用本轮已算好的 EGS 分/风险标志/行业/流动性。
 
@@ -21,6 +21,11 @@ import csv
 from pathlib import Path
 
 from engine.a_short_delisting import derive_delisting_flags
+from engine.a_short_run_revision import (
+    official_egs_full_path,
+    resolve_official_revision,
+    validate_official_egs_full_binding,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -33,19 +38,30 @@ EGS_FULL_REQUIRED_COLUMNS = (
 )
 
 
-def egs_full_path(as_of: str, root: Path | str = ROOT) -> Path:
-    return Path(root) / "A-EGS" / "Result" / f"egs_full_{as_of}.csv"
+def egs_full_path(as_of: str, root: Path | str = ROOT,
+                  run_revision_id: str | None = None) -> Path:
+    return official_egs_full_path(root, as_of, run_revision_id)
 
 
-def load_egs_full(as_of: str, root: Path | str = ROOT) -> dict:
-    """读 `A-EGS/Result/egs_full_<as_of>.csv` → {ts_code: row_dict}。
+def load_egs_full(as_of: str, root: Path | str = ROOT,
+                  run_revision_id: str | None = None, *, strict: bool = False) -> dict:
+    """读官方 `egs_full_<as_of>.csv` → {ts_code: row_dict}。
 
     文件不存在 → 返回 {}(则所有持仓走 Tier-3 = EGS 未覆盖,这是诚实降级,不是错误)。
     文件存在但缺必需表头 → raise ValueError(egs_full 契约漂移,必须显式暴露,不可静默错位)。
     """
-    path = egs_full_path(as_of, root)
+    selected = resolve_official_revision(root, as_of, require=False)
+    official = run_revision_id is not None or selected is not None
+    path = egs_full_path(as_of, root, run_revision_id)
     if not path.is_file():
+        if strict or run_revision_id is not None or selected is not None:
+            raise FileNotFoundError(
+                f"official egs_full artifact missing for {as_of}"
+                f"{f' revision={run_revision_id}' if run_revision_id else ''}: {path}"
+            )
         return {}
+    if official:
+        validate_official_egs_full_binding(path, as_of)
     with open(path, encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         header = [h.strip() for h in (reader.fieldnames or [])]

@@ -73,6 +73,7 @@ P1_CANDIDATE_EFFECT_SUMMARY_FILENAME = "regime_candidate_effect_summary.json"
 P1_CANDIDATE_EFFECT_MARKDOWN_FILENAME = "regime_candidate_effect_summary.md"
 P1_CANDIDATE_EFFECT_OUTCOME_FILENAME = "candidate_effect_outcome.json"
 CANDIDATE_EFFECT_OUTCOME_SCHEMA_PATH = ROOT / "schemas" / "a_short_regime_candidate_effect_outcome.schema.json"
+SIDECAR_OUTCOME_PREFIX = "[a-short-sidecar-outcome] "
 
 
 # ---- pure helpers -----------------------------------------------------------------------------
@@ -80,6 +81,20 @@ CANDIDATE_EFFECT_OUTCOME_SCHEMA_PATH = ROOT / "schemas" / "a_short_regime_candid
 def _current_run_date() -> str:
     """Single controlled clock for D2 forward-evidence eligibility."""
     return datetime.now().strftime("%Y%m%d")
+
+
+def _emit_sidecar_outcome(*, name: str, as_of: str, run_revision_id: str | None,
+                          progress_status: str, observed_data_through: str | None = None) -> None:
+    payload = {
+        "name": name,
+        "as_of": str(as_of),
+        "run_revision_id": run_revision_id,
+        "execution_status": "succeeded",
+        "progress_status": progress_status,
+    }
+    if observed_data_through is not None:
+        payload["observed_data_through"] = str(observed_data_through)
+    print(SIDECAR_OUTCOME_PREFIX + json.dumps(payload, sort_keys=True, separators=(",", ":")))
 
 def validate_iv_feed(iv_feed: dict) -> None:
     """Validate an a_short_iv_feed artifact before consumption: schema + the feed's own consistency
@@ -893,6 +908,7 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
     cal = list(trade_calendar)
     ledger = load_ledger(ledger_path)
     was_empty = not (ledger.get("rows") or [])
+    ledger_rows_before = len(ledger.get("rows") or [])
     if was_empty and not bootstrap:
         raise ValueError("run_regime_step: no existing ledger — initial creation requires explicit "
                          "bootstrap=True (a weekly run must not silently bootstrap)")
@@ -907,6 +923,10 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
     out = weekly_regime_step(ledger, as_of, cal, v14_2_regime, csi1000, provider,
                              prior_comparison_records=records,
                              run_revision_id=run_revision_id)
+    out["regime_daily_progress_status"] = (
+        "advanced" if len(out["ledger"].get("rows") or []) > ledger_rows_before
+        else "already_current"
+    )
     if was_empty and len(out["ledger"]["rows"]) < BACKFILL_MIN_TRADING_DAYS:
         raise ValueError(f"run_regime_step: insufficient bootstrap — only {len(out['ledger']['rows'])} "
                          f"< {BACKFILL_MIN_TRADING_DAYS} eligible trading days; refusing to start the "
@@ -960,6 +980,7 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
                 run_revision_id=run_revision_id,
             )
             actions = merge_action_records(refreshed, current_action)
+            action_progress_status = "advanced"
         else:
             # A rerun on the same settled week may use a different private M6.7 artifact
             # after account-state refresh. D2 is immutable comparison evidence, so retain
@@ -967,6 +988,7 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
             # a history conflict. The engine-level merge guard remains strict for callers.
             current_action = existing_action
             actions = refreshed
+            action_progress_status = "already_current"
         summary = summarize_action_records(
             actions,
             official_revision_id=(run_revision_id if official_project_root is not None else None),
@@ -980,6 +1002,7 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
         if reminder is not None:
             out["panel_markdown"] = append_action_review_reminder(out["panel_markdown"], reminder)
             save_panel(out["panel_markdown"], panel_path)
+        out["regime_action_progress_status"] = action_progress_status
     if candidate_effect_requested:
         out["candidate_effect"] = run_candidate_effect_sidecar(
             decision_as_of=str(action_decision_as_of), regime_ledger=out["ledger"],
@@ -1154,6 +1177,16 @@ def main(argv=None) -> int:
         else:
             print(f"[candidate-effect] {candidate_effect['status']}: {candidate_effect['reason']}; "
                   "this week is not counted and no prior result was overwritten")
+    _emit_sidecar_outcome(
+        name="regime_daily", as_of=as_of, run_revision_id=args.run_revision_id,
+        progress_status=out.get("regime_daily_progress_status", "unavailable"),
+        observed_data_through=effective_as_of,
+    )
+    if action_comparison:
+        _emit_sidecar_outcome(
+            name="regime_action", as_of=as_of, run_revision_id=args.run_revision_id,
+            progress_status=out.get("regime_action_progress_status", "unavailable"),
+        )
     return 0
 
 

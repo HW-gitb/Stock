@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import inspect
 import json
 import math
 import subprocess
@@ -98,6 +99,19 @@ class MarginOverheatCashControlContractTests(unittest.TestCase):
         self.assertIsNone(production_margin.MARGIN_OVERHEAT_PERCENTILE_THRESHOLD)
         self.assertIsNone(production_margin.MARGIN_OVERHEAT_CASH_FACTOR)
         self.assertFalse(production_margin.MARGIN_OVERHEAT_PRODUCTION_EFFECT_ENABLED)
+
+    def test_adjudication_has_no_unused_changed_counter(self):
+        self.assertNotIn(
+            "changed = 0",
+            inspect.getsource(track.adjudicate_margin_overheat_cash_control),
+        )
+
+    def test_weekly_missing_margin_input_keeps_fail_closed_taxonomy(self):
+        source = inspect.getsource(weekly_pipeline.main)
+        self.assertIn('margin_status == "not_configured"', source)
+        self.assertIn('progress_status="not_applicable"', source)
+        self.assertIn('error_code="settlement_input_unavailable"', source)
+        self.assertIn('progress_status="stalled"', source)
         self.assertFalse(track.evidence_counts_toward_clock())
         self.assertEqual(track.current_mode(), track.PRE_FREEZE)
 

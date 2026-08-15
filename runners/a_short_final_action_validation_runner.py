@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import copy
 import hashlib
 import json
 import math
@@ -830,6 +831,8 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str, tracker_path: s
                          summary_path: str | Path = PUBLIC_SUMMARY_DEFAULT,
                          markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT,
                          write_public: bool = True,
+                         strict: bool = False,
+                         sidecar_result: dict | None = None,
                          run_revision_id: str | None = None,
                          official_project_root: str | Path | None = None) -> dict[str, Any]:
     """``write_public=False`` is the weekly-pipeline path: the published pair may
@@ -838,6 +841,8 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str, tracker_path: s
     if run_revision_id is not None:
         run_revision_id = validate_run_revision_id(run_revision_id)
     if not root:
+        if sidecar_result is not None:
+            sidecar_result["outcomes_updated"] = 0
         return unavailable_public_summary(as_of, run_revision_id)
     try:
         official_revision_id = None
@@ -849,6 +854,7 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str, tracker_path: s
             )
         private_path, ledger = _load_or_initialize(root)
         epoch = _active_epoch(ledger, create=False)
+        before_records = copy.deepcopy((epoch or {}).get("records", []))
         if epoch is not None:
             tracker = _load_tracker(tracker_path)
             execution = _load_execution_cache(daily_cache_path)
@@ -876,6 +882,25 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str, tracker_path: s
                 _settle_full_edge(record, execution)
             _validate_ledger(ledger)
             _atomic_write(private_path, ledger)
+        after_records = list((epoch or {}).get("records", []))
+        if sidecar_result is not None:
+            before_progress = [
+                {key: record.get(key) for key in (
+                    "decision_date", "run_revision_id", "source_identity",
+                    "hold_result", "full_edge_result", "conflict",
+                )}
+                for record in before_records
+            ]
+            after_progress = [
+                {key: record.get(key) for key in (
+                    "decision_date", "run_revision_id", "source_identity",
+                    "hold_result", "full_edge_result", "conflict",
+                )}
+                for record in after_records
+            ]
+            sidecar_result["outcomes_updated"] = sum(
+                before != after for before, after in zip(before_progress, after_progress)
+            ) + abs(len(after_progress) - len(before_progress))
         summary = _summary_from_ledger(
             ledger, as_of, official_revision_id=official_revision_id,
             official_project_root=official_project_root,
@@ -886,6 +911,10 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str, tracker_path: s
     except Exception:
         # An outage must not overwrite last week's checked pair with a fresh
         # "unavailable" one; the caller records it in the sidecar outcomes.
+        if strict:
+            raise
+        if sidecar_result is not None:
+            sidecar_result.pop("outcomes_updated", None)
         return unavailable_public_summary(as_of, run_revision_id)
 
 

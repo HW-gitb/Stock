@@ -38,6 +38,7 @@ DEFAULT_TRACKER = ROOT / "logs" / "forward_tracker.csv"
 DEFAULT_OUTPUT = ROOT / "research" / "results" / "a_short_theme_forward_comparison.json"
 EPOCH_ARCHIVE_DIR = ROOT / "docs" / "a_short_theme_forward_comparison_epochs"
 DEFAULT_PRIVATE_ROOT = ROOT / "state" / "a_short" / "theme_forward_comparison_private" / "v1"
+SIDECAR_OUTCOME_PREFIX = "[a-short-sidecar-outcome] "
 TRACKER_STRING_COLUMNS = {
     "as_of": str, "decision_as_of": str, "run_date": str,
     "price_data_through": str, "industry_trend_source_as_of": str,
@@ -129,6 +130,46 @@ def _private_root(path: str | Path) -> Path:
     if result.returncode != 0:
         raise SystemExit("[FATAL] theme comparison private root is not a provably gitignored path")
     return resolved
+
+
+def _private_artifact_digest(private_root: Path) -> str:
+    """Digest private receipt/admission artifacts without exposing their contents."""
+    digest = hashlib.sha256()
+    transient = {"updated_at", "generated_at", "captured_at"}
+    if not private_root.exists():
+        return digest.hexdigest()
+    for path in sorted(item for item in private_root.rglob("*") if item.is_file()):
+        digest.update(path.relative_to(private_root).as_posix().encode("utf-8"))
+        payload = path.read_bytes()
+        if path.suffix.lower() == ".json":
+            try:
+                value = json.loads(payload)
+            except (TypeError, ValueError):
+                pass
+            else:
+                def clean(item):
+                    if isinstance(item, dict):
+                        return {key: clean(value) for key, value in item.items() if key not in transient}
+                    if isinstance(item, list):
+                        return [clean(value) for value in item]
+                    return item
+
+                payload = json.dumps(
+                    clean(value), ensure_ascii=False, sort_keys=True, allow_nan=False,
+                ).encode("utf-8")
+        digest.update(payload)
+    return digest.hexdigest()
+
+
+def _emit_sidecar_outcome(*, as_of: str, run_revision_id: str | None,
+                          progress_status: str) -> None:
+    print(SIDECAR_OUTCOME_PREFIX + json.dumps({
+        "name": "theme_forward_comparison",
+        "as_of": str(as_of),
+        "run_revision_id": run_revision_id,
+        "execution_status": "succeeded",
+        "progress_status": progress_status,
+    }, sort_keys=True, separators=(",", ":")))
 
 
 def _epoch_private_dir(private_root: Path, epoch: dict) -> Path:
@@ -438,6 +479,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--epoch-start-as-of", help="YYYYMMDD cohort whose theme family is frozen")
     parser.add_argument("--reset-epoch", action="store_true", help="archive the current frozen epoch before opening --start-epoch")
     parser.add_argument("--private-root", default=str(DEFAULT_PRIVATE_ROOT))
+    parser.add_argument("--as-of", default=None,
+                        help="Decision date used by the launcher outcome contract.")
     parser.add_argument("--run-revision-id", default=None)
     parser.add_argument("--official-project-root", default=None,
                         help="optional project root whose official pointer gates formal receipts")
@@ -447,6 +490,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"[FATAL] forward tracker not found: {tracker_path}")
     tracker = pd.read_csv(tracker_path, dtype=TRACKER_STRING_COLUMNS)
     private_root = _private_root(args.private_root)
+    private_digest_before = _private_artifact_digest(private_root)
     run_revision_id = None
     if args.run_revision_id is not None:
         try:
@@ -503,6 +547,9 @@ def main(argv: list[str] | None = None) -> int:
             reset_epoch=args.reset_epoch,
         )
         print(f"[OK] opened frozen theme comparison epoch: {epoch['epoch_id']}; clock starts from {epoch['epoch_start_as_of']}")
+        _emit_sidecar_outcome(as_of=str(args.as_of or args.epoch_start_as_of),
+                              run_revision_id=run_revision_id,
+                              progress_status="advanced")
         return 0
     if args.epoch_start_as_of or args.reset_epoch:
         raise SystemExit("[FATAL] --epoch-start-as-of and --reset-epoch require --start-epoch")
@@ -537,6 +584,18 @@ def main(argv: list[str] | None = None) -> int:
     _write_json_atomic(output_path, packet)
     _record_formal_decision_if_due(packet, output_path, private_root)
     print(f"[OK] wrote comparison packet: {args.out}; checkpoint={packet['checkpoints']['current_checkpoint']}")
+    if args.as_of:
+        outcome_as_of = str(args.as_of)
+    elif not tracker.empty:
+        outcome_as_of = str(tracker["as_of"].astype(str).max())
+    else:
+        outcome_as_of = ""
+    _emit_sidecar_outcome(
+        as_of=outcome_as_of,
+        run_revision_id=run_revision_id,
+        progress_status=("advanced" if _private_artifact_digest(private_root) != private_digest_before
+                         else "already_current"),
+    )
     return 0
 
 

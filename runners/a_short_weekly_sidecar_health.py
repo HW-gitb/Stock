@@ -34,7 +34,7 @@ REQUIRED_ARTIFACT_SCHEMAS = {
     "candidate_effect": ROOT / "schemas" / "a_short_regime_candidate_effect_summary.schema.json",
     "iv_feed": ROOT / "schemas" / "a_short_iv_feed.schema.json",
 }
-HEALTH_SCHEMA_VERSION = "1.1.0"
+HEALTH_SCHEMA_VERSION = "1.2.0"
 
 # Deliberately small and explicit.  A new sidecar must be registered here and
 # must also be named in the launcher/pipeline expected-outcome manifest.  The
@@ -77,6 +77,7 @@ SIDECAR_SPECS: dict[str, _SidecarSpec] = {
     "industry_weight_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
     "target_policy_capture": _spec("forward_evidence", "decision", "manifest_only"),
     "final_action_capture": _spec("forward_evidence", "decision", "manifest_only"),
+    "final_action_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
     "overlay_adjudication_capture": _spec("forward_evidence", "decision", "manifest_only"),
     "overlay_adjudication_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
 }
@@ -397,13 +398,9 @@ def _theme_packet_progress(
     if mode.startswith("epoch_"):
         item["progress_status"] = "stalled"
         return
-    if latest == as_of:
-        item["progress_status"] = (
-            "already_current" if item["progress_status"] == "already_current" else "advanced"
-        )
-    else:
-        # A valid packet may be waiting for the next cohort or not yet effective.
-        item["progress_status"] = "not_applicable"
+    # The producer/launcher outcome is the progress authority.  A packet date
+    # is an observed clock only; it must not upgrade a producer no-op into
+    # ``advanced``.
 
 
 def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path,
@@ -687,7 +684,8 @@ def build_health(
     _validate_health_reason_contract(entries)
     failed = sum(1 for item in entries if item["execution_status"] in {"failed", "missing_outcome"})
     stalled = sum(1 for item in entries if item["progress_status"] == "stalled")
-    advanced = sum(1 for item in entries if item["progress_status"] in {"advanced", "already_current"})
+    advanced = sum(1 for item in entries if item["progress_status"] == "advanced")
+    already_current = sum(1 for item in entries if item["progress_status"] == "already_current")
     partial = sum(1 for item in entries if item["execution_status"] in {"skipped", "not_due", "not_configured"})
     sidecar_degraded = any(
         item["expected"] and item["progress_status"] in {"stalled", "unavailable"}
@@ -718,6 +716,7 @@ def build_health(
         "m67_status": m67_status,
         "overall": overall,
         "advanced_count": advanced,
+        "already_current_count": already_current,
         "stalled_count": stalled,
         "failed_count": failed,
         "partial_count": partial,
@@ -760,6 +759,7 @@ def write_health_bundle(payload: dict[str, Any], out_dir: Path) -> tuple[Path, P
     receipt["health_sha256"] = hashlib.sha256(json_bytes).hexdigest()
     md = [
         f"# A-short sidecar health · {payload['as_of']}", "",
+        f"already_current={payload['already_current_count']}", "",
         # `m67_status` is half of the `overall` formula, so it is printed next to
         # the verdict: an all-zero sidecar tally beside a non-failed main state reads as a
         # contradiction until the M6.7 leg that actually caused it is visible.

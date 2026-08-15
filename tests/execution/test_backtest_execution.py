@@ -37,6 +37,10 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
     def load_fixture_payload(self) -> dict:
         return json.loads(self.analysis_input_path.read_text(encoding="utf-8"))
 
+    def test_backtest_runner_has_no_orphan_default_input_root(self) -> None:
+        source = (ROOT / "runners" / "backtest_execution.py").read_text(encoding="utf-8")
+        self.assertNotIn("DEFAULT_INPUT_ROOT", source)
+
     def capital_cli_args(self) -> list[str]:
         return [
             "--portfolio-allocation",

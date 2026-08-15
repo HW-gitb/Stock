@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 
 from engine.a_short_egs_full_adapter import (load_egs_full, egs_full_row_to_candidate,  # noqa: E402
                                              EGS_FULL_REQUIRED_COLUMNS)
+from engine.a_short_run_revision import public_revision_root, sha256_file  # noqa: E402
 from runners.a_short_weekly_pipeline import (_build_holdings, main,  # noqa: E402
                                              _reject_nonprivate_account_output_path,
                                              _is_account_output_git_ignored)
@@ -88,7 +89,7 @@ class EgsFullAdapterTests(unittest.TestCase):
 
     def test_load_and_header_validation(self):
         with tempfile.TemporaryDirectory() as td:
-            d = Path(td) / "A-EGS" / "Result"
+            d = Path(td) / "result" / "a_short" / "20260612"
             d.mkdir(parents=True)
             (d / "egs_full_20260612.csv").write_text(
                 ",".join(EGS_FULL_REQUIRED_COLUMNS) + "\n"
@@ -97,9 +98,44 @@ class EgsFullAdapterTests(unittest.TestCase):
             m = load_egs_full("20260612", root=td)
             self.assertIn("600519.SH", m)
             # 缺必需列 → ValueError(契约漂移,拒绝静默错位)
-            (d / "egs_full_20260613.csv").write_text("ts_code,name\n600000.SH,x\n", encoding="utf-8")
+            d2 = Path(td) / "result" / "a_short" / "20260613"
+            d2.mkdir(parents=True)
+            (d2 / "egs_full_20260613.csv").write_text(
+                "ts_code,name\n600000.SH,x\n", encoding="utf-8"
+            )
             with self.assertRaises(ValueError):
                 load_egs_full("20260613", root=td)
+
+    def test_selected_revision_requires_bound_official_full_rank(self):
+        with tempfile.TemporaryDirectory() as td:
+            revision = "a" * 32
+            root = Path(td)
+            bundle = public_revision_root(root, "20260614", revision)
+            bundle.mkdir(parents=True)
+            full = bundle / "egs_full_20260614.csv"
+            full.write_text(
+                ",".join(EGS_FULL_REQUIRED_COLUMNS) + "\n"
+                + ",".join(_egs_full_row()[c] for c in EGS_FULL_REQUIRED_COLUMNS) + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(FileNotFoundError):
+                load_egs_full("20260614", root=root, run_revision_id=revision)
+            marker = bundle / "official_publish.json"
+            marker.write_text(json.dumps({
+                "stage_status": "complete",
+                "trade_date": "20260614",
+                "files": {"full_rank": {"path": full.name, "sha256": "0" * 64}},
+            }), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                load_egs_full("20260614", root=root, run_revision_id=revision)
+            marker.write_text(json.dumps({
+                "stage_status": "complete",
+                "trade_date": "20260614",
+                "files": {"full_rank": {"path": full.name, "sha256": sha256_file(full)}},
+            }), encoding="utf-8")
+            self.assertIn("600519.SH", load_egs_full(
+                "20260614", root=root, run_revision_id=revision
+            ))
 
     def test_row_to_candidate_maps_real_fields(self):
         c = egs_full_row_to_candidate(_egs_full_row(final_score="80.1"))

@@ -8,6 +8,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -117,6 +119,15 @@ def _write_valid_weekly_bundle(root: Path) -> Path:
 
 
 class AShortSidecarHealthTests(unittest.TestCase):
+    def test_markdown_title_precedes_machine_counter(self):
+        payload = build_health(
+            as_of="20260727",
+            launcher_manifest=_manifest([_row("data_canary")]),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            markdown = write_health_bundle(payload, Path(tmp))[1].read_text(encoding="utf-8")
+        self.assertLess(markdown.index("# A-short sidecar health"), markdown.index("already_current="))
+
     def test_direct_script_entrypoint_bootstraps_project_root(self):
         """The weekly PowerShell entry invokes this file directly, not as -m."""
         root = Path(__file__).resolve().parents[1]
@@ -859,7 +870,7 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertEqual(result["overall"], "partial")
         self.assertEqual(result["sidecars"][0]["progress_status"], "not_applicable")
 
-    def test_theme_comparison_progress_comes_from_packet_clock(self):
+    def test_theme_comparison_packet_clock_does_not_promote_without_new_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             packet = root / "research" / "results" / "a_short_theme_forward_comparison.json"
@@ -869,7 +880,7 @@ class AShortSidecarHealthTests(unittest.TestCase):
             )
             manifest = _manifest([_row(
                 "theme_forward_comparison",
-                progress="not_applicable",
+                progress="already_current",
                 observed_decision_as_of=None,
             )])
             with patch("engine.a_short_theme_forward_comparison.validate_comparison_packet"):
@@ -878,7 +889,9 @@ class AShortSidecarHealthTests(unittest.TestCase):
                 )
         self.assertEqual(result["overall"], "healthy")
         self.assertEqual(result["sidecars"][0]["observed_decision_as_of"], "20260727")
-        self.assertEqual(result["sidecars"][0]["progress_status"], "advanced")
+        self.assertEqual(result["sidecars"][0]["progress_status"], "already_current")
+        self.assertEqual(result["advanced_count"], 0)
+        self.assertEqual(result["already_current_count"], 1)
 
     def test_theme_comparison_epoch_mismatch_is_stalled_even_when_fresh(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -974,6 +987,40 @@ class AShortSidecarHealthTests(unittest.TestCase):
 
 
 class AShortSidecarOutcomeSchemaTests(unittest.TestCase):
+    def test_all_four_python_sidecar_emitters_share_the_machine_contract(self):
+        from runners import a_short_crash_veto_tracker, a_short_regime_comparison_runner
+        from runners import a_short_theme_forward_comparison, forward_tracker
+
+        emitters = (
+            (forward_tracker, "forward_tracker_capture"),
+            (a_short_crash_veto_tracker, "crash_veto"),
+            (a_short_regime_comparison_runner, "regime_daily"),
+            (a_short_theme_forward_comparison, "theme_forward_comparison"),
+        )
+        revision = "a" * 32
+        for module, expected_name in emitters:
+            with self.subTest(name=expected_name):
+                output = StringIO()
+                kwargs = {
+                    "as_of": "20260727",
+                    "run_revision_id": revision,
+                    "progress_status": "already_current",
+                }
+                if expected_name == "regime_daily":
+                    kwargs["name"] = expected_name
+                with redirect_stdout(output):
+                    module._emit_sidecar_outcome(**kwargs)
+                line = output.getvalue().strip()
+                self.assertTrue(line.startswith("[a-short-sidecar-outcome] "))
+                payload = json.loads(line.split("] ", 1)[1])
+                self.assertEqual(payload, {
+                    "name": expected_name,
+                    "as_of": "20260727",
+                    "run_revision_id": revision,
+                    "execution_status": "succeeded",
+                    "progress_status": "already_current",
+                })
+
     def test_manifest_schema_is_closed(self):
         manifest = _manifest([_row("data_canary")])
         jsonschema.validate(manifest, json.loads(OUTCOME_SCHEMA.read_text(encoding="utf-8")))

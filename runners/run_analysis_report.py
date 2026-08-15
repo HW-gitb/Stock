@@ -30,6 +30,7 @@ from engine.analyzer import state_manager
 from engine.analyzer.rule6_hard_veto import RULE_VERSIONS, run_veto
 from engine.a_short_legacy_llm_tasks import result_content
 from engine.data.analysis_input_contract import validate_analysis_input_file
+from engine.a_short_run_revision import official_analysis_input_path
 
 
 SCHEMA_PATH = ROOT / "schemas" / "deterministic_report.schema.json"
@@ -43,7 +44,7 @@ A_SHARE_STATE_REPLAY_TZ = timezone(timedelta(hours=8))
 
 
 def load_analysis_input(as_of: str, input_path: Path | None = None) -> dict[str, Any]:
-    path = input_path or (LIVE_RESULT_ROOT / as_of / "analysis_input.json")
+    path = input_path or official_analysis_input_path(ROOT, as_of)
     return validate_analysis_input_file(path, label=f"analysis_input {path}")
 
 

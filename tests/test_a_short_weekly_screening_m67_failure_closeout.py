@@ -159,6 +159,24 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
         self.assertNotIn("$script:M67InvocationState = 'complete'", self.stage4)
         self.assertIn("weekly_operation_bundle_invalid", self.stage4)
 
+    def test_sidecar_parser_is_identity_and_status_fail_closed(self) -> None:
+        parser = self.text[self.text.index("function Read-SidecarOutcomeLine"):self.text.index("function New-SharedCacheOutcomeReadResult")]
+        for required in (
+            "ConvertFrom-Json -ErrorAction Stop",
+            "candidate.name",
+            "candidate.as_of",
+            "candidate.run_revision_id",
+            "progress_status",
+            "execution_status",
+            "-notin @('advanced','already_current','stalled','not_applicable','unavailable')",
+        ):
+            self.assertIn(required, parser)
+        self.assertIn("sidecar_outcome_missing_or_invalid", self.text)
+        self.assertIn("$CandidateEffectBeforeObserved", self.text)
+        self.assertIn("$CandidateEffectObservedCandidate", self.text)
+        self.assertNotIn("$CandidateEffectBeforeHash", self.text)
+        self.assertNotIn("$CandidateEffectAfterHash", self.text)
+
     def test_operation_loader_failure_keeps_report_but_replaces_success_receipt(self) -> None:
         self.assertIn("[switch]$PreservePublishedWeeklyReport", self.text)
         self.assertRegex(

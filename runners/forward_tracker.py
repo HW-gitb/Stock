@@ -60,6 +60,7 @@ from engine.data.analysis_input_contract import validate_analysis_input_contract
 from engine.a_share_market_clock import a_share_market_date
 from engine.a_short_run_revision import (
     RevisionError,
+    official_analysis_input_path,
     public_revision_root,
     resolve_official_revision,
     validate_run_revision_id,
@@ -67,6 +68,7 @@ from engine.a_short_run_revision import (
 
 TRACKER_CSV = ROOT / "logs" / "forward_tracker.csv"
 LIVE_RESULT_ROOT = ROOT / "result" / "a_short"
+SIDECAR_OUTCOME_PREFIX = "[a-short-sidecar-outcome] "
 
 # Columns kept in the tracker. Order matters: read/write round-trips must
 # preserve column order so older CSVs stay diff-friendly.
@@ -361,6 +363,17 @@ def _decision_cohort_matches(existing: pd.DataFrame, incoming: pd.DataFrame) -> 
     return canonical_rows(existing) == canonical_rows(incoming)
 
 
+def _emit_sidecar_outcome(*, as_of: str, run_revision_id: str | None,
+                          progress_status: str) -> None:
+    print(SIDECAR_OUTCOME_PREFIX + json.dumps({
+        "name": "forward_tracker_capture",
+        "as_of": str(as_of),
+        "run_revision_id": run_revision_id,
+        "execution_status": "succeeded",
+        "progress_status": progress_status,
+    }, sort_keys=True, separators=(",", ":")))
+
+
 def capture(as_of: str, run_revision_id: str | None = None) -> int:
     if run_revision_id is not None:
         try:
@@ -370,7 +383,7 @@ def capture(as_of: str, run_revision_id: str | None = None) -> int:
             return 2
         input_path = public_revision_root(ROOT, as_of, run_revision_id) / "analysis_input.json"
     else:
-        input_path = LIVE_RESULT_ROOT / as_of / "analysis_input.json"
+        input_path = official_analysis_input_path(ROOT, as_of)
     if not input_path.exists():
         print(f"[FATAL] analysis_input.json missing: {input_path.relative_to(ROOT)}")
         return 2
@@ -441,6 +454,8 @@ def capture(as_of: str, run_revision_id: str | None = None) -> int:
             set(same_day["candidate_digest"].dropna().astype(str)) == {digest} and \
             captured_codes == expected_codes and _decision_cohort_matches(same_day, new_df):
         print(f"[OK] {as_of}: identical run already captured; preserving backfill")
+        _emit_sidecar_outcome(as_of=as_of, run_revision_id=run_revision_id,
+                              progress_status="already_current")
         return 0
 
     # Legacy date-only captures retain their historical replacement behavior.  A
@@ -454,6 +469,8 @@ def capture(as_of: str, run_revision_id: str | None = None) -> int:
     _write_tracker(combined)
     action = "appended revision cohort" if run_revision_id is not None else "replaced cohort"
     print(f"[OK] {as_of}: {action} with run {run_id} ({len(new_df)} rows; tracker rows now {len(combined)})")
+    _emit_sidecar_outcome(as_of=as_of, run_revision_id=run_revision_id,
+                          progress_status="advanced")
     return 0
 
 

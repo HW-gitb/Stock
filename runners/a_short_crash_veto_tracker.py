@@ -56,6 +56,7 @@ DECISION_LOSS_RATE_GAP = 0.10
 # mature official weeks are the minimum frozen evidence window; pre-freeze
 # output remains audit-only even when the synthetic rollup is decisive.
 OFFICIAL_ROLLING_MIN_WEEKS = 3
+SIDECAR_OUTCOME_PREFIX = "[a-short-sidecar-outcome] "
 
 
 def _now() -> str:
@@ -64,6 +65,33 @@ def _now() -> str:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _progress_digest(state: dict) -> str:
+    """Digest durable cohort/result progress while ignoring run timestamps."""
+    transient = {"updated_at", "generated_at", "captured_at"}
+
+    def clean(value):
+        if isinstance(value, dict):
+            return {key: clean(item) for key, item in value.items() if key not in transient}
+        if isinstance(value, list):
+            return [clean(item) for item in value]
+        return value
+
+    return hashlib.sha256(
+        json.dumps(clean(state), ensure_ascii=False, sort_keys=True, allow_nan=False).encode("utf-8")
+    ).hexdigest()
+
+
+def _emit_sidecar_outcome(*, as_of: str, run_revision_id: str | None,
+                          progress_status: str) -> None:
+    print(SIDECAR_OUTCOME_PREFIX + json.dumps({
+        "name": "crash_veto",
+        "as_of": str(as_of),
+        "run_revision_id": run_revision_id,
+        "execution_status": "succeeded",
+        "progress_status": progress_status,
+    }, sort_keys=True, separators=(",", ":")))
 
 
 def _atomic_json(path: Path, payload: dict) -> None:
@@ -116,9 +144,6 @@ def _official_inputs(as_of: str, run_revision_id: str | None = None) -> tuple[di
     marker_path = result_dir / "official_publish.json"
     recon_path = result_dir / "rank_universe_reconciliation.csv"
     full_path = result_dir / f"egs_full_{as_of}.csv"
-    if run_revision_id is None:
-        # Legacy date-root EGS full-rank output predates V5-A's public bundle.
-        full_path = ROOT / "A-EGS" / "Result" / f"egs_full_{as_of}.csv"
     if not marker_path.exists() or not recon_path.exists() or not full_path.exists():
         raise FileNotFoundError(f"{as_of} official EGS publish/reconciliation/full-rank artifact missing")
     marker = json.loads(marker_path.read_text(encoding="utf-8"))
@@ -314,7 +339,7 @@ def _make_cohort(as_of: str, marker: dict, scope: str, days: int, member_codes: 
         members.append({"ts_code": code, "name": str(row.get("name") or ""),
                         "l1_name": str(row.get("l1_name") or ""), "l2_name": str(row.get("l2_name") or ""),
                         "controls": matches.get(code, [])})
-    return {
+    cohort = {
         "cohort_id": _cohort_id(as_of, str(marker["run_id"]), scope, days, run_revision_id),
         "as_of": as_of, "run_id": marker["run_id"], "captured_at": _now(),
         "rule_confirmed_days": days, "scope": scope, "source": source, "locked": bool(locked),
@@ -322,6 +347,7 @@ def _make_cohort(as_of: str, marker: dict, scope: str, days: int, member_codes: 
     }
     if run_revision_id is not None:
         cohort["run_revision_id"] = run_revision_id
+    return cohort
 
 
 def _upsert_cohort(state: dict, cohort: dict) -> bool:
@@ -834,6 +860,7 @@ def run_update(as_of: str, rule_days: int, state_path: Path, summary_path: Path,
                run_revision_id: str | None = None,
                official_project_root: str | Path | None = None) -> int:
     state = _load_state(state_path)
+    progress_before = _progress_digest(state)
     if bootstrap:
         if run_revision_id is None:
             old_n, added_n, other_n = bootstrap_legacy(state, as_of, official_days, active_days)
@@ -868,6 +895,11 @@ def run_update(as_of: str, rule_days: int, state_path: Path, summary_path: Path,
     print(f"[crash-veto] {summary['one_week_plain']}")
     print(f"[crash-veto] {summary['two_week_plain']}")
     print(f"[crash-veto] 最终结论：{summary['final_decision']['plain_text']}")
+    _emit_sidecar_outcome(
+        as_of=as_of,
+        run_revision_id=run_revision_id,
+        progress_status=("advanced" if _progress_digest(state) != progress_before else "already_current"),
+    )
     return 0
 
 

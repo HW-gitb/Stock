@@ -686,9 +686,21 @@ def settle_from_daily_payload(*, root: str | Path, daily_payload: dict, as_of: s
         }
         _validate_private_record(outcome)
         _, outcome_path = _weekly_paths(private_root, decision_date, capture.get("run_revision_id"))
-        if not outcome_path.exists() or _load_json(outcome_path) != outcome:
+        existing = _load_json(outcome_path) if outcome_path.exists() else None
+        if existing is None:
             _atomic_write(outcome_path, outcome)
             changed += 1
+        else:
+            existing_compare = copy.deepcopy(existing)
+            outcome_compare = copy.deepcopy(outcome)
+            for compare in (existing_compare, outcome_compare):
+                payload = dict(compare.get("payload") or {})
+                for key in ("settled_through", "cache_sha256", "generated_at", "updated_at", "captured_at"):
+                    payload.pop(key, None)
+                compare["payload"] = payload
+            if existing_compare != outcome_compare:
+                _atomic_write(outcome_path, outcome)
+                changed += 1
     if official_project_root is not None and official_selected_count == 0:
         return {"status": "no_official_p5_captures", "outcomes_updated": 0,
                 "production_unchanged": True}
@@ -1024,6 +1036,8 @@ def settle_and_summarize_weekly(*, root: str | Path | None, daily_cache_path: st
                     root=private_root, daily_payload=_load_json(cache_path), as_of=as_of,
                     run_revision_id=run_revision_id,
                     official_project_root=official_project_root)
+                if sidecar_result is not None:
+                    sidecar_result["outcomes_updated"] = settlement.get("outcomes_updated")
                 if official_project_root is not None and settlement.get("status") != "settled_from_existing_cache":
                     summary = unavailable_public_progress(as_of)
                 else:

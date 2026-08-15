@@ -38,8 +38,8 @@ class BoundedUnittestTests(unittest.TestCase):
             [
                 sys.executable,
                 "-c",
-                "print('Ran 5 tests in 0.1s'); "
-                "print('[bounded-unittest nested] Ran 3 tests in 0.1s'); print('OK')",
+                "print('[bounded-unittest nested] Ran 3 tests in 0.1s'); "
+                "print('Ran 5 tests in 0.1s'); print('OK')",
             ],
             10,
         )

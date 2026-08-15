@@ -553,6 +553,28 @@ function Add-SidecarOutcome {
     if (-not [string]::IsNullOrWhiteSpace($FeedSha256)) { $Outcome['feed_sha256'] = $FeedSha256 }
     $script:LauncherSidecarOutcomes += $Outcome
 }
+function Read-SidecarOutcomeLine {
+    param(
+        [object[]]$Output,
+        [string]$Name,
+        [string]$AsOf,
+        [string]$RunRevisionId
+    )
+    $prefix = '[a-short-sidecar-outcome] '
+    $found = $null
+    foreach ($line in @($Output)) {
+        $text = [string]$line
+        if (-not $text.StartsWith($prefix, [System.StringComparison]::Ordinal)) { continue }
+        try { $candidate = $text.Substring($prefix.Length) | ConvertFrom-Json -ErrorAction Stop } catch { continue }
+        $progress = [string]$candidate.progress_status
+        if ([string]$candidate.name -ne $Name -or [string]$candidate.as_of -ne $AsOf -or
+            [string]$candidate.run_revision_id -ne $RunRevisionId -or
+            $progress -notin @('advanced','already_current','stalled','not_applicable','unavailable') -or
+            [string]$candidate.execution_status -ne 'succeeded') { continue }
+        $found = $candidate
+    }
+    return $found
+}
 function New-SharedCacheOutcomeReadResult {
     param([bool]$Valid, [string]$ErrorCode = $null, [object]$Outcome = $null)
     return [pscustomobject]@{
@@ -762,8 +784,8 @@ if ($SkipCanary) {
 } else {
     $CanaryExitCode = 1
     Write-Host ""
-    Write-Host "[2/4] Running runners\data_canary.py --as-of $AsOf --source $CanarySource ..." -ForegroundColor Yellow
-    & $PythonExe runners\data_canary.py --as-of $AsOf --source $CanarySource
+    Write-Host "[2/4] Running runners\data_canary.py --as-of $AsOf --run-revision-id $RunRevisionId --source $CanarySource ..." -ForegroundColor Yellow
+    & $PythonExe runners\data_canary.py --as-of $AsOf --run-revision-id $RunRevisionId --source $CanarySource
     $CanaryExitCode = $LASTEXITCODE
     if ($null -eq $CanaryExitCode) { $CanaryExitCode = 1 }
 
@@ -784,8 +806,39 @@ if ($SkipCanary) {
         # 仍然不让它影响主流程退出码（旁路约束）
         Write-Host "[WARN] canary process exit $CanaryExitCode (unexpected; check logs/data_canary_$AsOf.json)" -ForegroundColor Yellow
     }
-    $CanaryProgress = if ($CanaryExitCode -eq 0 -and (Test-Path $CanaryLog)) { 'advanced' } else { 'unavailable' }
-    Add-SidecarOutcome -Name 'data_canary' -Expected $true -Attempted $true -ExecutionStatus $(if($CanaryExitCode -eq 0){'succeeded'}else{'failed'}) -ProgressStatus $CanaryProgress -ErrorCode $(if($CanaryExitCode -eq 0){$null}else{'process_failed'}) -ObservedDecisionAsOf $AsOf
+    $CanaryProgress = 'unavailable'
+    $CanaryExecution = 'failed'
+    $CanaryError = 'canary_log_missing_or_invalid'
+    $CanaryObservedAsOf = $null
+    if ($CanaryExitCode -eq 0 -and $null -ne $CanaryPayload) {
+        $CanaryStatus = [string]$CanaryPayload.status
+        $CanaryObservedAsOf = [string]$CanaryPayload.as_of
+        if ($CanaryObservedAsOf -ne $AsOf) {
+            $CanaryProgress = 'stalled'
+            $CanaryExecution = 'succeeded'
+            $CanaryError = 'stale_as_of_fallback'
+        } elseif ($CanaryStatus -in @('ok','warn','error_drift','error_missing')) {
+            $CanaryProgress = 'advanced'
+            $CanaryExecution = 'succeeded'
+            $CanaryError = $null
+        } elseif ($CanaryStatus -eq 'skipped_akshare_not_installed') {
+            $CanaryProgress = 'not_applicable'
+            $CanaryExecution = 'not_configured'
+            $CanaryError = $null
+        } elseif ($CanaryStatus -in @('skipped_no_candidates', 'skipped_empty_candidates',
+                                      'skipped_no_rows_after_tier_filter', 'skipped_zero_sample_size')) {
+            $CanaryProgress = 'stalled'
+            $CanaryExecution = 'succeeded'
+            $CanaryError = $CanaryStatus
+        } else {
+            $CanaryProgress = 'unavailable'
+            $CanaryExecution = 'failed'
+            $CanaryError = $CanaryStatus
+        }
+    } elseif ($CanaryExitCode -ne 0) {
+        $CanaryError = 'process_failed'
+    }
+    Add-SidecarOutcome -Name 'data_canary' -Expected $true -Attempted $true -ExecutionStatus $CanaryExecution -ProgressStatus $CanaryProgress -ErrorCode $CanaryError -ObservedDecisionAsOf $CanaryObservedAsOf
 }
 
 # --- Stage 3: forward_tracker capture ---
@@ -800,9 +853,11 @@ if ($SkipTracker) {
     $TrackerBackfillExitCode = 1
     Write-Host ""
     Write-Host "[3/4] Running runners\forward_tracker.py capture --as-of $AsOf ..." -ForegroundColor Yellow
-    & $PythonExe runners\forward_tracker.py capture --as-of $AsOf --run-revision-id $RunRevisionId
+    $TrackerCaptureOutput = @(& $PythonExe runners\forward_tracker.py capture --as-of $AsOf --run-revision-id $RunRevisionId 2>&1)
     $TrackerExitCode = $LASTEXITCODE
     if ($null -eq $TrackerExitCode) { $TrackerExitCode = 1 }
+    $TrackerCaptureOutput | ForEach-Object { Write-Host ([string]$_) }
+    $TrackerOutcome = Read-SidecarOutcomeLine -Output $TrackerCaptureOutput -Name 'forward_tracker_capture' -AsOf $AsOf -RunRevisionId $RunRevisionId
 
     if ($TrackerExitCode -ne 0) {
         # tracker capture 失败不影响主流程退出码（旁路约束）。
@@ -811,6 +866,11 @@ if ($SkipTracker) {
         Add-SidecarOutcome -Name 'forward_tracker_capture' -Expected $true -Attempted $true -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'process_failed' -ObservedDecisionAsOf $AsOf
         Add-SidecarOutcome -Name 'forward_tracker_backfill' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'capture_failed'
         Add-SidecarOutcome -Name 'theme_forward_comparison' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'capture_failed'
+    } elseif ($null -eq $TrackerOutcome) {
+        Write-Host "[WARN] forward_tracker succeeded without a valid machine outcome; refusing to claim progress." -ForegroundColor Yellow
+        Add-SidecarOutcome -Name 'forward_tracker_capture' -Expected $true -Attempted $true -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'sidecar_outcome_missing_or_invalid' -ObservedDecisionAsOf $AsOf
+        Add-SidecarOutcome -Name 'forward_tracker_backfill' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'capture_outcome_invalid'
+        Add-SidecarOutcome -Name 'theme_forward_comparison' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'capture_outcome_invalid'
     } else {
         # P1 Cut2 consumes only this existing tracker. Backfill is cache-only: it never asks the
         # weekly runner to download extra market data, and a cache gap remains advisory.
@@ -826,7 +886,7 @@ if ($SkipTracker) {
         } elseif ($TrackerBackfillExitCode -ne 0) {
             Write-Host "[WARN] forward_tracker cache-only backfill exit $TrackerBackfillExitCode; P1 remains pending and EGS/M6.7 continue unchanged." -ForegroundColor Yellow
         }
-        Add-SidecarOutcome -Name 'forward_tracker_capture' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus 'advanced' -ObservedDecisionAsOf $AsOf
+        Add-SidecarOutcome -Name 'forward_tracker_capture' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus ([string]$TrackerOutcome.progress_status) -ObservedDecisionAsOf ([string]$TrackerOutcome.as_of)
         if ($TrackerBackfillExitCode -eq 3) {
             Add-SidecarOutcome -Name 'forward_tracker_backfill' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus 'stalled' -ErrorCode 'forward_daily_cache_stale'
         } else {
@@ -836,17 +896,23 @@ if ($SkipTracker) {
             Add-SidecarOutcome -Name 'theme_forward_comparison' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'historical_replay'
         } else {
             Write-Host "[3a/4] Running audit-only theme forward comparison sidecar ..." -ForegroundColor Yellow
-            & $PythonExe runners\a_short_theme_forward_comparison.py `
+            $ThemeComparisonOutput = @(& $PythonExe runners\a_short_theme_forward_comparison.py `
                 --tracker (Join-Path $ProjectRoot 'logs\forward_tracker.csv') `
                 --out (Join-Path $ProjectRoot 'research\results\a_short_theme_forward_comparison.json') `
                 --private-root (Join-Path $ProjectRoot 'state\a_short\theme_forward_comparison_private\v1') `
-                --run-revision-id $RunRevisionId --official-project-root $ProjectRoot
+                --as-of $AsOf --run-revision-id $RunRevisionId --official-project-root $ProjectRoot 2>&1)
             $ThemeComparisonExitCode = $LASTEXITCODE
             if ($null -eq $ThemeComparisonExitCode) { $ThemeComparisonExitCode = 1 }
+            $ThemeComparisonOutput | ForEach-Object { Write-Host ([string]$_) }
+            $ThemeOutcome = Read-SidecarOutcomeLine -Output $ThemeComparisonOutput -Name 'theme_forward_comparison' -AsOf $AsOf -RunRevisionId $RunRevisionId
             if ($ThemeComparisonExitCode -ne 0) {
                 Write-Host "[WARN] theme forward comparison exit $ThemeComparisonExitCode (audit-only sidecar; does NOT block the weekly)" -ForegroundColor Yellow
             }
-            Add-SidecarOutcome -Name 'theme_forward_comparison' -Expected $true -Attempted $true -ExecutionStatus $(if($ThemeComparisonExitCode -eq 0){'succeeded'}else{'failed'}) -ProgressStatus $(if($ThemeComparisonExitCode -eq 0){'not_applicable'}else{'unavailable'}) -ErrorCode $(if($ThemeComparisonExitCode -eq 0){$null}else{'process_failed'})
+            if ($ThemeComparisonExitCode -eq 0 -and $null -ne $ThemeOutcome) {
+                Add-SidecarOutcome -Name 'theme_forward_comparison' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus ([string]$ThemeOutcome.progress_status) -ObservedDecisionAsOf ([string]$ThemeOutcome.as_of)
+            } else {
+                Add-SidecarOutcome -Name 'theme_forward_comparison' -Expected $true -Attempted $true -ExecutionStatus $(if($ThemeComparisonExitCode -eq 0){'failed'}else{'failed'}) -ProgressStatus 'unavailable' -ErrorCode $(if($ThemeComparisonExitCode -eq 0){'sidecar_outcome_missing_or_invalid'}else{'process_failed'})
+            }
         }
     }
 }
@@ -860,16 +926,18 @@ if ($IsHistoricalAsOf) {
     Write-Host "[3b/4] Historical replay: crash-veto forward tracker skipped" -ForegroundColor DarkGray
 } else {
     Write-Host "[3b/4] Updating crash-veto 5/10-trading-day comparison ..." -ForegroundColor Yellow
-    & $PythonExe runners\a_short_crash_veto_tracker.py update --as-of $AsOf --rule-confirmed-days 5 --run-revision-id $RunRevisionId --official-project-root $ProjectRoot --confirm-fetch-authorized
+    $CrashVetoOutput = @(& $PythonExe runners\a_short_crash_veto_tracker.py update --as-of $AsOf --rule-confirmed-days 5 --run-revision-id $RunRevisionId --official-project-root $ProjectRoot --confirm-fetch-authorized 2>&1)
     $CrashVetoExitCode = $LASTEXITCODE
     if ($null -eq $CrashVetoExitCode) { $CrashVetoExitCode = 1 }
-    if ($CrashVetoExitCode -eq 0 -and (Test-Path $CrashVetoSummary)) {
+    $CrashVetoOutput | ForEach-Object { Write-Host ([string]$_) }
+    $CrashVetoOutcome = Read-SidecarOutcomeLine -Output $CrashVetoOutput -Name 'crash_veto' -AsOf $AsOf -RunRevisionId $RunRevisionId
+    if ($CrashVetoExitCode -eq 0 -and (Test-Path $CrashVetoSummary) -and $null -ne $CrashVetoOutcome) {
         $CrashVetoSummaryReady = $true
         Write-Host "[ADVISORY] crash-veto comparison ready -> $CrashVetoSummary (selection unchanged)" -ForegroundColor Yellow
     } else {
         Write-Host "[WARN] crash-veto comparison unavailable (exit $CrashVetoExitCode); formal selection/M6.7 continues unchanged." -ForegroundColor Yellow
     }
-    Add-SidecarOutcome -Name 'crash_veto' -Expected $true -Attempted $true -ExecutionStatus $(if($CrashVetoExitCode -eq 0 -and (Test-Path $CrashVetoSummary)){'succeeded'}else{'failed'}) -ProgressStatus $(if($CrashVetoExitCode -eq 0 -and (Test-Path $CrashVetoSummary)){'advanced'}else{'unavailable'}) -ErrorCode $(if($CrashVetoExitCode -eq 0 -and (Test-Path $CrashVetoSummary)){$null}else{'process_failed'}) -ObservedDecisionAsOf $(if($CrashVetoExitCode -eq 0){$AsOf}else{$null})
+    Add-SidecarOutcome -Name 'crash_veto' -Expected $true -Attempted $true -ExecutionStatus $(if($CrashVetoExitCode -eq 0 -and (Test-Path $CrashVetoSummary) -and $null -ne $CrashVetoOutcome){'succeeded'}else{'failed'}) -ProgressStatus $(if($CrashVetoExitCode -eq 0 -and (Test-Path $CrashVetoSummary) -and $null -ne $CrashVetoOutcome){[string]$CrashVetoOutcome.progress_status}else{'unavailable'}) -ErrorCode $(if($CrashVetoExitCode -eq 0 -and (Test-Path $CrashVetoSummary) -and $null -ne $CrashVetoOutcome){$null}else{if($CrashVetoExitCode -eq 0){'sidecar_outcome_missing_or_invalid'}else{'process_failed'}}) -ObservedDecisionAsOf $(if($CrashVetoExitCode -eq 0){$AsOf}else{$null})
 }
 
 # --- Stage 4: M6.7 authoritative operation weekly report (Slice 3b-2: replaces the standalone semantic-risk summary
@@ -1166,20 +1234,35 @@ if ($SkipRegime) {
         $RegimeArgs += @('--iv-feed', $RegimeIvFeed)
     }
     $RegimeArgs += '--confirm-fetch-authorized'
+    $CandidateEffectOutcome = Join-Path $ProjectRoot 'research\results\a_short\candidate_effect_outcome.json'
+    $CandidateEffectBeforeExists = $false
+    $CandidateEffectBeforeObserved = $null
+    if (Test-Path -LiteralPath $CandidateEffectOutcome -PathType Leaf) {
+        try {
+            $CandidateEffectBeforeReceipt = Get-Content -Raw -Encoding UTF8 $CandidateEffectOutcome | ConvertFrom-Json
+            if ([string]$CandidateEffectBeforeReceipt.schema_name -eq 'a_short_regime_candidate_effect_outcome') {
+                $CandidateEffectBeforeExists = $true
+                $CandidateEffectBeforeObserved = [string]$CandidateEffectBeforeReceipt.observed_as_of
+            }
+        } catch { }
+    }
     Write-Host "[5/5] Running $PythonExe $($RegimeArgs -join ' ') ..." -ForegroundColor Yellow
-    & $PythonExe @RegimeArgs
+    $RegimeOutput = @(& $PythonExe @RegimeArgs 2>&1)
     $RegimeExitCode = $LASTEXITCODE
     if ($null -eq $RegimeExitCode) { $RegimeExitCode = 1 }
+    $RegimeOutput | ForEach-Object { Write-Host ([string]$_) }
+    $RegimeDailyOutcome = Read-SidecarOutcomeLine -Output $RegimeOutput -Name 'regime_daily' -AsOf $AsOf -RunRevisionId $RunRevisionId
+    $RegimeActionOutcome = Read-SidecarOutcomeLine -Output $RegimeOutput -Name 'regime_action' -AsOf $AsOf -RunRevisionId $RunRevisionId
     if ($RegimeExitCode -ne 0) {
         # 真取数失败(daily/stk_limit/指数/IV)不影响主流程退出码(旁路约束:comparison-only 绝不阻断选股)
         Write-Host "[WARN] V14.3 regime comparison exit $RegimeExitCode (advisory sidecar; comparison-only, does NOT block the weekly)" -ForegroundColor Yellow
     } else {
         Write-Host "[ADVISORY] V14.3 regime comparison ledger updated (non-production; V14.2 frozen)." -ForegroundColor Yellow
     }
-    $RegimeStatus = if($RegimeExitCode -eq 0){'succeeded'}else{'failed'}
-    $RegimeProgress = if($RegimeExitCode -eq 0){'advanced'}else{'unavailable'}
-    $RegimeError = if($RegimeExitCode -eq 0){$null}else{'process_failed'}
-    Add-SidecarOutcome -Name 'regime_daily' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ExpectedDataThrough $PriceAsOf -ObservedDataThrough $(if($RegimeExitCode -eq 0){$PriceAsOf}else{$null})
+    $RegimeStatus = if($RegimeExitCode -eq 0 -and $null -ne $RegimeDailyOutcome){'succeeded'}else{'failed'}
+    $RegimeProgress = if($null -ne $RegimeDailyOutcome){[string]$RegimeDailyOutcome.progress_status}else{'unavailable'}
+    $RegimeError = if($RegimeExitCode -eq 0 -and $null -ne $RegimeDailyOutcome){$null}else{if($RegimeExitCode -eq 0){'sidecar_outcome_missing_or_invalid'}else{'process_failed'}}
+    Add-SidecarOutcome -Name 'regime_daily' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ExpectedDataThrough $PriceAsOf -ObservedDataThrough $(if($null -ne $RegimeDailyOutcome){[string]$RegimeDailyOutcome.observed_data_through}else{$null})
     if ($M67InvocationState -eq 'complete' -and $DesignCompletionAuthorization -eq 'probe_failed') {
         # A broken authorization probe is not the same business state as an
         # explicit pre-freeze registry decision.  Keep the comparison lane
@@ -1205,8 +1288,7 @@ if ($SkipRegime) {
         Add-SidecarOutcome -Name 'regime_action' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_semantic_risk'
         Add-SidecarOutcome -Name 'candidate_effect' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_semantic_risk'
     } else {
-        Add-SidecarOutcome -Name 'regime_action' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ObservedDecisionAsOf $(if($RegimeExitCode -eq 0){$AsOf}else{$null})
-        $CandidateEffectOutcome = Join-Path $ProjectRoot 'research\results\a_short\candidate_effect_outcome.json'
+        Add-SidecarOutcome -Name 'regime_action' -Expected $true -Attempted $true -ExecutionStatus $(if($RegimeExitCode -eq 0 -and $null -ne $RegimeActionOutcome){'succeeded'}else{'failed'}) -ProgressStatus $(if($null -ne $RegimeActionOutcome){[string]$RegimeActionOutcome.progress_status}else{'unavailable'}) -ErrorCode $(if($RegimeExitCode -eq 0 -and $null -ne $RegimeActionOutcome){$null}else{if($RegimeExitCode -eq 0){'sidecar_outcome_missing_or_invalid'}else{'process_failed'}}) -ObservedDecisionAsOf $(if($null -ne $RegimeActionOutcome){$AsOf}else{$null})
         $CandidateEffectStatus = 'failed'
         $CandidateEffectProgress = 'unavailable'
         $CandidateEffectError = 'candidate_effect_outcome_missing_or_invalid'
@@ -1216,7 +1298,7 @@ if ($SkipRegime) {
         # mismatched pair, so the launcher deliberately does NOT re-implement that enum table or
         # pin the schema version: one contract, one place. It checks identity and field shape
         # only, and the Python health observer stays authoritative for the real evidence clock.
-        if ($RegimeExitCode -eq 0 -and (Test-Path -LiteralPath $CandidateEffectOutcome -PathType Leaf)) {
+        if ($RegimeExitCode -eq 0 -and $null -ne $RegimeDailyOutcome -and (Test-Path -LiteralPath $CandidateEffectOutcome -PathType Leaf)) {
             try {
                 $CandidateEffectReceipt = Get-Content -Raw -Encoding UTF8 $CandidateEffectOutcome | ConvertFrom-Json
                 $CandidateEffectReceiptStatus = [string]$CandidateEffectReceipt.status
@@ -1233,7 +1315,13 @@ if ($SkipRegime) {
                     $CandidateEffectObservedValid) {
                     $CandidateEffectStatus = 'succeeded'
                     $CandidateEffectObserved = $CandidateEffectObservedCandidate
-                    $CandidateEffectProgress = if ($CandidateEffectReceiptStatus -eq 'updated') { 'advanced' } elseif ([string]::IsNullOrWhiteSpace($CandidateEffectObserved)) { 'unavailable' } else { 'stalled' }
+                    $CandidateEffectProgress = if ($CandidateEffectReceiptStatus -eq 'updated') {
+                        if ($CandidateEffectBeforeExists -and $CandidateEffectBeforeObserved -eq $CandidateEffectObserved) {
+                            'already_current'
+                        } else {
+                            'advanced'
+                        }
+                    } elseif ([string]::IsNullOrWhiteSpace($CandidateEffectObserved)) { 'unavailable' } else { 'stalled' }
                     $CandidateEffectError = if ($CandidateEffectReceiptStatus -eq 'updated') { $null } else { $CandidateEffectReceiptReason }
                 }
             } catch { }
@@ -1253,7 +1341,7 @@ if (-not $SkipSemanticRisk -and -not $IsHistoricalAsOf) {
     $PipelineExpected = @(
         'official_operation_capture', 'official_operation_settlement', 'factor_v2_capture',
         'industry_weight_capture', 'industry_weight_settlement', 'target_policy_capture',
-        'final_action_capture', 'overlay_adjudication_capture', 'overlay_adjudication_settlement'
+        'final_action_capture', 'final_action_settlement', 'overlay_adjudication_capture', 'overlay_adjudication_settlement'
     )
 }
 $ManifestExpected = @($LauncherSidecarOutcomes | ForEach-Object { [string]$_.name }) + $PipelineExpected | Select-Object -Unique
