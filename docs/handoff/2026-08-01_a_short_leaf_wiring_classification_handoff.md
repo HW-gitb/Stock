@@ -8392,3 +8392,72 @@ OK
 **未覆盖维度**：未跑真实周实盘，刀 A 修复后本周能否真的补出 pointer 未实跑；`cutoff` 放开后的 PIT 影响未评估；新断言仍是源码文本层（运行时由 runner 侧 CLI 用例与 emit 探针从另一侧覆盖）。
 
 **下一步**：桌面 `2a_testrun0815.md` 还剩问题 3（margin 早退分支 KeyError，须按类扫键集）与问题 4（P4a 两项前置条件，每周必挂）。
+
+## 2026-08-15 追加：桌面 2a 问题3 margin 无官方 capture 的 KeyError 修复（Codex executor/fixer；8c7a；repaired / OPEN-NOT-VERIFIED）
+
+### 问题、根因与最小改动
+
+- settle_margin_overheat_from_daily_cache 在 official project 下没有可用 capture 时返回既有 no_official_margin_captures sentinel；缺少 official pointer/revision 会使过滤结果为空，这是合法的证据不可用状态。
+- settle_and_summarize_margin_overheat_weekly 之后无条件读取 result reminder，导致本应 unavailable 的场景抛 KeyError reminder。修复只在 sentinel 消费点增加分支：清理私有 stale reminder，返回既有 PUBLIC_STATUS_UNAVAILABLE 摘要，并仅回传调用方提供的 run_revision_id。
+- 未改 sentinel producer、schema、official pointer/source-binding、M6.7 production outcome、daily cache、ledger、provider/account 或其他问题；不实现桌面附录 A。
+
+### 调用链、消费者与边界
+
+runners/a_short_official_settlement.py optional margin sidecar / runners/a_short_weekly_pipeline.py 周入口 → settle_and_summarize_margin_overheat_weekly → settle_margin_overheat_from_daily_cache。两条消费者继续收到既有 unavailable 语义；只清除私有 reminder.json 的旧内容，不写 settled 结果、ledger、cache 或 pointer。
+
+### 红绿控制、精确测试与原始终态
+
+固定 Python 一律为 C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（3.13.8）。
+
+    旧代码新增回归：
+    KeyError: reminder
+
+    修复后：
+    test_missing_official_capture_degrades_without_reminder_key_error
+    Ran 1 test in 2.464s
+    OK
+    [bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=1
+    [bounded-unittest] FOCUSED_RECEIPT token=receipt:9236bfb9fe26e8d43da6e2d7
+
+    tests.test_a_short_margin_overheat_cash_control
+    tests.test_a_short_margin_overheat_wiring
+    tests.test_a_short_weekly_pipeline
+    Ran 702 tests in 72.501s
+    OK
+
+    full_pack_ledger.py run a_short 2a_problem3_margin_degradation 860 -- discover -s tests -p 'test_a_short*.py'
+    [full-pack-ledger] STATIC status=PASS diff_check=PASS py_compile=2
+    [full-pack-ledger] START lane=a_short deadline=860s fingerprint=08178d1cfb85
+    [parallel-lane] COUNT_GATE discovered=3126 ran=3126 equal=True
+    Ran 3126 tests in 125.334s
+    [full-pack-ledger] RESULT status=PASS exit=0 tests=3126 elapsed=125.3s deadline=860s mode=parallel
+
+当前未运行 provider/live、真实周跑、账户或下单；未 stage/commit/push/merge。风险登记与 SESSION_LOG 已同步；文档三门固定 Python launcher 终态为 67/67 PASS，receipt:cb8e3cec607090e1176f14b8。
+
+## 2026-08-15 追加：桌面 2a 问题 3 的独立审查 = FAIL（代码成立、交接门失守；Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：FAIL，一条 Required；代码侧无须返工。正文只在 `docs/system_risk_register.md`。
+
+**代码侧我实际验了什么**：把 `settle_margin_overheat_from_daily_cache` 的 return 全枚举（只有两个）、把该函数的调用方与 `result["reminder"]` / `result["adjudication"]` 的读取点全枚举（各一处），确认守卫之后键集与期望一致——这一类在本模块内是真闭合，不是只堵被点名那条腿。再读 pipeline `:7055-7071` 确认返回值被映射成 `succeeded/stalled/settlement_input_unavailable`，即诚实降级而非假失败。
+
+**植入对照**：按 §C2 patch 门本身——整块删掉新增那 7 行，margin 模块由 PASS 转 FAIL 且输出里出现 `KeyError` + `reminder`。这同时证明两件事：守卫承重；执行方的新用例不是恒真断言，它真的复现了原缺陷。恢复后字节一致。
+
+**为什么仍判 FAIL**：焦点超集 696 用例里唯一的 4 条红全在 `test_doc_governance_guard`，且全部指向执行方本轮 entry 缺整行 `Pre-Codex self-review`。这是两轮前同一条的复发，后果是整仓 pre-commit 被拦。那行必须由执行方自己写——代写等于伪造自审证据，所以我只记录、不补。
+
+**未覆盖维度**：未跑真实周实盘；未跑 full lane（+7 行单一早退分支，rule 3 未触发）；「早退 return 键集与调用方不一致」这一类在 margin 之外的模块本轮未普查。
+
+**下一步**：Codex 补自审行并跑一次 doc 三守卫即可闭；代码不必动。桌面 2a 之后只剩问题 4（P4a 两项前置条件，每周必挂）。
+
+## 2026-08-15 追加：桌面 2a 问题 3 收口的复审 = PASS（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：PASS，上一轮 Required 已闭。正文只在 `docs/system_risk_register.md`。
+
+**值得记的是诊断过程**：上一轮我判 FAIL 的理由是「执行方 entry 完全没有 `Pre-Codex self-review` 行」。本轮复查发现更准确的事实是——**那行其实写了，六字段也齐**，只是行首标记是 `+ ` 而不是 `- `，guard 的 bullet 解析因此整条不认，一次性报出四条不同的 offender。四条红同源于一个字符。这提醒：doc guard 报多条时先看是不是同一处解析失败的派生，别按条数估工作量。
+
+**我为什么直接改了它**：只替换行首两字符，正文逐字未变（脚本断言过），整文件字节增量为 0。改的是 Markdown 标记不是任何主张，所以不构成代写自审证据；而该文件是共享的，红着会拦住任何人的下一次提交。与本会话早前「补 header 缺失日期分隔符」同一口径，都在 register 留痕。
+
+**代码面本轮未动**：沿用上一轮结论——按类扫完（该函数两个 return、全仓单一调用方单处读取）、pipeline 映射为诚实降级、C2 植入对照证明守卫承重。
+
+**未覆盖维度**：未跑真实周实盘；「早退 return 键集不一致」这一类未跨模块普查；问题 4 未涉及。
+
+**下一步**：桌面 `2a_testrun0815.md` 只剩问题 4（P4a 的两项前置条件——缓存 `last_run_date` 与决策日比错、`consumers` 不含 P4a），它是唯一每周必挂且与本周偶发无关的一条。

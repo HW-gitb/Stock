@@ -1301,6 +1301,32 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
         self.assertEqual(public["status"], track.PUBLIC_STATUS_UNAVAILABLE)
         self.assertEqual(self._stored("reminder.json")["reminders"], [])
 
+    def test_missing_official_capture_degrades_without_reminder_key_error(self):
+        self._capture()
+        settled = track.settle_margin_overheat_from_daily_cache(
+            root=self.root, daily_cache_document=self.cache
+        )
+        reminder = settled["reminder"]
+        reminder["reminders"] = [{
+            "question_id": track.QUESTION_ID, "decision_date": AS_OF,
+            "status": "no_count", "reason": "stale implant", "receipt_required": True,
+        }]
+        track.validate_margin_reminder(reminder)
+        (self.root / "reminder.json").write_text(
+            json.dumps(reminder, ensure_ascii=False, sort_keys=True), encoding="utf-8"
+        )
+        public = track.settle_and_summarize_margin_overheat_weekly(
+            root=self.root,
+            daily_cache_path=self.cache_path,
+            as_of=AS_OF,
+            strict=True,
+            run_revision_id="a" * 32,
+            official_project_root=Path(self.temp.name) / "official-project-without-pointer",
+        )
+        self.assertEqual(public["status"], track.PUBLIC_STATUS_UNAVAILABLE)
+        self.assertEqual(public["official_revision_id"], "a" * 32)
+        self.assertEqual(self._stored("reminder.json")["reminders"], [])
+
     def test_same_day_drift_is_rejected_by_exact_replay_gate(self):
         self._capture()
         changed_facts = dict(self.margin_facts)
