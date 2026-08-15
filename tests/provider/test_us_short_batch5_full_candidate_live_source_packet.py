@@ -96,9 +96,23 @@ def _full_overextension_projection() -> dict:
 
 
 class FullCandidateFakeClient:
-    def __init__(self, *, massive_429_once=()):
+    def __init__(
+        self,
+        *,
+        massive_429_once=(),
+        bankruptcy_symbols=(),
+        missing_cik_symbols=(),
+        failed_submissions=(),
+        malformed_submissions=(),
+        future_submissions=(),
+    ):
         self.urls: list[str] = []
         self._massive_429_once = set(massive_429_once)
+        self._bankruptcy_symbols = set(bankruptcy_symbols)
+        self._missing_cik_symbols = set(missing_cik_symbols)
+        self._failed_submissions = set(failed_submissions)
+        self._malformed_submissions = set(malformed_submissions)
+        self._future_submissions = set(future_submissions)
 
     def get_json(self, url, headers=None, timeout_seconds=30):
         self.urls.append(url)
@@ -113,11 +127,16 @@ class FullCandidateFakeClient:
                 self._massive_429_once.remove(identity)
                 return ({"error": "rate limited"}, 429, False, "http_error")
         if parsed.netloc == "www.sec.gov" and parsed.path.endswith("/company_tickers.json"):
+            symbols = {
+                "0": ("AAPL", 320193, "Apple Inc."),
+                "1": ("MSFT", 789019, "Microsoft Corp"),
+                "2": ("JPM", 19617, "JPMorgan Chase & Co"),
+            }
             return (
                 {
-                    "0": {"ticker": "AAPL", "cik_str": 320193, "title": "Apple Inc."},
-                    "1": {"ticker": "MSFT", "cik_str": 789019, "title": "Microsoft Corp"},
-                    "2": {"ticker": "JPM", "cik_str": 19617, "title": "JPMorgan Chase & Co"},
+                    key: {"ticker": ticker, "cik_str": cik, "title": title}
+                    for key, (ticker, cik, title) in symbols.items()
+                    if ticker not in self._missing_cik_symbols
                 },
                 200,
                 True,
@@ -125,16 +144,31 @@ class FullCandidateFakeClient:
             )
         if parsed.netloc == "data.sec.gov" and parsed.path.startswith("/submissions/"):
             accession = parsed.path.rsplit("CIK", 1)[-1].split(".", 1)[0]
+            symbol_by_cik = {"0000320193": "AAPL", "0000789019": "MSFT", "0000019617": "JPM"}
+            symbol = symbol_by_cik.get(accession)
+            if symbol in self._failed_submissions:
+                return ({"error": "submission failure"}, 503, False, "http_error")
+            is_bankruptcy = symbol in self._bankruptcy_symbols
+            is_8k = is_bankruptcy or symbol in self._future_submissions
+            filing_date = "2026-06-16" if symbol in self._future_submissions else "2026-06-01"
+            if symbol in self._malformed_submissions:
+                recent = {
+                    "form": ["10-Q"],
+                    "filingDate": [filing_date],
+                    "acceptanceDateTime": ["2026-06-01T08:00:00-04:00"],
+                    "accessionNumber": [f"{int(accession):010d}-26-000001"],
+                }
+            else:
+                recent = {
+                    "form": ["8-K" if is_8k else "10-Q"],
+                    "filingDate": [filing_date],
+                    "acceptanceDateTime": ["2026-06-01T08:00:00-04:00"],
+                    "accessionNumber": [f"{int(accession):010d}-26-000001"],
+                    "items": ["1.03" if is_bankruptcy else "2.01"],
+                }
             return (
                 {
-                    "filings": {
-                        "recent": {
-                            "form": ["10-Q"],
-                            "filingDate": ["2026-06-01"],
-                            "acceptanceDateTime": ["2026-06-01T08:00:00-04:00"],
-                            "accessionNumber": [f"{int(accession):010d}-26-000001"],
-                        }
-                    }
+                    "filings": {"recent": recent}
                 },
                 200,
                 True,
@@ -864,6 +898,248 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertEqual(summary["endpoint_call_budget"]["fmp_grades_calls"], 0)
         self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 13)
         self.assertNotIn("financialmodelingprep.com", "\n".join(client.urls))
+
+    def test_existing_pass2_submissions_drive_bankruptcy_candidate_exclusion_without_extra_call(self):
+        client = FullCandidateFakeClient(bankruptcy_symbols=("AAPL",))
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            summary = runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        self.assertEqual(len(client.urls), 16)
+        self.assertNotIn("bankruptcy_8k", "\n".join(client.urls))
+        self.assertEqual(summary["endpoint_call_budget"]["sec_submissions_calls"], 3)
+        self.assertEqual(
+            summary["bankruptcy_screening"],
+            {
+                "target_count": 3,
+                "successful_screen_count": 3,
+                "screened_no_filing_count": 2,
+                "positive_count": 1,
+                "candidate_bankruptcy_excluded_count": 1,
+                "unscreened_or_failed_count": 0,
+                "extra_provider_calls": 0,
+                "duplicate_raw_writes": 0,
+            },
+        )
+        subset_path = self.paths["prefix"].with_name(self.paths["prefix"].name + "_candidate_subset.json")
+        subset = json.loads(subset_path.read_text(encoding="utf-8"))
+        aapl = next(row for row in subset["rows"] if row["ticker"] == "AAPL")
+        self.assertFalse(aapl["eligible"])
+        self.assertTrue(aapl["bankruptcy"])
+        self.assertIn("status_bankruptcy", aapl["reasons"])
+        self.assertEqual(set(subset["eligible_tickers"]), {"MSFT", "JPM"})
+        context = json.loads(self.paths["output"].read_text(encoding="utf-8"))
+        self.assertEqual(set(context["candidate_pass2_signals"]), {"MSFT", "JPM"})
+        offering_path = self.paths["prefix"].with_name(
+            self.paths["prefix"].name + "_offering_audit_source.json"
+        )
+        offering = json.loads(offering_path.read_text(encoding="utf-8"))
+        self.assertNotIn("AAPL", set(offering["signals"]) | set(offering["checked"]) | set(offering["excluded"]))
+
+    def test_later_pass2_clock_rebases_status_record_before_bankruptcy_merge(self):
+        later_observed_at = "2026-06-15T08:05:00-04:00"
+        client = FullCandidateFakeClient(bankruptcy_symbols=("AAPL",))
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=False,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=later_observed_at,
+                sec_sleep_seconds=0,
+            )
+
+        subset_path = self.paths["prefix"].with_name(self.paths["prefix"].name + "_candidate_subset.json")
+        subset = json.loads(subset_path.read_text(encoding="utf-8"))
+        aapl = next(row for row in subset["rows"] if row["ticker"] == "AAPL")
+        self.assertFalse(aapl["eligible"])
+        self.assertEqual(aapl["status_provenance"]["observed_at"], later_observed_at)
+        self.assertEqual(
+            aapl["status_provenance"]["flags"]["bankruptcy"]["observed_at"],
+            later_observed_at,
+        )
+        self.assertEqual(
+            aapl["status_provenance"]["flags"]["delisted"]["observed_at"],
+            "2026-06-15T08:00:00-04:00",
+        )
+
+    def test_bankruptcy_screen_counts_measure_duplicate_records_and_raw_refs(self):
+        def payload(symbol: str, positive: bool) -> dict:
+            cik = {"AAPL": 320193, "MSFT": 789019, "JPM": 19617}[symbol]
+            return {
+                "filings": {
+                    "recent": {
+                        "form": ["8-K" if positive else "10-Q"],
+                        "filingDate": ["2026-06-01"],
+                        "acceptanceDateTime": ["2026-06-01T08:00:00-04:00"],
+                        "accessionNumber": [f"{cik:010d}-26-000001"],
+                        "items": ["1.03" if positive else "2.01"],
+                    }
+                }
+            }
+
+        record = runner.sample_validation.FetchRecord
+        raw_refs = {
+            "AAPL": "capture_test/optional_aapl.json",
+            "MSFT": "capture_test/optional_msft.json",
+            "JPM": "capture_test/optional_jpm.json",
+        }
+        records = [
+            record(
+                provider_id="sec_edgar",
+                endpoint_family="submissions",
+                symbol=symbol,
+                raw_sample_ref=raw_refs[symbol],
+                ok=True,
+                http_status=200,
+                error_type=None,
+                payload=payload(symbol, symbol == "AAPL"),
+            )
+            for symbol in ("AAPL", "MSFT", "JPM")
+        ]
+        records.append(
+            record(
+                provider_id="sec_edgar",
+                endpoint_family="submissions",
+                symbol="AAPL",
+                raw_sample_ref="capture_test/optional_aapl.json",
+                ok=True,
+                http_status=200,
+                error_type=None,
+                payload=payload("AAPL", True),
+            )
+        )
+        _, counts = runner._screen_bankruptcy_from_pass2_records(
+            target_symbols=["AAPL", "MSFT", "JPM"],
+            candidate_symbols=["AAPL", "MSFT", "JPM"],
+            source_as_of="2026-06-15",
+            observed_at=_OFFERING_OBSERVED_AT,
+            records=records,
+        )
+        self.assertEqual(counts["extra_provider_calls"], 1)
+        self.assertEqual(counts["duplicate_raw_writes"], 1)
+
+    def test_positive_forced_holding_is_retained_with_bankruptcy_hard_veto_signal(self):
+        preflight_runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["preflight"],
+            forced_holding_tickers=["AAPL"],
+            authorized_total_call_budget=16,
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+        client = FullCandidateFakeClient(bankruptcy_symbols=("AAPL",))
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+                forced_holding_tickers=["AAPL"],
+            )
+
+        context = json.loads(self.paths["output"].read_text(encoding="utf-8"))
+        holding = next(row for row in context["holdings"] if row["ticker"] == "AAPL")
+        self.assertTrue(holding["signals"]["bankruptcy"])
+        self.assertNotIn("AAPL", context["candidate_pass2_signals"])
+        components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+        self.assertTrue(components["per_ticker_analysis"]["AAPL"]["signals"]["bankruptcy"])
+
+    def test_bankruptcy_summary_tampering_fails_closed(self):
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            summary = runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=FullCandidateFakeClient(),
+                confirm_user_authorization=True,
+                run_data_context=False,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+        for field, value in (("extra_provider_calls", 1), ("duplicate_raw_writes", 1)):
+            mutated = json.loads(json.dumps(summary))
+            mutated["bankruptcy_screening"][field] = value
+            with self.subTest(field=field):
+                with self.assertRaises(runner.FullCandidateLiveSourcePacketError):
+                    runner._validate_summary_against_schema(mutated)
+        missing = json.loads(json.dumps(summary))
+        del missing["bankruptcy_screening"]["positive_count"]
+        with self.assertRaises(runner.FullCandidateLiveSourcePacketError):
+            runner._validate_summary_against_schema(missing)
+
+    def test_bankruptcy_missing_failed_malformed_and_future_submission_controls_fail_closed(self):
+        cases = (
+            {"missing_cik_symbols": ("AAPL",)},
+            {"failed_submissions": ("AAPL",)},
+            {"malformed_submissions": ("AAPL",)},
+            {"future_submissions": ("AAPL",)},
+        )
+        for client_options in cases:
+            with self.subTest(client_options=client_options):
+                with self._env(), mock.patch.object(
+                    runner.sample_validation, "_read_windows_environment_value", return_value=None
+                ), self.assertRaises(runner.FullCandidateLiveSourcePacketError):
+                    runner.run_full_candidate_live_source_packet(
+                        preflight_summary_path=self.paths["preflight"],
+                        expected_total_call_budget=16,
+                        output_data_context_path=self.paths["output"],
+                        context_components_output_path=self.paths["components"],
+                        source_artifact_prefix=self.paths["prefix"],
+                        summary_path=self.paths["summary"],
+                        raw_root=self.raw_root,
+                        client=FullCandidateFakeClient(**client_options),
+                        confirm_user_authorization=True,
+                        run_data_context=True,
+                        generated_at="2026-07-06T12:00:00+00:00",
+                        observed_at=_OFFERING_OBSERVED_AT,
+                        sec_sleep_seconds=0,
+                    )
 
     def test_analyst_source_consumption_cross_locks_reject_tampered_summary(self):
         with self._env(), mock.patch.object(

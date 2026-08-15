@@ -172,7 +172,6 @@ def run_universe(ctx) -> dict[str, Any]:
         candidate_list_path=ctx.candidate_path,
         generated_at=ctx.generated_at,
         confirm_user_authorization=ctx.confirm_user_authorization,
-        scan_bankruptcy_for_eligible=True,
     )
 
 

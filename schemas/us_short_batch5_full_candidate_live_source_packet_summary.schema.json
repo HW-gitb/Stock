@@ -16,6 +16,7 @@
     "preflight_gate",
     "candidate_universe",
     "pass2_target_universe",
+    "bankruptcy_screening",
     "endpoint_call_budget",
     "endpoint_results",
     "raw_capture_manifest",
@@ -28,7 +29,7 @@
   ],
   "properties": {
     "schema_name": { "const": "us_short_batch5_full_candidate_live_source_packet_summary" },
-    "schema_version": { "const": "1.0.0" },
+    "schema_version": { "const": "1.1.0" },
     "schema_ref": { "const": "schemas/us_short_batch5_full_candidate_live_source_packet_summary.schema.json" },
     "authorization_ref": {
       "enum": [
@@ -237,6 +238,30 @@
         "fmp_grade_call_cap": { "const": 250 },
         "fmp_grade_calls_within_free_daily_cap": { "const": true },
         "neutral_fill_tickers_excluded_from_expensive_pass2": { "const": true }
+      }
+    },
+    "bankruptcy_screening": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_count",
+        "successful_screen_count",
+        "screened_no_filing_count",
+        "positive_count",
+        "candidate_bankruptcy_excluded_count",
+        "unscreened_or_failed_count",
+        "extra_provider_calls",
+        "duplicate_raw_writes"
+      ],
+      "properties": {
+        "target_count": { "type": "integer", "minimum": 0 },
+        "successful_screen_count": { "type": "integer", "minimum": 0 },
+        "screened_no_filing_count": { "type": "integer", "minimum": 0 },
+        "positive_count": { "type": "integer", "minimum": 0 },
+        "candidate_bankruptcy_excluded_count": { "type": "integer", "minimum": 0 },
+        "unscreened_or_failed_count": { "type": "integer", "minimum": 0 },
+        "extra_provider_calls": { "type": "integer", "minimum": 0 },
+        "duplicate_raw_writes": { "type": "integer", "minimum": 0 }
       }
     },
     "endpoint_call_budget": {
