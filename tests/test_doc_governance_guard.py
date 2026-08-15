@@ -892,7 +892,7 @@ class DocGovernanceGuard(unittest.TestCase):
         for i in range(1, len(parts), 2):
             lines = parts[i + 1].splitlines()
             header = lines[0] if lines else ""
-            if "修复" not in header:
+            if "修复" not in header or not re.search(r"\bCodex\b", header, flags=re.IGNORECASE):
                 continue
             proof = next((line for line in lines
                           if re.match(r"^\s*-\s+\*\*Pre-Codex self-review\*\*\s*[:：]", line)), "")
@@ -903,13 +903,13 @@ class DocGovernanceGuard(unittest.TestCase):
 
     @classmethod
     def _repair_door_offenders(cls, zone_text):
-        """A post-adoption `修复` entry must paste the pre-commit door's terminal result."""
+        """A post-adoption Codex `修复` entry must paste the pre-commit door's terminal result."""
         offenders = []
         parts = re.split(r"(?m)^## (\d{4}-\d{2}-\d{2}) [—–-] ", zone_text)
         for i in range(1, len(parts), 2):
             lines = parts[i + 1].splitlines()
             header = lines[0] if lines else ""
-            if "修复" not in header:
+            if "修复" not in header or not re.search(r"\bCodex\b", header, flags=re.IGNORECASE):
                 continue
             proof = next((line for line in lines
                           if re.match(r"^\s*-\s+\*\*Pre-Codex self-review\*\*\s*[:：]", line)), "")
@@ -1217,6 +1217,10 @@ class DocGovernanceGuard(unittest.TestCase):
                         "missing handoff closeout field must turn the guard red")
         self.assertEqual(self._repair_closeout_offenders(compliant), [],
                          "complete repair closeout evidence must be accepted")
+        reviewer = ("## 2026-07-28 — Claude 审查 FAIL（R-TEST-FOO 修复）\n"
+                    "- **Verdict/Action**: FAIL\n- **Required**: R-TEST-FOO\n")
+        self.assertEqual(self._repair_closeout_offenders(reviewer), [],
+                         "a reviewer finding that names a repair must not owe executor closeout evidence")
 
     def test_executor_repair_door_evidence_enforced_above_marker(self):
         log = (ROOT / "docs" / "SESSION_LOG.md").read_text(encoding="utf-8")
@@ -1245,6 +1249,10 @@ class DocGovernanceGuard(unittest.TestCase):
                          "a pasted door result must be accepted")
         self.assertEqual(self._repair_door_offenders(blocked), [],
                          "an explicit BLOCKED door is evidence, not a placeholder")
+        reviewer = ("## 2026-07-28 — Claude 审查 FAIL（R-TEST-FOO 修复）\n"
+                    "- **Verdict/Action**: FAIL\n- **Required**: R-TEST-FOO\n")
+        self.assertEqual(self._repair_door_offenders(reviewer), [],
+                         "a reviewer finding that names a repair must not owe an executor door result")
         self.assertEqual(
             self._repair_door_offenders(blocked + head + base + "; door=route 14 OK + doc-governance 41 OK\n"),
             [],

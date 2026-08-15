@@ -128,19 +128,22 @@ class WeeklyStepTests(unittest.TestCase):
         self.assertEqual(out["evidence"]["total_weeks"], 2)         # prior + current
         self.assertEqual(out["comparison_record"]["as_of"], cal[7])
 
-    def test_identical_same_week_rerun_dedups(self):
-        # R-V143-SLICE2B-PIPELINE-WEEKLY-RERUN-DUPLICATE-CURRENT: identical rerun → replace, not double.
+    def test_identical_same_week_legacy_identity_rerun_dedups(self):
+        # Legacy real evidence rows omit run_revision_id. A same-week rerun must still replace, not double.
         cal = _dates(5)
         ledger = build_ledger([_row(d) for d in cal])
         prior = build_comparison_record(ledger["rows"], "unknown", as_of=cal[-1])
+        self.assertNotIn("run_revision_id", prior)
         out = weekly_regime_step(ledger, cal[-1], cal, "unknown", _idx(cal), _Provider(),
                                  prior_comparison_records=[prior])
+        self.assertEqual(len(out["comparison_records"]), 1)
         self.assertEqual(out["evidence"]["total_weeks"], 1)        # deduped, not 2
 
-    def test_divergent_same_week_rerun_raises(self):
+    def test_divergent_same_week_legacy_identity_rerun_raises(self):
         cal = _dates(5)
         ledger = build_ledger([_row(d) for d in cal])
         conflict = build_comparison_record(ledger["rows"], "unknown", as_of=cal[-1])
+        self.assertNotIn("run_revision_id", conflict)
         conflict["v14_3_raw_regime"] = "attack"                    # classification differs from rerun
         conflict["v14_3_fired_rule"] = "attack_all_of"
         with self.assertRaises(ValueError):

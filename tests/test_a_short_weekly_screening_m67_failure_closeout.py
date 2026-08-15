@@ -97,7 +97,7 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
             self.text,
         )
 
-    def test_all_three_powershell_python_source_calls_use_stdin(self) -> None:
+    def test_all_repository_powershell_python_source_calls_use_stdin(self) -> None:
         us_short = US_SHORT_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("$Probe | & $PythonExe -", self.text)
         self.assertIn("$OperationLoaderCode | & $PythonExe -", self.stage4)
@@ -106,19 +106,29 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
         self.assertNotRegex(us_short, r"(?:-c|[\"']-c[\"'])\s+\$stderrToStdoutBootstrap")
 
         source_argument_hazard = re.compile(
+            r"(?i)(?:"
             r"(?<![\w])(?:-c|[\"']-c[\"'])\s+\$[A-Za-z_][A-Za-z0-9_]*"
+            r"|(?:&\s*)?(?:\$[A-Za-z_][A-Za-z0-9_]*python[A-Za-z0-9_]*|"
+            r"python(?:\.exe)?|py(?:\.exe)?)[^\r\n]*?"
+            r"(?<![\w])(?:-c|[\"']-c[\"'])(?=\s|$)"
+            r")"
         )
         stale = []
-        for path in sorted((ROOT / "runners").glob("*.ps1")):
+        powershell_sources = sorted((*ROOT.rglob("*.ps1"), *ROOT.rglob("*.psm1")))
+        for path in powershell_sources:
             for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if line.lstrip().startswith("#"):
+                    continue
                 if source_argument_hazard.search(line):
-                    stale.append(f"{path.name}:{line_no}:{line.strip()}")
+                    stale.append(f"{path.relative_to(ROOT)}:{line_no}:{line.strip()}")
         self.assertEqual([], stale)
 
         planted = (
             "& $PythonExe -c $Probe",
             "& $PythonExe -c $OperationLoaderCode $ProjectRoot $M67Out",
             '& $PythonExe "-c" $stderrToStdoutBootstrap @cliArgs',
+            "& $PythonExe -c 'print(1)'",
+            'python.exe "-c" "print(1)"',
         )
         for old_call in planted:
             with self.subTest(old_call=old_call):

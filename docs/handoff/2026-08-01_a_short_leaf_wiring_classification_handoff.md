@@ -8214,3 +8214,74 @@ The final documentation update is this handoff append plus the new risk-register
 **未覆盖维度与诚实边界**：未跑真实 US 周实盘——`_run_inputs` 目前仍无 `*_lineage.json`，操作者须先用带 `--price-basis-date` 的转换器重生成一对，新 ps1 会把缺失路径列进报错并给出生成命令，但这条真实序列本轮未实跑。full lane 未复跑，按 rule 4 引执行方记录并独立核过指纹与时序。
 
 **下一步**：桌面 `1a_testrun0815.md` 只剩问题 5（P4a 当周捕获缺失），需下一次真实周跑把失败原因留在机器记录里才能诊断。
+
+## 2026-08-15 追加：PowerShell→Python source transport 全仓同类扫描与守卫收口（Codex；8c7a；OPEN-NOT-VERIFIED）
+
+用户要求在问题 1/2 对应的 3 个已修调用点之外按类一网打尽。扫描包含隐藏目录，共枚举当前工作树全部 12 个 `.ps1/.psm1/.cmd/.bat` 入口，并检查 `-c`、`runpy`、`exec/compile`、`-EncodedCommand` 与源码管道形态。结论是：没有第 4 个现存 PowerShell native-argv Python source 调用。三个已知调用仍分别为 `weekly_screening.ps1` 的 design-completion probe、operation-bundle loader，以及 `us_short_paper_one_click.ps1` 的 bootstrap，均已通过 stdin 调用 `python -`。
+
+唯一额外的 `python -c` 是 `.tools/run_unittest_with_repo_pythonpath.cmd` 的固定 `import jsonschema` 依赖探针。它由 `cmd.exe` 执行，不经过 PowerShell 变量/native argv 重编码，源码没有内嵌引号或动态内容，故不属于本缺陷类；为避免过度修复，不改该 launcher，也不新增 helper/临时脚本。
+
+本轮唯一改动是 `tests/test_a_short_weekly_screening_m67_failure_closeout.py`：原守卫只扫 `runners/*.ps1` 且只拒绝 `-c $变量`；现改为递归扫描全仓 `.ps1/.psm1`，忽略纯注释，同时拒绝两类危险形态：任意 `-c $SourceVariable`，以及 PowerShell 中 Python/Python 变量后跟任何 `-c` 字面源码。planted controls 从 3 个变量形态扩为 5 个，新增直接 `& $PythonExe -c 'print(1)'` 和 `python.exe "-c" "print(1)"`，防止用字面源码绕过守卫。
+
+固定解释器 launcher 运行 `tests.test_a_short_weekly_screening_m67_failure_closeout tests.test_us_short_paper_one_click`，原始终态 `Ran 32 tests in 3.019s / OK`，receipt `cc986ac48d5c201db8df1e41`。文档门禁在首次因 SESSION_LOG 的 `door=pending` 占位符按预期失败后，改为真实状态并达到 `67/67 PASS`，receipt `9478c1f421c8e7945d5a0e5f`。没有改生产 runner、schema、source-binding、provider、cache、写盘、授权或 live 行为；未运行 provider/live/胶囊。按 AGENTS rule 3，测试守卫扩面不触发 full lane。当前未提交，待 Claude Code 独立复核测试 diff 与分类边界。
+
+## 2026-08-15 追加：2a 实跑问题 5+6 一刀最小修复（Codex executor/fixer；8c7a；OPEN-NOT-VERIFIED）
+
+桌面 `2a_testrun0815.md` 的两项都属于 sidecar 成功状态在下游被错误解释：P5 是 Stage 5 launcher 未传已有 `RunRevisionId`，但其 outcome parser 强制同 ID；P6 是合法 `latest_evidence_as_of=null` 被 health 用来覆盖 launcher 已验证的决策日。修复仅有两处生产改动：`RegimeArgs` 添加 `--run-revision-id $RunRevisionId`；theme health 只有在 packet date 非空时才覆盖 launcher date。没有放宽错 revision、非法日期、epoch mismatch、rejection 或 no-op 不得升级为 advanced 的既有判据。
+
+生产/消费者链：P5 `weekly_screening Stage 5 -> regime runner -> machine outcome -> Read-SidecarOutcomeLine -> launcher manifest -> health`；P6 `launcher observed_decision_as_of -> validated theme packet -> health`。没有 schema、source-binding 字段、缓存、写盘、provider、账户或交易行为改动。新建独立入口静态回归，避免碰工作树既有 source-transport 脏测试；health 测试增加 null packet 时钟保留。该既有 source-transport 切片及其 SESSION/handoff 脏改动均保持原样，不纳入本刀。
+
+固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。新增两条红测在原代码的精确包 `55` tests 中均失败；最终 acceptance pack 为 `tests.test_a_short_weekly_screening_regime_sidecar_wiring tests.test_a_short_weekly_sidecar_health tests.test_a_short_regime_comparison_runner tests.test_a_short_weekly_screening_m67_failure_closeout tests.test_a_short_preflight`，终态 `Ran 135 tests in 32.853s / OK`，receipt `6981b1a9b0eaba9983356754`。由于改动正式周入口，最终一次 A-short full lane 在 fingerprint `2cb8f3850a81` 下达到 `diff_check=PASS`、`py_compile=4`、`discovered=3123 ran=3123 equal=True`、`Ran 3123 tests in 141.771s / PASS`。
+
+未跑 provider/live、真实周跑、测试胶囊或自动下单；未刷新生产 state/cache/raw/account/weekly artifact；未 stage/commit/push/merge。风险登记和 SESSION_LOG 已同步，`docs/CURRENT.md` 未写瞬态状态。下一步为 Claude Code 独立 reviewer/committer 对本刀 diff、红绿控制和原始 full-lane 终态审查；当前为 `OPEN-NOT-VERIFIED`。
+
+## 2026-08-15 追加：桌面 2a 问题 5/6 修复的独立审查 = FAIL（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：FAIL，一条 Required、两条 Optional。正文只在 `docs/system_risk_register.md`。
+
+**编号提醒**：用户口述为「问题 1 和问题 2」，但工作树内实际是桌面文档的**问题 5 与问题 6**（即我上一轮难度排序的第 1、2 位，也正是我建议合成一刀的那两条）。已按文档编号记录，避免后续对不上。
+
+**我实际验了什么**：问题 6 侧整读 `_theme_packet_progress` 的改动与新增用例，确认它直击实跑中 `health_contract_missing_clock` 那一格。问题 5 侧沿着 `--run-revision-id` 一路追到 `engine/a_short_regime_pipeline.py::weekly_regime_step`，发现该参数参与同周重跑的去重身份键，随后**用真实的 `regime_comparison_records.json`（8 条、id 全为 None）跑那条原判据**：传 None → same=1（replace），传真 id → same=0（append）。这是本轮唯一由 reviewer 独立提供的判据。
+
+**这一条的教训值得记**：问题 5 在我上一轮的难度排序里被列为「第 2 易，改动就一行」，但我当时也写了「唯一要确认的是把 revision id 传进 regime runner 会不会改变日线账本的记录身份，要看一眼再动」。这次证明那句提醒是对的——**一行改动 + 参数不是惰性字段 = 实质行为变更**。以后凡是「补一个参数让下游校验通过」的修法，都要先追这个参数在下游被谁消费。
+
+**未覆盖维度与诚实边界**：本轮 hook 未注入 review-evidence 快照；未跑真实周实盘，追加重复记录的后果由真实数据 + 真实判据推得而非实跑；`extend_ledger` 是否也把 id 写进 ledger 行未追到底；未跑 full lane。
+
+**下一步**：Codex 按 register 的 Required 把「报表身份」与「证据身份」解耦，或显式处理历史归一化。
+
+## 2026-08-15 追加：桌面 2a 问题 5/6 reviewer Required 的最小收口（Codex executor/fixer；8c7a；OPEN-NOT-VERIFIED）
+
+### 问题、根因与最小改动
+
+- P5 的首版修复把 `$RunRevisionId` 塞进既有 `--run-revision-id`；reviewer 证明该参数不是展示字段，而是 `weekly_regime_step` 同周 record 去重键的一部分。历史 regime comparison record 缺该字段，即等价 `None`；真 id 会把同一 settled week 从 replace 变成 append，且让 immutable classification conflict 分支不可达。
+- 现改为新增 `--sidecar-outcome-run-revision-id`。`weekly_screening.ps1` Stage 5 只传这个新参数；runner 用既有 revision validator 校验，且只在 `_emit_sidecar_outcome` 为 `regime_daily` 和 `regime_action` 写入该 id。原 `--run-revision-id` 仍是显式直接运行时的 evidence/research identity，本次 launcher 不再传它。
+- P6 保留前一刀的最小空值保护：theme packet 的 `latest_evidence_as_of` 只有非空、通过既有日期校验时才覆盖 launcher `observed_decision_as_of`；合法 `null` 保留已有时钟。
+
+### 调用链、消费者、schema/source-binding 与写盘边界
+
+- P5：`weekly_screening.ps1 Stage 5 -> regime runner main -> machine outcome -> Read-SidecarOutcomeLine -> launcher manifest -> sidecar health`。outcome 的 revision id 仅服务 launcher source-binding；`lane_paths -> run_regime_step -> weekly_regime_step` 仍收 `None`，因此历史 `as_of + None` evidence key、record/ledger/panel 与 candidate-effect 写盘路径均不变。
+- P6：`launcher observed_decision_as_of -> validated theme packet -> _theme_packet_progress -> health summary`。无 schema 版本、source-binding 字段、缓存格式或写盘协议变化。
+- 未改 provider、账户、下单、生产选股或任何实际周执行；本轮只跑临时测试目录与 gitignored full-pack ledger/worker sidecar。
+
+### 负向控制、自审与精确验证
+
+- 修前：新 Stage 5 接线断言与 runner 新 CLI 用例在旧代码下失败。修后 `CliGuardTests` 断言 daily/action 两个 outcome 都拿到同一 revision id，而 `lane_paths` 与 `run_regime_step` 均仍为 `None`；legacy same-week rerun 保持一条 record/一周 evidence，分类不同仍抛 immutable-history conflict。`7/7 PASS`，receipt `4051699a1ff4a7acb4b9ee7c`。
+- P6 null-clock、runner、pipeline 与 doc gate 关联精确包 `158/158 PASS`，receipt `cbadc27b13838c22bd9c8ddd`。doc gate 的修正只排除 reviewer 标题误报，Codex 修复 entry 仍须带 closeout fields 与 door，两个 planted controls 证明该边界。
+- 最终 A-short full pack（固定 Python）记录 fingerprint `845229b16e50`：`py_compile=8`、132/132 modules、`discovered=3124 ran=3124 equal=True`、`3124 OK`、142.0s；随后 `full_pack_ledger check a_short` 确认 exact-code-state cached green。`git diff --check` 无 whitespace error。
+
+### 边界与后续
+
+- 本工作树既有 source-transport 测试及其 docs 脏改动不属于本切片，未覆盖、回滚或归功。未 stage/commit/push/merge，`docs/CURRENT.md` 未记录瞬态 review/commit 状态。
+- 风险与 session 已分别写入 `docs/system_risk_register.md`、`docs/SESSION_LOG.md`；当前仍为 `OPEN-NOT-VERIFIED`，由 Claude Code 独立审查并在 PASS 后按 reviewer/committer 边界提交。
+
+## 2026-08-15 追加：桌面 2a 问题 5/6 收口的独立审查 = PASS（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：PASS，上一轮 Required 已闭。正文只在 `docs/system_risk_register.md`。
+
+**这一轮值得记的是修法选择**：上一轮我把「给 regime runner 补 `--run-revision-id`」判成 FAIL，不是因为补参数错，而是因为**那个参数在下游不是惰性字段**——它同时是比较记录的同周去重身份键。执行方没有去改历史归一化（那会动到已积累的 8 周证据），而是新开一个只服务报表的参数 `--sidecar-outcome-run-revision-id`，让证据侧保持原样。这是把「报表身份」与「证据身份」彻底分开，比让两者共用一个字段更稳。
+
+**我实际验了什么（区别于执行方用例）**：他们三条 closure 都用 mock 验调用参数（lane/run 拿到 None、sidecar 拿到 id）。缺的一格是「真正发出去的那一行会不会被 launcher 接受」——ps1 侧的测试只是源码文本断言，证不了运行时。我驱动真实 `_emit_sidecar_outcome` 取得输出，再把 `Read-SidecarOutcomeLine` 的五项检查逐字翻译应用：修后接受；`run_revision_id=None`（实跑中被判 invalid 的那种）拒绝；id 不匹配拒绝。后两格是反向控制，证明这道核对承重。
+
+**未覆盖维度与诚实边界**：本轮 hook 未注入 review-evidence 快照；未跑真实周实盘，故「下次真跑 regime_daily 会记成 already_current」由探针 + 判据翻译推得；未跑 full lane；桌面问题 1/2/3/4 未涉及。
+
+**下一步**：桌面 `2a_testrun0815.md` 还剩问题 1、2、3、4——其中 4 是每周必挂且与偶发无关，1 是本周锁死且状态不自愈。

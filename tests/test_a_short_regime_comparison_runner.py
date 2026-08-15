@@ -890,6 +890,59 @@ class CliGuardTests(unittest.TestCase):
         self.assertEqual(payload["progress_status"], "advanced")
         self.assertEqual(payload["observed_data_through"], "20260724")
 
+    def test_cli_uses_sidecar_revision_without_forking_evidence_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = {
+                "ledger": str(root / "ledger.json"),
+                "records": str(root / "records.json"),
+                "panel": str(root / "panel.md"),
+                "action_records": str(root / "actions.json"),
+                "action_summary": str(root / "action-summary.json"),
+                "candidate_effect_ledger": str(root / "candidate-effect.json"),
+                "candidate_effect_summary": str(root / "candidate-effect-summary.json"),
+                "candidate_effect_markdown": str(root / "candidate-effect-summary.md"),
+                "candidate_effect_outcome": str(root / "candidate-effect-outcome.json"),
+                "forward_tracker": str(root / "forward-tracker.csv"),
+            }
+            result = {
+                "ledger": {"coverage": {"n": 2}},
+                "evidence": "forward",
+                "regime_daily_progress_status": "advanced",
+                "action_comparison": {
+                    "summary": {"total_forward_weeks": 0, "settled_divergence_h10": 0},
+                    "review_reminder": None,
+                },
+            }
+            revision_id = "a" * 32
+            output = StringIO()
+            with patch("runners.a_short_regime_comparison_runner.lane_paths", return_value=paths) as lane, \
+                    patch("runners.a_short_regime_comparison_runner.load_ledger",
+                          return_value={"rows": [{}], "coverage": {"start": "20260701"}}), \
+                    patch("runners.a_short_regime_comparison_runner._init_pro", return_value=object()), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_trade_calendar",
+                          return_value=["20260724"]), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_daily",
+                          return_value=pd.DataFrame({"trade_date": ["20260724"]})), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_stk_limit",
+                          return_value=pd.DataFrame()), \
+                    patch("runners.a_short_regime_comparison_runner._fetch_index",
+                          return_value=pd.DataFrame()), \
+                    patch("runners.a_short_regime_comparison_runner.run_regime_step",
+                          return_value=result) as run, redirect_stdout(output):
+                self.assertEqual(main([
+                    "--as-of", "20260727", "--sidecar-outcome-run-revision-id", revision_id,
+                    "--confirm-fetch-authorized",
+                ]), 0)
+        self.assertIsNone(lane.call_args.kwargs["run_revision_id"])
+        self.assertIsNone(run.call_args.kwargs["run_revision_id"])
+        payloads = [json.loads(line.split("] ", 1)[1]) for line in output.getvalue().splitlines()
+                    if line.startswith("[a-short-sidecar-outcome] ")]
+        self.assertEqual(
+            {payload["name"]: payload["run_revision_id"] for payload in payloads},
+            {"regime_daily": revision_id, "regime_action": revision_id},
+        )
+
     def test_cli_does_not_pass_d2_source_to_writer_before_design_completion(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
