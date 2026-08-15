@@ -37,7 +37,7 @@ REQUIRED_TEST_MODULES_BY_LANE = {
         "jsonschema", "numpy", "openpyxl", "pandas", "requests", "tqdm",
     ),
 }
-_RAN_TESTS = re.compile(r"\bRan\s+(\d+)\s+tests?\s+in\b")
+_RAN_TESTS = re.compile(r"^\s*Ran\s+(\d+)\s+tests?\s+in\b", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -212,7 +212,16 @@ def main(argv: list[str]) -> int:
         print(f"[bounded-unittest] REFUSED: {exc}")
         return 2
     if result.output:
-        print(result.output, end="" if result.output.endswith("\n") else "\n")
+        output = result.output
+        if nested:
+            # A nested launcher may be captured or forwarded by its parent.  Label its
+            # unittest summary so the parent's terminal-count parser cannot mistake it
+            # for the outer run's evidence.
+            output = "".join(
+                line if not line.strip() else f"[bounded-unittest nested] {line}"
+                for line in output.splitlines(keepends=True)
+            )
+        print(output, end="" if output.endswith("\n") else "\n")
     receipt = None
     receipt_error = None
     if tier == "focused" and result.status == "PASS" and not nested and not document_only:

@@ -184,7 +184,8 @@ function Write-M67FailureReceipt {
     param([string]$Directory, [string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '', [string]$AnalysisInput = $null,
           [string]$RunRevisionId = $null,
           [object]$AttemptedBeforeEgs = $null, [string]$FeedRef = '', [string]$FeedSha256 = '',
-          [string]$IvFeedStatus = 'not_requested', [switch]$DeferHealth)
+          [string]$IvFeedStatus = 'not_requested', [switch]$DeferHealth,
+          [switch]$PreservePublishedWeeklyReport)
     $ErrorActionPreference = 'Stop'
     New-Item -ItemType Directory -Force -Path $Directory -ErrorAction Stop | Out-Null
     $Receipt = Join-Path $Directory 'weekly_m67.receipt.json'
@@ -248,6 +249,11 @@ function Write-M67FailureReceipt {
         'weekly_m67.pipeline_sidecar_outcomes.json',
         'launcher_sidecar_outcomes.json'
     )) {
+        if ($PreservePublishedWeeklyReport -and $Leaf -in @('weekly_m67.json', 'weekly_m67.md')) {
+            # The M6.7 producer succeeded; only the post-publish loader failed.
+            # Keep the report bytes, while the failed receipt below marks them unverified.
+            continue
+        }
         if (-not (Invalidate-M67Artifact -LiteralPath (Join-Path $Directory $Leaf))) {
             $InvalidationFailures += $Leaf
         }
@@ -309,7 +315,8 @@ function Write-M67FailureReceipt {
 function Set-M67Failure {
     param([string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '', [string]$AnalysisInput = $null,
           [object]$AttemptedBeforeEgs = $null, [string]$FeedRef = '', [string]$FeedSha256 = '',
-          [string]$IvFeedStatus = 'not_requested', [string]$Directory)
+          [string]$IvFeedStatus = 'not_requested', [string]$Directory,
+          [switch]$PreservePublishedWeeklyReport)
     if ($script:M67InvocationState -eq 'failed') { return }
     if ([string]::IsNullOrWhiteSpace($Directory)) { throw 'M6.7 failure closeout directory is required' }
     $script:M67InvocationState = 'failed'
@@ -321,7 +328,8 @@ function Set-M67Failure {
     Write-M67FailureReceipt -Directory $Directory -Reason $Reason -ExitCode $ExitCode `
         -FailureDetailRef $FailureDetailRef -AnalysisInput $AnalysisInput -RunRevisionId $RunRevisionId `
         -AttemptedBeforeEgs $AttemptedBeforeEgs -FeedRef $FeedRef -FeedSha256 $FeedSha256 `
-        -IvFeedStatus $IvFeedStatus -DeferHealth
+        -IvFeedStatus $IvFeedStatus -DeferHealth `
+        -PreservePublishedWeeklyReport:$PreservePublishedWeeklyReport
     Write-Host "[FATAL] M6.7 requested: $Reason (exit $ExitCode); continuing independent closeout" -ForegroundColor Red
 }
 function Write-KnownM67FailureReceipt {
@@ -1076,13 +1084,13 @@ print(json.dumps({
                         if ($OperationLoaderExitCode -ne 0) {
                             throw "operation loader exited $OperationLoaderExitCode"
                         }
-                        $OperationRecord = ($OperationLoaderOutput -join "`n") | ConvertFrom-Json
+                        $OperationRecord = ($OperationLoaderOutput | Select-Object -Last 1) | ConvertFrom-Json
                         $OperationStage = [string]$OperationRecord.stage_status
                         if ($OperationStage -notin @('complete', 'degraded_no_new_entries', 'partial_holdings_only')) {
                             throw "operation loader returned invalid stage $OperationStage"
                         }
                     } catch {
-                        Set-M67Failure -Reason 'weekly_operation_bundle_invalid' -ExitCode 24 -AnalysisInput $SemAnalysisInput -IvFeedStatus $script:IvFeedStatus -Directory $M67Dir
+                        Set-M67Failure -Reason 'weekly_operation_bundle_invalid' -ExitCode 24 -AnalysisInput $SemAnalysisInput -IvFeedStatus $script:IvFeedStatus -Directory $M67Dir -PreservePublishedWeeklyReport
                     }
                     if ($script:M67InvocationState -ne 'failed') {
                         $script:M67InvocationState = $OperationStage

@@ -56,6 +56,15 @@ _DURATION_LINE = re.compile(r"^\s*(\d+\.\d+)s\s+(\S.*?)\s*$", re.MULTILINE)
 # A helper that takes one of these holds it against every other process on the
 # same tree, so its dependents have to run one at a time.
 _CROSS_PROCESS_LOCK = re.compile(r"msvcrt\.locking|fcntl\.(?:flock|lockf)")
+# `python -m unittest` keeps the worker cwd at `sys.path[0]`, even when
+# PYTHONPATH names the discovery root first.  Insert the recorded discovery
+# root before starting unittest so a same-named cwd package cannot win.
+_WORKER_BOOTSTRAP = (
+    "import runpy, sys\n"
+    "sys.path.insert(0, sys.argv[1])\n"
+    "sys.argv = [sys.argv[0], *sys.argv[2:]]\n"
+    "runpy.run_module('unittest.__main__', run_name='__main__')\n"
+)
 
 _DISCOVERY_SNIPPET = r"""
 import json, sys, unittest
@@ -354,7 +363,9 @@ def worker_environment(path_entries: list[str], *, cwd: Path = ROOT,
     Discovery may resolve a package through a transient ``sys.path`` entry that
     is not present in the parent environment.  Keep the worker independent of
     that transient state by also binding the caller's cwd and start directory
-    explicitly, after resolving relative entries against the same cwd.
+    explicitly, after resolving relative entries against the same cwd.  The
+    worker bootstrap separately gives ``start_dir`` precedence over the
+    process cwd, whose implicit ``sys.path[0]`` otherwise wins.
     """
     env = {NESTED_RUN_MARKER: "1"}
     entries: list[str] = []
@@ -367,11 +378,11 @@ def worker_environment(path_entries: list[str], *, cwd: Path = ROOT,
         if value not in entries:
             entries.append(value)
 
-    add_entry(cwd)
     for entry in path_entries:
         add_entry(entry)
     if start_dir:
         add_entry(start_dir)
+    add_entry(cwd)
     inherited = os.environ.get("PYTHONPATH", "")
     if inherited:
         entries.append(inherited)
@@ -383,9 +394,24 @@ def worker_environment(path_entries: list[str], *, cwd: Path = ROOT,
 def _run_module(module: str, timeout_seconds: int, log_dir: Path | None,
                 runtime_args: tuple[str, ...] = FULL_PACK_RUNTIME_ARGS,
                 cwd: Path = ROOT,
-                worker_env: dict[str, str] | None = None) -> ModuleOutcome:
+                worker_env: dict[str, str] | None = None,
+                start_dir: str | None = None) -> ModuleOutcome:
+    if start_dir:
+        discovery_root = Path(start_dir)
+        if not discovery_root.is_absolute():
+            discovery_root = cwd / discovery_root
+        command = [
+            sys.executable,
+            "-c",
+            _WORKER_BOOTSTRAP,
+            str(discovery_root.resolve()),
+            *runtime_args,
+            module,
+        ]
+    else:
+        command = [sys.executable, "-m", "unittest", *runtime_args, module]
     result = run_command(
-        [sys.executable, "-m", "unittest", *runtime_args, module],
+        command,
         timeout_seconds,
         cwd=cwd,
         extra_env=worker_env if worker_env is not None else {NESTED_RUN_MARKER: "1"},
@@ -548,7 +574,7 @@ def run_parallel_pack(
                 module = pending.popleft()
                 in_flight[
                     pool.submit(_run_module, module, remaining, log_dir, runtime_args,
-                                cwd, worker_env)
+                                cwd, worker_env, start_dir)
                 ] = module
             if not in_flight:
                 break
@@ -572,6 +598,7 @@ def run_parallel_pack(
             break
         outcome = _run_module(
             tail_pending.popleft(), remaining, log_dir, runtime_args, cwd, worker_env,
+            start_dir,
         )
         outcomes.append(outcome)
         if outcome.status != "PASS":

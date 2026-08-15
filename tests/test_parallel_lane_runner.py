@@ -311,9 +311,9 @@ class ParallelLaneRunnerTests(unittest.TestCase):
         # library directory here and a worker still needs it.
         self.assertEqual(
             env["PYTHONPATH"],
-            os.path.abspath(tmp) + os.pathsep
-            + os.path.abspath(os.path.join(tmp, "resolved_entry")) + os.pathsep
+            os.path.abspath(os.path.join(tmp, "resolved_entry")) + os.pathsep
             + os.path.abspath(os.path.join(tmp, "tests")) + os.pathsep
+            + os.path.abspath(tmp) + os.pathsep
             + "existing_entry",
         )
 
@@ -329,7 +329,32 @@ class ParallelLaneRunnerTests(unittest.TestCase):
             )
             env = driver.worker_environment([], cwd=parent, start_dir=str(root))
             outcome = driver._run_module(
-                "phase6.test_guard", 60, None, cwd=parent, worker_env=env
+                "phase6.test_guard", 60, None, cwd=parent, worker_env=env,
+                start_dir=str(root),
+            )
+        self.assertEqual(outcome.status, "PASS")
+        self.assertEqual(outcome.tests, 2)
+
+    def test_worker_prefers_discovery_root_over_cwd_decoy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp)
+            decoy = parent / "phase6"
+            decoy.mkdir()
+            (decoy / "__init__.py").write_text("", encoding="utf-8")
+            (decoy / "test_guard.py").write_text(_passing_module(1), encoding="utf-8")
+
+            start_dir = parent / "suite"
+            package = start_dir / "phase6"
+            package.mkdir(parents=True)
+            (package / "__init__.py").write_text("", encoding="utf-8")
+            (package / "test_guard.py").write_text(_passing_module(2), encoding="utf-8")
+
+            env = driver.worker_environment(
+                [str(start_dir)], cwd=parent, start_dir=str(start_dir)
+            )
+            outcome = driver._run_module(
+                "phase6.test_guard", 60, None, cwd=parent, worker_env=env,
+                start_dir=str(start_dir),
             )
         self.assertEqual(outcome.status, "PASS")
         self.assertEqual(outcome.tests, 2)
