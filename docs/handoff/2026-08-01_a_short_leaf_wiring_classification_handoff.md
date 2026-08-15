@@ -8285,3 +8285,110 @@ The final documentation update is this handoff append plus the new risk-register
 **未覆盖维度与诚实边界**：本轮 hook 未注入 review-evidence 快照；未跑真实周实盘，故「下次真跑 regime_daily 会记成 already_current」由探针 + 判据翻译推得；未跑 full lane；桌面问题 1/2/3/4 未涉及。
 
 **下一步**：桌面 `2a_testrun0815.md` 还剩问题 1、2、3、4——其中 4 是每周必挂且与偶发无关，1 是本周锁死且状态不自愈。
+
+## 2026-08-15 追加：桌面 2a 问题 1/2 与问题 5/6 Optional 两刀最小收口（Codex executor/fixer；8c7a；OPEN-NOT-VERIFIED）
+
+### 第一刀：问题 1/2 的根因、最小改动与调用链
+
+- 问题 1 的真实状态是 date root 没有 `official_revision.json`，不是已有 official 被要求切换。旧 `select_official_revision` 却在 `current is None` 分支也因 `formal_state_committed` 或 `cutoff_passed` 抛 `RevisionSelectionBlocked`，使第一次 M6.7 成功跑无法建立 pointer。
+- 最小改动只删除这个无-pointer 分支的两道拦截；有 current pointer 的分支仍在不同 revision 下检查 formal-state/cutoff，same revision/equivalent replay/rollback/current view 逻辑未动。没有 schema、source-binding、缓存、provider、account 或 transaction write-boundary 改动。
+- 问题 2 是问题 1 的直接消费者后果。既有调用链保持 `weekly_screening.ps1 -> manifest -> select-official -> official pointer + selection receipt -> if selected/already_current -> runners/a_short_official_settlement.py`。没有绕过 pointer 或增加 legacy date-root reader；official operation/final action/industry weight 仍仅从 selected authority 结算。
+
+### 第二刀：问题 5/6 Optional 的最小处置
+
+- 删除 `tests/test_a_short_weekly_screening_regime_sidecar_wiring.py`：它只搜索 Stage 5 文本，不能证明 runtime。替代证据已在 `CliGuardTests.test_cli_uses_sidecar_revision_without_forking_evidence_identity`、legacy same-week rerun/immutable-conflict tests 和 theme null-clock health test 中，故删去重复而弱的守卫；未修改问题 5/6 生产码。
+- `O-2A-REPO-WIDE-PS-C-SCAN-BEYOND-SCOPE` 是历史 source-transport 同类闭合的范围归属问题。此前用户明确要求三处调用点按类扫描，故保留该守卫、不再扩面、也不回退；本轮仅将它从问题 5/6 验收面移回此前问题 1/2 scope，不把已有防护伪报成新修复。
+
+### 红绿控制、精确测试与原始终态
+
+固定 Python 一律为 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。
+
+```text
+RED: tests.test_a_short_run_revision.AShortRunRevisionTest.test_initial_official_selection_permits_settled_state_and_cutoff
+ERROR RevisionSelectionBlocked: official revision selection is forbidden after formal settlement/ratchet state
+
+tests.test_a_short_run_revision tests.test_a_short_v5_revision_matrix tests.test_a_short_weekly_screening_m67_failure_closeout
+Ran 36 tests in 2.098s
+OK
+[bounded-unittest] FOCUSED_RECEIPT token=receipt:bd9583365397940edd56808f
+
+P5/P6 runtime replacement selectors
+Ran 4 tests in 0.098s
+OK
+
+full_pack_ledger.py run a_short 2a_p1p2_p5p6_optional_repairs 860 -- discover -s tests -p test_a_short*.py
+[full-pack-ledger] STATIC status=PASS diff_check=PASS py_compile=3
+[parallel-lane] COUNT_GATE discovered=3124 ran=3124 equal=True
+Ran 3124 tests in 125.935s
+[full-pack-ledger] RESULT status=PASS exit=0 tests=3124 elapsed=125.9s deadline=860s mode=parallel
+```
+
+首次以旧的 receipt-shaped full-pack 参数调用被当前 runner `REFUSED - invalid run arguments`，在测试开始前即终止；随后只运行了上列一次实际 full lane。未跑 provider/live、真实周跑、胶囊、账户或下单，未 stage/commit/push/merge，`docs/CURRENT.md` 未写瞬态 review/commit 状态。风险登记与 session 已同步；下一步仅 Claude Code 独立 reviewer/committer 基于最终 diff、红绿控制与 full-lane 原始终态审查，PASS 后再提交。
+
+文档落盘后的固定-Python 治理终态：`tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length` → `Ran 67 tests in 1.075s / OK`，receipt `receipt:4af1a01d1f694936d90ce180`。
+
+## 2026-08-15 追加：桌面 2a 问题 1-2 与 5-6 Optional 的独立审查（刀 A PASS / 刀 B FAIL；Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：刀 A PASS，刀 B FAIL（一条 Required）。正文只在 `docs/system_risk_register.md`。
+
+**刀 A 我为什么放行了超出点名范围的那一半**：我上一轮只点了 `formal_state_committed` 的不对称，本刀连 `cutoff_passed` 也在「无 pointer」分支一并放开。判 PASS 的理由是三条同时成立——执行方在 register/SESSION_LOG 里显式写明了这个范围；把原先断言「cutoff 挡首次选择」的用例**反转**而不是悄悄删掉；并新增「已有 pointer 时切换在 cutoff 下仍被拒」的反向控制。放松类改动只要「有意、明说、有强制腿对照」，就不该因为超出点名范围而机械判红。
+
+**刀 B 与我这轮的自我更正（重点）**：执行方称被删的 wiring 测试是「重复」。我第一次植入是把 ps1 里那半行删掉 → 包红 → 我一度据此认为覆盖仍在。**这个植入不承重**：删半行会让 `@(...)` 留下悬空逗号、PowerShell 语法直接错，任何解析型测试都会红，红的原因是语法不是覆盖——正是 checklist §C2 说的「patch 了判据的来源而不是门本身」。改成语法中性的植入（只把参数名改成 `...-idX`）后 baseline PASS、植入后**仍 PASS**，无人守护成立，原结论作废。以后对 PowerShell 数组参数做植入，一律用「改名」而不是「删元素」。
+
+**未覆盖维度与诚实边界**：未跑真实周实盘，刀 A 修复后本周能否真的补出 pointer 未实跑；rule 4 的 mtime 一路本轮不可用（我的探针两次改写了 ps1，均已验证恢复到字节一致），故只以内容指纹为准；`cutoff` 放开后「决策周过去很久才首次选官方」的 PIT 影响未评估（生产 launcher 不传该 flag）。
+
+**下一步**：Codex 只需在保留的测试模块里补回那条 launcher 参数断言即可闭 B；A 无需返工。
+
+## 2026-08-15 追加：2a 刀 B launcher wiring Required 的最小修复（Codex executor/fixer；8c7a；OPEN-NOT-VERIFIED）
+
+### 问题、根因与最小改动
+
+- Claude 审查确认，删除 `tests/test_a_short_weekly_screening_regime_sidecar_wiring.py` 后，唯一保留的 P5 CLI 回归直接调用 Python runner，不读 `weekly_screening.ps1`。因此 Stage 5 把 `--sidecar-outcome-run-revision-id` 改名或删掉时，launcher 会静默回到缺身份 outcome，而没有测试会红。
+- 不恢复已删的独立源码测试、不添加新 runner/harness。只在已有 `tests/test_a_short_weekly_screening_m67_failure_closeout.py` 的 `stage5` 切片上增加一条 `assertIn`，要求参数和值 `'--sidecar-outcome-run-revision-id', $RunRevisionId` 同时存在。这正好守护 launcher→runner 调用边界，不改变 Python runner、记录去重键、outcome schema、source-binding、缓存或写盘。
+
+### 语法中性负向控制与原始终态
+
+```text
+TEMPORARY planted control:
+--sidecar-outcome-run-revision-id -> --sidecar-outcome-run-revision-idX
+
+tests.test_a_short_weekly_screening_m67_failure_closeout.AShortWeeklyM67FailureCloseoutTests.test_regime_sidecar_outcome_wiring_uses_the_current_revision
+FAILED (failures=1)
+AssertionError: "'--sidecar-outcome-run-revision-id', $RunRevisionId" not found
+
+RESTORED: runners/weekly_screening.ps1 exact argument spelling
+
+tests.test_a_short_weekly_screening_m67_failure_closeout
+Ran 17 tests in 0.121s
+OK
+[bounded-unittest] FOCUSED_RECEIPT token=receipt:4b407a0f8a6e1feb96e29771
+
+tests.test_a_short_run_revision tests.test_a_short_v5_revision_matrix
+Ran 20 tests in 2.211s
+OK
+[bounded-unittest] FOCUSED_RECEIPT token=receipt:76f3a5066909bb51b85e30f5
+
+P5/P6 runtime companion selectors
+Ran 4 tests in 0.126s
+OK
+```
+
+`git diff --numstat -- runners/weekly_screening.ps1` 在恢复后为空，`git diff --check` PASS。此刀只有测试守卫，按规则不新跑 full lane，也不把上一刀的 full-lane 绿灯冒充为当前测试状态的 fingerprint 证据。未运行 provider/live、真实周跑、账户、胶囊或下单；未 stage/commit/push/merge；`docs/CURRENT.md` 不写瞬态状态。风险和 SESSION_LOG 已同步，下一步 Claude Code 独立 reviewer/committer 审查最终 diff。
+
+文档落盘后治理终态：固定 Python 下 `tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency tests.test_readme_route_row_length` → `Ran 67 tests in 1.025s / OK`，receipt `receipt:d050dc5db8419aafecc30cee`。
+
+## 2026-08-15 追加：桌面 2a 问题 5/6 Optional 收口的复审 = PASS（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：PASS，上一轮 Required 已闭。正文只在 `docs/system_risk_register.md`。
+
+**修法比原状更强**：被删掉的那个模块是整文件扫描，补回来的断言限定在 `self.stage5` 切片（`# --- Stage 5` 到 `# P4: health`，既有 `setUpClass` 界定），所以同一字符串出现在脚本别处不能糊弄过去。
+
+**我实际验的**：跑我上一轮点名要的那格 closure——语法中性植入（只把 ps1 参数名改成 `...-idX`，语法一字未动），baseline PASS、植入 FAIL；上一轮同一位置同一手法是 PASS。植入范围收窄到持有该断言的单一模块，归因唯一。两次植入后文件均恢复到字节一致、残留 0。
+
+**记一条方法教训**：上一轮我第一次的植入是「删掉那半行」，结果 `@(...)` 留下悬空逗号、PowerShell 语法直接错，任何解析型测试都会红——那次红与覆盖无关，是 checklist §C2 的「patch 了判据来源而非门本身」。**对 PowerShell 数组参数做植入，一律用改名不用删元素。**
+
+**rule 4 的处置**：本轮 `full-lane=not_triggered` 成立——相对上轮的全部 delta 就是 6 行测试、生产码零改动，故上轮 `3124 PASS` 对当前生产码仍有效；当前指纹与其不同仅因新增测试行，这一点由我两轮各自冻结的 scope manifest 相减得出。mtime 一路不可用（我的探针改写过 ps1 并已恢复），只以内容指纹为准。
+
+**未覆盖维度**：未跑真实周实盘，刀 A 修复后本周能否真的补出 pointer 未实跑；`cutoff` 放开后的 PIT 影响未评估；新断言仍是源码文本层（运行时由 runner 侧 CLI 用例与 emit 探针从另一侧覆盖）。
+
+**下一步**：桌面 `2a_testrun0815.md` 还剩问题 3（margin 早退分支 KeyError，须按类扫键集）与问题 4（P4a 两项前置条件，每周必挂）。

@@ -782,10 +782,6 @@ def select_official_revision(
                 inferred_root, date, current_revision
             )
     else:
-        if formal_state_committed:
-            raise RevisionSelectionBlocked("official revision selection is forbidden after formal settlement/ratchet state")
-        if cutoff_passed:
-            raise RevisionSelectionBlocked("official revision selection is forbidden after the weekly cutoff")
         supersedes = None
     pointer_payload = _selection_payload(
         schema_name="a_short_official_revision", decision_as_of=date, revision=revision,
