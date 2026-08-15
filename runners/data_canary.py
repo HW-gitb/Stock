@@ -27,17 +27,16 @@ data_canary.py — Phase 2.6 旁路数据对账 (Tushare vs akshare)
 Usage:
     python runners/data_canary.py --as-of 20260522
     python runners/data_canary.py --as-of 20260522 --source em
-    python runners/data_canary.py --candidates A-EGS/Result/egs_full_20260522.csv
+    python runners/data_canary.py --candidates result/a_short/20260522/egs_full_20260522.csv
 """
 import argparse
 import hashlib
 import json
 import os
 import random
-import re
 import sys
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -48,7 +47,14 @@ except ModuleNotFoundError:
     ak = None
 
 ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 LOG_DIR = ROOT / "logs"
+
+from engine.a_short_run_revision import (  # noqa: E402
+    official_egs_full_path, resolve_official_revision, validate_run_revision_id,
+    validate_official_egs_full_binding,
+)
 
 SAMPLE_SIZE = 5
 CLOSE_WARN_PCT = 0.5
@@ -114,7 +120,7 @@ def _normalize_code(c) -> str:
     return digits.zfill(6)
 
 
-def _find_candidates(as_of: str) -> Path | None:
+def _find_candidates(as_of: str, run_revision_id: str | None = None) -> Path | None:
     """Default: prefer 实盘 egs_full, fallback 回测 candidates.
 
     Note on Beijing Stock Exchange (BJ): egs_main filters .BJ tickers at L0
@@ -122,47 +128,35 @@ def _find_candidates(as_of: str) -> Path | None:
     stock_zh_a_spot covers SH+SZ only and the missing-BJ edge case does
     not fire today. If A-share scope ever expands to BJ, canary will need
     a parallel BJ source (e.g., ak.stock_zh_bj_spot)."""
-    p1 = ROOT / "A-EGS" / "Result" / f"egs_full_{as_of}.csv"
-    if p1.exists():
-        return p1
-    p2 = ROOT / "result" / "a_short" / "backtest" / "generated" / as_of / "candidates.csv"
-    if p2.exists():
-        return p2
-    return None
+    selected = resolve_official_revision(ROOT, as_of, require=False)
+    path = official_egs_full_path(ROOT, as_of, run_revision_id)
+    if path.is_file() and (run_revision_id is not None or selected is not None):
+        validate_official_egs_full_binding(path, as_of)
+    return path if path.is_file() else None
 
 
 def _find_latest_candidates_within(days: int = 7) -> tuple[Path | None, str | None]:
     """Auto-fallback when --as-of defaults to today but today has no
     egs_full (weekend, holiday, or screening not yet run). Scans
-    A-EGS/Result/egs_full_*.csv and picks the most recent YYYYMMDD
-    within the last `days` calendar days.
+    legal official date roots and picks the most recent YYYYMMDD within the
+    last `days` calendar days.
 
     Returns (path, as_of_str) or (None, None) if nothing found.
     Returning a stale candidates set is acceptable here because canary
     is a sidecar check; the resulting log includes both the requested
     as_of and the actual as_of used so the staleness is auditable."""
-    result_dir = ROOT / "A-EGS" / "Result"
-    if not result_dir.exists():
-        return None, None
-    pattern = re.compile(r"^egs_full_(\d{8})\.csv$")
     today = datetime.now().date()
-    candidates = []
-    for p in result_dir.glob("egs_full_*.csv"):
-        m = pattern.match(p.name)
-        if not m:
-            continue
+    for offset in range(max(0, int(days)) + 1):
+        as_of = (today - timedelta(days=offset)).strftime("%Y%m%d")
         try:
-            d = datetime.strptime(m.group(1), "%Y%m%d").date()
-        except ValueError:
+            path = _find_candidates(as_of)
+        except (FileNotFoundError, ValueError):
+            # An incomplete or mismatched official bundle is not a canary
+            # process failure; keep searching the bounded legal fallback dates.
             continue
-        delta = (today - d).days
-        if 0 <= delta <= days:
-            candidates.append((d, m.group(1), p))
-    if not candidates:
-        return None, None
-    candidates.sort(key=lambda t: t[0], reverse=True)
-    _, as_of_str, path = candidates[0]
-    return path, as_of_str
+        if path is not None:
+            return path, as_of
+    return None, None
 
 
 def _write_log(payload: dict, as_of: str) -> Path:
@@ -369,6 +363,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Phase 2.6 旁路数据对账（Tushare vs akshare）")
     parser.add_argument("--as-of", default=datetime.now().strftime("%Y%m%d"),
                         help="As-of date YYYYMMDD (default: today)")
+    parser.add_argument("--run-revision-id", default=None,
+                        help="Selected official revision id for this decision date.")
     parser.add_argument("--candidates", default=None,
                         help="Path to candidates CSV (default: auto-find egs_full_<as_of>.csv)")
     parser.add_argument("--sample-size", type=int, default=SAMPLE_SIZE)
@@ -380,15 +376,33 @@ def main() -> int:
                         help="akshare data source. sina (default): close+name only, stable; "
                              "em: 含 pe/pb, 但本地若挂 VPN 需将 *.eastmoney.com 加 split-tunnel")
     args = parser.parse_args()
+    if args.run_revision_id is not None:
+        try:
+            args.run_revision_id = validate_run_revision_id(args.run_revision_id)
+        except ValueError as exc:
+            parser.error(f"--run-revision-id is invalid: {exc}")
     source_spec = AK_SOURCES[args.source]
     source_fields = source_spec["fields"]
+    requested_as_of = args.as_of
+    actual_as_of = requested_as_of
+    fallback_used = False
+    resolved_revision_id = args.run_revision_id
+
+    def _log_context() -> dict:
+        return {
+            "requested_as_of": requested_as_of,
+            "as_of_fallback_used": fallback_used,
+            "run_revision_id": args.run_revision_id,
+            "resolved_revision_id": resolved_revision_id,
+        }
 
     # Graceful skip: akshare not installed
     if ak is None:
         out = _write_log(_skip_payload(
-            args.as_of,
+            actual_as_of,
             "skipped_akshare_not_installed",
             "akshare not installed; run `pip install akshare` to enable canary.",
+            **_log_context(),
         ), args.as_of)
         print(f"[SKIP] akshare not installed; wrote {out}")
         return 0
@@ -397,26 +411,33 @@ def main() -> int:
     # egs_full (weekend / holiday / screening not yet run), auto-fall-back
     # to the most recent egs_full within the last week. Both the requested
     # and the actual as_of are preserved in the log for auditability.
-    requested_as_of = args.as_of
-    fallback_used = False
     if args.candidates:
         cand_path = Path(args.candidates)
     else:
-        cand_path = _find_candidates(args.as_of)
-        if cand_path is None and args.as_of == datetime.now().strftime("%Y%m%d"):
+        try:
+            cand_path = _find_candidates(args.as_of, args.run_revision_id)
+        except (FileNotFoundError, ValueError) as exc:
+            cand_path = None
+            print(f"[SKIP] official candidates binding unavailable: {type(exc).__name__}")
+        if cand_path is None and args.run_revision_id is None and args.as_of == datetime.now().strftime("%Y%m%d"):
             fallback_path, fallback_as_of = _find_latest_candidates_within(days=7)
             if fallback_path is not None:
                 cand_path = fallback_path
-                args.as_of = fallback_as_of
+                actual_as_of = fallback_as_of
                 fallback_used = True
                 print(f"[INFO] no egs_full for {requested_as_of}; "
                       f"falling back to most recent: {fallback_as_of}")
+    if resolved_revision_id is None and cand_path is not None and not args.candidates:
+        selected = resolve_official_revision(ROOT, actual_as_of, require=False)
+        if selected is not None:
+            resolved_revision_id = selected["selected_revision_id"]
     if cand_path is None or not cand_path.exists():
         out = _write_log(_skip_payload(
-            requested_as_of,
+            actual_as_of,
             "skipped_no_candidates",
             f"No candidates file found for as_of={requested_as_of} "
-            f"(also no fallback within last 7 days under A-EGS/Result/).",
+                f"(also no official egs_full within the last 7 calendar days).",
+            **_log_context(),
         ), requested_as_of)
         print(f"[SKIP] no candidates; wrote {out}")
         return 0
@@ -425,21 +446,23 @@ def main() -> int:
         df = pd.read_csv(cand_path)
     except Exception as e:
         out = _write_log(_skip_payload(
-            args.as_of,
+            actual_as_of,
             "skipped_candidates_read_failed",
             f"{type(e).__name__}: {e}",
             candidates_source=_display_path(cand_path),
-        ), args.as_of)
+            **_log_context(),
+        ), requested_as_of)
         print(f"[SKIP] candidates read failed; wrote {out}")
         return 0
 
     if df.empty:
         out = _write_log(_skip_payload(
-            args.as_of,
+            actual_as_of,
             "skipped_empty_candidates",
             "Candidates file is empty.",
             candidates_source=_display_path(cand_path),
-        ), args.as_of)
+            **_log_context(),
+        ), requested_as_of)
         print(f"[SKIP] empty candidates; wrote {out}")
         return 0
 
@@ -449,13 +472,14 @@ def main() -> int:
     missing_cols = [c for c in required_cols if c not in df.columns]
     if missing_cols:
         out = _write_log(_skip_payload(
-            args.as_of,
+            actual_as_of,
             "skipped_candidates_schema_mismatch",
             "Candidates file missing required columns.",
             candidates_source=_display_path(cand_path),
             missing_columns=missing_cols,
             available_columns=list(df.columns),
-        ), args.as_of)
+            **_log_context(),
+        ), requested_as_of)
         print(f"[SKIP] candidates schema mismatch; wrote {out}")
         return 0
 
@@ -464,12 +488,13 @@ def main() -> int:
         df = df[df["tier"] == args.tier].copy()
         if df.empty:
             out = _write_log(_skip_payload(
-                args.as_of,
+                actual_as_of,
                 "skipped_no_rows_after_tier_filter",
                 f"No rows after tier={args.tier} filter.",
                 candidates_source=_display_path(cand_path),
                 tier_filter=args.tier,
-            ), args.as_of)
+                **_log_context(),
+            ), requested_as_of)
             print(f"[SKIP] no rows after tier={args.tier}; wrote {out}")
             return 0
 
@@ -479,21 +504,22 @@ def main() -> int:
     # hashlib.md5 — Python's built-in hash() is PYTHONHASHSEED-salted
     # per-process so it would NOT be reproducible across runs.
     try:
-        seed = args.seed if args.seed is not None else int(args.as_of)
+        seed = args.seed if args.seed is not None else int(actual_as_of)
     except ValueError:
-        seed_bytes = hashlib.md5(args.as_of.encode("utf-8")).digest()
+        seed_bytes = hashlib.md5(actual_as_of.encode("utf-8")).digest()
         seed = int.from_bytes(seed_bytes[:4], "big")
     rng = random.Random(seed)
     sample_size = max(0, min(args.sample_size, len(df)))
     if sample_size == 0:
         out = _write_log(_skip_payload(
-            args.as_of,
+            actual_as_of,
             "skipped_zero_sample_size",
             "No rows sampled because --sample-size resolved to 0.",
             candidates_source=_display_path(cand_path),
             tier_filter=args.tier or None,
             available_rows=int(len(df)),
-        ), args.as_of)
+            **_log_context(),
+        ), requested_as_of)
         print(f"[SKIP] zero sample size; wrote {out}")
         return 0
     sample_idx = rng.sample(range(len(df)), sample_size)
@@ -503,12 +529,13 @@ def main() -> int:
     fn = getattr(ak, source_spec["fn_name"], None)
     if fn is None:
         out = _write_log(_skip_payload(
-            args.as_of,
+            actual_as_of,
             "error_akshare_fn_missing",
             f"akshare has no function {source_spec['fn_name']} (akshare too old or renamed).",
             source=args.source,
             candidates_source=_display_path(cand_path),
-        ), args.as_of)
+            **_log_context(),
+        ), requested_as_of)
         print(f"[ERROR] akshare {source_spec['fn_name']} missing; wrote {out} (not blocking)")
         return 0
 
@@ -518,26 +545,28 @@ def main() -> int:
         ak_spot = fn()
     except Exception as e:
         out = _write_log(_skip_payload(
-            args.as_of,
+            actual_as_of,
             "error_akshare_fetch_failed",
             f"{type(e).__name__}: {e}",
             source=args.source,
             candidates_source=_display_path(cand_path),
-        ), args.as_of)
+            **_log_context(),
+        ), requested_as_of)
         print(f"[ERROR] akshare fetch failed: {e}; wrote {out} (not blocking)")
         return 0
 
     missing_ak_cols = [v for v in source_fields.values() if v not in ak_spot.columns]
     if missing_ak_cols:
         out = _write_log(_skip_payload(
-            args.as_of,
+            actual_as_of,
             "error_akshare_schema_mismatch",
             f"akshare {source_spec['fn_name']} missing expected columns.",
             source=args.source,
             candidates_source=_display_path(cand_path),
             missing_columns=missing_ak_cols,
             available_columns=list(ak_spot.columns),
-        ), args.as_of)
+            **_log_context(),
+        ), requested_as_of)
         print(f"[ERROR] akshare schema mismatch; wrote {out} (not blocking)")
         return 0
 
@@ -590,9 +619,11 @@ def main() -> int:
                               " 切 --source=em 启用 pe/pb 对账（需本地能直连 *.eastmoney.com）。")
 
     payload = {
-        "as_of": args.as_of,
+        "as_of": actual_as_of,
         "requested_as_of": requested_as_of,
         "as_of_fallback_used": fallback_used,
+        "run_revision_id": args.run_revision_id,
+        "resolved_revision_id": resolved_revision_id,
         "ran_at": _now_iso(),
         "status": overall,
         "candidates_source": _display_path(cand_path),
@@ -618,7 +649,7 @@ def main() -> int:
         "limitations": limitations,
     }
 
-    out = _write_log(payload, args.as_of)
+    out = _write_log(payload, requested_as_of)
     print(_advisory_summary_message(
         overall,
         missing,

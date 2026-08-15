@@ -29,6 +29,7 @@ if str(ROOT) not in sys.path:
 from engine.analyzer.rule6_hard_veto import RULE_VERSIONS, run_veto
 from engine.analyzer.state_manager import STATE_ROOT
 from engine.data.analysis_input_contract import validate_analysis_input_contract
+from engine.a_short_run_revision import official_analysis_input_path
 
 REPORT_SCHEMA_PATH = ROOT / "schemas" / "execution_backtest_report.schema.json"
 PRICE_DATA_SCHEMA_PATH = ROOT / "schemas" / "execution_price_data.schema.json"
@@ -40,7 +41,6 @@ LEGACY_RULE6_M67_LIMITATION = (
     "recommendation performance: overheat and chasing_high are hard-vetoed here but "
     "only downgraded by M6.7."
 )
-DEFAULT_INPUT_ROOT = ROOT / "result" / "a_short"
 DEFAULT_OUT_DIR = ROOT / "result" / "a_short" / "backtest" / "execution"
 DEFAULT_PRESET_PATH = ROOT / "presets" / "a_short.yaml"
 A_SHARE_LOT_SIZE = 100
@@ -258,7 +258,7 @@ def load_cash_buffer_state(path: Path) -> dict[str, Any]:
 def resolve_input_path(as_of: str, input_path: Path | None) -> Path:
     if input_path is not None:
         return input_path
-    return DEFAULT_INPUT_ROOT / as_of / "analysis_input.json"
+    return official_analysis_input_path(ROOT, as_of)
 
 
 def validate_report(report: dict[str, Any]) -> None:

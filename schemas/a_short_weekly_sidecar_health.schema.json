@@ -21,11 +21,11 @@
   ],
   "required": [
     "schema_name", "schema_version", "as_of", "m67_status", "overall",
-    "advanced_count", "stalled_count", "failed_count", "partial_count", "sidecars"
+    "advanced_count", "already_current_count", "stalled_count", "failed_count", "partial_count", "sidecars"
   ],
   "properties": {
     "schema_name": {"const": "a_short_weekly_sidecar_health"},
-    "schema_version": {"const": "1.1.0"},
+    "schema_version": {"const": "1.2.0"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
     "run_revision_id": {"type": ["string", "null"], "pattern": "^([0-9a-f]{32})?$"},
     "generated_at": {"type": "string"},
@@ -34,6 +34,7 @@
     "m67_status": {"enum": ["complete", "degraded_no_new_entries", "partial_holdings_only", "failed", "skipped", "not_run", "unavailable"]},
     "overall": {"enum": ["healthy", "degraded", "partial", "failed"]},
     "advanced_count": {"type": "integer", "minimum": 0},
+    "already_current_count": {"type": "integer", "minimum": 0},
     "stalled_count": {"type": "integer", "minimum": 0},
     "failed_count": {
       "type": "integer",

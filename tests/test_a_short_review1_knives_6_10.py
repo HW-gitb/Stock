@@ -828,13 +828,14 @@ class ForwardCohortReplacementTest(unittest.TestCase):
     def test_same_day_rerun_replaces_cohort_instead_of_union(self) -> None:
         as_of = cloned_minimal_analysis_input_payload()["trade_date"]
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "result"
+            root = Path(tmp) / "result" / "a_short"
             bucket = root / as_of
             bucket.mkdir(parents=True)
             tracker = Path(tmp) / "forward_tracker.csv"
             input_path = bucket / "analysis_input.json"
             input_path.write_text(json.dumps(self._payload(["600000.SH", "000001.SZ"]), ensure_ascii=False), encoding="utf-8")
-            with patch.object(forward_tracker, "LIVE_RESULT_ROOT", root), \
+            with patch.object(forward_tracker, "ROOT", Path(tmp)), \
+                 patch.object(forward_tracker, "LIVE_RESULT_ROOT", root), \
                  patch.object(forward_tracker, "TRACKER_CSV", tracker):
                 self.assertEqual(forward_tracker.capture(as_of), 0)
                 input_path.write_text(json.dumps(self._payload(["000001.SZ", "600001.SH"]), ensure_ascii=False), encoding="utf-8")
@@ -850,7 +851,7 @@ class ForwardCohortReplacementTest(unittest.TestCase):
         payload = self._payload(["600000.SH", "000001.SZ"])
         as_of = payload["trade_date"]
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "result"
+            root = Path(tmp) / "result" / "a_short"
             bucket = root / as_of
             bucket.mkdir(parents=True)
             tracker = Path(tmp) / "forward_tracker.csv"
@@ -862,7 +863,8 @@ class ForwardCohortReplacementTest(unittest.TestCase):
                 identity["candidate_digest"], payload["candidates"][0],
             )
             pd.DataFrame([partial], columns=forward_tracker.SCHEMA_COLUMNS).to_csv(tracker, index=False)
-            with patch.object(forward_tracker, "LIVE_RESULT_ROOT", root), \
+            with patch.object(forward_tracker, "ROOT", Path(tmp)), \
+                 patch.object(forward_tracker, "LIVE_RESULT_ROOT", root), \
                  patch.object(forward_tracker, "TRACKER_CSV", tracker):
                 self.assertEqual(forward_tracker.capture(as_of), 0)
             written = pd.read_csv(tracker, dtype={"as_of": str, "ts_code": str})

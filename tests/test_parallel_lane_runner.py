@@ -116,6 +116,14 @@ class ParallelLaneRunnerTests(unittest.TestCase):
         self.assertEqual(summary["modules_run"], 3)
         self.assertIn("Ran 6 tests", result.output)
 
+    def test_nested_aggregate_count_is_prefixed_for_outer_bounded_parser(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, args = self._tree(tmp, {"test_alpha": _passing_module(1)})
+            with patch.dict(os.environ, {NESTED_RUN_MARKER: "1"}):
+                result, _summary = self._run(root, args, tmp, workers=1)
+        self.assertEqual(result.status, "PASS")
+        self.assertIn("[bounded-unittest nested] Ran 1 test", result.output)
+
     def test_serial_and_parallel_agree_on_the_same_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
             root, args = self._tree(tmp, {

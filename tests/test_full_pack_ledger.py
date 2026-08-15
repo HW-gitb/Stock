@@ -246,6 +246,24 @@ class FullPackLedgerTests(unittest.TestCase):
                         )
                 self.assertIn("RESULT status=PASS", output.getvalue())
 
+    def test_nested_full_pack_result_count_is_prefixed_for_outer_launcher(self):
+        state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
+        passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            "os.environ", {"STOCK_BOUNDED_UNITTEST_ACTIVE": "1"}
+        ), patch.object(fpl, "_execute_full_pack", return_value=(passed, {"mode": "parallel"})):
+            output = StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(
+                    fpl.run_full_pack(
+                        "a_short", "nested result output", FOCUSED_RECEIPT, 30,
+                        ["discover", "-s", "tests", "-p", "test_a_short*.py"],
+                        state=state, ledger=Path(tmp) / "ledger.json",
+                    ),
+                    0,
+                )
+        self.assertIn("[bounded-unittest nested] Ran 3 tests", output.getvalue())
+
     def test_full_pack_runtime_optimization_keeps_discovery_and_adds_only_safe_flags(self):
         self.assertEqual(
             fpl.FULL_PACK_RUNTIME_ARGS,

@@ -26,6 +26,7 @@ ledger or invalidates an exact-code-state cached green.
 from __future__ import annotations
 
 import json
+import os
 import py_compile
 import shutil
 import subprocess
@@ -37,6 +38,7 @@ from bounded_unittest import (
     DEPENDENCY_EXIT,
     FULL_MAX_SECONDS,
     FULL_PACK_RUNTIME_ARGS,
+    NESTED_RUN_MARKER,
     external_test_dependency_error,
 )
 import parallel_lane_runner
@@ -313,7 +315,14 @@ def run_full_pack(
                 flush=True,
             )
     if result.output:
-        print(result.output, end="" if result.output.endswith("\n") else "\n")
+        output = result.output
+        if os.environ.get(NESTED_RUN_MARKER) == "1":
+            output = "".join(
+                line if not line.lstrip().startswith("Ran ")
+                else f"[bounded-unittest nested] {line}"
+                for line in output.splitlines(keepends=True)
+            )
+        print(output, end="" if output.endswith("\n") else "\n")
     count = str(result.tests) if result.tests is not None else "UNKNOWN"
     print(
         f"[full-pack-ledger] RESULT status={result.status} exit={result.exit_code} "

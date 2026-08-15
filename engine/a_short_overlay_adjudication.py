@@ -775,8 +775,26 @@ def settle_from_daily_payload(*, root: str | Path, daily_payload: dict, as_of: s
                                 "settled_through": max(as_of, str((existing or {}).get("payload", {}).get("settled_through") or "")),
                                 "horizons": horizons}, "boundary": _boundary()})
         _validate_record(outcome)
-        if not path.exists() or _load(path) != outcome:
+        existing = _load(path) if path.exists() else None
+        if existing is None:
             _write(path, outcome); changed += 1
+        else:
+            existing_compare = {key: value for key, value in existing.items() if key != "record_sha256"}
+            outcome_compare = {key: value for key, value in outcome.items() if key != "record_sha256"}
+            for compare in (existing_compare, outcome_compare):
+                payload = dict(compare.get("payload") or {})
+                for key in ("settled_through", "cache_sha256", "generated_at", "updated_at", "captured_at"):
+                    payload.pop(key, None)
+                payload["horizons"] = {
+                    horizon_key: {
+                        key: value for key, value in horizon.items()
+                        if key not in {"source_cache_sha256", "generated_at", "updated_at", "captured_at"}
+                    } if isinstance(horizon, dict) else horizon
+                    for horizon_key, horizon in (payload.get("horizons") or {}).items()
+                }
+                compare["payload"] = payload
+            if existing_compare != outcome_compare:
+                _write(path, outcome); changed += 1
     if official_project_root is not None and official_selected_count == 0:
         return {"status": "no_official_overlay_captures", "outcomes_updated": 0,
                 "production_unchanged": True}
@@ -1182,6 +1200,8 @@ def settle_and_summarize_weekly(*, root: str | Path | None, daily_cache_path: st
                     root=private_root, daily_payload=_load(cache), as_of=as_of, cache_path=cache,
                     epoch_context=epoch_context, run_revision_id=run_revision_id,
                     official_project_root=official_project_root)
+                if sidecar_result is not None:
+                    sidecar_result["outcomes_updated"] = settlement.get("outcomes_updated")
                 if official_project_root is not None and settlement.get("status") != "settled_from_existing_cache":
                     summary = unavailable_public_summary(as_of, epoch_context=epoch_context)
                 else:

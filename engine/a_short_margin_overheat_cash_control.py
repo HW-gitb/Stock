@@ -3579,6 +3579,7 @@ def settle_margin_overheat_from_daily_cache(
     captures: dict[str, dict] = {}
     outcomes: dict[str, dict] = {}
     receipts: dict[str, dict] = {}
+    changed = 0
     for decision_date, week_dir in capture_files:
         if official_project_root is not None and decision_date == operation_as_of and run_revision_id is not None:
             # A pre-selector invocation may still point at an older same-day
@@ -3598,10 +3599,13 @@ def settle_margin_overheat_from_daily_cache(
             _validate_stage_b_capture_admission(capture, stage_b_admission)
         validate_margin_source_receipt(receipt, capture, require_current_epoch=False)
         current_slice_digest = _margin_cache_slice_digest(document, capture["payload"])
+        existing_outcome = None
+        existing_outcome_path = week_dir / "outcome.json"
+        if existing_outcome_path.is_file():
+            existing_outcome = _load_private_json(existing_outcome_path, "outcome")
+            validate_margin_outcome(existing_outcome)
         if capture["payload"]["daily_cache_digest"] != current_slice_digest:
-            existing_outcome_path = week_dir / "outcome.json"
-            if existing_outcome_path.is_file():
-                existing_outcome = _load_private_json(existing_outcome_path, "outcome")
+            if existing_outcome is not None:
                 validate_margin_outcome(existing_outcome)
                 if existing_outcome.get("payload", {}).get("status") in {"settled", "no_count"}:
                     raise MarginOverheatCashControlError(
@@ -3613,8 +3617,11 @@ def settle_margin_overheat_from_daily_cache(
         receipts[decision_date] = receipt
         outcome = _settle_capture(capture, document)
         outcomes[decision_date] = outcome
+        if existing_outcome != outcome:
+            changed += 1
     if official_project_root is not None and not captures:
-        return {"status": "no_official_margin_captures", "production_unchanged": True}
+        return {"status": "no_official_margin_captures", "outcomes_updated": 0,
+                "production_unchanged": True}
     settled_receipts: dict[str, dict] = {}
     for date, outcome in outcomes.items():
         capture = captures[date]
@@ -3665,13 +3672,14 @@ def settle_margin_overheat_from_daily_cache(
         writes[week_root / "source_receipt.json"] = _json_bytes(receipt)
     from engine.a_short_artifact_set_transaction import commit_artifact_set
     commit_artifact_set(_private_journal_dir(stage_root), writes)
-    return {"status": "settled_from_existing_cache", "ledger": new_ledger,
+    return {"status": "settled_from_existing_cache", "outcomes_updated": changed, "ledger": new_ledger,
             "adjudication": adjudication, "reminder": reminder}
 
 
 def settle_and_summarize_margin_overheat_weekly(*, root: str | Path | None,
                                                  daily_cache_path: str | Path | None,
                                                  as_of: str, strict: bool = False,
+                                                 sidecar_result: dict | None = None,
                                                  run_revision_id: str | None = None,
                                                  official_project_root: str | Path | None = None) -> dict[str, Any]:
     """Settle/adjudicate before M6.7 and suppress stale reminders on any fault."""
@@ -3680,12 +3688,18 @@ def settle_and_summarize_margin_overheat_weekly(*, root: str | Path | None,
         if official_project_root is not None and run_revision_id is None:
             raise MarginOverheatCashControlError("official summary requires run_revision_id")
         if root is None:
+            if sidecar_result is not None:
+                sidecar_result["outcomes_updated"] = 0
             return _public_margin_summary(PUBLIC_STATUS_NOT_CONFIGURED, as_of=as_of)
         private_root = _private_root(root)
         if not private_root.exists():
+            if sidecar_result is not None:
+                sidecar_result["outcomes_updated"] = 0
             return _public_margin_summary(PUBLIC_STATUS_UNAVAILABLE, as_of=as_of)
         if daily_cache_path is None:
             _clear_private_margin_reminder(private_root)
+            if sidecar_result is not None:
+                sidecar_result["outcomes_updated"] = 0
             return _public_margin_summary(PUBLIC_STATUS_UNAVAILABLE, as_of=as_of)
         document = load_margin_overheat_daily_cache(daily_cache_path)
         result = settle_margin_overheat_from_daily_cache(
@@ -3693,6 +3707,8 @@ def settle_and_summarize_margin_overheat_weekly(*, root: str | Path | None,
             run_revision_id=run_revision_id,
             official_project_root=official_project_root,
         )
+        if sidecar_result is not None:
+            sidecar_result["outcomes_updated"] = result.get("outcomes_updated")
         reminder = result["reminder"]
         validate_margin_reminder(reminder)
         adjudication = result["adjudication"]

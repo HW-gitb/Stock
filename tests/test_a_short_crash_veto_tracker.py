@@ -14,6 +14,7 @@ from runners.a_short_crash_veto_tracker import (
     _official_rolling_epoch_mode,
     _official_inputs,
     _load_capture_frames,
+    _make_cohort,
     build_summary,
     decide_design,
     detect_crash_codes,
@@ -33,6 +34,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CrashVetoTrackerTest(unittest.TestCase):
+    def test_make_cohort_returns_revision_binding(self):
+        features = pd.DataFrame(columns=["l1_name", "l2_name", "total_mv", "pct_20d", "avg_amount_20d"])
+        cohort = _make_cohort(
+            "20260723", {"run_id": "run-1"}, "official_all_crash_veto", 5,
+            [], [], features, "test", run_revision_id="a" * 32,
+        )
+        self.assertEqual(cohort["run_revision_id"], "a" * 32)
+
     def test_revision_bundle_is_the_crash_veto_official_input_and_missing_analysis_fails_loud(self):
         as_of = "20260723"
         revision = "a" * 32

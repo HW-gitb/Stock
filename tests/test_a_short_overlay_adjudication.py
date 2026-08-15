@@ -149,6 +149,21 @@ class OverlayAdjudicationTests(unittest.TestCase):
                 egs_publish_marker_path=marker, source_identity=identity, forward_eligible=False)
             self.assertEqual(result["status"], "not_live_canonical_no_capture")
 
+    def test_settlement_clock_change_without_new_evidence_does_not_count_again(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._capture(tmp, same_scores=True)
+            capture = json.loads((root / "weeks" / DECISION / "capture.json").read_text(encoding="utf-8"))
+            codes = sorted({row["ts_code"] for row in capture["payload"]["baseline_selected"] + capture["payload"]["candidate_selected"]})
+            daily = _daily(codes)
+            with mock.patch("engine.a_short_overlay_adjudication._today", return_value="20260730"):
+                first = settle_from_daily_payload(root=root, daily_payload=daily, as_of="20260730")
+            later_clock = json.loads(json.dumps(daily))
+            later_clock["meta"]["last_run_date"] = "20260731"
+            with mock.patch("engine.a_short_overlay_adjudication._today", return_value="20260731"):
+                second = settle_from_daily_payload(root=root, daily_payload=later_clock, as_of="20260731")
+        self.assertGreater(first["outcomes_updated"], 0)
+        self.assertEqual(second["outcomes_updated"], 0)
+
     def test_future_price_request_uses_settled_price_clock_not_decision_date(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp); stage3, overlay, weekly, receipt, marker, identity = _sources(tmp)

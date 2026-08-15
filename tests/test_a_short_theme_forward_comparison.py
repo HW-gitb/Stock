@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 
 from engine import a_short_evidence_epoch_mode as epoch_mode  # noqa: E402
 from engine import a_short_theme_forward_comparison as comparison  # noqa: E402
+from runners import a_short_theme_forward_comparison as theme_runner  # noqa: E402
 from tests._a_short_epoch_mode_test_utils import _resealed_freeze_packet  # noqa: E402
 
 # Synthetic fixtures intentionally span the full 36-week design window.
@@ -115,6 +116,32 @@ class ThemeForwardComparisonTests(unittest.TestCase):
         patcher = mock.patch.object(comparison, "_today_date", _fixed_test_today)
         patcher.start()
         self.addCleanup(patcher.stop)
+
+    def test_private_artifact_digest_ignores_runtime_timestamps_but_detects_evidence_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            private_root = Path(tmp) / "state" / "a_short" / "theme_forward_comparison_private" / "v1"
+            private_root.mkdir(parents=True)
+            artifact = private_root / "receipt.json"
+            artifact.write_text(json.dumps({
+                "evidence": "same",
+                "generated_at": "2026-08-15T00:00:00Z",
+                "updated_at": "2026-08-15T00:00:00Z",
+            }), encoding="utf-8")
+            first = theme_runner._private_artifact_digest(private_root)
+            artifact.write_text(json.dumps({
+                "evidence": "same",
+                "generated_at": "2026-08-16T00:00:00Z",
+                "updated_at": "2026-08-16T00:00:00Z",
+            }), encoding="utf-8")
+            timestamp_only = theme_runner._private_artifact_digest(private_root)
+            artifact.write_text(json.dumps({
+                "evidence": "changed",
+                "generated_at": "2026-08-16T00:00:00Z",
+                "updated_at": "2026-08-16T00:00:00Z",
+            }), encoding="utf-8")
+            evidence_changed = theme_runner._private_artifact_digest(private_root)
+        self.assertEqual(first, timestamp_only)
+        self.assertNotEqual(first, evidence_changed)
 
     def _build_epoch_at_decision(
         self, tracker: pd.DataFrame, epoch_id: str, start_as_of: str
