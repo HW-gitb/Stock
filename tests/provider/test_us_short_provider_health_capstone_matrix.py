@@ -112,13 +112,14 @@ def _stage_results() -> dict:
     return {
         "universe_fetch": {
             "scope": {"status": "universe_fetch_and_pass1_completed"},
+            "schema_version": "1.3.0",
             "pass1_result": {"needs_market_cap": []},
             "status_screening": {"status_source_outcome": _status_outcome()},
             "provider_health": {
                 "overall_run_state": "usable_with_fallback",
                 "status_sources": {"state": "clean", "outcome": _status_outcome()},
                 "opportunistic_fallbacks": {
-                    "fmp_profile_market_cap": {"needed_count": 0, "unresolved_count": 0}
+                    "yfinance_market_cap": {"needed_count": 0, "unresolved_count": 0}
                 },
             },
         },
@@ -154,7 +155,7 @@ class CapstoneProviderHealthMatrix(unittest.TestCase):
             needs=[],
             completion={
                 "needed_count": 0, "sec_companyfacts_target_count": 0, "sec_companyfacts_request_count": 0,
-                "sec_companyfacts_rescued_count": 0, "fmp_attempted_count": 0, "fmp_rescued_count": 0,
+                "sec_companyfacts_rescued_count": 0, "yfinance_attempted_count": 0, "yfinance_rescued_count": 0,
                 "massive_overview_attempted_count": 0, "massive_overview_rescued_count": 0,
                 "final_unresolved_count": 0,
             },
@@ -167,7 +168,7 @@ class CapstoneProviderHealthMatrix(unittest.TestCase):
             needs=[],
             completion={
                 "needed_count": 43, "sec_companyfacts_target_count": 0, "sec_companyfacts_request_count": 0,
-                "sec_companyfacts_rescued_count": 0, "fmp_attempted_count": 43, "fmp_rescued_count": 40,
+                "sec_companyfacts_rescued_count": 0, "yfinance_attempted_count": 43, "yfinance_rescued_count": 40,
                 "massive_overview_attempted_count": 3, "massive_overview_rescued_count": 3,
                 "final_unresolved_count": 0,
             },
@@ -183,7 +184,7 @@ class CapstoneProviderHealthMatrix(unittest.TestCase):
             needs=["UNRESOLVED"],
             completion={
                 "needed_count": 1, "sec_companyfacts_target_count": 1, "sec_companyfacts_request_count": 1,
-                "sec_companyfacts_rescued_count": 0, "fmp_attempted_count": 1, "fmp_rescued_count": 0,
+                "sec_companyfacts_rescued_count": 0, "yfinance_attempted_count": 1, "yfinance_rescued_count": 0,
                 "massive_overview_attempted_count": 1, "massive_overview_rescued_count": 0,
                 "final_unresolved_count": 1,
             },
@@ -203,7 +204,7 @@ class CapstoneProviderHealthMatrix(unittest.TestCase):
             needs=["A"],
             completion={
                 "needed_count": 1, "sec_companyfacts_target_count": 0, "sec_companyfacts_request_count": 0,
-                "sec_companyfacts_rescued_count": 1, "fmp_attempted_count": 0, "fmp_rescued_count": 1,
+                "sec_companyfacts_rescued_count": 1, "yfinance_attempted_count": 0, "yfinance_rescued_count": 1,
                 "massive_overview_attempted_count": 0, "massive_overview_rescued_count": 0,
                 "final_unresolved_count": 0,
             },
@@ -211,11 +212,36 @@ class CapstoneProviderHealthMatrix(unittest.TestCase):
         self.assertEqual(stages._universe_market_cap_health(nonconserved["universe_fetch"]),
                          ("universe_market_cap", "down"))
 
+        rescue_exceeds_attempts = self._with_completion(
+            needs=[],
+            completion={
+                "needed_count": 2, "sec_companyfacts_target_count": 0, "sec_companyfacts_request_count": 0,
+                "sec_companyfacts_rescued_count": 0, "yfinance_attempted_count": 1, "yfinance_rescued_count": 2,
+                "massive_overview_attempted_count": 0, "massive_overview_rescued_count": 0,
+                "final_unresolved_count": 0,
+            },
+        )
+        self.assertEqual(stages._universe_market_cap_health(rescue_exceeds_attempts["universe_fetch"]),
+                         ("universe_market_cap", "down"))
+
     def test_committed_real_universe_summary_keeps_market_cap_fallback_noncritical(self):
         path = ROOT / "docs" / "us_short_universe_fetch_summary_20260730.json"
         summary = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(stages._universe_health(summary), ("universe_status", "ok"))
         self.assertEqual(stages._universe_market_cap_health(summary), ("universe_market_cap", "degraded"))
+
+    def test_legacy_fmp_completion_shape_is_not_current_contract(self):
+        summary = self._with_completion(
+            needs=["A"],
+            completion={
+                "needed_count": 1, "sec_companyfacts_target_count": 1, "sec_companyfacts_request_count": 1,
+                "sec_companyfacts_rescued_count": 0, "fmp_attempted_count": 1, "fmp_rescued_count": 1,
+                "massive_overview_attempted_count": 0, "massive_overview_rescued_count": 0,
+                "final_unresolved_count": 0,
+            },
+        )
+        self.assertEqual(stages._universe_market_cap_health(summary["universe_fetch"]),
+                         ("universe_market_cap", "down"))
 
     def test_universe_status_does_not_read_overall_run_state(self):
         summary = _stage_results()["universe_fetch"]
@@ -252,7 +278,7 @@ class CapstoneProviderHealthMatrix(unittest.TestCase):
         market_cap = _stage_results()
         market_cap["universe_fetch"]["pass1_result"]["needs_market_cap"] = ["AAPL"]
         market_cap["universe_fetch"]["provider_health"]["opportunistic_fallbacks"] = {
-            "fmp_profile_market_cap": {"needed_count": 1, "unresolved_count": 1}
+            "yfinance_market_cap": {"needed_count": 1, "unresolved_count": 1}
         }
         mutations["universe_market_cap"] = market_cap
 

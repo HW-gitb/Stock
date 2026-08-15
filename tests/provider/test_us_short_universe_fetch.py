@@ -1,15 +1,15 @@
-"""Tests for runners/us_short_universe_fetch.py (Massive + SEC free data path, no broker).
+"""Tests for runners/us_short_universe_fetch.py (Massive + SEC + yfinance free path, no broker).
 
 Offline-only: no live Massive/SEC/FMP calls. Covers the pure logic:
 - SEC ticker/CIK/exchange parsing + exchange normalization
 - SEC shares frames merge (latest per CIK across quarters)
 - Massive grouped daily ADV WINDOW parsing (canonical ticker, multi-day average dollar volume,
   delayed-day skip, min-coverage conservative null)
-- Pass1 per-row records: market_cap = SEC shares × close; ADV = multi-day average; FMP fallback precedence
+- Pass1 per-row records: market_cap = SEC shares × close; ADV = multi-day average; yfinance fallback precedence
 - ADV semantics: a single-day spike must NOT pass the (multi-day) ADV floor
 - summary recomputed from rows; per-run artifact schema + semantic validate-before-write
 - canonical decision_date binds the output path
-- FMP market-cap fallback (budget cap, 429 stop); authorization / gitignore / raw_root / now-et guards
+- yfinance market-cap fallback (single info read, identity/rate-stop/pacing); authorization / gitignore / raw_root / now-et guards
 """
 from __future__ import annotations
 
@@ -701,13 +701,21 @@ class TestApplyPass1(unittest.TestCase):
         self.assertEqual(_mod.summarize_rows(rows)["needs_market_cap"], ["GOOGL"])
         self.assertFalse(rows[0]["eligible"])
 
-    def test_fmp_cap_rescues(self):
+    def test_yfinance_snapshot_cap_rescues(self):
         sec = {"GOOGL": {"cik": 1652044, "exchange": "NASDAQ"}}
-        rows = self._rows(sec, {}, {"GOOGL": _md(340.0, 50_000_000.0)}, fmp_caps={"GOOGL": 2e12})
+        rows = self._rows(
+            sec, {}, {"GOOGL": _md(340.0, 50_000_000.0)},
+            yfinance_caps={"GOOGL": {
+                "market_cap": 2e12,
+                "market_cap_source": _mod.YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT,
+                "market_cap_source_observed_at": "2026-06-29T12:00:00+00:00",
+                "market_cap_clock_semantics": _mod.YFINANCE_CLOCK_MARKET_CAP_SNAPSHOT,
+            }},
+        )
         self.assertTrue(rows[0]["eligible"])
-        self.assertEqual(rows[0]["market_cap_source"], "fmp_profile")
+        self.assertEqual(rows[0]["market_cap_source"], _mod.YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT)
 
-    def test_massive_overview_cap_rescues_after_fmp(self):
+    def test_massive_overview_cap_rescues_after_yfinance(self):
         sec = {"COIN": {"cik": 9001, "exchange": "NASDAQ"}}
         rows = self._rows(
             sec, {}, {"COIN": _md(200.0, 50_000_000.0)},
@@ -740,7 +748,7 @@ class TestApplyPass1(unittest.TestCase):
         sec = {"COIN": {"cik": 9001, "exchange": "NASDAQ"}}
         rows = self._rows(
             sec, {}, {"COIN": _md(200.0, 50_000_000.0)},
-            fmp_caps={"COIN": 0}, massive_caps={"COIN": float("nan")},
+            yfinance_caps={"COIN": {"market_cap": 0}}, massive_caps={"COIN": float("nan")},
         )
         self.assertFalse(rows[0]["eligible"])
         self.assertEqual(rows[0]["market_cap_source"], "none")
@@ -751,8 +759,13 @@ class TestApplyPass1(unittest.TestCase):
         shares = {9010: {"shares": 1e308, "end": "2026-03-31", "source": "sec_xbrl_frames"}}
         market_data = {"GIANT": _md(1e308, 50_000_000.0)}
 
-        rows = self._rows(sec, shares, market_data, fmp_caps={"GIANT": 1e9})
-        self.assertEqual(rows[0]["market_cap_source"], "fmp_profile")
+        rows = self._rows(sec, shares, market_data, yfinance_caps={"GIANT": {
+            "market_cap": 1e9,
+            "market_cap_source": _mod.YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT,
+            "market_cap_source_observed_at": "2026-06-29T12:00:00+00:00",
+            "market_cap_clock_semantics": _mod.YFINANCE_CLOCK_MARKET_CAP_SNAPSHOT,
+        }})
+        self.assertEqual(rows[0]["market_cap_source"], _mod.YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT)
         self.assertEqual(rows[0]["market_cap_usd"], 1e9)
 
         unresolved_rows = self._rows(sec, shares, market_data)
@@ -765,23 +778,33 @@ class TestApplyPass1(unittest.TestCase):
         )
         _mod.validate_candidate_artifact(artifact, expected_decision_date="20260629", governance=self.gov)
 
-    def test_sec_shares_precedence_over_fmp(self):
+    def test_sec_shares_precedence_over_yfinance(self):
         sec = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"}}
         shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
         rows = self._rows(
             sec, shares, {"AAPL": _md(200.0, 50_000_000.0)},
-            fmp_caps={"AAPL": 1.0}, massive_caps={"AAPL": 2e12},
+            yfinance_caps={"AAPL": {
+                "market_cap": 1.0,
+                "market_cap_source": _mod.YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT,
+                "market_cap_source_observed_at": "2026-06-29T12:00:00+00:00",
+                "market_cap_clock_semantics": _mod.YFINANCE_CLOCK_MARKET_CAP_SNAPSHOT,
+            }}, massive_caps={"AAPL": 2e12},
         )
         self.assertTrue(rows[0]["eligible"])               # SEC shares used, bogus FMP cap ignored
         self.assertEqual(rows[0]["market_cap_source"], "sec_shares_x_close")
 
-    def test_fmp_precedence_over_later_massive_overview(self):
+    def test_yfinance_precedence_over_later_massive_overview(self):
         sec = {"COIN": {"cik": 9001, "exchange": "NASDAQ"}}
         rows = self._rows(
             sec, {}, {"COIN": _md(200.0, 50_000_000.0)},
-            fmp_caps={"COIN": 1e11}, massive_caps={"COIN": 2e11},
+            yfinance_caps={"COIN": {
+                "market_cap": 1e11,
+                "market_cap_source": _mod.YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT,
+                "market_cap_source_observed_at": "2026-06-29T12:00:00+00:00",
+                "market_cap_clock_semantics": _mod.YFINANCE_CLOCK_MARKET_CAP_SNAPSHOT,
+            }}, massive_caps={"COIN": 2e11},
         )
-        self.assertEqual(rows[0]["market_cap_source"], "fmp_profile")
+        self.assertEqual(rows[0]["market_cap_source"], _mod.YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT)
         self.assertEqual(rows[0]["market_cap_usd"], 1e11)
 
     def test_no_price_fails(self):
@@ -1020,38 +1043,69 @@ class TestSummaryAndArtifact(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
 
-    def _fmp_rows(self, fmp_caps):
-        # one ticker with NO SEC shares (so the producer falls back to FMP / none precedence)
+    def _yfinance_rows(self, yfinance_caps):
+        # one ticker with NO SEC shares (so the producer falls back to yfinance / none precedence)
         sec = {"NOSEC": {"cik": 999, "exchange": "NYSE"}}
         md = {"NOSEC": _md(50.0, 20_000_000.0)}
-        return _mod.apply_pass1(sec, {}, md, governance=self.gov, fmp_caps=fmp_caps,
+        return _mod.apply_pass1(sec, {}, md, governance=self.gov, yfinance_caps=yfinance_caps,
                                 as_of="2026-06-26", observed_at="2026-06-29T12:00:00+00:00")
 
-    def _fmp_artifact(self, rows):
+    def _yfinance_artifact(self, rows):
         return _mod.build_candidate_artifact(
             rows=rows, decision_date="20260629", price_basis_date="20260626", used_date="2026-06-26",
             observed_window_dates=["2026-06-26"], generated_at="2026-06-29T12:00:00+00:00",
             calendar_verification_status="pending_authoritative_cross_check")
 
-    def test_validate_rejects_forged_fmp_source_when_sec_available(self):
+    def test_validate_rejects_forged_yfinance_source_when_sec_available(self):
         # Codex cc_r1_v1 residual: SEC shares+price available → producer uses sec_shares_x_close; forging
-        # market_cap_source (and matching lineage) to fmp_profile must be REJECTED (producer-precedence re-derive).
+        # market_cap_source (and matching lineage) to yfinance snapshot must be REJECTED (producer precedence).
         art = self._artifact()
         for r in art["rows"]:
             if r["ticker"] == "AAPL":   # SEC shares 15e9 + price 200 → sec_shares_x_close
-                r["market_cap_source"] = "fmp_profile"             # forged source
-                r["lineage"]["market_cap_source"] = "fmp_profile"  # forged to match → isolates the precedence check
+                r["market_cap_source"] = _mod.YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT
+                r["lineage"]["market_cap_source"] = _mod.YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT
+                r["lineage"]["market_cap_source_observed_at"] = "2026-06-29T12:00:00+00:00"
+                r["lineage"]["market_cap_clock_semantics"] = _mod.YFINANCE_CLOCK_MARKET_CAP_SNAPSHOT
         with self.assertRaises(RuntimeError):
             _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
 
-    def test_validate_accepts_fmp_fallback_when_sec_unavailable(self):
-        # FMP fallback POSITIVE: no SEC shares + finite FMP cap → market_cap_source=fmp_profile accepted.
-        rows = self._fmp_rows({"NOSEC": 5e8})
-        self.assertEqual(rows[0]["market_cap_source"], "fmp_profile")
+    def test_validate_accepts_yfinance_snapshot_when_sec_unavailable(self):
+        # yfinance snapshot POSITIVE: no SEC shares + finite snapshot cap is accepted with retrieval lineage.
+        rows = self._yfinance_rows({"NOSEC": {
+            "market_cap": 5e8,
+            "market_cap_source": _mod.YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT,
+            "market_cap_source_observed_at": "2026-06-29T12:00:00+00:00",
+            "market_cap_clock_semantics": _mod.YFINANCE_CLOCK_MARKET_CAP_SNAPSHOT,
+        }})
+        self.assertEqual(rows[0]["market_cap_source"], _mod.YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT)
         self.assertIsNone(rows[0]["shares"])
-        _mod.validate_candidate_artifact(self._fmp_artifact(rows), expected_decision_date="20260629", governance=self.gov)
+        _mod.validate_candidate_artifact(self._yfinance_artifact(rows), expected_decision_date="20260629", governance=self.gov)
 
-    def test_validate_accepts_massive_overview_fallback_when_sec_and_fmp_unavailable(self):
+    def test_validate_accepts_yfinance_shares_times_delayed_close(self):
+        rows = _mod.apply_pass1(
+            {"NOSEC": {"cik": 999, "exchange": "NYSE"}}, {},
+            {"NOSEC": _md(50.0, 20_000_000.0, price_as_of="2026-06-25")},
+            governance=self.gov,
+            yfinance_caps={"NOSEC": {
+                "market_cap": 50e9,
+                "market_cap_source": _mod.YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE,
+                "market_cap_basis_shares": 1e9,
+                "market_cap_source_observed_at": "2026-06-29T12:00:00+00:00",
+                "market_cap_clock_semantics": _mod.YFINANCE_CLOCK_SHARES_X_MASSIVE_CLOSE,
+            }},
+            as_of="2026-06-25", observed_at="2026-06-29T12:00:00+00:00",
+        )
+        self.assertEqual(rows[0]["market_cap_source"], _mod.YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE)
+        _mod.validate_candidate_artifact(
+            _mod.build_candidate_artifact(
+                rows=rows, decision_date="20260629", price_basis_date="20260626", used_date="2026-06-25",
+                observed_window_dates=["2026-06-25"], generated_at="2026-06-29T12:00:00+00:00",
+                calendar_verification_status="pending_authoritative_cross_check",
+            ),
+            expected_decision_date="20260629", governance=self.gov,
+        )
+
+    def test_validate_accepts_massive_overview_fallback_when_sec_and_yfinance_unavailable(self):
         rows = _mod.apply_pass1(
             {"COIN": {"cik": 999, "exchange": "NASDAQ"}}, {},
             {"COIN": _md(50.0, 20_000_000.0)}, governance=self.gov,
@@ -1059,95 +1113,169 @@ class TestSummaryAndArtifact(unittest.TestCase):
         )
         self.assertEqual(rows[0]["market_cap_source"], "massive_ticker_overview")
         _mod.validate_candidate_artifact(
-            self._fmp_artifact(rows), expected_decision_date="20260629", governance=self.gov,
+            self._yfinance_artifact(rows), expected_decision_date="20260629", governance=self.gov,
         )
 
     def test_validate_accepts_none_source_when_no_market_cap(self):
-        # none POSITIVE: no SEC shares + no FMP cap → market_cap_source=none, market_cap_usd=None accepted.
-        rows = self._fmp_rows({})
+        # none POSITIVE: no SEC shares + no yfinance cap → market_cap_source=none, market_cap_usd=None accepted.
+        rows = self._yfinance_rows({})
         self.assertEqual(rows[0]["market_cap_source"], "none")
         self.assertIsNone(rows[0]["market_cap_usd"])
-        _mod.validate_candidate_artifact(self._fmp_artifact(rows), expected_decision_date="20260629", governance=self.gov)
+        _mod.validate_candidate_artifact(self._yfinance_artifact(rows), expected_decision_date="20260629", governance=self.gov)
 
     def test_validate_rejects_none_source_with_finite_market_cap(self):
         # none NEGATIVE boundary: market_cap_source=none must not carry a finite market_cap (forge rejected).
-        rows = self._fmp_rows({})
+        rows = self._yfinance_rows({})
         rows[0]["market_cap_usd"] = 5e8   # forged finite cap while market_cap_source stays "none"
         with self.assertRaises(RuntimeError):
-            _mod.validate_candidate_artifact(self._fmp_artifact(rows), expected_decision_date="20260629", governance=self.gov)
+            _mod.validate_candidate_artifact(self._yfinance_artifact(rows), expected_decision_date="20260629", governance=self.gov)
 
 
-class TestFetchFmpMarketCaps(unittest.TestCase):
-    class _Resp:
-        def __init__(self, body): self._b = body
-        def read(self): return self._b
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
+class _FakeYFinanceTicker:
+    def __init__(self, info):
+        self.info = info
 
-    def test_parses_market_cap(self):
-        payload = json.dumps([{"symbol": "GOOGL", "marketCap": 2e12}]).encode()
-        with patch("urllib.request.urlopen", return_value=self._Resp(payload)), \
-             patch.object(_mod.time, "sleep"):
-            out = _mod.fetch_fmp_market_caps(["GOOGL"], "key", budget=10)
-        self.assertEqual(out["GOOGL"], 2e12)
 
-    def test_budget_caps_calls(self):
-        calls = {"n": 0}
+class _FakeYFinanceModule:
+    def __init__(self, infos):
+        self.infos = infos
+        self.calls = []
 
-        def fake(req, timeout=20):
-            calls["n"] += 1
-            return self._Resp(json.dumps([{"symbol": "X", "marketCap": 5e11}]).encode())
+    def Ticker(self, ticker):
+        self.calls.append(ticker)
+        value = self.infos[ticker]
+        if isinstance(value, Exception):
+            raise value
+        return _FakeYFinanceTicker(value)
 
-        with patch("urllib.request.urlopen", side_effect=fake), patch.object(_mod.time, "sleep"):
-            _mod.fetch_fmp_market_caps([f"T{i}" for i in range(10)], "key", budget=3)
-        self.assertEqual(calls["n"], 3)
 
-    def test_429_stops(self):
-        import urllib.error
+class TestFetchYfinanceMarketCaps(unittest.TestCase):
+    def _fetch(self, infos, *, market_data=None, tickers=None, stats=None, sleeps=None, pace_seconds=0.2):
+        module = _FakeYFinanceModule(infos)
+        market_data = market_data or {ticker: _md(100.0, 20_000_000.0) for ticker in infos}
+        sleeps = sleeps if sleeps is not None else []
+        out = _mod.fetch_yfinance_market_caps(
+            tickers or list(infos), market_data, "20260626", market_cap_floor=300_000_000.0,
+            observed_at="2026-06-29T12:00:00+00:00", client=_mod._YFinanceClient(module),
+            sleep_func=sleeps.append, pace_seconds=pace_seconds, stats_out=stats,
+        )
+        return out, module
 
-        def fake(req, timeout=20):
-            raise urllib.error.HTTPError(None, 429, "rate", {}, None)
+    def test_shares_times_price_basis_close(self):
+        stats = {}
+        out, module = self._fetch({"AAPL": {"symbol": "AAPL", "sharesOutstanding": 4_000_000_000}} , stats=stats)
+        self.assertEqual(module.calls, ["AAPL"])
+        self.assertEqual(out["AAPL"]["market_cap"], 4e11)
+        self.assertEqual(out["AAPL"]["market_cap_source"], _mod.YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE)
+        self.assertEqual(out["AAPL"]["market_cap_basis_shares"], 4e9)
+        self.assertEqual(stats["logical_ticker_attempt_count"], 1)
+        self.assertEqual(stats["rescued_count"], 1)
+
+    def test_shares_times_delayed_massive_close(self):
+        out, _ = self._fetch(
+            {"AAPL": {"symbol": "AAPL", "sharesOutstanding": 4_000_000_000}},
+            market_data={"AAPL": _md(100.0, 20_000_000.0, price_as_of="2026-06-25")},
+        )
+        self.assertEqual(out["AAPL"]["market_cap"], 4e11)
+        self.assertEqual(out["AAPL"]["market_cap_source"], _mod.YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE)
+
+    def test_market_cap_snapshot_when_values_cross_governance_threshold(self):
+        out, _ = self._fetch({"ADS": {
+            "symbol": "ADS", "sharesOutstanding": 1_000_000, "marketCap": 500_000_000,
+        }}, market_data={"ADS": _md(100.0, 20_000_000.0)})
+        self.assertEqual(out["ADS"]["market_cap"], 500_000_000)
+        self.assertEqual(out["ADS"]["market_cap_source"], _mod.YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT)
+        self.assertEqual(out["ADS"]["market_cap_clock_semantics"], _mod.YFINANCE_CLOCK_MARKET_CAP_SNAPSHOT)
+
+    def test_both_missing_remains_unresolved(self):
+        stats = {}
+        out, _ = self._fetch({"MISS": {"symbol": "MISS"}}, stats=stats)
+        self.assertEqual(out, {})
+        self.assertEqual(stats["rescued_count"], 0)
+
+    def test_identity_mismatch_remains_unresolved(self):
+        stats = {}
+        out, _ = self._fetch({"COIN": {"symbol": "OTHER", "marketCap": 2e12}}, stats=stats)
+        self.assertEqual(out, {})
+        self.assertEqual(stats["identity_mismatch_count"], 1)
+
+    def test_bad_values_and_ordinary_exception_are_noncritical(self):
+        stats = {}
+        out, _ = self._fetch({"BAD": {"symbol": "BAD", "marketCap": -1}, "ERR": RuntimeError("down")}, stats=stats)
+        self.assertEqual(out, {})
+        self.assertEqual(stats["ordinary_failure_count"], 2)
+
+    def test_rate_or_crumb_signal_stops_current_and_remaining(self):
+        stats = {}
+        out, module = self._fetch({"A": {"symbol": "A", "marketCap": 1e9},
+                                   "B": RuntimeError("Too Many Requests: crumb invalid"),
+                                   "C": {"symbol": "C", "marketCap": 1e9}}, stats=stats)
+        self.assertEqual(set(out), {"A"})
+        self.assertEqual(module.calls, ["A", "B"])
+        self.assertTrue(stats["stopped_on_rate_limit_or_crumb"])
+        self.assertEqual(stats["logical_ticker_attempt_count"], 2)
+
+    def test_successful_info_ignores_benign_rate_limit_log(self):
+        class NoisyModule:
+            def __init__(self):
+                self.calls = []
+
+            def Ticker(self, ticker):
+                self.calls.append(ticker)
+
+                class NoisyTicker:
+                    @property
+                    def info(self):
+                        print("Yahoo Finance may rate-limit or block this client.", file=sys.stderr)
+                        return {"symbol": ticker, "marketCap": 1e9}
+
+                return NoisyTicker()
+
+        module = NoisyModule()
+        stats = {}
+        sleeps = []
+        out = _mod.fetch_yfinance_market_caps(
+            ["A", "B"], {"A": _md(100.0, 20_000_000.0), "B": _md(100.0, 20_000_000.0)},
+            "20260626", market_cap_floor=300_000_000.0,
+            observed_at="2026-06-29T12:00:00+00:00", client=_mod._YFinanceClient(module),
+            sleep_func=sleeps.append, stats_out=stats,
+        )
+        self.assertEqual(set(out), {"A", "B"})
+        self.assertEqual(module.calls, ["A", "B"])
+        self.assertEqual(sleeps, [0.2])
+        self.assertFalse(stats["stopped_on_rate_limit_or_crumb"])
+        self.assertEqual(stats["rate_limit_or_crumb_failure_count"], 0)
+
+    def test_rate_limit_in_exception_cause_stops_current_and_remaining(self):
+        try:
+            try:
+                raise RuntimeError("HTTP 429")
+            except RuntimeError as cause:
+                raise RuntimeError("wrapped request failure") from cause
+        except RuntimeError as caught:
+            wrapped_exc = caught
 
         stats = {}
-        with patch("urllib.request.urlopen", side_effect=fake), patch.object(_mod.time, "sleep"):
-            out = _mod.fetch_fmp_market_caps(["A", "B"], "key", budget=10, stats_out=stats)
+        out, module = self._fetch({"A": wrapped_exc, "B": {"symbol": "B", "marketCap": 1e9}}, stats=stats)
         self.assertEqual(out, {})
-        self.assertEqual(stats["actual_request_count"], 1)
+        self.assertEqual(module.calls, ["A"])
+        self.assertTrue(stats["stopped_on_rate_limit_or_crumb"])
+        self.assertEqual(stats["rate_limit_or_crumb_failure_count"], 1)
 
-    def test_403_stops_without_trying_later_residual(self):
-        import urllib.error
+    def test_fixed_pacing_skips_first_attempt(self):
+        sleeps = []
+        self._fetch({"A": {"symbol": "A", "marketCap": 1e9}, "B": {"symbol": "B", "marketCap": 1e9}}, sleeps=sleeps)
+        self.assertEqual(sleeps, [0.2])
 
-        def fake(req, timeout=20):
-            raise urllib.error.HTTPError(None, 403, "forbidden", {}, None)
-
+    def test_missing_dependency_degrades_without_provider_call(self):
         stats = {}
-        with patch("urllib.request.urlopen", side_effect=fake), patch.object(_mod.time, "sleep"):
-            out = _mod.fetch_fmp_market_caps(["A", "B"], "key", budget=240, stats_out=stats)
+        out = _mod.fetch_yfinance_market_caps(
+            ["A"], {"A": _md(100.0, 20_000_000.0)}, "20260626", market_cap_floor=300_000_000.0,
+            observed_at="2026-06-29T12:00:00+00:00", importer=lambda _: (_ for _ in ()).throw(ModuleNotFoundError()),
+            stats_out=stats,
+        )
         self.assertEqual(out, {})
-        self.assertEqual(stats["actual_request_count"], 1)
-
-    def test_explicit_fmp_identity_mismatch_remains_unresolved(self):
-        payload = json.dumps([{"symbol": "OTHER", "marketCap": 5e11}]).encode()
-
-        with patch("urllib.request.urlopen", return_value=self._Resp(payload)), \
-             patch.object(_mod.time, "sleep"):
-            out = _mod.fetch_fmp_market_caps(["COIN"], "key", budget=10)
-
-        self.assertEqual(out, {})
-
-    def test_fmp_requires_one_or_two_consistent_nonblank_identity_fields(self):
-        payloads = iter([
-            [{"marketCap": 1e9}],
-            [{"symbol": "", "ticker": "EMPTY", "marketCap": 1e9}],
-            [{"symbol": "CONFLICT", "ticker": "OTHER", "marketCap": 1e9}],
-            [{"ticker": "valid", "marketCap": 1e9}],
-        ])
-
-        with patch("urllib.request.urlopen", side_effect=lambda *args, **kwargs: self._Resp(json.dumps(next(payloads)).encode())), \
-             patch.object(_mod.time, "sleep"):
-            out = _mod.fetch_fmp_market_caps(["MISS", "EMPTY", "CONFLICT", "VALID"], "key", budget=10)
-
-        self.assertEqual(out, {"VALID": 1e9})
+        self.assertTrue(stats["dependency_missing"])
 
 
 class TestProblem7MarketCapChain(unittest.TestCase):
@@ -1169,7 +1297,7 @@ class TestProblem7MarketCapChain(unittest.TestCase):
                 ["AAA", "BBB"], ["AAA"], layer="Massive ticker-overview fallback",
             )
 
-    def test_43_targets_complete_fmp_then_exact_massive_residual_without_loss(self):
+    def test_43_targets_complete_yfinance_then_exact_massive_residual_without_loss(self):
         initial_rows = _mod.apply_pass1(
             self.sec, {}, self.market_data, governance=self.gov,
             as_of="2026-08-07", observed_at="2026-08-10T12:00:00+00:00",
@@ -1177,31 +1305,27 @@ class TestProblem7MarketCapChain(unittest.TestCase):
         initial = _mod.summarize_rows(initial_rows)["needs_market_cap"]
         self.assertEqual(initial, self.tickers)
 
-        fmp_calls = []
+        yfinance_module = _FakeYFinanceModule({
+            ticker: ({"symbol": ticker, "marketCap": 1e9} if ticker in self.tickers[:40]
+                     else {"symbol": ticker})
+            for ticker in self.tickers
+        })
+        yfinance_stats = {}
+        yfinance_caps = _mod.fetch_yfinance_market_caps(
+            initial, self.market_data, "20260807", market_cap_floor=300_000_000.0,
+            observed_at="2026-08-10T12:00:00+00:00", client=_mod._YFinanceClient(yfinance_module),
+            sleep_func=lambda _: None, stats_out=yfinance_stats,
+        )
+        self.assertEqual(yfinance_module.calls, self.tickers)
+        self.assertEqual(yfinance_stats["logical_ticker_attempt_count"], 43)
+        self.assertEqual(set(yfinance_caps), set(self.tickers[:40]))
 
-        def fmp_fake(request, timeout=20):
-            query = _mod.urllib.parse.parse_qs(_mod.urllib.parse.urlparse(request.full_url).query)
-            ticker = query["symbol"][0]
-            fmp_calls.append(ticker)
-            body = [{"symbol": ticker, "marketCap": 1e9}] if ticker in self.tickers[:40] else []
-            return TestFetchFmpMarketCaps._Resp(json.dumps(body).encode())
-
-        fmp_stats = {}
-        with patch.object(_mod.urllib.request, "urlopen", side_effect=fmp_fake), \
-             patch.object(_mod.time, "sleep"):
-            fmp_caps = _mod.fetch_fmp_market_caps(
-                initial, "key", budget=_mod.UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET, stats_out=fmp_stats,
-            )
-        self.assertEqual(len(fmp_calls), 43)
-        self.assertEqual(fmp_stats["actual_request_count"], 43)
-        self.assertEqual(set(fmp_caps), set(self.tickers[:40]))
-
-        after_fmp_rows = _mod.apply_pass1(
-            self.sec, {}, self.market_data, governance=self.gov, fmp_caps=fmp_caps,
+        after_yfinance_rows = _mod.apply_pass1(
+            self.sec, {}, self.market_data, governance=self.gov, yfinance_caps=yfinance_caps,
             as_of="2026-08-07", observed_at="2026-08-10T12:00:00+00:00",
         )
-        after_fmp = _mod.summarize_rows(after_fmp_rows)["needs_market_cap"]
-        self.assertEqual(after_fmp, self.tickers[40:])
+        after_yfinance = _mod.summarize_rows(after_yfinance_rows)["needs_market_cap"]
+        self.assertEqual(after_yfinance, self.tickers[40:])
 
         overview_calls = []
 
@@ -1212,26 +1336,26 @@ class TestProblem7MarketCapChain(unittest.TestCase):
         overview_stats = {}
         with patch.object(_mod, "_massive_ticker_overview_for_date", side_effect=overview_fake):
             massive_caps = _mod.fetch_massive_ticker_overview(
-                after_fmp, "20260807", "key", stats_out=overview_stats, sleep_func=lambda _: None,
+                after_yfinance, "20260807", "key", stats_out=overview_stats, sleep_func=lambda _: None,
             )
         self.assertEqual(overview_calls, [(ticker, "20260807") for ticker in self.tickers[40:]])
         self.assertEqual(overview_stats["actual_request_count"], 3)
 
         final_rows = _mod.apply_pass1(
-            self.sec, {}, self.market_data, governance=self.gov, fmp_caps=fmp_caps,
+            self.sec, {}, self.market_data, governance=self.gov, yfinance_caps=yfinance_caps,
             massive_caps=massive_caps, as_of="2026-08-07", observed_at="2026-08-10T12:00:00+00:00",
         )
         final = _mod.summarize_rows(final_rows)
         self.assertEqual(final["needs_market_cap"], [])
         self.assertEqual(set(_mod.eligible_tickers_from_rows(final_rows)), set(self.tickers))
         completion = _mod.build_market_cap_completion(
-            initial_needs=initial, after_companyfacts_needs=initial, after_fmp_needs=after_fmp,
+            initial_needs=initial, after_companyfacts_needs=initial, after_yfinance_needs=after_yfinance,
             final_needs=final["needs_market_cap"], sec_companyfacts_target_count=0,
-            sec_companyfacts_request_count=0, fmp_attempted_count=fmp_stats["actual_request_count"],
-            massive_overview_attempted_count=len(after_fmp),
+            sec_companyfacts_request_count=0, yfinance_attempted_count=yfinance_stats["logical_ticker_attempt_count"],
+            massive_overview_attempted_count=len(after_yfinance),
         )
         self.assertEqual(completion["needed_count"], 43)
-        self.assertEqual(completion["fmp_rescued_count"], 40)
+        self.assertEqual(completion["yfinance_rescued_count"], 40)
         self.assertEqual(completion["massive_overview_rescued_count"], 3)
         self.assertEqual(completion["final_unresolved_count"], 0)
 
@@ -1241,9 +1365,14 @@ class TestProblem7MarketCapChain(unittest.TestCase):
             as_of="2026-08-07", observed_at="2026-08-10T12:00:00+00:00",
         )
         initial = _mod.summarize_rows(initial_rows)["needs_market_cap"]
-        fmp_caps = {ticker: 1e9 for ticker in initial[:40]}
-        after_fmp = _mod.summarize_rows(_mod.apply_pass1(
-            self.sec, {}, self.market_data, governance=self.gov, fmp_caps=fmp_caps,
+        yfinance_caps = {ticker: {
+            "market_cap": 1e9,
+            "market_cap_source": _mod.YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT,
+            "market_cap_source_observed_at": "2026-08-10T12:00:00+00:00",
+            "market_cap_clock_semantics": _mod.YFINANCE_CLOCK_MARKET_CAP_SNAPSHOT,
+        } for ticker in initial[:40]}
+        after_yfinance = _mod.summarize_rows(_mod.apply_pass1(
+            self.sec, {}, self.market_data, governance=self.gov, yfinance_caps=yfinance_caps,
             as_of="2026-08-07", observed_at="2026-08-10T12:00:00+00:00",
         ))["needs_market_cap"]
 
@@ -1252,26 +1381,34 @@ class TestProblem7MarketCapChain(unittest.TestCase):
 
         with patch.object(_mod, "_massive_ticker_overview_for_date", side_effect=overview_fake):
             massive_caps = _mod.fetch_massive_ticker_overview(
-                after_fmp, "20260807", "key", sleep_func=lambda _: None,
+                after_yfinance, "20260807", "key", sleep_func=lambda _: None,
             )
         final_rows = _mod.apply_pass1(
-            self.sec, {}, self.market_data, governance=self.gov, fmp_caps=fmp_caps,
+            self.sec, {}, self.market_data, governance=self.gov, yfinance_caps=yfinance_caps,
             massive_caps=massive_caps, as_of="2026-08-07", observed_at="2026-08-10T12:00:00+00:00",
         )
         final = _mod.summarize_rows(final_rows)
         self.assertEqual(final["needs_market_cap"], [self.tickers[-1]])
         completion = _mod.build_market_cap_completion(
-            initial_needs=initial, after_companyfacts_needs=initial, after_fmp_needs=after_fmp,
+            initial_needs=initial, after_companyfacts_needs=initial, after_yfinance_needs=after_yfinance,
             final_needs=final["needs_market_cap"], sec_companyfacts_target_count=0,
-            sec_companyfacts_request_count=0, fmp_attempted_count=40,
+            sec_companyfacts_request_count=0, yfinance_attempted_count=40,
             massive_overview_attempted_count=3,
         )
         self.assertEqual(completion["final_unresolved_count"], len(final["needs_market_cap"]))
         self.assertEqual(
             completion["needed_count"],
-            completion["fmp_rescued_count"] + completion["massive_overview_rescued_count"]
+            completion["yfinance_rescued_count"] + completion["massive_overview_rescued_count"]
             + completion["final_unresolved_count"],
         )
+
+    def test_completion_rejects_yfinance_rescue_above_logical_attempts(self):
+        with self.assertRaisesRegex(RuntimeError, "call counts exceed"):
+            _mod.build_market_cap_completion(
+                initial_needs=["A"], after_companyfacts_needs=["A"], after_yfinance_needs=[], final_needs=[],
+                sec_companyfacts_target_count=0, sec_companyfacts_request_count=0,
+                yfinance_attempted_count=0, massive_overview_attempted_count=0,
+            )
 
 
 class TestGuards(unittest.TestCase):
@@ -1351,16 +1488,34 @@ class TestRunFetchE2E(unittest.TestCase):
                 stats_out["actual_request_count"] = len(tickers)
             return {}
 
+        def no_yfinance_market_caps(tickers, market_data, price_basis_date, *, market_cap_floor,
+                                    observed_at, **kwargs):
+            stats_out = kwargs.get("stats_out")
+            if stats_out is not None:
+                stats_out.update({
+                    "logical_ticker_attempt_count": 0, "rescued_count": 0,
+                    "shares_x_close_count": 0, "market_cap_snapshot_count": 0,
+                    "identity_mismatch_count": 0, "ordinary_failure_count": 0,
+                    "rate_limit_or_crumb_failure_count": 0,
+                    "stopped_on_rate_limit_or_crumb": False, "dependency_missing": True,
+                })
+            return {}
+
         self._offline_companyfacts_patch = patch.object(
             _mod, "fetch_sec_companyfacts", side_effect=no_companyfacts,
         )
         self._offline_massive_overview_patch = patch.object(
             _mod, "fetch_massive_ticker_overview", side_effect=no_massive_overview,
         )
+        self._offline_yfinance_patch = patch.object(
+            _mod, "fetch_yfinance_market_caps", side_effect=no_yfinance_market_caps,
+        )
         self._offline_companyfacts_patch.start()
         self._offline_massive_overview_patch.start()
+        self._offline_yfinance_patch.start()
         self.addCleanup(self._offline_companyfacts_patch.stop)
         self.addCleanup(self._offline_massive_overview_patch.stop)
+        self.addCleanup(self._offline_yfinance_patch.stop)
 
     def test_tracked_20260706_summary_provider_health_fmp_counts_match_recorded_counts(self):
         summary_path = ROOT / "docs" / "us_short_universe_fetch_summary_20260706.json"
@@ -1428,7 +1583,7 @@ class TestRunFetchE2E(unittest.TestCase):
                 calls["actual_total_calls"],
                 calls["sec_ticker_reference_calls"] + calls["nasdaq_halt_feed_calls"]
                 + calls["massive_grouped_daily_calls"] + calls["sec_share_frame_calls"]
-                + calls["sec_companyfacts_calls"] + calls["fmp_profile_calls"]
+                + calls["sec_companyfacts_calls"]
                 + calls["massive_ticker_overview_calls"],
             )
 
@@ -1497,15 +1652,15 @@ class TestRunFetchE2E(unittest.TestCase):
         self.assertEqual(completion["needed_count"], 1)
         self.assertEqual(completion["sec_companyfacts_target_count"], 1)
         self.assertEqual(completion["sec_companyfacts_request_count"], 1)
-        self.assertEqual(completion["fmp_attempted_count"], 0)
+        self.assertEqual(completion["yfinance_attempted_count"], 0)
         self.assertEqual(completion["massive_overview_attempted_count"], 1)
         self.assertEqual(completion["massive_overview_rescued_count"], 1)
         self.assertEqual(completion["final_unresolved_count"], 0)
         self.assertEqual(summary["provider_call_evidence"]["sec_companyfacts_calls"], 1)
         self.assertEqual(summary["provider_call_evidence"]["massive_ticker_overview_calls"], 1)
         self.assertEqual(summary["provider_health"]["overall_run_state"], "usable_with_fallback")
-        fallback = summary["provider_health"]["opportunistic_fallbacks"]["fmp_profile_market_cap"]
-        self.assertEqual(fallback["unresolved_after_fmp_count"], 1)
+        fallback = summary["provider_health"]["opportunistic_fallbacks"]["yfinance_market_cap"]
+        self.assertEqual(fallback["unresolved_after_yfinance_count"], 1)
         self.assertEqual(fallback["unresolved_count"], 0)
         massive_observation = summary["market_cap_fallback_observability"]["massive_ticker_overview"]
         self.assertEqual(massive_observation["target_count"], 1)
@@ -1578,7 +1733,7 @@ class TestRunFetchE2E(unittest.TestCase):
             ticker: {"cik": 700_000 + idx, "exchange": "NASDAQ"}
             for idx, ticker in enumerate(tickers)
         }
-        fmp_seen = []
+        yfinance_seen = []
         massive_seen = []
 
         def fake_grouped(date, key):
@@ -1590,11 +1745,12 @@ class TestRunFetchE2E(unittest.TestCase):
                 stats_out["actual_request_count"] = len(ciks)
             return {}
 
-        def fake_fmp(targets, key, *, budget, stats_out=None):
-            fmp_seen.append(list(targets))
-            self.assertEqual(budget, _mod.UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET)
+        def fake_yfinance(targets, market_data, price_basis_date, *, market_cap_floor, observed_at,
+                          stats_out=None, **kwargs):
+            yfinance_seen.append(list(targets))
+            self.assertEqual(price_basis_date, "20260626")
             if stats_out is not None:
-                stats_out["actual_request_count"] = len(targets)
+                stats_out.update({"logical_ticker_attempt_count": len(targets), "rescued_count": 0})
             return {}
 
         def fake_overview(targets, price_basis_date, key, *, stats_out=None, sleep_func=None):
@@ -1612,11 +1768,11 @@ class TestRunFetchE2E(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmpp = Path(tmp)
             with patch.dict(os.environ, {
-                "SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": "FMP_TEST_KEY",
+                "SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ",
             }), patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
                  patch.object(_mod, "fetch_sec_shares", return_value={}), \
                  patch.object(_mod, "fetch_sec_companyfacts", side_effect=fake_companyfacts), \
-                 patch.object(_mod, "fetch_fmp_market_caps", side_effect=fake_fmp), \
+                 patch.object(_mod, "fetch_yfinance_market_caps", side_effect=fake_yfinance), \
                  patch.object(_mod, "fetch_massive_ticker_overview", side_effect=fake_overview), \
                  patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
                  patch.object(_mod, "fetch_nasdaq_trade_halt_feed", return_value={
@@ -1629,14 +1785,14 @@ class TestRunFetchE2E(unittest.TestCase):
                     generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
                 )
 
-        self.assertEqual(fmp_seen, [tickers])
+        self.assertEqual(yfinance_seen, [tickers])
         self.assertEqual(massive_seen, [tickers])
         artifact = json.loads(cand.read_text(encoding="utf-8"))
         self.assertEqual(artifact["eligible_tickers"], tickers)
         self.assertEqual(summary["market_cap_completion"]["massive_overview_rescued_count"], 43)
         self.assertEqual(summary["market_cap_completion"]["final_unresolved_count"], 0)
-        fallback = summary["provider_health"]["opportunistic_fallbacks"]["fmp_profile_market_cap"]
-        self.assertEqual(fallback["unresolved_after_fmp_count"], 43)
+        fallback = summary["provider_health"]["opportunistic_fallbacks"]["yfinance_market_cap"]
+        self.assertEqual(fallback["unresolved_after_yfinance_count"], 43)
         self.assertEqual(fallback["unresolved_count"], 0)
         massive_observation = summary["market_cap_fallback_observability"]["massive_ticker_overview"]
         self.assertEqual(massive_observation["target_count"], 43)
@@ -1997,7 +2153,7 @@ class TestRunFetchE2E(unittest.TestCase):
         self.assertEqual(summary["provider_health"]["status_sources"]["state"], "restricted")
         self.assertEqual(summary["provider_health"]["overall_run_state"], "restricted")
 
-    def test_run_fetch_provider_health_marks_fmp_fallback_as_opportunistic(self):
+    def test_run_fetch_provider_health_marks_yfinance_fallback_as_opportunistic(self):
         sec_map = {
             "AAPL": {"cik": 320193, "exchange": "NASDAQ"},
             "GOOGL": {"cik": 1652044, "exchange": "NASDAQ"},
@@ -2012,11 +2168,15 @@ class TestRunFetchE2E(unittest.TestCase):
                 {"T": "MSFT", "c": 450.0, "v": 50_000_000},
             ]
 
-        def stopped_fmp_fetch(tickers, key, *, budget=_mod.UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET, stats_out=None):
+        def stopped_yfinance_fetch(tickers, market_data, price_basis_date, *, market_cap_floor, observed_at,
+                                   stats_out=None, **kwargs):
             self.assertEqual(tickers, ["GOOGL", "MSFT"])
-            self.assertEqual(budget, _mod.UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET)
             if stats_out is not None:
-                stats_out["actual_request_count"] = 1
+                stats_out.update({
+                    "logical_ticker_attempt_count": 1, "rescued_count": 0,
+                    "ordinary_failure_count": 1, "rate_limit_or_crumb_failure_count": 1,
+                    "stopped_on_rate_limit_or_crumb": True,
+                })
             return {}
 
         cand = self.state_root / "candidate_universe_20260629.json"
@@ -2026,11 +2186,11 @@ class TestRunFetchE2E(unittest.TestCase):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             tmpp = Path(tmp)
-            with patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": "FMP_SECRET_ZZZ"}), \
+            with patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ"}), \
                  patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
                  patch.object(_mod, "fetch_sec_shares", return_value=shares), \
                  patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
-                 patch.object(_mod, "fetch_fmp_market_caps", side_effect=stopped_fmp_fetch), \
+                 patch.object(_mod, "fetch_yfinance_market_caps", side_effect=stopped_yfinance_fetch), \
                  patch.object(_mod, "fetch_nasdaq_trade_halt_feed",
                               return_value={"observed": True, "observed_at": "2026-06-29T12:00:00+00:00",
                                             "halted_symbols": []}), \
@@ -2047,13 +2207,17 @@ class TestRunFetchE2E(unittest.TestCase):
         self.assertEqual(health["overall_run_state"], "usable_with_fallback")
         self.assertEqual(health["critical_sources"]["massive_grouped_daily"], "clean")
         self.assertEqual(health["critical_sources"]["sec_edgar"], "clean")
-        fallback = health["opportunistic_fallbacks"]["fmp_profile_market_cap"]
+        fallback = health["opportunistic_fallbacks"]["yfinance_market_cap"]
         self.assertEqual(fallback["state"], "usable_with_fallback")
         self.assertEqual(fallback["attempted_count"], 1)
         self.assertEqual(fallback["rescued_count"], 0)
         self.assertEqual(fallback["unresolved_count"], 2)
-        self.assertEqual(summary["universe"]["fmp_mktcap_fallback_attempted"], 1)
-        self.assertEqual(summary["provider_call_evidence"]["fmp_profile_calls"], 1)
+        self.assertEqual(summary["universe"]["yfinance_mktcap_fallback_attempted"], 1)
+        self.assertEqual(summary["provider_call_evidence"]["yfinance_info_logical_ticker_attempts"], 1)
+        yfinance_observation = summary["market_cap_fallback_observability"]["yfinance_info"]
+        self.assertEqual(yfinance_observation["ordinary_failure_count"], 1)
+        self.assertEqual(yfinance_observation["rate_limit_or_crumb_failure_count"], 1)
+        self.assertTrue(yfinance_observation["stopped_on_rate_limit_or_crumb"])
         self.assertFalse(fallback["provider_readiness_evidence"])
         self.assertTrue(health["critical_failure_no_emit_policy"])
         self.assertFalse(health["provider_selection_or_production_claimed"])

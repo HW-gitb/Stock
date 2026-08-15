@@ -12,9 +12,9 @@ Data path (all free, pure HTTP — NO broker, no order, no paid subscription):
                                 MULTI-DAY average, not one day's spike/dip.
   - Shares outstanding        : SEC XBRL frames API, merged over dynamic completed quarters, then targeted
                                 CompanyFacts for SEC-frame holes
-  - market_cap fallback       : FMP profile marketCap, then Massive ticker-overview for exact residuals
+  - market_cap fallback       : yfinance Ticker.info, then Massive ticker-overview for exact residuals
                                 (multi-class / non-calendar-aligned names absent from SEC frames, e.g. GOOGL)
-  - market_cap                : shares (SEC) × close (Massive); else FMP profile; else Massive overview
+  - market_cap                : SEC shares × close; else governed yfinance info; else Massive overview
   - ADV (avg daily $ volume)  : mean over the ADV window of (close × volume) per ticker. A ticker observed on
                                 fewer than ADV_MIN_DAYS_REQUIRED days gets adv_usd=None (insufficient coverage
                                 → conservative; the gate's adv floor is multi-day, governance preset $5M/day).
@@ -34,7 +34,7 @@ Outputs (paths bind to the canonical decision_date, §2.1 — NOT a hardcoded da
 
 Usage:
   python runners/us_short_universe_fetch.py --confirm-user-authorization --now-et 2026-06-29T08:00:00
-Requires env: MASSIVE_API_KEY, SEC_USER_AGENT (FMP_API_KEY optional, for market-cap fallback).
+Requires env: MASSIVE_API_KEY, SEC_USER_AGENT (yfinance is an optional noncritical dependency).
 """
 from __future__ import annotations
 
@@ -42,6 +42,7 @@ import argparse
 import calendar as _calendar
 import copy
 import gzip as _gzip
+import importlib
 import json
 import math
 import os
@@ -51,13 +52,18 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
+from io import StringIO
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PYTHON_LIBS = ROOT / ".tools" / "python_libs"
+if PYTHON_LIBS.exists() and str(PYTHON_LIBS) not in sys.path:
+    sys.path.insert(0, str(PYTHON_LIBS))
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -112,15 +118,17 @@ ADV_MIN_DAYS_REQUIRED = 10
 # sessions may not be published yet); we still collect only up to ADV_WINDOW_TRADING_DAYS days WITH data.
 ADV_WINDOW_FETCH_BUFFER_SESSIONS = 12
 
-PROVIDER_LABEL = "massive_grouped_daily + sec_shares (+ fmp/massive mktcap fallback)"
-ROW_PROVIDER_ID = "massive_grouped_daily+sec_xbrl_frames_or_companyfacts(+fmp_profile,+massive_ticker_overview)"
+PROVIDER_LABEL = "massive_grouped_daily + sec_shares (+ yfinance_info/massive mktcap fallback)"
+ROW_PROVIDER_ID = "massive_grouped_daily+sec_xbrl_frames_or_companyfacts(+yfinance_info,+massive_ticker_overview)"
 
-FMP_PROFILE_URL = "https://financialmodelingprep.com/stable/profile?symbol={sym}&apikey={key}"
-FMP_FALLBACK_SLEEP = 0.2
-# Problem 7 fixes the old silent first-40 truncation. The retired grades reservation is no longer part of this
-# universe stage; 240 is the approved bounded maximum (250/day less a 10-call safety buffer). Pass2 retains its
-# own explicit/advisory contract and this stage never performs a batch/bulk request.
-UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET = 240
+YFINANCE_MARKET_CAP_SLEEP_SECONDS = 0.2
+YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE = "yfinance_info_shares_x_massive_close"
+YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT = "yfinance_info_market_cap_snapshot"
+YFINANCE_CLOCK_SHARES_X_MASSIVE_CLOSE = "massive_observed_close_plus_retrieval_snapshot_shares"
+YFINANCE_CLOCK_MARKET_CAP_SNAPSHOT = "retrieval_snapshot_no_historical_asof"
+YFINANCE_RATE_OR_CRUMB_MARKERS = (
+    "429", "too many requests", "rate limit", "rate-limit", "ratelimit", "crumb",
+)
 _RUN_STATE_SEVERITY = {"clean": 0, "usable_with_fallback": 1, "restricted": 2, "blocked": 3}
 
 
@@ -190,15 +198,16 @@ def _build_run_fetch_provider_health(
     *,
     status_source_outcome: dict[str, Any],
     fallback_needed_count: int,
-    fmp_attempted: int,
-    fmp_rescued: int,
+    yfinance_attempted: int,
+    yfinance_rescued: int,
     final_unresolved_count: int,
 ) -> dict[str, Any]:
     """Summarize provider run-state from already-observed run outcomes.
 
     Massive grouped daily and SEC bulk calls are critical for this runner; if they fail, `run_fetch` raises before
-    any completed summary is emitted. FMP market-cap fallback is opportunistic: it can rescue SEC-missing-share
-    names, but partial/no rescue must not be laundered into provider-readiness evidence.
+    any completed summary is emitted. yfinance market-cap fallback is opportunistic: it can rescue SEC-missing-share
+    names, but partial/no rescue must not be laundered into provider-readiness evidence. Values accepted into the
+    current candidate artifact are trusted for this Pass1 run only; yfinance retrieval is not strict PIT evidence.
     """
     status_state = "clean"
     if status_source_outcome.get("block_or_no_emit"):
@@ -206,25 +215,25 @@ def _build_run_fetch_provider_health(
     elif status_source_outcome.get("critical_failed"):
         status_state = "restricted"
 
-    counts = (fallback_needed_count, fmp_attempted, fmp_rescued, final_unresolved_count)
+    counts = (fallback_needed_count, yfinance_attempted, yfinance_rescued, final_unresolved_count)
     if any(type(value) is not int or value < 0 for value in counts):
         raise RuntimeError("market-cap fallback health counts must be non-negative exact ints")
     if (
-        fmp_attempted > fallback_needed_count
-        or fmp_rescued > fallback_needed_count
+        yfinance_attempted > fallback_needed_count
+        or yfinance_rescued > fallback_needed_count
         or final_unresolved_count > fallback_needed_count
     ):
         raise RuntimeError("market-cap fallback health counts exceed the CompanyFacts residual")
 
     if fallback_needed_count <= 0:
-        fmp_state = "clean"
+        yfinance_state = "clean"
     else:
-        fmp_state = "usable_with_fallback"
+        yfinance_state = "usable_with_fallback"
 
-    unresolved_after_fmp_count = max(fallback_needed_count - fmp_rescued, 0)
+    unresolved_after_yfinance_count = max(fallback_needed_count - yfinance_rescued, 0)
 
     return {
-        "overall_run_state": _worst_run_state(["clean", status_state, fmp_state]),
+        "overall_run_state": _worst_run_state(["clean", status_state, yfinance_state]),
         "critical_sources": {
             "massive_grouped_daily": "clean",
             "sec_edgar": "clean",
@@ -234,15 +243,15 @@ def _build_run_fetch_provider_health(
             "outcome": status_source_outcome,
         },
         "opportunistic_fallbacks": {
-            "fmp_profile_market_cap": {
-                "state": fmp_state,
+            "yfinance_market_cap": {
+                "state": yfinance_state,
                 "needed_count": fallback_needed_count,
-                "attempted_count": fmp_attempted,
-                "rescued_count": fmp_rescued,
-                # Keep the legacy field tied to the final, whole-chain fact.  The FMP-only intermediate is
-                # retained under an explicit name so a Massive rescue cannot make this summary contradict itself.
-                "unresolved_after_fmp_count": unresolved_after_fmp_count,
+                "attempted_count": yfinance_attempted,
+                "rescued_count": yfinance_rescued,
+                "unresolved_after_yfinance_count": unresolved_after_yfinance_count,
                 "unresolved_count": final_unresolved_count,
+                "canonical_pass1_value_trust": "accepted_for_current_run_only",
+                "clock_semantics": "retrieval_snapshot_for_yfinance_info; not_strict_pit",
                 "provider_readiness_evidence": False,
                 "policy": "opportunistic_rescue_only_not_provider_readiness",
             },
@@ -660,6 +669,16 @@ def _valid_iso_date(value: Any, *, upper_bound: str | None = None) -> bool:
     return upper_bound is None or value <= upper_bound
 
 
+def _valid_observed_at(value: Any) -> bool:
+    if not isinstance(value, str) or "T" not in value:
+        return False
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None
+
+
 def _frame_share_record(
     item: Any, *, price_basis_date: str | None, decision_date: str | None = None,
 ) -> tuple[int, dict[str, Any]] | None:
@@ -1004,47 +1023,203 @@ def fetch_massive_window(
 
 
 # ---------------------------------------------------------------------------
-# FMP fallback: market cap only for SEC-missing-shares survivors (bounded, free tier)
+# yfinance fallback: market cap only for SEC-missing-shares survivors (optional, noncritical)
 # ---------------------------------------------------------------------------
 
-def fetch_fmp_market_caps(
-    tickers: list[str], fmp_key: str, *, budget: int = UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET,
-    stats_out: dict[str, int] | None = None,
-) -> dict[str, float]:
-    """Fetch marketCap from FMP stable/profile for a BOUNDED set (SEC-missing-shares survivors). Stops at
-    `budget` calls or HTTP 429/403. Returns {ticker: market_cap}."""
-    out: dict[str, float] = {}
-    calls = 0
-    for sym in tickers:
-        if calls >= budget:
-            break
-        time.sleep(FMP_FALLBACK_SLEEP)
-        url = FMP_PROFILE_URL.format(sym=urllib.parse.quote(sym), key=fmp_key)
-        calls += 1  # count the attempted HTTP request, including a terminal 403/429 response
+class _YFinanceClient:
+    def __init__(self, module: Any):
+        self._module = module
+
+    def ticker(self, symbol: str) -> Any:
+        return self._module.Ticker(symbol)
+
+
+def _looks_like_yfinance_rate_or_crumb_signal(text: Any) -> bool:
+    if not isinstance(text, str):
+        return False
+    lowered = text.lower()
+    return any(marker in lowered for marker in YFINANCE_RATE_OR_CRUMB_MARKERS)
+
+
+def _looks_like_yfinance_rate_or_crumb_exception(exc: BaseException) -> bool:
+    """Classify only a failed Ticker.info call, never a benign provider log line."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while isinstance(current, BaseException) and id(current) not in seen:
+        seen.add(id(current))
+        signals = [type(current).__name__, str(current)]
+        for attr in ("status_code", "status", "code"):
+            value = getattr(current, attr, None)
+            if value is not None:
+                signals.append(str(value))
+        response = getattr(current, "response", None)
+        response_status = getattr(response, "status_code", None)
+        if response_status is not None:
+            signals.append(str(response_status))
+        if _looks_like_yfinance_rate_or_crumb_signal(" ".join(signals)):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
+def _load_yfinance_client(importer: Any = None) -> tuple[Any | None, bool]:
+    """Load yfinance lazily; return (client, dependency_missing)."""
+    importer = importer or importlib.import_module
+    try:
+        return _YFinanceClient(importer("yfinance")), False
+    except Exception:
+        # Missing package, broken optional dependency, or import-time provider failure is noncritical for this
+        # residual layer. The summary records the availability outcome and Massive receives the exact residual.
+        return None, True
+
+
+def _yfinance_market_cap_record(
+    *,
+    info: dict[str, Any],
+    ticker: str,
+    market_data: dict[str, dict[str, Any]],
+    price_basis_date: str,
+    market_cap_floor: float,
+    observed_at: str,
+) -> dict[str, Any] | None:
+    expected_ticker = canonical_us_ticker(ticker)
+    identity_values = [info[key] for key in ("symbol", "ticker") if key in info]
+    if (expected_ticker is None or not identity_values
+            or any(canonical_us_ticker(value) != expected_ticker for value in identity_values)):
+        return None
+
+    shares = info.get("sharesOutstanding")
+    snapshot_market_cap = info.get("marketCap")
+    close = (market_data.get(ticker) or {}).get("close")
+    price_as_of = (market_data.get(ticker) or {}).get("price_as_of")
+    basis_close = close if _valid_iso_date(
+        price_as_of, upper_bound=_iso_from_yyyymmdd(price_basis_date)
+    ) else None
+    shares_cap = _finite_positive_product(shares, basis_close)
+    snapshot_cap = float(snapshot_market_cap) if _is_finite(snapshot_market_cap) and snapshot_market_cap > 0 else None
+    if shares_cap is None and snapshot_cap is None:
+        return None
+
+    if shares_cap is not None and snapshot_cap is not None:
+        if (shares_cap >= market_cap_floor) != (snapshot_cap >= market_cap_floor):
+            return {
+                "market_cap": snapshot_cap,
+                "market_cap_source": YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT,
+                "market_cap_source_observed_at": observed_at,
+                "market_cap_clock_semantics": YFINANCE_CLOCK_MARKET_CAP_SNAPSHOT,
+            }
+        return {
+            "market_cap": shares_cap,
+            "market_cap_source": YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE,
+            "market_cap_basis_shares": float(shares),
+            "market_cap_source_observed_at": observed_at,
+            "market_cap_clock_semantics": YFINANCE_CLOCK_SHARES_X_MASSIVE_CLOSE,
+        }
+    if shares_cap is not None:
+        return {
+            "market_cap": shares_cap,
+            "market_cap_source": YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE,
+            "market_cap_basis_shares": float(shares),
+            "market_cap_source_observed_at": observed_at,
+            "market_cap_clock_semantics": YFINANCE_CLOCK_SHARES_X_MASSIVE_CLOSE,
+        }
+    return {
+        "market_cap": snapshot_cap,
+        "market_cap_source": YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT,
+        "market_cap_source_observed_at": observed_at,
+        "market_cap_clock_semantics": YFINANCE_CLOCK_MARKET_CAP_SNAPSHOT,
+    }
+
+
+def fetch_yfinance_market_caps(
+    tickers: list[str],
+    market_data: dict[str, dict[str, Any]],
+    price_basis_date: str,
+    *,
+    market_cap_floor: float,
+    observed_at: str,
+    client: Any | None = None,
+    importer: Any = None,
+    sleep_func: Any = None,
+    pace_seconds: float = YFINANCE_MARKET_CAP_SLEEP_SECONDS,
+    stats_out: dict[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Read each exact residual once from ``Ticker.info`` and return private lineage records.
+
+    yfinance may issue multiple physical Yahoo requests behind one ``Ticker.info`` access. This function counts
+    only logical ticker attempts; it never claims a physical HTTP count and never persists the info payload.
+    """
+    if not _is_finite(market_cap_floor) or market_cap_floor <= 0:
+        raise RuntimeError("market_cap_floor must be a finite positive number")
+    if not _is_finite(pace_seconds) or pace_seconds < 0:
+        raise RuntimeError("pace_seconds must be a finite non-negative number")
+    requested: list[str] = []
+    seen: set[str] = set()
+    for raw in tickers:
+        ticker = canonical_us_ticker(raw)
+        if ticker is not None and ticker not in seen:
+            requested.append(ticker)
+            seen.add(ticker)
+    stats: dict[str, Any] = {
+        "logical_ticker_attempt_count": 0,
+        "rescued_count": 0,
+        "shares_x_close_count": 0,
+        "market_cap_snapshot_count": 0,
+        "identity_mismatch_count": 0,
+        "ordinary_failure_count": 0,
+        "rate_limit_or_crumb_failure_count": 0,
+        "stopped_on_rate_limit_or_crumb": False,
+        "dependency_missing": False,
+    }
+    out: dict[str, dict[str, Any]] = {}
+    if client is None:
+        client, dependency_missing = _load_yfinance_client(importer)
+        stats["dependency_missing"] = dependency_missing
+    if client is None:
+        if stats_out is not None:
+            stats_out.update(stats)
+        return out
+    sleep_func = sleep_func or time.sleep
+    for index, ticker in enumerate(requested):
+        if index > 0:
+            sleep_func(pace_seconds)
+        stats["logical_ticker_attempt_count"] += 1
+        stdout = StringIO()
+        stderr = StringIO()
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "StockSystem/0.1 us-short-universe-mktcap"})
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            if exc.code in (403, 429):
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                info = client.ticker(ticker).info
+        except Exception as exc:
+            if _looks_like_yfinance_rate_or_crumb_exception(exc):
+                stats["rate_limit_or_crumb_failure_count"] += 1
+                stats["stopped_on_rate_limit_or_crumb"] = True
                 break
+            stats["ordinary_failure_count"] += 1
             continue
-        except Exception:
+        if not isinstance(info, dict):
+            stats["ordinary_failure_count"] += 1
             continue
-        row = payload[0] if isinstance(payload, list) and payload else (payload if isinstance(payload, dict) else None)
-        if isinstance(row, dict):
-            expected_ticker = canonical_us_ticker(sym)
-            identity_values = [row[key] for key in ("symbol", "ticker") if key in row]
-            # A response must identify itself.  If both identity fields are present they must both independently
-            # canonicalize to the requested ticker; blank, malformed, or disagreeing values remain unresolved.
-            if (expected_ticker is None or not identity_values
-                    or any(canonical_us_ticker(value) != expected_ticker for value in identity_values)):
-                continue
-            mc = row.get("marketCap")
-            if _is_finite(mc) and mc > 0:
-                out[sym] = float(mc)
+        expected_ticker = canonical_us_ticker(ticker)
+        identity_values = [info[key] for key in ("symbol", "ticker") if key in info]
+        if (expected_ticker is None or not identity_values
+                or any(canonical_us_ticker(value) != expected_ticker for value in identity_values)):
+            stats["identity_mismatch_count"] += 1
+            continue
+        record = _yfinance_market_cap_record(
+            info=info, ticker=ticker, market_data=market_data, price_basis_date=price_basis_date,
+            market_cap_floor=market_cap_floor, observed_at=observed_at,
+        )
+        if record is None:
+            stats["ordinary_failure_count"] += 1
+            continue
+        out[ticker] = record
+        stats["rescued_count"] += 1
+        if record["market_cap_source"] == YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE:
+            stats["shares_x_close_count"] += 1
+        else:
+            stats["market_cap_snapshot_count"] += 1
     if stats_out is not None:
-        stats_out.update({"actual_request_count": calls})
+        stats_out.update(stats)
     return out
 
 
@@ -1070,7 +1245,7 @@ def apply_pass1(
     market_data: dict[str, dict[str, Any]],
     *,
     governance: dict[str, Any],
-    fmp_caps: dict[str, float] | None = None,
+    yfinance_caps: dict[str, dict[str, Any]] | None = None,
     massive_caps: dict[str, float] | None = None,
     status_records: dict[str, dict[str, Any]] | None = None,
     as_of: str,
@@ -1081,13 +1256,13 @@ def apply_pass1(
     """Pass1 over the universe -> ONE per-row lineage record per ticker (eligible AND not).
 
     price/volume/adv_usd come from `market_data` (Massive multi-day window: adv_usd is the AVERAGE daily
-    dollar volume, None when coverage < min_days). market_cap precedence is SEC shares × close, then FMP profile,
-    then Massive ticker-overview.
+    dollar volume, None when coverage < min_days). market_cap precedence is SEC shares × close, then yfinance
+    Ticker.info, then Massive ticker-overview.
     Each row carries the Pass1 inputs, the gate verdict + reasons, and §3.2 lineage (price_source / ADV
     window coverage / shares source / market_cap source / as_of / observed_at). The summary is recomputed
     from these rows by `summarize_rows` (single source).
     """
-    fmp_caps = fmp_caps or {}
+    yfinance_caps = yfinance_caps or {}
     massive_caps = massive_caps or {}
     status_supplied = status_records is not None
     if status_supplied and not isinstance(status_records, dict):
@@ -1113,9 +1288,17 @@ def apply_pass1(
         if sec_market_cap is not None:
             market_cap = sec_market_cap
             market_cap_source = "sec_shares_x_close"
-        if market_cap is None and sym in fmp_caps and _is_finite(fmp_caps[sym]) and fmp_caps[sym] > 0:
-            market_cap = float(fmp_caps[sym])
-            market_cap_source = "fmp_profile"
+        yfinance_record = yfinance_caps.get(sym)
+        if market_cap is None and isinstance(yfinance_record, dict):
+            candidate_cap = yfinance_record.get("market_cap")
+            candidate_source = yfinance_record.get("market_cap_source")
+            if (_is_finite(candidate_cap) and candidate_cap > 0
+                    and candidate_source in {
+                        YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE,
+                        YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT,
+                    }):
+                market_cap = float(candidate_cap)
+                market_cap_source = candidate_source
         if market_cap is None and sym in massive_caps and _is_finite(massive_caps[sym]) and massive_caps[sym] > 0:
             market_cap = float(massive_caps[sym])
             market_cap_source = "massive_ticker_overview"
@@ -1174,6 +1357,22 @@ def apply_pass1(
                 "market_cap_source": market_cap_source,
             },
         }
+        if market_cap_source in {
+            YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE,
+            YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT,
+        }:
+            if not isinstance(yfinance_record, dict):
+                raise RuntimeError(f"missing yfinance lineage record for {sym}")
+            for record_key in ("market_cap_source_observed_at", "market_cap_clock_semantics"):
+                value = yfinance_record.get(record_key)
+                if not isinstance(value, str) or not value:
+                    raise RuntimeError(f"yfinance market-cap record for {sym} lacks {record_key}")
+                row["lineage"][record_key] = value
+            if market_cap_source == YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE:
+                basis_shares = yfinance_record.get("market_cap_basis_shares")
+                if not _is_finite(basis_shares) or basis_shares <= 0:
+                    raise RuntimeError(f"yfinance shares×close record for {sym} lacks positive basis shares")
+                row["lineage"]["market_cap_basis_shares"] = float(basis_shares)
         if isinstance(shares_rec, dict) and _is_finite(shares):
             for record_key, lineage_key in (
                 ("end", "shares_end"), ("filed", "shares_filed"), ("accession", "shares_accession"),
@@ -1223,60 +1422,61 @@ def build_market_cap_completion(
     *,
     initial_needs: list[str],
     after_companyfacts_needs: list[str],
-    after_fmp_needs: list[str],
+    after_yfinance_needs: list[str],
     final_needs: list[str],
     sec_companyfacts_target_count: int,
     sec_companyfacts_request_count: int,
-    fmp_attempted_count: int,
+    yfinance_attempted_count: int,
     massive_overview_attempted_count: int,
 ) -> dict[str, int]:
     """Build and check the single conservation aggregate consumed by problem 6."""
     if any(not isinstance(values, list) for values in (
-        initial_needs, after_companyfacts_needs, after_fmp_needs, final_needs,
+        initial_needs, after_companyfacts_needs, after_yfinance_needs, final_needs,
     )):
         raise RuntimeError("market-cap completion stages must be lists")
     if any(
         any(not isinstance(ticker, str) or not ticker for ticker in values)
-        for values in (initial_needs, after_companyfacts_needs, after_fmp_needs, final_needs)
+        for values in (initial_needs, after_companyfacts_needs, after_yfinance_needs, final_needs)
     ):
         raise RuntimeError("market-cap completion stages must contain non-empty ticker strings")
     initial = set(initial_needs)
     companyfacts_residual = set(after_companyfacts_needs)
-    fmp_residual = set(after_fmp_needs)
+    yfinance_residual = set(after_yfinance_needs)
     final = set(final_needs)
     if (len(initial) != len(initial_needs)
             or len(companyfacts_residual) != len(after_companyfacts_needs)
-            or len(fmp_residual) != len(after_fmp_needs)
+            or len(yfinance_residual) != len(after_yfinance_needs)
             or len(final) != len(final_needs)
             or not companyfacts_residual <= initial
-            or not fmp_residual <= companyfacts_residual or not final <= fmp_residual):
+            or not yfinance_residual <= companyfacts_residual or not final <= yfinance_residual):
         raise RuntimeError("market-cap completion stages must be nested unique ticker sets")
+    sec_rescued = len(initial - companyfacts_residual)
+    yfinance_rescued = len(companyfacts_residual - yfinance_residual)
+    massive_rescued = len(yfinance_residual - final)
     counts = (
         sec_companyfacts_target_count, sec_companyfacts_request_count,
-        fmp_attempted_count, massive_overview_attempted_count,
+        yfinance_attempted_count, massive_overview_attempted_count,
     )
     if any(type(value) is not int or value < 0 for value in counts):
         raise RuntimeError("market-cap completion call counts must be non-negative integers")
     if (sec_companyfacts_target_count > len(initial)
             or sec_companyfacts_request_count > sec_companyfacts_target_count
-            or fmp_attempted_count > len(companyfacts_residual)
-            or massive_overview_attempted_count > len(fmp_residual)):
+            or yfinance_attempted_count > len(companyfacts_residual)
+            or yfinance_rescued > yfinance_attempted_count
+            or massive_overview_attempted_count > len(yfinance_residual)):
         raise RuntimeError("market-cap completion call counts exceed their exact stage targets")
-    sec_rescued = len(initial - companyfacts_residual)
-    fmp_rescued = len(companyfacts_residual - fmp_residual)
-    massive_rescued = len(fmp_residual - final)
     completion = {
         "needed_count": len(initial_needs),
         "sec_companyfacts_target_count": sec_companyfacts_target_count,
         "sec_companyfacts_request_count": sec_companyfacts_request_count,
         "sec_companyfacts_rescued_count": sec_rescued,
-        "fmp_attempted_count": fmp_attempted_count,
-        "fmp_rescued_count": fmp_rescued,
+        "yfinance_attempted_count": yfinance_attempted_count,
+        "yfinance_rescued_count": yfinance_rescued,
         "massive_overview_attempted_count": massive_overview_attempted_count,
         "massive_overview_rescued_count": massive_rescued,
         "final_unresolved_count": len(final_needs),
     }
-    if len(initial) != sec_rescued + fmp_rescued + massive_rescued + len(final):
+    if len(initial) != sec_rescued + yfinance_rescued + massive_rescued + len(final):
         raise RuntimeError("market-cap completion counts do not conserve the initial target set")
     return completion
 
@@ -1300,7 +1500,7 @@ def build_candidate_artifact(
     eligible = eligible_tickers_from_rows(rows)
     return {
         "schema_name": "us_short_universe_candidate_artifact",
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "authorization_ref": AUTHORIZATION_REF,
         "generated_at": generated_at,
         "decision_date": decision_date,
@@ -1399,13 +1599,16 @@ def validate_candidate_artifact(artifact: dict[str, Any], *, expected_decision_d
         mcs, mc, sh, px = r["market_cap_source"], r["market_cap_usd"], r["shares"], r["price"]
         # market_cap_source re-derived by the PRODUCER PRECEDENCE (apply_pass1), not source-label-first
         # (Codex cc_r1_v1 residual): SEC shares×price wins WHENEVER both are finite — so a row with SEC
-        # shares+price available can NOT carry market_cap_source=fmp_profile/none. fmp_profile is valid only
-        # when SEC-derived cap is unavailable + a finite FMP cap is present; none only when no finite cap.
+        # SEC shares×price wins whenever available; yfinance and Massive are only residual sources.
         sec_market_cap = _finite_positive_product(sh, px)
         if sec_market_cap is not None:
             if mcs != "sec_shares_x_close" or not (_is_finite(mc) and math.isclose(mc, sec_market_cap, rel_tol=1e-9)):
                 raise RuntimeError(f"行 {r['ticker']} SEC shares×price 可得时 market_cap 必须 sec_shares_x_close 且 == shares×price（producer 优先级反伪造）")
-        elif mcs in {"fmp_profile", "massive_ticker_overview"}:
+        elif mcs in {
+            YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE,
+            YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT,
+            "massive_ticker_overview",
+        }:
             if not _is_finite(mc) or mc <= 0:
                 raise RuntimeError(f"行 {r['ticker']} market_cap_source={mcs} 但 market_cap_usd 非正有限")
         elif mcs == "none":
@@ -1419,6 +1622,30 @@ def validate_candidate_artifact(artifact: dict[str, Any], *, expected_decision_d
                 or lin["market_cap_source"] != mcs or lin["shares_source"] != expected_shares_source
                 or lin["price_source"] != "massive_grouped_daily"):
             raise RuntimeError(f"行 {r['ticker']} lineage 与存储输入/窗口不一致（反伪造）")
+        yfinance_lineage_keys = {
+            "market_cap_basis_shares", "market_cap_source_observed_at", "market_cap_clock_semantics",
+        }
+        if mcs == YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE:
+            basis_shares = lin.get("market_cap_basis_shares")
+            basis_cap = _finite_positive_product(basis_shares, px)
+            if (not _is_finite(basis_shares) or basis_shares <= 0
+                    or basis_cap is None or not math.isclose(mc, basis_cap, rel_tol=1e-9)
+                    or lin.get("market_cap_clock_semantics") != YFINANCE_CLOCK_SHARES_X_MASSIVE_CLOSE
+                    or not _valid_iso_date(
+                        r["price_as_of"], upper_bound=_iso_from_yyyymmdd(artifact["price_basis_date"])
+                    )):
+                raise RuntimeError(f"row {r['ticker']} yfinance shares×close lineage/market_cap invalid")
+            if (not _valid_observed_at(lin.get("market_cap_source_observed_at"))
+                    or lin["market_cap_source_observed_at"] != generated_at):
+                raise RuntimeError(f"row {r['ticker']} yfinance shares×close snapshot clock invalid")
+        elif mcs == YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT:
+            if (lin.get("market_cap_clock_semantics") != YFINANCE_CLOCK_MARKET_CAP_SNAPSHOT
+                    or not _valid_observed_at(lin.get("market_cap_source_observed_at"))
+                    or lin["market_cap_source_observed_at"] != generated_at
+                    or "market_cap_basis_shares" in lin):
+                raise RuntimeError(f"row {r['ticker']} yfinance marketCap snapshot lineage invalid")
+        elif any(key in lin for key in yfinance_lineage_keys):
+            raise RuntimeError(f"row {r['ticker']} non-yfinance market-cap source carries yfinance lineage")
         if expected_shares_source not in {"sec_xbrl_frames", "sec_xbrl_companyfacts", "none"}:
             raise RuntimeError(f"行 {r['ticker']} shares_source 非法")
         provenance_keys = ("shares_end", "shares_filed", "shares_accession")
@@ -1651,7 +1878,6 @@ def run_fetch(
                 "pre_execution_checks": {
                     "massive_key_present": bool(massive_key),
                     "sec_user_agent_present": bool(sec_ua),
-                    "fmp_key_present": bool(os.environ.get("FMP_API_KEY", "")),
                 },
                 "generated_at": generated_at}
 
@@ -1772,31 +1998,29 @@ def run_fetch(
         summary_counts = summarize_rows(rows)
     after_companyfacts_needs = list(summary_counts["needs_market_cap"])
 
-    # FMP market-cap fallback for the exact CompanyFacts residual set (bounded; pure HTTP, no broker)
-    fmp_caps: dict[str, float] = {}
-    fmp_call_stats: dict[str, int] = {"actual_request_count": 0}
-    fmp_key = os.environ.get("FMP_API_KEY", "")
-    fmp_targets = list(after_companyfacts_needs)
+    # yfinance market-cap fallback for the exact CompanyFacts residual set; Massive receives the exact residual.
+    yfinance_caps: dict[str, dict[str, Any]] = {}
+    yfinance_stats: dict[str, Any] = {}
+    yfinance_targets = list(after_companyfacts_needs)
     _assert_exact_market_cap_layer_targets(
-        after_companyfacts_needs, fmp_targets, layer="FMP market-cap fallback",
+        after_companyfacts_needs, yfinance_targets, layer="yfinance market-cap fallback",
     )
-    if fmp_targets and fmp_key:
-        print(f"      FMP 市值兜底: {len(fmp_targets)} 个残余，预算={UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET}...", flush=True)
-        fmp_caps = fetch_fmp_market_caps(
-            fmp_targets, fmp_key, budget=UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET, stats_out=fmp_call_stats,
+    if yfinance_targets:
+        print(f"      yfinance Ticker.info market-cap completion: {len(yfinance_targets)} residuals (logical attempts only)...", flush=True)
+        yfinance_caps = fetch_yfinance_market_caps(
+            yfinance_targets, market_data, price_basis_date,
+            market_cap_floor=float(governance["cheap_eligibility_thresholds"]["min_market_cap_usd"]),
+            observed_at=generated_at, stats_out=yfinance_stats,
         )
-        rows = apply_pass1(sec_map, sec_shares, market_data, governance=governance, fmp_caps=fmp_caps,
+        rows = apply_pass1(sec_map, sec_shares, market_data, governance=governance, yfinance_caps=yfinance_caps,
                            as_of=used_date, observed_at=generated_at, status_records=status_records)
         summary_counts = summarize_rows(rows)
-    elif fmp_targets and not fmp_key:
-        print(f"      FMP 兜底跳过 (FMP_API_KEY 未设); {len(fmp_targets)} 个残余转 Massive", flush=True)
-
-    after_fmp_needs = list(summary_counts["needs_market_cap"])
+    after_yfinance_needs = list(summary_counts["needs_market_cap"])
     massive_overview_stats: dict[str, int] = {"actual_request_count": 0}
     massive_overview_caps: dict[str, float] = {}
-    massive_overview_targets = list(after_fmp_needs)
+    massive_overview_targets = list(after_yfinance_needs)
     _assert_exact_market_cap_layer_targets(
-        after_fmp_needs, massive_overview_targets, layer="Massive ticker-overview fallback",
+        after_yfinance_needs, massive_overview_targets, layer="Massive ticker-overview fallback",
     )
     if massive_overview_targets:
         minimum_pacing_seconds = (
@@ -1812,7 +2036,7 @@ def run_fetch(
         )
         rows = apply_pass1(
             sec_map, sec_shares, market_data, governance=governance,
-            fmp_caps=fmp_caps, massive_caps=massive_overview_caps,
+            yfinance_caps=yfinance_caps, massive_caps=massive_overview_caps,
             as_of=used_date, observed_at=generated_at, status_records=status_records,
         )
         summary_counts = summarize_rows(rows)
@@ -1821,11 +2045,11 @@ def run_fetch(
     market_cap_completion = build_market_cap_completion(
         initial_needs=initial_needs,
         after_companyfacts_needs=after_companyfacts_needs,
-        after_fmp_needs=after_fmp_needs,
+        after_yfinance_needs=after_yfinance_needs,
         final_needs=final_needs,
         sec_companyfacts_target_count=len(companyfacts_ciks),
         sec_companyfacts_request_count=sec_companyfacts_stats.get("actual_request_count", 0),
-        fmp_attempted_count=fmp_call_stats.get("actual_request_count", 0),
+        yfinance_attempted_count=yfinance_stats.get("logical_ticker_attempt_count", 0),
         massive_overview_attempted_count=len(massive_overview_targets),
     )
     massive_overview_observability = build_massive_ticker_overview_observability(
@@ -1835,7 +2059,7 @@ def run_fetch(
         final_unresolved_count=market_cap_completion["final_unresolved_count"],
     )
 
-    fmp_attempted = fmp_call_stats.get("actual_request_count", 0)
+    yfinance_attempted = yfinance_stats.get("logical_ticker_attempt_count", 0)
     integrated_bankruptcy_stats = {
         "eligible_symbol_count": 0,
         "sec_company_submissions_calls": 0,
@@ -1867,7 +2091,7 @@ def run_fetch(
             sec_shares,
             market_data,
             governance=governance,
-            fmp_caps=fmp_caps,
+            yfinance_caps=yfinance_caps,
             massive_caps=massive_overview_caps,
             as_of=used_date,
             observed_at=generated_at,
@@ -1892,7 +2116,7 @@ def run_fetch(
     print(f"      eligible={summary_counts['eligible_count']}  "
           f"ineligible={summary_counts['ineligible_count']}  "
           f"no_price={summary_counts['no_price_count']}  no_shares={summary_counts['no_shares_count']}  "
-          f"market_cap_rescued={sum(market_cap_completion[k] for k in ('sec_companyfacts_rescued_count', 'fmp_rescued_count', 'massive_overview_rescued_count'))}  "
+          f"market_cap_rescued={sum(market_cap_completion[k] for k in ('sec_companyfacts_rescued_count', 'yfinance_rescued_count', 'massive_overview_rescued_count'))}  "
           f"unresolved={market_cap_completion['final_unresolved_count']}", flush=True)
     if scan_bankruptcy_for_eligible:
         bankruptcy_source = "integrated_eligible_sec_submissions"
@@ -1954,9 +2178,9 @@ def run_fetch(
         )
     provider_health = _build_run_fetch_provider_health(
         status_source_outcome=status_source_outcome,
-        fallback_needed_count=len(fmp_targets),
-        fmp_attempted=fmp_attempted,
-        fmp_rescued=market_cap_completion["fmp_rescued_count"],
+        fallback_needed_count=len(yfinance_targets),
+        yfinance_attempted=yfinance_attempted,
+        yfinance_rescued=market_cap_completion["yfinance_rescued_count"],
         final_unresolved_count=market_cap_completion["final_unresolved_count"],
     )
     provider_call_evidence = {
@@ -1968,7 +2192,10 @@ def run_fetch(
         "sec_share_frame_calls": len(sec_share_frames),
         "sec_companyfacts_calls": sec_companyfacts_stats.get("actual_request_count", 0),
         "sec_bankruptcy_submissions_calls": integrated_bankruptcy_stats["sec_company_submissions_calls"],
-        "fmp_profile_calls": fmp_call_stats.get("actual_request_count", 0),
+        "yfinance_info_logical_ticker_attempts": yfinance_stats.get("logical_ticker_attempt_count", 0),
+        "yfinance_info_identity_mismatch_count": yfinance_stats.get("identity_mismatch_count", 0),
+        "yfinance_info_rate_limit_or_crumb_failure_count": yfinance_stats.get("rate_limit_or_crumb_failure_count", 0),
+        "yfinance_info_dependency_missing": yfinance_stats.get("dependency_missing", False),
         "massive_ticker_overview_calls": massive_overview_stats.get("actual_request_count", 0),
     }
     provider_call_evidence["sec_share_frames"] = list(sec_share_frames)
@@ -1989,7 +2216,7 @@ def run_fetch(
 
     summary = {
         "schema_name": "us_short_universe_fetch_summary",
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "authorization_ref": AUTHORIZATION_REF,
         "generated_at": generated_at,
         "scope": {
@@ -2016,7 +2243,7 @@ def run_fetch(
             "tickers_cik_exchange": "SEC company_tickers_exchange.json",
             "price_volume": "Massive grouped daily (/v2/aggs/grouped/locale/us/market/stocks/{date}), one call per window day",
             "shares_outstanding": "SEC XBRL frames (dynamic completed quarters), then targeted SEC CompanyFacts (DEI/us-gaap PIT)",
-            "market_cap": "SEC shares × Massive close; else FMP profile (max 240 residual calls); else Massive ticker-overview",
+            "market_cap": "SEC shares × Massive close; else yfinance Ticker.info (sharesOutstanding × Massive observed close, normally price-basis and allowed to use delayed used_date, or governed marketCap snapshot); else Massive ticker-overview",
             "adv": f"mean of Massive (volume × close) over the {ADV_WINDOW_TRADING_DAYS}-trading-day window (multi-day average, not a single day)",
             "broker_used": False,
             "paid_subscription_used": False,
@@ -2030,11 +2257,24 @@ def run_fetch(
             "sec_ciks_with_shares": len(sec_shares),
             "sec_share_frames": list(sec_share_frames),
             "sec_share_frame_count": len(sec_share_frames),
-            "fmp_mktcap_fallback_attempted": fmp_attempted,
-            "fmp_mktcap_fallback_rescued": market_cap_completion["fmp_rescued_count"],
+            "yfinance_mktcap_fallback_attempted": yfinance_attempted,
+            "yfinance_mktcap_fallback_rescued": market_cap_completion["yfinance_rescued_count"],
         },
         "market_cap_completion": market_cap_completion,
         "market_cap_fallback_observability": {
+            "yfinance_info": {
+                "target_count": len(yfinance_targets),
+                "logical_ticker_attempt_count": yfinance_stats.get("logical_ticker_attempt_count", 0),
+                "rescued_count": yfinance_stats.get("rescued_count", 0),
+                "shares_x_close_count": yfinance_stats.get("shares_x_close_count", 0),
+                "market_cap_snapshot_count": yfinance_stats.get("market_cap_snapshot_count", 0),
+                "ordinary_failure_count": yfinance_stats.get("ordinary_failure_count", 0),
+                "rate_limit_or_crumb_failure_count": yfinance_stats.get("rate_limit_or_crumb_failure_count", 0),
+                "stopped_on_rate_limit_or_crumb": yfinance_stats.get("stopped_on_rate_limit_or_crumb", False),
+                "physical_http_call_count_recorded": False,
+                "attempt_semantics": "one logical Ticker.info access may issue multiple Yahoo requests; physical HTTP count is not claimed",
+                "provider_readiness_evidence": False,
+            },
             "massive_ticker_overview": massive_overview_observability,
         },
         "provider_health": provider_health,
@@ -2066,12 +2306,12 @@ def run_fetch(
             bankruptcy_limitation,
             f"ADV = mean daily dollar volume over the last {ADV_WINDOW_TRADING_DAYS} trading days ending at used_date (a real multi-day average, governance floor is $5M/day). A ticker observed on < {ADV_MIN_DAYS_REQUIRED} days has adv_usd=null (insufficient coverage) and fails the gate conservatively — it is never admitted on a one-day spike.",
             "decision_date / price_basis_date are resolved from the FROZEN NYSE/NASDAQ calendar, whose data_provenance.verification_status is recorded here; it is still pending_authoritative_cross_check until verified (SR-PROVIDER-001) — disclosed, not laundered.",
-            "market_cap completion is a fixed SEC frames → targeted CompanyFacts → FMP profile (max 240) → Massive ticker-overview chain; failures remain unresolved and the aggregate is conserved.",
+            "market_cap completion is a fixed SEC frames → targeted CompanyFacts → yfinance Ticker.info → Massive ticker-overview chain; failures remain unresolved and the aggregate is conserved. yfinance shares and marketCap are retrieval snapshots, not strict PIT evidence.",
             "Massive free tier is delayed data — fine for the §2.1 prior-close price clock; does NOT authorize DataHub/production/ship-gate.",
             "Non-common-stock SEC entries (warrants/units/preferreds) without a Massive close or SEC shares fall out as no_price / no_shares.",
         ],
     }
-    _write_summary_safe(summary, summary_path, [massive_key, fmp_key])   # scan BEFORE write → no residue on failure
+    _write_summary_safe(summary, summary_path, [massive_key])   # scan BEFORE write → no residue on failure
     return summary
 
 
@@ -2120,7 +2360,7 @@ def main(argv=None):
           f"shares-CIK={u.get('sec_ciks_with_shares',0)}")
     print(f"Eligible: {r.get('eligible_count',0)}  Ineligible: {r.get('ineligible_count',0)}  "
           f"no_price: {r.get('no_price_count',0)}  no_shares: {r.get('no_shares_count',0)}  "
-          f"fmp_rescued: {u.get('fmp_mktcap_fallback_rescued',0)}")
+          f"yfinance_rescued: {u.get('yfinance_mktcap_fallback_rescued',0)}")
     if r.get("eligible_count", 0) > 0:
         print(f"样本: {r.get('eligible_tickers',[])[:10]}")
     return 0

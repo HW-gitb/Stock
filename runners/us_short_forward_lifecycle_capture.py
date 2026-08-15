@@ -144,7 +144,8 @@ def _load_candidate(candidate_path: Path) -> tuple[dict[str, Any], str, dict[str
     payload = _read_json(candidate_path)
     if not isinstance(payload, dict):
         raise ForwardLifecycleCaptureError("candidate artifact root must be an object")
-    if payload.get("schema_name") != "us_short_universe_candidate_artifact" or payload.get("schema_version") != "1.1.0":
+    if (payload.get("schema_name") != "us_short_universe_candidate_artifact"
+            or payload.get("schema_version") not in {"1.1.0", "1.2.0", "1.3.0"}):
         raise ForwardLifecycleCaptureError("candidate artifact identity is unsupported")
     decision_date = _strict_yyyymmdd(payload.get("decision_date"))
     observed_at = _valid_observed_at(payload.get("generated_at"))
