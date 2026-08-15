@@ -7868,6 +7868,7 @@ runners/weekly_screening.cmd → Windows PowerShell 5.1 runners/weekly_screening
 **Self-review and conclusion**: Nested-package worker import, synthetic red/timeout/count-gate controls, and target weekly-module dispatch all passed. Current fingerprint is `f2700818d74f` for both lanes. The prior `2208/3097` failure is superseded by current A-short `3097/3097 PASS`; US-short was rerun on the same shared-tool fingerprint and reached `5879/5879 PASS`. This is offline full-pack evidence only, not provider/live/production/ship-gate evidence. The next action is Claude Code independent review; only reviewer/committer may commit after PASS.
 
 **This slice's document gate**: fixed launcher ran `tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard tests.test_readme_route_row_length`, `Ran 66 tests ... OK`, `RESULT tier=focused status=PASS exit=0 tests=66`; no stage/commit.
+
 ## 2026-08-15 追加：PowerShell→python 传参吞引号三处同类修复的独立审查 = PASS（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
 
 **判定**：PASS，零 Required，两条 Optional。正文只在 `docs/system_risk_register.md`。
@@ -7890,3 +7891,48 @@ runners/weekly_screening.cmd → Windows PowerShell 5.1 runners/weekly_screening
 **证据形态**：两条 lane 都在同一 fingerprint 上跑过（a_short 3097 / us_short 5879，均 discovered==ran），我独立重算指纹一致、mtime 早于记账，按 rule 4 未重跑。
 
 **顺带查实的两件与本刀无关的事**：`tests/test_review_tiering_enforcement.py` 那条 stop-hook 用例在 master 上同样红，且该模块**两条 lane 都不覆盖**（既不匹配 `test_a_short*` 也不匹配 `test_us_short*`），与 phase6 盲区同类；另外 bounded runner 的 receipt 计数会被测试自己拉起的嵌套 unittest 子进程带偏——本轮外层是 65 OK，receipt 却记成 3。
+
+## 2026-08-15 追加：full-pack 与桌面 1a 刀 1/2 Optional 最小修复（8c7a）
+
+**状态与边界**：Codex executor/fixer 已完成 `O-LANEENV-1/2/3` 与 `O-STDIN-1/2` 五条 Optional 的最小修复，当前为 `repaired / OPEN-NOT-VERIFIED`，等待 Claude Code 独立 reviewer/committer。未 stage、commit、push、merge；未启动 provider/live、真实 weekly、测试胶囊或账户动作。所有读取、修改、检查、测试和产物均在 `D:\cnhea\Codex\worktrees\8c7a\Stock`。
+
+**问题、根因、最小改动**：`O-LANEENV-1` 是 cwd 的隐式 `sys.path[0]` 可遮蔽 discovery root；worker 现在用最小 `_WORKER_BOOTSTRAP` 把 resolved `start_dir` 插到 `sys.path[0]` 后运行 `unittest.__main__`，同时保留原有 cwd/path_entries/PYTHONPATH 绑定。`O-LANEENV-2` 是 stop-hook 测试 fixture 缺少合法 review-header separator，只修 fixture，不改生产 hook。`O-LANEENV-3` 是未锚定 `Ran N` 正则会被 nested launcher 污染；现在行首锚定并给 nested 非空输出加前缀，nested receipt suppression 不变。`O-STDIN-1` 把 PowerShell operation loader 改为只解析 stdout 最后一行，保留 invalid-bundle exit 24 fail-closed。`O-STDIN-2` 只在 M6.7 publish 后 operation-bundle validation catch 传 `-PreservePublishedWeeklyReport`：保留 `weekly_m67.json/md`，替换成功 receipt 为 failed receipt；其他失败路径仍失效/删除旧产物。
+
+**调用链与消费者**：`full_pack_ledger.py -> parallel_lane_runner.discover_modules -> worker_environment(cwd,start_dir) -> worker bootstrap/fixed-Python unittest -> ModuleOutcome -> sidecar/count gate -> ledger`；以及 `weekly_screening.ps1 -> stdin operation loader -> last stdout line -> ConvertFrom-Json -> validate_published_weekly_operation_bundle -> M6.7 bundle/receipt`。消费者仅为离线 full-pack worker 与既有 M6.7 closeout；无 provider/source selection、schema、source-binding、cache key、state 或生产数据变更。
+
+**schema/source/cache/write 边界**：无 schema 变更；receipt 原有 failed status/reason/exit code 表示报告不可信。没有新增缓存或正式生产写盘；full-pack 只写既有 `.tools/state` 测试产物，M6.7 专用分支只保留 report bytes 并写 failed receipt。
+
+**负向控制与自审**：same-name cwd decoy 要求导入 discovery-root 并得到 2 tests；nested `Ran 5`/`Ran 3` 要求外层仍为 5；既有 red/timeout/count-gate/nested-receipt controls、review-header、last-line loader、preserve-report/failed-receipt controls 均通过。固定 Python 3.13.8 `py_compile` 通过；未用 PATH、bundled Python、provider/live。
+
+**精确命令与原始终态**：
+
+```text
+& 'D:\cnhea\Codex\worktrees\8c7a\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 600 tests.test_bounded_unittest tests.test_parallel_lane_runner tests.test_review_tiering_enforcement tests.test_a_short_weekly_screening_m67_failure_closeout tests.phase6.test_weekly_screening_guardrails
+Ran 97 tests in 41.560s
+[bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=97 elapsed=41.7s deadline=600s
+[bounded-unittest] FOCUSED_RECEIPT token=receipt:27fc0c499093b17cf79dc56b tests=97 bundles=none python=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe
+
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\8c7a\Stock\.tools\full_pack_ledger.py' run a_short 'Full-pack and knife 1/2 optional repairs' 'receipt:27fc0c499093b17cf79dc56b' 860 -- discover -s tests -p 'test_a_short*.py'
+[parallel-lane] COUNT_GATE discovered=3098 ran=3098 equal=True
+[full-pack-ledger] RESULT status=PASS exit=0 tests=3098 elapsed=117.8s deadline=860s mode=parallel
+
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\8c7a\Stock\.tools\full_pack_ledger.py' run us_short 'Full-pack and knife 1/2 optional repairs' 'receipt:27fc0c499093b17cf79dc56b' 860 -- discover -s tests -p 'test_us_short*.py'
+[parallel-lane] COUNT_GATE discovered=5879 ran=5879 equal=True
+[full-pack-ledger] RESULT status=PASS exit=0 tests=5879 elapsed=467.2s deadline=860s mode=parallel
+
+& 'D:\cnhea\Codex\worktrees\8c7a\Stock\.tools\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 600 tests.test_bounded_unittest tests.test_parallel_lane_runner tests.test_review_tiering_enforcement tests.test_a_short_weekly_screening_m67_failure_closeout tests.phase6.test_weekly_screening_guardrails tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard tests.test_readme_route_row_length
+Ran 163 tests in 45.861s
+[bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=163 elapsed=46.0s deadline=600s
+[bounded-unittest] FOCUSED_RECEIPT token=receipt:d916eba7a9801941de4233ec tests=163 bundles=none python=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe
+```
+
+**交接结论**：这是离线验证和最小修复的终态记录；full-pack PASS 不等于 provider/live、production、ship-gate、独立 review 或 commit。下一步由 Claude Code 独立审查，PASS 后才进入 reviewer/committer 提交流程。
+## 2026-08-15 追加：两刀（全量测试侧 / loader 侧）的独立审查（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：两刀分别 PASS，零 Required；但我上轮记的 `O-LANEENV-3` **不能记为已闭**。正文只在 `docs/system_risk_register.md`。
+
+**刀 A 值得记的是根因比我报的更深**：我只测到"cwd 排最前会遮蔽同名模块"，执行方查出真正原因是 `python -m unittest` 把进程 cwd 钉成 `sys.path[0]`，PYTHONPATH 怎么排都压不过。于是加了一段 bootstrap 先 `sys.path.insert(0, discovery_root)` 再跑 unittest。我的对照：同名诱饵在场时，走 bootstrap 得 2（真模块胜）、不走得 1（诱饵胜）——后者是反向控制，证明起作用的是 bootstrap 本身。
+
+**`O-LANEENV-3` 为什么还开着**：修法给"嵌套 launcher"的输出加了前缀并锚定了正则，但我实测这轮焦点包外层 `Ran 126 tests`、receipt 仍是 `tests=3`，且全篇 `[bounded-unittest nested]` 前缀出现 **0 次**——末尾那段是 `tests.test_full_pack_ledger` 拉起的 ledger/lane-runner 子进程打的，不经过 bounded_unittest 的 nested 分支。它只是低报（偏保守、不产生假绿），所以不阻断 PASS，但要留在 register 里，别当已闭。最窄修法是让外层只采信自己那次 `run_unittest` 的 `result.output`，或把前缀下沉到 `run_command` 层。
+
+**刀 B 的边界**：解析改动我用同形片段做了三格实测（旧写法失败、新写法解出、坏 loader 仍拒）；保留已发布报告那条只由读码 + 源码文本守卫证到——只有 loader 那一处 catch 传 `-PreservePublishedWeeklyReport`，失败 receipt 照写，且 `--m67-report` 只在 stage=complete 时绑定，所以保住的报告不会被下游当权威。真跑一次失败路径仍未做。

@@ -149,10 +149,27 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
         self.assertIn("validate_published_weekly_operation_bundle", self.stage4)
         self.assertIn('"stage_status": stage', self.stage4)
         self.assertIn("sys.stderr = sys.stdout", self.stage4)
+        self.assertIn(
+            "$OperationRecord = ($OperationLoaderOutput | Select-Object -Last 1) | ConvertFrom-Json",
+            self.stage4,
+        )
+        self.assertNotIn("$OperationLoaderOutput -join", self.stage4)
         self.assertIn("$script:M67InvocationState = $OperationStage", self.stage4)
         self.assertIn("JSON=$M67Out Markdown=$OperationMarkdown", self.stage4)
         self.assertNotIn("$script:M67InvocationState = 'complete'", self.stage4)
         self.assertIn("weekly_operation_bundle_invalid", self.stage4)
+
+    def test_operation_loader_failure_keeps_report_but_replaces_success_receipt(self) -> None:
+        self.assertIn("[switch]$PreservePublishedWeeklyReport", self.text)
+        self.assertRegex(
+            self.text,
+            r"if \(\$PreservePublishedWeeklyReport -and \$Leaf -in @\('weekly_m67\.json', 'weekly_m67\.md'\)\)",
+        )
+        self.assertIn(
+            "-Reason 'weekly_operation_bundle_invalid' -ExitCode 24",
+            self.stage4,
+        )
+        self.assertIn("-PreservePublishedWeeklyReport", self.stage4)
 
     def test_noncomplete_operation_states_do_not_run_m67_dependent_regime_sidecars(self) -> None:
         self.assertIn(
