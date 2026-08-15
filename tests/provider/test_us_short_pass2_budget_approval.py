@@ -25,6 +25,7 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
 )
 from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
 from tests.provider.us_short_private_test_root import temporary_provider_directory  # noqa: E402
+from runners import us_short_batch5_full_candidate_pass2_preflight as pass2_preflight  # noqa: E402
 
 
 DECISION_DATE = "20260615"
@@ -94,6 +95,11 @@ class Pass2BudgetApprovalScriptEntryTest(unittest.TestCase):
 
 class Pass2BudgetApprovalContractTest(unittest.TestCase):
     def setUp(self):
+        self.actual_clock_patch = mock.patch(
+            "engine.us_short_live_provider_preflight._now_et_wall_clock",
+            return_value=datetime(2026, 7, 9, 8, 0, 0),
+        )
+        self.actual_clock_patch.start()
         self.tempdir = temporary_provider_directory(
             ROOT,
             Path("provider_samples/us_short_batch5_full_candidate_pass2_preflight_20260706"),
@@ -116,6 +122,7 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
         self._prepare(200)
 
     def tearDown(self):
+        self.actual_clock_patch.stop()
         self.state_patch.stop()
         self.tempdir.__exit__(None, None, None)
 
@@ -326,7 +333,7 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
         ctx = capstone.resolve_capstone_context(
             now_et=datetime(2026, 7, 9, 8, 0, 0),
             private_root=private_root,
-            batch4_template_path=private_root.parent / f"pass2_resume_template_{os.getpid()}.json",
+            batch4_template_path=ROOT / "schemas" / "examples" / "us_short_weekend_batch4_context_packet.empty.example.json",
             account_state_path=account_path,
             authorized_momentum_top_k=200,
             authorized_pass2_call_budget=1001,
@@ -575,6 +582,17 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
                 observed_at=GENERATED_AT,
             )
         client.assert_not_called()
+
+
+class Problem7CatalystRecallCanonicalizerTest(unittest.TestCase):
+    def test_canonicalizer_accepts_tuple_sorts_and_rejects_duplicates_or_bad_shapes(self) -> None:
+        self.assertEqual(
+            pass2_preflight.canonicalize_catalyst_recall_tickers(("msft", "AAPL")),
+            ("AAPL", "MSFT"),
+        )
+        for value in (("AAPL", "aapl"), ["bad ticker!"], "AAPL", {"AAPL"}):
+            with self.subTest(value=value), self.assertRaises(pass2_preflight.FullCandidatePass2PreflightError):
+                pass2_preflight.canonicalize_catalyst_recall_tickers(value)
 
 
 if __name__ == "__main__":

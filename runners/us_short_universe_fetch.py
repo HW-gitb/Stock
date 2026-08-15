@@ -73,6 +73,7 @@ from engine.us_short_eligibility_gate import (  # noqa: E402
     canonical_us_ticker,
 )
 from engine.us_short_canonical_asof import OutOfWindowError, resolve_canonical_asof  # noqa: E402
+from engine.us_short_live_provider_preflight import inspect_live_provider_clock  # noqa: E402
 from engine.us_short_market_calendar import (  # noqa: E402
     build_sessions,
     load_market_calendar,
@@ -1858,6 +1859,21 @@ def _resolve_canonical(now_et: datetime, calendar: dict) -> dict[str, Any]:
 # Main
 # ---------------------------------------------------------------------------
 
+def _format_live_provider_clock_error(preflight: dict[str, Any]) -> str:
+    requested = preflight.get("requested") if isinstance(preflight.get("requested"), dict) else {}
+    actual = preflight.get("actual") if isinstance(preflight.get("actual"), dict) else {}
+    return (
+        "live_provider_clock_incompatible "
+        f"[{preflight.get('reason_code', 'UNKNOWN')}] "
+        f"requested decision_date={requested.get('decision_date') or '<unresolved>'} "
+        f"price_basis_date={requested.get('price_basis_date') or '<unresolved>'}; "
+        f"actual decision_date={actual.get('decision_date') or '<unresolved>'} "
+        f"price_basis_date={actual.get('price_basis_date') or '<unresolved>'} "
+        f"window_state={preflight.get('actual_window_state') or '<unresolved>'}; "
+        "live provider only supports the real current canonical window; "
+        "historical analysis use frozen raw/offline replay"
+    )
+
 def run_fetch(
     *,
     now_et: datetime | None = None,
@@ -1878,11 +1894,10 @@ def run_fetch(
     if not _check_gitignore():
         raise RuntimeError("provider_samples/ not confirmed in .gitignore")
 
-    generated_at = generated_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
-    sec_ua = os.environ.get("SEC_USER_AGENT", "")
-    massive_key = os.environ.get("MASSIVE_API_KEY", "")
-
     if dry_run_env:
+        generated_at = generated_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
+        sec_ua = os.environ.get("SEC_USER_AGENT", "")
+        massive_key = os.environ.get("MASSIVE_API_KEY", "")
         return {"scope": {"status": "dry_run_env_only"},
                 "pre_execution_checks": {
                     "massive_key_present": bool(massive_key),
@@ -1892,13 +1907,23 @@ def run_fetch(
 
     if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
         raise RuntimeError("live execution requires --now-et（无时区 ET 墙钟 YYYY-MM-DDTHH:MM:SS）")
+    calendar = load_market_calendar(calendar_path)
+    canonical = _resolve_canonical(now_et, calendar)
+    live_preflight = inspect_live_provider_clock(
+        requested_now_et=now_et,
+        calendar=calendar,
+        requested_canonical=canonical,
+    )
+    if live_preflight["compatible"] is not True:
+        raise RuntimeError(_format_live_provider_clock_error(live_preflight))
+    # Caller supplied timestamps are explanatory only on the live path.
+    generated_at = live_preflight["actual_observed_at_utc"]
+    sec_ua = os.environ.get("SEC_USER_AGENT", "")
+    massive_key = os.environ.get("MASSIVE_API_KEY", "")
     if not sec_ua:
         raise RuntimeError("SEC_USER_AGENT not set")
     if not massive_key:
         raise RuntimeError("MASSIVE_API_KEY not set")
-
-    calendar = load_market_calendar(calendar_path)
-    canonical = _resolve_canonical(now_et, calendar)
     decision_date = canonical["decision_date"]
     price_basis_date = canonical["price_basis_date"]
     calendar_verification_status = calendar["data_provenance"]["verification_status"]
@@ -2073,7 +2098,7 @@ def run_fetch(
         "decision_date": decision_date,
         "price_basis_date": price_basis_date,
         "used_date": used_date,
-        "run_datetime_et": canonical["run_datetime_et"],
+        "run_datetime_et": live_preflight["actual_observed_at_et"],
         "calendar_verification_status": calendar_verification_status,
     }
     market_cap_fallback_observability = {

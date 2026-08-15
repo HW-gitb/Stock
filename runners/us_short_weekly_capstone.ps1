@@ -23,7 +23,7 @@
 #   .\runners\us_short_weekly_capstone.ps1 -Live -MomentumTopK 200   # 真跑；预算在同一次运行内自动派生并冻结
 #   .\runners\us_short_weekly_capstone.ps1 -PythonExe C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe   # 可省略；传值仅校验固定主 Python
 #   .\runners\us_short_weekly_capstone.ps1 -PrivateRoot D:\external\private   # 覆盖私密输出根(仓外亦可)
-#   .\runners\us_short_weekly_capstone.ps1 -ExtraArgs '--provider-pace-seconds','2.0'   # 透传其余 runner 参数
+#   -ExtraArgs is intentionally rejected; add future knobs as explicit audited wrapper parameters.
 #
 # 约束：
 # - 默认 dry-run；-Live 前会检查 batch4 模板 + 账户状态文件存在,缺则早失败给出补齐指引(dry-run 不检查、也不需要)。
@@ -45,6 +45,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+if ($ExtraArgs.Count -gt 0) {
+    throw "Weekly capstone does not forward -ExtraArgs; raw runner flags could override wrapper-owned clock or authorization gates."
+}
+
 # repo root = 本脚本(runners\)的上一级
 $repo = Split-Path -Parent $PSScriptRoot
 $runner = Join-Path $repo "runners\us_short_weekly_capstone.py"
@@ -53,9 +57,10 @@ if (-not (Test-Path $runner)) {
 }
 . (Join-Path $repo ".tools\Resolve-AshortPython.ps1")
 $PythonExe = Resolve-AshortPython -Requested $PythonExe
-
-if ($ExtraArgs -contains "--prepare-pass2-budget" -or $ExtraArgs -contains "--pass2-call-budget") {
-    throw "用户侧入口已改为同次运行自动派生 Pass2 预算；不要透传 --prepare-pass2-budget 或 --pass2-call-budget。"
+$ExplicitAsOf = -not [string]::IsNullOrWhiteSpace($AsOf)
+$ExplicitNowEt = -not [string]::IsNullOrWhiteSpace($NowEt)
+if ($Live -and ($ExplicitAsOf -or $ExplicitNowEt)) {
+    throw "-Live requires the wrapper to use the actual current ET clock; do not combine it with -AsOf or -NowEt."
 }
 
 # --now-et:省略则取当前 ET 墙钟(DST 自适应);Windows 时区 id "Eastern Standard Time" 含夏令时切换。
@@ -114,8 +119,6 @@ $cliArgs = @(
 if (-not [string]::IsNullOrWhiteSpace($PrivateRoot)) { $cliArgs += @("--private-root", $PrivateRoot) }
 if ($MomentumTopK -gt 0) { $cliArgs += @("--momentum-top-k", "$MomentumTopK") }
 if ($Live)               { $cliArgs += @("--live", "--confirm-user-authorization", "--auto-pass2-budget") }
-if ($ExtraArgs.Count -gt 0) { $cliArgs += $ExtraArgs }
-
 $mode = if ($Live) { "LIVE(联网真跑；预算同次自动派生)" } else { "DRY-RUN(默认,不联网)" }
 Write-Host "[模式] $mode" -ForegroundColor Cyan
 Write-Host "[命令] $PythonExe $($cliArgs -join ' ')" -ForegroundColor DarkGray

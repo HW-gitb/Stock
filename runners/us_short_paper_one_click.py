@@ -28,8 +28,10 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
 from engine.us_short_model_paper_activation import resolve_model_paper_activation  # noqa: E402
+from engine.us_short_live_provider_preflight import validate_provider_pace_seconds  # noqa: E402
 from runners.us_short_weekly_capstone import (  # noqa: E402
     WeeklyCapstoneError,
+    prepare_live_provider_context,
     resolve_capstone_context,
     run_weekly_capstone,
 )
@@ -251,10 +253,6 @@ def run_one_click(
     private_root = _private_root(private_root)
     if type(momentum_top_k) is not int or not 1 <= momentum_top_k <= 250:
         raise PaperOneClickError("momentum-top-k must be an integer from 1 through 250")
-    if provider_pace_seconds < 0:
-        raise PaperOneClickError("provider-pace-seconds must be nonnegative")
-    state_dir = _canonical_source_state_dir(state_dir)
-
     try:
         activation = resolve_model_paper_activation()
     except Exception as exc:  # noqa: BLE001 - malformed authorization is never ordinary dormancy
@@ -294,6 +292,12 @@ def run_one_click(
             },
         }
 
+    try:
+        provider_pace_seconds = validate_provider_pace_seconds(provider_pace_seconds)
+    except ValueError as exc:
+        raise PaperOneClickError(str(exc)) from None
+    state_dir = _canonical_source_state_dir(state_dir)
+
     # Resolve the canonical week before writing any generated input.  This is
     # the same resolver used by the capstone, so the wrapper cannot drift to a
     # different decision date.
@@ -312,6 +316,20 @@ def run_one_click(
         theme_soft_boost_enabled=theme_soft_boost_enabled,
         sample_root=ROOT,
     )
+    try:
+        context = prepare_live_provider_context(
+            context,
+            calendar_path=ROOT / "presets" / "us_short_market_calendar_2026_2027.json",
+            requested_now_et=now_et,
+        )
+    except WeeklyCapstoneError as exc:
+        raise PaperOneClickError(str(exc)) from None
+    try:
+        from runners import us_short_batch5_to_batch4_weekend_e2e as batch4_bridge
+
+        batch4_bridge.load_batch4_action_template(TEMPLATE_SOURCE)
+    except Exception as exc:  # noqa: BLE001 - keep the paper gate before input writes
+        raise PaperOneClickError(f"batch4 template preflight rejected: {exc}") from None
     _emit_diagnostic_event(diagnostic_event, {
         "event": "capstone_context_resolved",
         "decision_date": context.decision_date,
@@ -328,7 +346,7 @@ def run_one_click(
     print(f"[US-SHORT PAPER] python={sys.executable}", file=sys.stderr)
     _emit_diagnostic_event(diagnostic_event, {"event": "capstone_started", "decision_date": context.decision_date})
     summary = run_weekly_capstone(
-        now_et=now_et,
+        now_et=context.now_et,
         private_root=private_root,
         batch4_template_path=template_path,
         account_state_path=account_path,

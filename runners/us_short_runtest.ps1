@@ -34,6 +34,11 @@ if ($ExtraArgs.Count -gt 0) {
     # live/budget gate.  Add future knobs as explicit audited wrapper params.
     throw 'Runtest does not forward -ExtraArgs; it rejects all raw runner flags so capsule paths and authorization gates cannot be overridden.'
 }
+$ExplicitAsOf = -not [string]::IsNullOrWhiteSpace($AsOf)
+$ExplicitNowEt = -not [string]::IsNullOrWhiteSpace($NowEt)
+if ($Live -and ($ExplicitAsOf -or $ExplicitNowEt)) {
+    throw '-Live requires the wrapper to use the actual current ET clock; do not combine it with -AsOf or -NowEt.'
+}
 $RuntimeRoot = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($SourceRoot)) {
     $SourceRoot = $RuntimeRoot

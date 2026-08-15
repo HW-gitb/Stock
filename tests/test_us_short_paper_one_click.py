@@ -71,6 +71,14 @@ def _assert_state_dir_literal_children_are_gitignored(
 
 
 class USShortPaperOneClickTest(unittest.TestCase):
+    def setUp(self):
+        self._actual_clock = mock.patch(
+            "engine.us_short_live_provider_preflight._now_et_wall_clock",
+            return_value=datetime(2026, 7, 23, 8, 0, 0),
+        )
+        self._actual_clock.start()
+        self.addCleanup(self._actual_clock.stop)
+
     def test_no_receipt_is_typed_dormant_stop_before_context_inputs_provider_or_store(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -234,11 +242,15 @@ class USShortPaperOneClickTest(unittest.TestCase):
 
     def test_invalid_launcher_option_fails_before_any_provider_stage(self) -> None:
         with tempfile.TemporaryDirectory() as td:
-            with self.assertRaisesRegex(PaperOneClickError, "provider-pace-seconds"):
+            with mock.patch.object(
+                one_click,
+                "resolve_model_paper_activation",
+                return_value={"status": "authorized", "receipt": {}},
+            ), self.assertRaisesRegex(PaperOneClickError, "provider_pace_seconds"):
                 run_one_click(
                     now_et=datetime(2026, 7, 20, 1, 0, 0),
                     private_root=Path(td),
-                    state_dir=Path(td) / "state",
+                    state_dir=DEFAULT_STATE_DIR,
                     provider_pace_seconds=-1.0,
                 )
 
@@ -460,7 +472,6 @@ class USShortPaperOneClickTest(unittest.TestCase):
                 encoding="utf-8",
             )
             base = [
-                "--now-et", "2026-07-23T08:00:00",
                 "--momentum-top-k", "200",
                 "--provider-pace-seconds", "1",
             ]
@@ -487,8 +498,6 @@ class USShortPaperOneClickTest(unittest.TestCase):
                             "Bypass",
                             "-File",
                             str(runners / "us_short_paper_one_click.ps1"),
-                            "-NowEt",
-                            "2026-07-23T08:00:00",
                             *(["-MaxRetriesPerCall", "1", "-RetryBackoffSeconds", "65",
                                "-MaxTotalHttpAttempts", "123", "-DisableSoftDiscovery",
                                "-DisableThemeSoftBoost"] if expected_exit == 17 else []),
@@ -508,7 +517,12 @@ class USShortPaperOneClickTest(unittest.TestCase):
                     self.assertNotIn("NativeCommandError", combined)
 
             recorded = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
-            self.assertEqual(recorded, [expected for _exit, expected in calls])
+            self.assertEqual(len(recorded), len(calls))
+            for actual, (_exit, expected) in zip(recorded, calls):
+                self.assertGreaterEqual(len(actual), 2)
+                self.assertEqual(actual[0], "--now-et")
+                self.assertRegex(actual[1], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
+                self.assertEqual(actual[2:], expected)
 
 
 if __name__ == "__main__":

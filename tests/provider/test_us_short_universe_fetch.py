@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -1427,6 +1428,14 @@ class TestProblem7MarketCapChain(unittest.TestCase):
 
 
 class TestGuards(unittest.TestCase):
+    def setUp(self):
+        self._actual_clock = patch(
+            "engine.us_short_live_provider_preflight._now_et_wall_clock",
+            return_value=datetime(2026, 6, 29, 8, 0, 0),
+        )
+        self._actual_clock.start()
+        self.addCleanup(self._actual_clock.stop)
+
     def test_requires_authorization(self):
         with self.assertRaises(RuntimeError) as ctx:
             _mod.run_fetch(confirm_user_authorization=False, dry_run_env=False)
@@ -1463,9 +1472,35 @@ class TestGuards(unittest.TestCase):
                                    now_et=datetime(2026, 6, 29, 8, 0, 0), raw_root=bad)
             self.assertFalse(any(bad.rglob("*")))
 
+    def test_historical_live_clock_rejects_before_first_provider_or_output_path(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(_mod, "_check_gitignore", return_value=True), \
+             patch.object(_mod, "fetch_sec_tickers", side_effect=AssertionError("provider reached")), \
+             patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "secret"}):
+            with self.assertRaisesRegex(RuntimeError, "live_provider_clock_incompatible") as ctx:
+                _mod.run_fetch(
+                    confirm_user_authorization=True,
+                    now_et=datetime(2026, 6, 30, 8, 0, 0),
+                    summary_path=Path(tmp) / "problem7_summary.json",
+                    raw_root=Path(tmp) / "problem7_raw",
+                )
+        message = str(ctx.exception)
+        self.assertIn("requested decision_date", message)
+        self.assertIn("actual decision_date", message)
+        self.assertIn("historical analysis use frozen raw/offline replay", message)
+        self.assertNotIn("https://", message)
+        self.assertNotIn("secret", message)
+        self.assertNotIn("traceback", message.lower())
+
 
 class TestRunFetchE2E(unittest.TestCase):
     def setUp(self):
+        self._actual_clock = patch(
+            "engine.us_short_live_provider_preflight._now_et_wall_clock",
+            return_value=datetime(2026, 6, 29, 8, 0, 0),
+        )
+        self._actual_clock.start()
+        self.addCleanup(self._actual_clock.stop)
         self._state_root_context = temporary_us_short_state_directory(ROOT)
         self.state_root = Path(self._state_root_context.__enter__())
         self.addCleanup(self._state_root_context.__exit__, None, None, None)
@@ -1580,11 +1615,13 @@ class TestRunFetchE2E(unittest.TestCase):
                     now_et=datetime(2026, 6, 29, 8, 0, 0),
                     summary_path=tmpp / "sum.json", raw_root=tmpp / "raw",
                     candidate_list_path=cand,
-                    generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                    generated_at="1999-01-01T00:00:00+00:00", confirm_user_authorization=True,
                 )
             self.assertEqual(summary["decision_clock"]["decision_date"], "20260629")
             self.assertEqual(summary["decision_clock"]["price_basis_date"], "20260626")
             self.assertEqual(summary["decision_clock"]["used_date"], "2026-06-26")
+            self.assertEqual(summary["decision_clock"]["run_datetime_et"], "2026-06-29T08:00:00")
+            self.assertEqual(summary["generated_at"], "2026-06-29T12:00:00+00:00")
             self.assertIn("AAPL", summary["pass1_result"]["eligible_tickers"])
             self.assertNotIn("LOWADV", summary["pass1_result"]["eligible_tickers"])
             self.assertFalse(summary["storage"]["tracked_summary_contains_prices"])
@@ -2537,6 +2574,12 @@ class SummarySafetyAndGitignore(unittest.TestCase):
 
 class CandidatePathGuard(unittest.TestCase):
     def setUp(self):
+        self._actual_clock = patch(
+            "engine.us_short_live_provider_preflight._now_et_wall_clock",
+            return_value=datetime(2026, 6, 29, 8, 0, 0),
+        )
+        self._actual_clock.start()
+        self.addCleanup(self._actual_clock.stop)
         self._state_root_context = temporary_us_short_state_directory(ROOT)
         self.state_root = Path(self._state_root_context.__enter__())
         self.addCleanup(self._state_root_context.__exit__, None, None, None)

@@ -212,7 +212,13 @@ class CapstoneResumeIntegrationTest(unittest.TestCase):
         self.state = self.root / "state"
         self.inputs = self.private / "_run_inputs"
         _write(self.inputs / "account.json", {"positions": []})
-        _write(self.inputs / "template.json", {"template": True})
+        _write(
+            self.inputs / "template.json",
+            json.loads(
+                (capstone.ROOT / "schemas" / "examples" / "us_short_weekend_batch4_context_packet.nonempty.example.json")
+                .read_text(encoding="utf-8")
+            ),
+        )
 
     def tearDown(self):
         self.temp.cleanup()
@@ -268,6 +274,10 @@ class CapstoneResumeIntegrationTest(unittest.TestCase):
     def _run(self, *, now_et, pipeline, resume_from=None):
         with mock.patch.object(capstone, "default_pipeline", return_value=pipeline), \
                 mock.patch.object(capstone, "_provider_execution_receipt", return_value=object()), \
+                mock.patch(
+                    "engine.us_short_live_provider_preflight._now_et_wall_clock",
+                    return_value=now_et.replace(tzinfo=None),
+                ), \
                 mock.patch("runners.us_short_account_state_from_manual_tables.validate_account_state"):
             return capstone.run_weekly_capstone(
                 now_et=now_et,

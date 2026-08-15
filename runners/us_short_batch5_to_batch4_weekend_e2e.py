@@ -188,7 +188,7 @@ def _remember_root(path: Path, *, cleanup_roots: list[Path], existed_before: dic
     cleanup_roots.append(resolved)
 
 
-def _load_template(path: Path, *, expected_sha256: str | None = None) -> dict[str, Any]:
+def load_batch4_action_template(path: Path, *, expected_sha256: str | None = None) -> dict[str, Any]:
     try:
         raw = path.read_bytes()
     except OSError as exc:
@@ -205,7 +205,18 @@ def _load_template(path: Path, *, expected_sha256: str | None = None) -> dict[st
     missing = _TEMPLATE_KEYS - set(template)
     if missing:
         raise Batch5ToBatch4E2EError(f"batch4 template missing required key(s): {sorted(missing)}")
+    for key in ("report_context", "basket_context", "market_axis_regimes"):
+        if not isinstance(template[key], dict):
+            raise Batch5ToBatch4E2EError(f"batch4 template {key} must be a JSON object")
+    if not isinstance(template["report_context"].get("price_clock"), dict):
+        raise Batch5ToBatch4E2EError("batch4 template report_context.price_clock must be an object")
     return {key: copy.deepcopy(template[key]) for key in _TEMPLATE_KEYS}
+
+
+def _load_template(path: Path, *, expected_sha256: str | None = None) -> dict[str, Any]:
+    """Backward-compatible internal alias for the bridge-owned validator."""
+
+    return load_batch4_action_template(path, expected_sha256=expected_sha256)
 
 
 def _load_provider_health(path: Path) -> dict[str, str]:
