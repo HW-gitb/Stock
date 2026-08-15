@@ -4656,7 +4656,8 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_t
 **为什么**：逐 key 精确计数钉的是测试代码的记账而非有没有越界，导致问题7/8/9/10 每轮都要重建快照；上一轮的 Required 是「基线必须能由它自己那次提交的代码态重新生成」，问题10 合入后本刀才具备这个前提。
 
 **验证命令**：
-- `.toolsun_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_test_io_inventory tests.test_us_short_discovery_conformance`
+- `.tools
+un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_test_io_inventory tests.test_us_short_discovery_conformance`
 - `python -m unittest tests.test_us_short_test_io_inventory`（rule-1 直测）
 - reviewer 反向控制：① 从基线 allowlist 删一条 ② 往 modules 塞一行伪模块，各重跑一次该测试，`finally` 按字节还原并核 sha256 + `git diff --numstat`
 - 逐字节比对两处 `.py` 与 `stash@{0}`（我上轮已审内容）
@@ -4895,3 +4896,48 @@ Codex 按上一轮 FAIL 的两条 Required 修复，并自裁接受两条 Option
 
 - 新记 `O-P1-3`（不阻断）：异常路径的 `"crumb"` marker 仍是纯子串匹配，会命中普通 404 消息里内嵌的 Yahoo URL 查询参数（`&crumb=`），使整层提前停止。探针已实测。影响是「慢，不是错」——残余仍按精确残余交给 Massive，无错值、无守恒破。要收窄时把 `"crumb"` 改成只匹配 crumb **获取失败**的类名/文案。
 - 本轮全程禁网。真实 Yahoo 稳定性、0814 current-day 缺口恢复、production / ship-gate 仍未验证；要宣称 live 稳定仍需单独授权的 current-day 真跑。
+
+## 2026-08-15 追加：桌面 `2us_testrun0814.md` 问题2 + O-P1-3 最小修复（dc41；Codex executor/fixer）
+
+### 范围与顺序
+
+- 严格按桌面问题2：只修复 market-cap completion 已完成后、后续 bankruptcy/candidate 流程失败时 summary 不落盘的问题；不新增 provider、retry、quota、checkpoint 文件、状态目录、通用 snapshotter、timer writer、receipt、SHA/fingerprint 或 cleanup 设计。
+- 同轮处置问题1留下的 `O-P1-3`：只收窄 crumb 误判，不扩展其他问题1设计。工作只在 `D:\cnhea\Codex\worktrees\dc41\Stock`，未改主树、其他工作树或桌面文档。
+
+### 最小实现
+
+- `runners/us_short_universe_fetch.py`：在 `build_market_cap_completion()` 和 Massive observability 成功后、bankruptcy scan 前，复用 `_write_summary_safe()` 写同一 canonical summary path 的 partial summary；正式 summary 完成后以同一路径覆盖，使用 `complete` / `completed_through` 标记。
+- `runners/us_short_weekly_capstone_stages.py`：当前 1.3.0 健康消费要求布尔 `complete=true`；partial、缺失或字符串值 fail-closed；1.0.0/1.2.0 完成 scope 保留只读兼容。
+- `O-P1-3`：通用 marker 删除裸 `crumb`，保留限流 marker，并只接受显式 crumb 失败文案或 crumb 异常类名。
+- 测试只改 `tests/provider/test_us_short_universe_fetch.py` 与 `tests/provider/test_us_short_provider_health_capstone_matrix.py`，覆盖晚失败保留 partial、正常同路径覆盖、partial 健康阻断、legacy 兼容和 URL `&crumb=` 误报反向控制。
+
+### 验证与边界
+
+- 固定 Python focused：149 tests PASS，receipt `receipt:e591ec7974d2ae40dd73a9bb`。
+- 唯一适用 US-short full lane：`discovered=5881 ran=5881 equal=True`，`PASS`，437.0s/860s；fingerprint `9f424312b401998f23ba7957c0bfc566db54b7612b115e4a3a7ffd47fedf5caa`；static `diff_check=PASS`、`py_compile=4`。
+- 全程 fake/offline；未调用真实 Yahoo/FMP/Massive/SEC/provider/live/paper；未提交、未 merge。状态为 `repaired / OPEN-NOT-VERIFIED`，`docs/CURRENT.md` 不写本轮 review/commit 瞬态门。
+
+### 下一步
+
+Claude Code：独立审查问题2与 `O-P1-3`，确认后按项目流程提交；不要扩大到桌面文档其他问题。
+
+## 2026-08-15 追加：问题2 市值结账 summary + O-P1-3 的独立审查（dc41；Claude Code reviewer/committer；**审查 PASS，已提交并合入 master**）
+
+### 审了什么
+
+dc41 7 modified / 0 untracked。整读 `run_fetch` 结账段、`_write_summary_safe`、新增的 `_universe_summary_is_complete_for_health` 及被它前置的两个 health 函数、`_looks_like_yfinance_rate_or_crumb_signal/_exception`。逐条对照桌面 §2.1–§2.8：写点位置、只写已结清字段、不写 pass1/eligible/bankruptcy/最终 provider_health、异常继续传播、正式版同路径覆盖、不新增 writer/状态目录/checkpoint 输出——全部符合。
+
+### 验证命令与结果
+
+- focused 超集（同前 5 模块）`281 tests OK`，`receipt:1878b9abb292259d7bb9dbe7`；doc-governance pack `66 OK`；`git diff --check` clean、`py_compile` 2 个改动 runner 全过。full lane 按 rule 4 不复跑，引 executor ledger `5881/5881 PASS`。
+- reviewer 自写 29 条探针：partial summary 经真实 `derive_capstone_provider_health` 得 `universe_status/universe_market_cap` 双 `missing`；partial 伪装完成 scope + 补 `pass1_result` 仍 missing；`complete` 的 `"true"/1/0/None/"True"`/缺 key 六种全 fail-closed；未知版本 `1.4.0` 也 missing；crumb 收窄两向（`&crumb=` 的 404 不停 / 显式 crumb 失败文案与类名仍停 / 429 各腿回归仍停）。
+- legacy 无回归是**实证**不是推断：把 `git show HEAD:` 的 stages 模块与工作树版并排跑四份已提交 summary，逐份结果完全一致（`20260626=missing/degraded`，三份 1.2.0 = `ok/degraded`）。
+
+### 失效的旧结论
+
+- 上一轮记的 `O-P1-3` 已闭；异常路径不再对裸 `crumb` 子串停层。核查装机版 yfinance 后确认：该库没有 crumb 专用异常类，crumb 取不到时实际抛 `YFRateLimitError`（文案含 "Too Many Requests"/"Rate limited"），仍被限流 marker 命中，收窄未丢真信号。
+
+### 下一步注意事项
+
+- 本刀起，同一 decision_date 的 canonical summary 在市值结账后就会被本轮 partial 覆盖；这是方案明确接受的代价（单一路径、`generated_at` 标识本轮），但意味着**失败重跑会覆盖掉上一轮的成功 summary**，读旧数字前先看 `complete` 与 `generated_at`。
+- dc41 落后 master 17 commits，本轮基线 `d1d5a13c`；下次开工先在该树 `git merge --ff-only master` 同步，否则 receipt 指纹与 merge 都要多花一轮。

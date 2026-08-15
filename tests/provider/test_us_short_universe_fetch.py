@@ -1246,6 +1246,21 @@ class TestFetchYfinanceMarketCaps(unittest.TestCase):
         self.assertFalse(stats["stopped_on_rate_limit_or_crumb"])
         self.assertEqual(stats["rate_limit_or_crumb_failure_count"], 0)
 
+    def test_crumb_query_parameter_in_ordinary_http_error_does_not_stop_remaining(self):
+        stats = {}
+        out, module = self._fetch({
+            "A": RuntimeError(
+                "404 Client Error: Not Found for url: "
+                "https://query2.finance.yahoo.com/v7/finance/quote?symbols=A&crumb=Ab1cD"
+            ),
+            "B": {"symbol": "B", "marketCap": 1e9},
+        }, stats=stats)
+        self.assertEqual(set(out), {"B"})
+        self.assertEqual(module.calls, ["A", "B"])
+        self.assertFalse(stats["stopped_on_rate_limit_or_crumb"])
+        self.assertEqual(stats["rate_limit_or_crumb_failure_count"], 0)
+        self.assertEqual(stats["ordinary_failure_count"], 1)
+
     def test_rate_limit_in_exception_cause_stops_current_and_remaining(self):
         try:
             try:
@@ -1586,6 +1601,10 @@ class TestRunFetchE2E(unittest.TestCase):
                 + calls["sec_companyfacts_calls"]
                 + calls["massive_ticker_overview_calls"],
             )
+            self.assertTrue(summary["complete"])
+            self.assertEqual(summary["completed_through"], "universe_fetch_and_pass1_completed")
+            self.assertEqual(json.loads((tmpp / "sum.json").read_text(encoding="utf-8")), summary)
+            self.assertFalse((tmpp / "sum.json.partial").exists())
 
             artifact = json.loads(cand.read_text(encoding="utf-8"))
         self.assertEqual(artifact["decision_date"], "20260629")
@@ -1596,6 +1615,61 @@ class TestRunFetchE2E(unittest.TestCase):
         self.assertTrue(aapl["adv_coverage_ok"])
         self.assertEqual(summary["pass1_result"], {**_mod.summarize_rows(artifact["rows"]),
                                                    "eligible_tickers": ["AAPL"]})
+
+    def test_market_cap_checkpoint_summary_survives_late_failure(self):
+        sec_map = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
+
+        def fake_grouped(date, key):
+            return [{"T": "AAPL", "c": 200.0, "v": 50_000_000}]
+
+        cand = self.state_root / "candidate_universe_20260629.json"
+        cand.unlink(missing_ok=True)
+        self.addCleanup(cand.unlink, missing_ok=True)
+        self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            with patch.dict(os.environ, {
+                "SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": "",
+            }), patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value=shares), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod, "fetch_nasdaq_trade_halt_feed", return_value={
+                     "observed": True, "observed_at": "2026-06-29T12:00:00+00:00", "halted_symbols": [],
+                 }), patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"), \
+                 patch.object(_mod, "build_candidate_artifact",
+                              side_effect=RuntimeError("candidate construction failed")):
+                with self.assertRaisesRegex(RuntimeError, "candidate construction failed"):
+                    _mod.run_fetch(
+                        now_et=datetime(2026, 6, 29, 8, 0, 0), summary_path=tmpp / "sum.json",
+                        raw_root=tmpp / "raw", candidate_list_path=cand,
+                        generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                    )
+
+            partial = json.loads((tmpp / "sum.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(set(partial), {
+            "schema_name", "schema_version", "complete", "completed_through", "generated_at", "scope",
+            "decision_clock", "market_cap_completion", "market_cap_fallback_observability",
+        })
+        self.assertEqual(partial["schema_version"], _mod.UNIVERSE_SUMMARY_SCHEMA_VERSION)
+        self.assertIs(partial["complete"], False)
+        self.assertEqual(partial["completed_through"], "market_cap_completion")
+        self.assertEqual(partial["scope"], {"status": "market_cap_completed_universe_incomplete"})
+        self.assertEqual(partial["decision_clock"]["decision_date"], "20260629")
+        completion = partial["market_cap_completion"]
+        self.assertEqual(
+            completion["needed_count"],
+            completion["sec_companyfacts_rescued_count"]
+            + completion["yfinance_rescued_count"]
+            + completion["massive_overview_rescued_count"]
+            + completion["final_unresolved_count"],
+        )
+        self.assertFalse(cand.exists())
+        for omitted in ("pass1_result", "eligible_tickers", "status_screening", "provider_health", "storage"):
+            self.assertNotIn(omitted, partial)
 
     def test_run_fetch_residual_massive_cap_enters_final_artifact(self):
         sec_map = {"COIN": {"cik": 17299, "exchange": "NASDAQ"}}

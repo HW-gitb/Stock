@@ -66,6 +66,8 @@ from runners.us_short_account_state_from_manual_tables import validate_account_s
 ROOT = Path(__file__).resolve().parents[1]
 _ELIGIBILITY_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 _CALENDAR_PATH = ROOT / "presets" / "us_short_market_calendar_2026_2027.json"
+_CURRENT_UNIVERSE_SUMMARY_SCHEMA_VERSION = "1.3.0"
+_LEGACY_UNIVERSE_SUMMARY_SCHEMA_VERSIONS = frozenset({"1.0.0", "1.2.0"})
 
 
 def _stage_summary_targets(ctx) -> dict[str, Path]:
@@ -1047,8 +1049,22 @@ def _raw_state_from_summary_state(value: Any) -> str:
     return "missing"
 
 
+def _universe_summary_is_complete_for_health(summary: Mapping[str, Any]) -> bool:
+    if not isinstance(summary, Mapping):
+        return False
+    version = summary.get("schema_version")
+    if version == _CURRENT_UNIVERSE_SUMMARY_SCHEMA_VERSION:
+        return type(summary.get("complete")) is bool and summary["complete"] is True
+    if version in _LEGACY_UNIVERSE_SUMMARY_SCHEMA_VERSIONS:
+        scope = summary.get("scope")
+        return isinstance(scope, Mapping) and scope.get("status") == "universe_fetch_and_pass1_completed"
+    return False
+
+
 def _universe_health(summary: Mapping[str, Any]) -> tuple[str, str]:
     if not isinstance(summary, Mapping):
+        return "universe_status", "missing"
+    if not _universe_summary_is_complete_for_health(summary):
         return "universe_status", "missing"
     scope = summary.get("scope")
     if not isinstance(scope, Mapping) or not isinstance(scope.get("status"), str):
@@ -1114,6 +1130,8 @@ def _universe_health(summary: Mapping[str, Any]) -> tuple[str, str]:
 
 def _universe_market_cap_health(summary: Mapping[str, Any]) -> tuple[str, str]:
     if not isinstance(summary, Mapping):
+        return "universe_market_cap", "missing"
+    if not _universe_summary_is_complete_for_health(summary):
         return "universe_market_cap", "missing"
     pass1 = summary.get("pass1_result")
     if not isinstance(pass1, Mapping):
