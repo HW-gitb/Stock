@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from unittest import mock
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from engine import us_short_llm_theme_discovery_plan_budget as plan_budget
 from engine import us_short_llm_theme_discovery_paid_gateway as paid_gateway
@@ -33,7 +34,28 @@ class _DeepSeek:
     def __init__(self, text): self.text, self.calls = text, []
     class _Completions:
         def __init__(self, owner): self.owner = owner
-        def create(self, **kwargs): self.owner.calls.append(kwargs); return type("R", (), {"choices": [type("C", (), {"message": type("M", (), {"content": self.owner.text})()})()]})()
+        def create(self, **kwargs):
+            self.owner.calls.append(kwargs)
+            payload = {
+                "model": "deepseek-v4-flash",
+                "choices": [{"message": {"content": self.owner.text}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
+                "system_fingerprint": "fp_fixture",
+            }
+            class Response:
+                model = payload["model"]
+                choices = [type("Choice", (), {
+                    "message": type("Message", (), {"content": self.owner.text})(),
+                    "finish_reason": "stop",
+                })()]
+                system_fingerprint = payload["system_fingerprint"]
+                usage = payload["usage"]
+
+                @staticmethod
+                def model_dump(mode="json"):
+                    del mode
+                    return copy.deepcopy(payload)
+            return Response()
     def __init_subclass__(cls): return super().__init_subclass__()
     @property
     def chat(self): return type("Chat", (), {"completions": self._completions})()
@@ -236,6 +258,8 @@ class WebFetchTests(unittest.TestCase):
         self.assertEqual(receipt["fetch_contract"]["execution_mode"], "offline_fake_client")
         self.assertFalse(receipt["fetch_contract"]["network_access_performed"])
         self.assertEqual(receipt["summary"]["accepted_source_count"], 2)
+        self.assertEqual(len(receipt["provider_response_refs"]), 1)
+        self.assertEqual(receipt["provider_response_refs"][0]["served_model"], "deepseek-v4-flash")
         self.assertEqual(summary["dropped_result_count"], 3)
         self.assertTrue(any(row["reason"] == "published_at_after_decision_open" for row in receipt["drop_ledger"]))
 
@@ -576,6 +600,7 @@ class WebFetchTests(unittest.TestCase):
                 batch = paid_gateway.PaidDispatchGateway(_DispatchBudget()).dispatch_web_regroup_all(
                     response, expected_decision_date="20260725", chunks=[(0, chunk)],
                     prompt_builder=fetch._build_deepseek_prompt,
+                    persist_response=_noop_persist,
                     consume_response=lambda request, value: fetch._consume_regroup_response(
                         value, expected_served_model=expected,
                         chunk_index=int(request.scope.split(":", 1)[1]),
@@ -614,6 +639,179 @@ class WebFetchTests(unittest.TestCase):
                 execution_mode="live_authorized", network_access_performed=True,
                 provider_calls_performed=True, network_call_count=99, provider_call_count=99,
             )
+
+    def test_deepseek_request_shape_is_shared_and_frozen(self):
+        client = _deepseek('{"themes":[]}')
+        paid_gateway.offline_web_regroup(
+            client, expected_decision_date="20260725", rows=[],
+            prompt_builder=fetch._build_deepseek_prompt,
+        )
+        offline_request = client.calls[-1]
+        gateway = paid_gateway.PaidDispatchGateway(_DispatchBudget())
+        gateway.dispatch_web_regroup_all(
+            client, expected_decision_date="20260725", chunks=[(0, [])],
+            prompt_builder=fetch._build_deepseek_prompt, persist_response=_noop_persist,
+        )
+        live_request = client.calls[-1]
+        for request in (offline_request, live_request):
+            self.assertEqual(request["model"], paid_gateway.DEEPSEEK_MODEL)
+            self.assertEqual(request["temperature"], 0)
+            self.assertEqual(request["max_tokens"], 16_384)
+            self.assertEqual(request["response_format"], {"type": "json_object"})
+            self.assertEqual(request["messages"][0]["role"], "user")
+        self.assertIn("at most 4 themes", live_request["messages"][0]["content"])
+
+    def test_parser_is_strict_json_and_rejects_more_than_four_themes(self):
+        with self.assertRaises(fetch.WebThemeDiscoveryError):
+            fetch._parse_llm_json('```json\n{"themes":[]}\n```')
+        with self.assertRaises(fetch._ProviderItemRejected) as caught:
+            fetch._parse_llm_json(
+                json.dumps({"themes": [{"theme_id": str(index)} for index in range(5)]}),
+                chunk_index=2,
+            )
+        self.assertEqual(caught.exception.reason, "regroup_theme_count_exceeded")
+        self.assertEqual(caught.exception.detail, "chunk[2]:themes_count=5")
+
+    def test_deepseek_raw_response_is_written_before_consume_and_receipts_telemetry(self):
+        response = {
+            "model": "deepseek-v4-flash",
+            "choices": [{"message": {"content": '{"themes":[]}'}, "finish_reason": "stop"}],
+            "usage": None,
+            "system_fingerprint": None,
+        }
+        events: list[str] = []
+
+        class Completions:
+            def create(self, **_kwargs):
+                events.append("provider")
+                return response
+
+        client = SimpleNamespace(chat=SimpleNamespace(completions=Completions()))
+        refs: list[dict[str, object]] = []
+        raw: dict[str, object] | None = None
+        with temporary_provider_directory(fetch.ROOT) as td:
+            raw_root = Path(td)
+
+            def capture(_request, value):
+                events.append("capture")
+                return value
+
+            def persist(request, value):
+                events.append("persist")
+                ref = fetch._persist_live_web_regroup_response(
+                    request, value, raw_root=raw_root, expected_decision_date="20260725",
+                    fetched_at=datetime(2026, 7, 25, 8, tzinfo=timezone.utc),
+                )
+                refs.append(ref)
+                self.assertTrue((fetch.ROOT / ref["raw_receipt_ref"]).is_file())
+                return ref
+
+            def consume(_request, value):
+                events.append("consume")
+                self.assertTrue(refs)
+                self.assertTrue((fetch.ROOT / refs[0]["raw_receipt_ref"]).is_file())
+                return fetch._consume_regroup_response(
+                    value, expected_served_model="deepseek-v4-flash", chunk_index=0,
+                )
+
+            batch = paid_gateway.PaidDispatchGateway(_DispatchBudget()).dispatch_web_regroup_all(
+                client, expected_decision_date="20260725", chunks=[(0, [])],
+                prompt_builder=fetch._build_deepseek_prompt, capture_response=capture,
+                persist_response=persist, consume_response=consume,
+            )
+            ref = refs[0]
+            raw = json.loads((fetch.ROOT / refs[0]["raw_receipt_ref"]).read_text(encoding="utf-8"))
+            fetch._validate_provider_response_refs(
+                refs, regroup_chunk_counts={"attempted": 1, "failed_indexes": []},
+                completed_response_count=1,
+            )
+            with self.assertRaises(fetch.WebThemeDiscoveryError):
+                fetch._validate_provider_response_refs([], completed_response_count=1)
+            with self.assertRaises(fetch.WebThemeDiscoveryError):
+                fetch._validate_provider_response_refs([ref, ref], completed_response_count=2)
+            out_of_range = dict(ref, chunk_index=1)
+            with self.assertRaises(fetch.WebThemeDiscoveryError):
+                fetch._validate_provider_response_refs(
+                    [out_of_range], regroup_chunk_counts={"attempted": 1, "failed_indexes": []},
+                )
+        self.assertEqual(events, ["provider", "capture", "persist", "consume"])
+        self.assertIsNone(batch.stop_error)
+        self.assertEqual(len(refs), 1)
+        ref = refs[0]
+        self.assertEqual(ref["provider"], "deepseek")
+        self.assertEqual(ref["chunk_index"], 0)
+        self.assertIsNone(ref["usage"])
+        self.assertEqual(ref["response_format"], "json_object")
+        assert raw is not None
+        self.assertEqual(set(raw), {"provider", "response", "fetched_at"})
+        self.assertEqual(raw["provider"], "deepseek")
+        self.assertEqual(
+            ref["response_sha256"], fetch._sha256_bytes(fetch._canonical_json(raw["response"])),
+        )
+
+    def test_deepseek_raw_persistence_failure_stops_before_sibling_and_consume(self):
+        calls = 0
+        consumed = False
+
+        class Completions:
+            def create(self, **_kwargs):
+                nonlocal calls
+                calls += 1
+                return {"model": "deepseek-v4-flash", "choices": []}
+
+        def persist(_request, _value):
+            raise fetch.WebThemeDiscoveryError("raw write failed")
+
+        def consume(_request, _value):
+            nonlocal consumed
+            consumed = True
+
+        client = SimpleNamespace(chat=SimpleNamespace(completions=Completions()))
+        batch = paid_gateway.PaidDispatchGateway(_DispatchBudget()).dispatch_web_regroup_all(
+            client, expected_decision_date="20260725", chunks=[(0, []), (1, [])],
+            prompt_builder=fetch._build_deepseek_prompt, persist_response=persist,
+            consume_response=consume,
+        )
+        self.assertIsInstance(batch.stop_error, paid_gateway.PaidEvidenceUnavailableError)
+        self.assertEqual(calls, 1)
+        self.assertFalse(consumed)
+
+    def test_live_writer_emits_1_1_receipt_with_deepseek_refs_and_completed_status(self):
+        response = {
+            "model": "deepseek-v4-flash",
+            "choices": [{"message": {"content": '{"themes":[]}'}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
+            "system_fingerprint": "fp_live",
+        }
+        with temporary_provider_directory(fetch.ROOT) as td:
+            raw_root = Path(td)
+            ref = fetch._persist_deepseek_response(
+                response, raw_root=raw_root, expected_decision_date="20260725",
+                chunk_index=0, fetched_at=datetime(2026, 7, 25, 8, tzinfo=timezone.utc),
+            )
+            transport = paid_gateway.new_transport("tavily", "deepseek")
+            transport._record_completed_response("tavily")
+            transport._record_completed_response("deepseek")
+            ticket = paid_gateway.issue_ticket()
+            receipt_kwargs = {"provider_response_refs": [ref]}
+            try:
+                _, receipt, summary = fetch.build_web_fetch_packet(
+                    queries=["q"], search_results=ROWS[:1], llm_response='{"themes":[]}',
+                    expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+                    fetched_at="2026-07-25T08:00:00Z", raw_root=raw_root, persist_raw=True,
+                    execution_mode="live_authorized", network_access_performed=True,
+                    provider_calls_performed=True, network_call_count=2, provider_call_count=2,
+                    _live_transport=transport, _live_ticket=ticket,
+                    regroup_model_identity=fetch._regroup_model_identity(served_model="deepseek-v4-flash"),
+                    regroup_attempted=True, regroup_failed=False,
+                    regroup_chunk_counts={"attempted": 1, "successful": 1, "failed": 0, "failed_indexes": []},
+                    **receipt_kwargs,
+                )
+            finally:
+                paid_gateway.revoke_ticket(ticket)
+        self.assertEqual(receipt["schema_version"], "1.1.0")
+        self.assertEqual(len(receipt["provider_response_refs"]), 1)
+        self.assertEqual(summary["status"], "live_authorized_completed")
 
     def test_model_top_level_superset_keeps_themes_and_ledgers_ignored_keys(self):
         payload = json.loads(self._llm())
@@ -1338,7 +1536,16 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
     def _response(themes, finish="stop", model="deepseek-v4-flash", fingerprint="fp_x"):
         payload = json.dumps({"themes": themes})
         choice = type("C", (), {"message": type("M", (), {"content": payload})(), "finish_reason": finish})()
-        return type("R", (), {"choices": [choice], "model": model, "system_fingerprint": fingerprint})()
+        response_payload = {
+            "choices": [{"message": {"content": payload}, "finish_reason": finish}],
+            "model": model, "system_fingerprint": fingerprint,
+            "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
+        }
+        return type("R", (), {
+            "choices": [choice], "model": model, "system_fingerprint": fingerprint,
+            "usage": response_payload["usage"],
+            "model_dump": staticmethod(lambda mode="json": copy.deepcopy(response_payload)),
+        })()
 
     def _theme(self, theme_id):
         return {"theme_id": theme_id, "display_name": theme_id, "summary": "s",
@@ -1350,9 +1557,59 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
             queries=["power demand"], expected_decision_date=self.DATE,
             tavily=self._Tavily(batches), deepseek_client=self._DeepSeek(plan),
             transport=transport, dispatch_budget=_DispatchBudget(),
-            persist_search_response=_noop_persist, query_records=["power demand"], parent_plan=None,
+            persist_search_response=_noop_persist, persist_regroup_response=_noop_persist,
+            query_records=["power demand"], parent_plan=None,
         )
         return outcome, transport
+
+    def _parent_with_stage2_cap(self, cap=4):
+        payload = query_plan.build_parent_plan(
+            decision_date=self.DATE,
+            policy_version="soft_discovery_query_policy_v0.1.0",
+            policy_template_content_sha256="a" * 64,
+            stage1_queries=[{"query_id": "stage1-a", "query_text": "power demand"}],
+            stage2_rule_sha256="b" * 64,
+            provider_envelopes=[
+                {"provider": "web", "stage1_max_dispatch_count": 1, "stage2_max_dispatch_count": cap, "retry_max_dispatch_count": 0, "max_dispatch_count": 1 + cap},
+                {"provider": "xai", "stage1_max_dispatch_count": 1, "stage2_max_dispatch_count": 0, "retry_max_dispatch_count": 0, "max_dispatch_count": 1},
+            ],
+            generated_at="2026-07-30T08:00:00Z",
+        )
+        return query_plan.ParentPlanDocument(
+            payload, artifact_sha256="c" * 64, artifact_path="state/us_short/test-parent-plan.json",
+        )
+
+    def test_stage2_chunks_use_the_frozen_envelope_and_refuse_a_fifth_before_deepseek(self):
+        parent = self._parent_with_stage2_cap(4)
+        records = query_plan.derive_stage1_query_records(parent)
+        rows = [dict(self.ROWS[0], url=f"https://news.example/{index}") for index in range(40)]
+        deepseek = self._DeepSeek([self._response([]) for _ in range(4)])
+        outcome = fetch.execute_live_web_orchestration(
+            queries=[row["query_text"] for row in records], expected_decision_date=self.DATE,
+            tavily=self._Tavily([rows]), deepseek_client=deepseek,
+            transport=_OrchestrationTransportProbe("tavily", "deepseek"), dispatch_budget=_DispatchBudget(),
+            persist_search_response=_noop_persist, persist_regroup_response=_noop_persist,
+            query_records=records, parent_plan=parent,
+        )
+        self.assertEqual(len(deepseek.prompts), 4)
+        self.assertEqual(
+            outcome["regroup_chunk_counts"],
+            {"attempted": 4, "successful": 4, "failed": 0, "failed_indexes": []},
+        )
+        frozen_envelopes = copy.deepcopy(parent["canonical_plan_core"]["provider_envelopes"])
+
+        five_chunk_rows = [dict(self.ROWS[0], url=f"https://news.example/five-{index}") for index in range(50)]
+        refused = self._DeepSeek([])
+        with self.assertRaisesRegex(plan_budget.PlanBudgetError, "frozen Stage-2"):
+            fetch.execute_live_web_orchestration(
+                queries=[row["query_text"] for row in records], expected_decision_date=self.DATE,
+                tavily=self._Tavily([five_chunk_rows]), deepseek_client=refused,
+                transport=_OrchestrationTransportProbe("tavily", "deepseek"), dispatch_budget=_DispatchBudget(),
+                persist_search_response=_noop_persist, persist_regroup_response=_noop_persist,
+                query_records=records, parent_plan=parent,
+            )
+        self.assertEqual(refused.prompts, [])
+        self.assertEqual(parent["canonical_plan_core"]["provider_envelopes"], frozen_envelopes)
 
     def test_happy_path_sends_the_reviewed_prompt_and_returns_themes(self):
         """Covers the K3-R55 shape: a prompt builder that returned None or a re-authored string."""
@@ -1362,7 +1619,8 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
             queries=["power demand"], expected_decision_date=self.DATE,
             tavily=self._Tavily([self.ROWS]), deepseek_client=deepseek,
             transport=transport, dispatch_budget=_DispatchBudget(),
-            persist_search_response=_noop_persist, query_records=["power demand"], parent_plan=None,
+            persist_search_response=_noop_persist, persist_regroup_response=_noop_persist,
+            query_records=["power demand"], parent_plan=None,
         )
         self.assertEqual(len(deepseek.prompts), 1)
         prompt = deepseek.prompts[0]
@@ -1378,6 +1636,22 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
         )
         self.assertEqual(transport._snapshot()["deepseek"], 0)
 
+    def test_live_output_clock_is_after_deepseek_persistence(self):
+        persisted_at: list[datetime] = []
+
+        def persist_regroup(_request, _response):
+            persisted_at.append(datetime.now(timezone.utc))
+
+        outcome = fetch.execute_live_web_orchestration(
+            queries=["power demand"], expected_decision_date=self.DATE,
+            tavily=self._Tavily([self.ROWS]), deepseek_client=self._DeepSeek([self._response([])]),
+            transport=_OrchestrationTransportProbe("tavily", "deepseek"), dispatch_budget=_DispatchBudget(),
+            persist_search_response=_noop_persist, persist_regroup_response=persist_regroup,
+            query_records=["power demand"], parent_plan=None,
+        )
+        self.assertEqual(len(persisted_at), 1)
+        self.assertGreaterEqual(outcome["fetched_at"], persisted_at[0])
+
     def test_no_accepted_rows_skips_the_regroup_entirely(self):
         """Covers the K3-R57 shape: the zero-source path must not call or claim a regroup."""
         deepseek = self._DeepSeek([])
@@ -1385,7 +1659,8 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
             queries=["power demand"], expected_decision_date=self.DATE,
             tavily=self._Tavily([[]]), deepseek_client=deepseek,
             transport=_OrchestrationTransportProbe("tavily", "deepseek"), dispatch_budget=_DispatchBudget(),
-            persist_search_response=_noop_persist, query_records=["power demand"], parent_plan=None,
+            persist_search_response=_noop_persist, persist_regroup_response=_noop_persist,
+            query_records=["power demand"], parent_plan=None,
         )
         self.assertEqual(deepseek.prompts, [])
         self.assertFalse(outcome["regroup_attempted"])
@@ -1409,7 +1684,7 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
             ["provider_item_exception_dropped", "regroup_chunk_dropped"],
         )
         self.assertTrue(all(row["detail"].startswith("chunk[1]:") for row in dropped))
-        self.assertFalse(outcome["regroup_failed"])
+        self.assertTrue(outcome["regroup_failed"])
         self.assertEqual(
             outcome["regroup_chunk_counts"],
             {"attempted": 2, "successful": 1, "failed": 1, "failed_indexes": [1]},

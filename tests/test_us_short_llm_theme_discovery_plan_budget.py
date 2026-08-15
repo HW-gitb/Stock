@@ -624,6 +624,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
             queries=["q1", "q2"], expected_decision_date=DECISION_DATE,
             tavily=Tavily(), deepseek_client=object(), transport=_live_transport("tavily", "deepseek"),
             dispatch_budget=AbortAfterOne(), persist_search_response=_noop_persist,
+            persist_regroup_response=_noop_persist,
             query_records=["q1", "q2"], parent_plan=None,
         )
         self.assertIsInstance(web_outcome["budget_error"], plan_budget.PlanBudgetError)
@@ -768,6 +769,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
             queries=["q"], expected_decision_date=DECISION_DATE,
             tavily=Tavily(), deepseek_client=object(), transport=_live_transport("tavily", "deepseek"),
             dispatch_budget=CompletionAfterReturn(), persist_search_response=_noop_persist,
+            persist_regroup_response=_noop_persist,
             query_records=["q"], parent_plan=None,
         )
         self.assertIsInstance(web_outcome["budget_error"], plan_budget.PostPaymentDispatchError)
@@ -1054,6 +1056,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 queries=["q"], expected_decision_date=DECISION_DATE,
                 tavily=object(), deepseek_client=object(), transport=_live_transport("tavily", "deepseek"),
                 dispatch_budget=web_budget, persist_search_response=None,
+                persist_regroup_response=None,
                 query_records=["q"], parent_plan=None,
             )
         self.assertEqual(web_budget.calls, 0)
@@ -1135,7 +1138,8 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 queries=["off-plan"], expected_decision_date=DECISION_DATE,
                 tavily=web_client, deepseek_client=object(),
                 transport=_live_transport("tavily", "deepseek"), dispatch_budget=web_budget,
-                persist_search_response=_noop_persist, query_records=None, parent_plan=parent,
+                persist_search_response=_noop_persist, persist_regroup_response=_noop_persist,
+                query_records=None, parent_plan=parent,
             )
         self.assertEqual(web_budget.calls, 0)
         self.assertEqual(web_client.calls, [])
@@ -1168,6 +1172,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 queries=["q"], expected_decision_date=DECISION_DATE,
                 tavily=object(), deepseek_client=object(), transport=None,
                 dispatch_budget=web_budget, persist_search_response=_noop_persist,
+                persist_regroup_response=_noop_persist,
                 query_records=["q"], parent_plan=None,
             )
         self.assertEqual(web_budget.calls, 0)
@@ -1199,6 +1204,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 queries=["q"], expected_decision_date=DECISION_DATE,
                 tavily=Tavily(), deepseek_client=object(), transport=_live_transport("tavily", "deepseek"),
                 dispatch_budget=Budget(), persist_search_response=_noop_persist,
+                persist_regroup_response=_noop_persist,
                 query_records=["q"], parent_plan=None,
             )
         self.assertEqual(outcome["results"], [])
@@ -1236,6 +1242,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 queries=["q"], expected_decision_date=DECISION_DATE,
                 tavily=object(), deepseek_client=object(), transport=_live_transport("tavily", "deepseek"),
                 dispatch_budget=None, persist_search_response=_noop_persist,
+                persist_regroup_response=_noop_persist,
                 query_records=["q"], parent_plan=None,
             )
         with self.assertRaisesRegex(plan_budget.PlanBudgetError, "dispatch_budget"):
@@ -1607,7 +1614,8 @@ class PlanGateDecisionTableTests(unittest.TestCase):
             queries=[row["query_text"] for row in records], expected_decision_date=DECISION_DATE,
             tavily=tavily, deepseek_client=deepseek,
             transport=_live_transport("tavily", "deepseek"), dispatch_budget=budget,
-            persist_search_response=_noop_persist, query_records=records, parent_plan=parent,
+             persist_search_response=_noop_persist, persist_regroup_response=_noop_persist,
+             query_records=records, parent_plan=parent,
         )
         self.assertEqual(budget.stages, ["stage1"] * len(records) + ["stage2"])
         self.assertEqual(len(tavily.paid), len(records))
@@ -1626,7 +1634,7 @@ class PlanGateDecisionTableTests(unittest.TestCase):
                         queries=[records[0]["query_text"]], expected_decision_date=DECISION_DATE,
                         tavily=_RecordingTavily(), deepseek_client=_RecordingDeepSeek(),
                         transport=transport, dispatch_budget=budget,
-                        persist_search_response=_noop_persist,
+                        persist_search_response=_noop_persist, persist_regroup_response=_noop_persist,
                         query_records=records, parent_plan=parent,
                     )
                 self.assertEqual(budget.stages, [])

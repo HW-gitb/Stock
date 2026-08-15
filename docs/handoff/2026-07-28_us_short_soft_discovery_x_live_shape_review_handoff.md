@@ -816,7 +816,7 @@ K3-R105 并列记录的两条残留已关闭；在 Claude Code 独立审查前�
 
 ### 给人看的清单在哪
 
-用户维护的人类可读清单在桌面：`C:\Users\cnhea\Desktop\us_short_软发现通道_未完成清单_20260728.md`（第十一版）。**它是给人看的，不是命令来源**；执行细节以本节和 register 为准，两边冲突时以仓库为准。方案与红线仍在 `C:\Users\cnhea\Desktop\us_short_软发现通道_方案与执行_20260725.md`。
+本节所说的“第十一版未完成清单”是历史原件，现已退役，不再作为文件依赖。当前人类可读收尾方案统一在桌面 `C:\Users\cnhea\Desktop\usshort_软通道收尾.md`。**它是给人看的，不是命令来源**；执行细节以本节和 register 为准，发生冲突时以仓库和当前系统状态为准。
 
 ### 三步走（第 1、2 步不花钱，第 3 步必须用户逐次授权）
 
@@ -2834,6 +2834,13 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_s
 
 
 ## 2026-08-15 追加：20260815 探针已开枪 —— 全景交接给 Codex（判断待你复核，方案由你设计）
+
+### 2026-08-15 第一刀执行结果（Codex；repaired / OPEN-NOT-VERIFIED）
+
+- 已严格按桌面 `C:\Users\cnhea\Desktop\usshort_软通道收尾.md` 第一刀执行；上一轮没有代码改动，因此没有回滚代码，原有两份文档改动保持不动。
+- 只改了既有 DeepSeek paid gateway、Web runner、Web receipt schema、assessor 和对应测试。没有改 Stage-1/v0.3、ratio、X、4diii、槽、诊断状态、生产评分，也没有真实 provider/付费调用。
+- 已落地：`16384` + JSON object + temperature 0 的统一请求；每 chunk 最多 4 个主题；严格 JSON；DeepSeek raw 先写后消费；Web receipt `1.1.0` 的 `provider_response_refs` 与 raw/SHA/模型/usage/finish/chunk 绑定；部分 chunk 失败保持可诊断但整体不完整；Stage-2 使用 parent-plan Web envelope，拒绝第 5 块。
+- 固定 Python 离线回归已通过；状态仍是 `repaired / OPEN-NOT-VERIFIED`。Claude Code 独立复审通过前，不进入第二刀、不做真实付费 smoke、不接 4diii。
 
 **这一节的性质**：reviewer（Claude）打完了 0815 那一枪并做了诊断，但**方案设计权交给你**。下面把事实、判断、空白分开标注。**FACT 请复算，JUDGMENT 请判伪，GAP 请补齐或明确接受。** 不要默认 reviewer 是对的——他在同一轮里已经自我更正过一次（把 `ratio=0.2647` 当成模板变差的证据，实际是被本轮失败自己压低的）。
 
