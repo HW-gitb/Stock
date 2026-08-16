@@ -79,6 +79,32 @@ class FullPackLedgerTests(unittest.TestCase):
             self.assertFalse(marked.exists())
             self.assertTrue(unmarked.exists())
 
+    def test_us_short_green_is_rejected_when_marked_root_survives_pack(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            protected = Path(tmp) / "provider_samples"
+            protected.mkdir()
+            leaked = protected / "nested" / "tmp-leaked"
+            state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
+            passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
+            output = StringIO()
+            args = ["discover", "-s", "tests", "-p", "test_us_short*.py"]
+            def run_pack(*_args):
+                leaked.mkdir(parents=True)
+                (leaked / fpl.PRIVATE_TEST_ROOT_MARKER).touch()
+                return passed, {"mode": "parallel"}
+
+            with patch.object(fpl, "PRIVATE_TEST_ROOTS", (protected,)), \
+                    patch.object(fpl, "external_test_dependency_error", return_value=None), \
+                    patch.object(fpl, "_execute_full_pack", side_effect=run_pack):
+                with redirect_stdout(output):
+                    result = fpl.run_full_pack(
+                        "us_short", "marked-root control", 30, args,
+                        state=state, ledger=Path(tmp) / "ledger.json",
+                    )
+            self.assertEqual(result, 2)
+            self.assertIn("marked private test roots remained", output.getvalue())
+            self.assertFalse(leaked.exists())
+
     def test_new_tmp_root_cleanup_is_bound_to_run_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             parent = Path(tmp) / "provider_samples"

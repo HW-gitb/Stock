@@ -85,6 +85,23 @@ def cleanup_orphaned_private_test_roots(
     return tuple(removed)
 
 
+def find_marked_private_test_roots(
+    roots: tuple[Path, ...] = PRIVATE_TEST_ROOTS,
+) -> tuple[Path, ...]:
+    """Find helper-marked temporary roots still present after a full pack."""
+    found: list[Path] = []
+    for parent in roots:
+        parent = parent.resolve()
+        if not parent.is_dir():
+            continue
+        found.extend(
+            candidate.resolve()
+            for candidate in parent.rglob("*")
+            if candidate.is_dir() and (candidate / PRIVATE_TEST_ROOT_MARKER).is_file()
+        )
+    return tuple(sorted(set(found)))
+
+
 def snapshot_private_test_dirs(
     roots: tuple[Path, ...] = PRIVATE_TEST_ROOTS,
 ) -> frozenset[Path]:
@@ -301,12 +318,15 @@ def run_full_pack(
         f"fingerprint={prepared_fingerprint[:12]}",
         flush=True,
     )
-    private_dirs_before = snapshot_private_test_dirs()
+    private_dirs_before = snapshot_private_test_dirs(PRIVATE_TEST_ROOTS)
+    leaked_marked_roots: tuple[Path, ...] = ()
     try:
         result, run_detail = _execute_full_pack(lane, unittest_args, timeout_seconds)
     finally:
-        orphaned = cleanup_orphaned_private_test_roots()
-        new_tmp_dirs = cleanup_new_private_test_roots(private_dirs_before)
+        if lane == "us_short":
+            leaked_marked_roots = find_marked_private_test_roots(PRIVATE_TEST_ROOTS)
+        orphaned = cleanup_orphaned_private_test_roots(PRIVATE_TEST_ROOTS)
+        new_tmp_dirs = cleanup_new_private_test_roots(private_dirs_before, PRIVATE_TEST_ROOTS)
         cleaned = orphaned + new_tmp_dirs
         if cleaned:
             print(
@@ -331,6 +351,12 @@ def run_full_pack(
     )
     if result.status != "PASS":
         return result.exit_code
+    if leaked_marked_roots:
+        print(
+            f"[full-pack-ledger] REFUSED - marked private test roots remained after "
+            f"us_short full pack: {', '.join(map(str, leaked_marked_roots))}"
+        )
+        return 2
     final_state = state if state is not None else collect_code_state()
     if fingerprint(final_state) != fingerprint(current_state):
         print("[full-pack-ledger] REFUSED - code state changed during the full run")

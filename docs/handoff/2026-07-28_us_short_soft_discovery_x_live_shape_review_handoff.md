@@ -3166,3 +3166,17 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **验证命令与结果**：lane 全量 `status=PASS exit=0 tests=5959 elapsed=710.3s deadline=860s`、`COUNT_GATE 5959=5959`、`serial_tail=23`、`319 PASS / 0 FAIL / 0 SKIPPED`、跑完零残留。**reviewer 自打反向控制**：把 `finally: parent.rmdir()` 临时改回轻夹具 → 新那条重叠测试精确转红（`AssertionError: False is not true`）；按备份还原后 sha256 回到 `cfadb192b19a185b2de45cca`。三样不可动（旧持锁夹具 / 探测器 / D 轴 conformance）diff 全空。
 - **失效的旧结论（我自己的估算，认下）**：方案里估「总墙钟落到 450s 上下、余量回到 ~48%」**过于乐观**。实测 `855.6s → 710.3s`，只省 145.3s，余量 17.4%——因为串行尾巴仍留着 `conformance_executable`（171.7s，现占墙钟 24.2%）等大件，而它们本就不许为墙钟牺牲。今后引用降本幅度，以这次实测为准。
 - **下一步注意**：新开 `O-RESIDUE-GUARD-BLIND-TO-LEAKED-MARKED-TEMP-ROOTS`（不阻断）——带标记的温目录一旦真泄漏就对守卫永久不可见；建议把「收尾时私有根不得残留带标记温目录」放进 `full_pack_ledger` 做一次跑后扫描，不要在守卫内部继续加条件。
+
+## 2026-08-16 追加：Codex 最小修复 optional——full-pack 收尾扫描（8d8c）
+
+- 在 `.tools/full_pack_ledger.py` 增加 `find_marked_private_test_roots()`。仅 US-short full pack 在所有 worker 结束后调用；它扫描既有 `provider_samples` 与 `state/us_short` 下的 marked temp roots，扫描后继续走原有 cleanup。若扫描非空，测试即使 PASS 也不记 ledger green，返回 `2`。
+- 新增 `tests/test_full_pack_ledger.py::test_us_short_green_is_rejected_when_marked_root_survives_pack`。它在模拟 full pack 期间植入嵌套 marked root，验证「发现残留 → 拒绝 PASS → 既有 cleanup 删除」。关闭扫描门的临时对照精确转红，恢复后 `1 OK`。
+- 选择收尾扫描而不是继续改 residue guard：并行运行期间守卫无法区分活目录与已泄漏目录，full-pack ledger 才知道所有 worker 已结束；改动只在收尾层，不扩大并行期规则。
+- 当前状态：`repaired / OPEN-NOT-VERIFIED`。本轮没有重跑 full lane；此前 `710.3s` 结果属于 optional 改动前代码态。既有 full-pack ledger 测试包有一个基线 `FOCUSED_RECEIPT` NameError，本刀不处理。
+
+## 2026-08-16 追加：Claude Code 审查 ledger 收尾扫描 —— PASS（已提交并合入 master）
+
+- **改了什么**：`full_pack_ledger` 在 `run_full_pack` 的 `finally` 里、既有清理**之前**递归扫两个私有根找 `.us_short_test_temp_root_owned`；命中且本轮本该记绿时打印 REFUSED 并 `return 2` 拒绝记账，只对 `us_short` lane 生效。
+- **为什么这么放是对的**：先取证再清理（否则清理抹掉证据）；拒绝在 `status != "PASS"` 提前返回**之后**，所以 fail-fast 红那种被杀进程留下的温目录不会再叠一层噪音；退出码 2 与既有两条 REFUSED 路径一致。这正是我提 Optional 时说的"只有 ledger 知道包什么时候真结束"。
+- **验证命令与结果**：改后 ledger 跑真实全量 `status=PASS exit=0 tests=5959 elapsed=712.4s deadline=860s`、`COUNT_GATE 5959=5959`、`serial_tail=23`、`319 PASS / 0 FAIL / 0 SKIPPED`、**无 REFUSED 行**——这一腿只能靠真跑，证明新门不会把干净的绿判成脏。**reviewer 自打反向控制**：把 `find_marked_private_test_roots` 掏空成恒 `return ()`，owner 用例精确转红 `AssertionError: 0 != 2`；逐字还原后 numstat 回 `29 3`、零残留。
+- **下一步注意（新开 Optional，不属本刀）**：`tests/test_full_pack_ledger.py:285` 引用全仓未定义的 `FOCUSED_RECEIPT`，整模块实测 ERROR。要紧的不是那一行，而是：**决定每条 lane 全量绿不绿的工具，自己的测试模块是红的，且它不匹配任何 lane 的 discovery pattern，没有任何全量会跑到它**。建议单独一刀修那一行，并把 ledger 自身的测试挂进某条会被跑到的包。
