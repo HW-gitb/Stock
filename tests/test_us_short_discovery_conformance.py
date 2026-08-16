@@ -2211,10 +2211,9 @@ class ResourceIsolationMatrix:
 
     Split out of ``ExecutableClosureMatrix`` as its own class so the lane's
     module-per-worker parallelism can run it beside the mutation matrix instead of
-    behind it. Not one assertion changed: it still runs every derived resource test
-    in BOTH orders, because the reverse pass is what catches a test that only
-    passes because another test ran first, and it still snapshots the repository
-    roots after each order.
+    behind it. The owning modules already run their tests in normal order; this D-axis
+    worker reruns every derived resource test once in reverse order under the shared
+    state/lock probes, then snapshots the repository roots after that pass.
     """
 
     NAMED_NON_CELLS = ExecutableClosureMatrix.NAMED_NON_CELLS
@@ -2401,20 +2400,22 @@ class ResourceIsolationMatrix:
 
         with mock.patch.object(capstone, "_acquire_decision_lock", recording_acquire), \
              mock.patch.object(capstone, "_release_decision_lock", proving_release):
-            for order in (selected, list(reversed(selected))):
-                for test_path in order:
-                    run, red, resolved, _output = LaneGuardRegistryConformance._run(test_path)
-                    with self.subTest(resource_test=test_path):
-                        self.assertTrue(resolved)
-                        self.assertEqual((run, red), (1, 0), _output)
-                self.assertEqual(
-                    snapshot(state_root), state_before,
-                    "a resource test changed repository state/us_short",
-                )
-                self.assertEqual(
-                    snapshot(legacy_lock_root), legacy_locks_before,
-                    "a resource test changed the legacy repository lock root",
-                )
+            # The owning modules cover normal order. Run this additional in-process pass in
+            # reverse derived order so a test that only passes because an earlier test prepared
+            # module state can still turn red without paying for two full D-axis passes.
+            for test_path in reversed(selected):
+                run, red, resolved, _output = LaneGuardRegistryConformance._run(test_path)
+                with self.subTest(resource_test=test_path):
+                    self.assertTrue(resolved)
+                    self.assertEqual((run, red), (1, 0), _output)
+            self.assertEqual(
+                snapshot(state_root), state_before,
+                "a resource test changed repository state/us_short",
+            )
+            self.assertEqual(
+                snapshot(legacy_lock_root), legacy_locks_before,
+                "a resource test changed the legacy repository lock root",
+            )
         self.assertEqual(set(self.NAMED_NON_CELLS), {
             "wrong_requirement", "offline_document_corroboration",
         })

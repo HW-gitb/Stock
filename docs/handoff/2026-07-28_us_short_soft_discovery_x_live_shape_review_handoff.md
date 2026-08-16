@@ -2996,3 +2996,37 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_s
 - 两处 full-lane 首红已按最小范围修正：查询质量旧夹具补 `semantic_assertions`；Batch5 夹具同步 4 个 boostable ticker、zero→valid 半升级前置状态和 Web-only MSFT `52.0` 分。IO inventory 用现有 generator 登记 5 个 class-4 测试夹具 key。
 - 验证：focused `481/481 OK`，`receipt:d0cf00b4a4e12967a2dc7773`；官方 full lane `5925/5925 PASS`、`318/318`、`equal=True`、`590.6s/860s`；static `diff-check=PASS`、`py_compile=2`；IO inventory `20/20 OK`。
 - 边界：无 provider/network/paid/slot/4d-iii；本轮 3 个测试/快照文件未提交，待用户决定后续提交或第五刀设计。
+
+
+## 2026-08-16 追加：交 Codex 独立审查「D 轴资源矩阵收窄」（reviewer 实现，未提交）
+
+**任务**：独立审查本工作树 `tests/test_us_short_discovery_conformance.py` 的未提交改动（`git diff` 可见，19+/14−），完整现状见 `docs/system_risk_register.md` 顶部 `R-USSHORT-D-AXIS-RESOURCE-MATRIX-SWEEPS-EVERY-TEST-TWICE`。**不要照抄 reviewer 的结论**——本刀删的是一项真实检测，且由 reviewer 自己实现，正需要独立一双眼睛。
+
+**必须自己复算的事实（勿采信转述）**：
+
+1. `selected` 的构造口径与实际规模（reviewer 记为 14 模块 / N=365 / 双遍 730 次）。
+2. `test_us_short_discovery_conformance_resources` 改动前后的实际耗时（reviewer 记改动前 228.9s，未测改动后）。
+3. 裸解释器启动开销（reviewer 记 0.018s，据此否决「按模块批量跑」）。
+
+**必须给出判断的三个问题**：
+
+1. **被删的性质值不值这 115s**：顺序依赖只可能经由**注入根**在这些测试之间传递（每个测试是独立进程，进程内状态不共享）。请判定该面在本仓是否真实可达、历史上是否抓到过东西；若你认为值得保留，请说明并给替代降本方案。
+2. **单遍是否仍承重**：请打**植入对照**——让 `selected` 中某一个测试真实转红（或让某测试改动真实 `state/us_short`），证明收窄后的矩阵仍精确转红并点名。这是本刀能否 PASS 的硬条件。
+3. **reviewer 否决的两条相邻方案是否成立**：inventory 扫描器少选风险、以及 `conformance_executable` 属变异矩阵不得砍——两条都请自行验证，reviewer 有可能判错。
+
+**边界**：只审这一处改动；不要顺手改 `conformance_executable`；不要碰 `full_pack_ledger` 的 860s 上限（AGENTS 常量）；不联网、不调 provider。审完把 verdict 写进本树 `docs/SESSION_LOG.md`，PASS 后由 reviewer 提交合并。
+
+## 2026-08-16 追加：Codex 已按 FAIL 结论完成 D 轴最小修复，交 Claude 复审
+
+- D 轴由错误的正序单遍改为 **逆序单遍**：`for test_path in reversed(selected)`。正常测试模块保留通常顺序；D 轴在同一解释器和共享 state/lock 探针下保留一个非正常顺序，不再支付两遍成本。
+- 主类 docstring、循环注释、独立资源模块的 module/class docstring 已统一纠正；不再声称每测试独立解释器，不再硬写 365，也不再声称仍跑 BOTH orders。
+- 真实顺序植入：正常序 `aaa(require clean) -> zzz(set module state)` 为 `2 OK`；逆序 D 轴精确点名 `test_aaa_d_axis_order_probe_requires_clean_state` 转红；还原后最终 D 轴 `51.924s / OK`，植入文件 working/head blob 相同、零 diff。
+- 边界未变：未改 `conformance_executable`，未改 860s ledger 上限，未联网、未调 provider、未提交。当前 `repaired / OPEN-NOT-VERIFIED`，下一步由 Claude 独立审查本次两文件修复及三份既有交接记录。
+
+## 2026-08-16 追加：Claude Code 独立复审 D 轴逆序单遍 —— PASS（已提交并合入 master）
+
+- **改了什么**：`ResourceIsolationMatrix` 的 D 轴由「正序 + 逆序两遍」收成 **仅 `reversed(selected)` 一遍**，两处真实根快照由每遍一次改为单遍后一次；三处说明（主类 docstring、循环注释、`tests/test_us_short_discovery_conformance_resources.py` 的 module/class docstring）同步改为真实的「同进程逆序单遍」。仅两个测试文件，无生产代码。
+- **为什么这么改**：该模块是 lane 墙钟地板（full pack 日志 `WALL_CLOCK_FLOOR` 记 `228.9s`，占 860s 预算 26.6%），而第二遍是可省的那一遍；保留的这一遍必须是**逆序**，因为所属模块本身已经覆盖通常顺序，逆序才是 D 轴独有的增量。
+- **验证命令与结果**：验收超集 `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_discovery_conformance tests.test_us_short_discovery_conformance_resources` → `Ran 32 tests in 165.337s / OK`、`status=PASS exit=0 tests=32`、`receipt:1da0de05dbfba28be4aeb977`。reviewer 自写顺序植入对照（临时 `tests/test_zz_reviewer_d_axis_order_probe.py`）：正常序 `Ran 2 / OK`，D 轴逆序 `FAILED` 并精确点名 `resource_test='...DAxisOrderProbe.test_aaa_probe_requires_clean_module_state'`；删探针后 numstat 逐字回到 `19/18` + `5/6`。纯 AST 复刻推导独立复算 `selected` 模块集 = `8 + 7 = 13`。
+- **失效的旧结论**：`_run()` 「每个测试独立解释器进程」为假（`:1973-1990` 同进程 loader + `TextTestRunner`）；`14 个模块 / 365 个测试 / 730 次子进程` 三个数字全部作废，正确为 `13 / 334 / 668`。register 顶部条目里这几处旧表述已开 `O-DAXIS-1` 待清理。
+- **下一步注意**：register 记的单遍耗时（`~52s`）在 reviewer 机器上复不出（实测 `129.1s`，干净超集 32 测试 `165.337s`），已开 `O-DAXIS-2`；引用降本幅度时别跨机器套用具体秒数。`conformance_executable`（第二名 `157.7s`）按 Codex 与 reviewer 双方判断**不得**同法收窄，它是变异矩阵不是顺序重扫。
