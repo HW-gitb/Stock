@@ -376,15 +376,50 @@ def _theme_packet_progress(
     packet_path = project_root / "research/results/a_short_theme_forward_comparison.json"
     packet = _load_json(packet_path)
     if packet is None:
-        _set_contract_failure(item, None, None)
+        _set_contract_failure(
+            item,
+            "theme_packet_missing" if not packet_path.exists() else "theme_packet_invalid",
+            "theme_packet=missing" if not packet_path.exists() else "theme_packet=invalid",
+        )
         return
     try:
         from engine.a_short_theme_forward_comparison import validate_comparison_packet
 
         validate_comparison_packet(packet)
     except Exception:
-        _set_contract_failure(item, None, None)
+        _set_contract_failure(item, "theme_packet_invalid", "theme_packet=invalid")
         return
+    mode = str(packet.get("adjudication_mode") or "")
+    if mode.startswith("epoch_"):
+        item["progress_status"] = "stalled"
+        item["error_code"] = item.get("error_code") or f"evidence_clock_blocked_{mode}"
+        item["error_detail"] = item.get("error_detail") or f"adjudication_mode={mode}"
+        return
+    rejected = packet.get("rejected_atomic_cohorts")
+    rejected_reason = (
+        rejected.get(as_of)
+        if isinstance(rejected, dict) and as_of in rejected
+        else None
+    )
+    if rejected_reason is not None:
+        reason_text = str(rejected_reason).replace("\r", " ").replace("\n", " ")[:480]
+        if (
+            reason_text == "decision_not_effective_yet"
+            and item["execution_status"] == "succeeded"
+            and item["progress_status"] in {"advanced", "already_current", "not_applicable"}
+        ):
+            # Health derives this benign explanation from the validated packet,
+            # while retaining the launcher's real success/no-op terminal state.
+            item["error_code"] = "decision_not_effective_yet"
+            item["error_detail"] = (
+                f"rejected_atomic_cohort={as_of}; reason=decision_not_effective_yet"
+            )
+        else:
+            _set_contract_failure(
+                item,
+                "theme_cohort_rejected",
+                f"rejected_atomic_cohort={as_of}; reason={reason_text}",
+            )
     latest, date_error = _normalise_date_field(
         packet.get("latest_evidence_as_of"),
         as_of=as_of,
@@ -396,15 +431,6 @@ def _theme_packet_progress(
         return
     if latest is not None:
         item["observed_decision_as_of"] = latest
-    rejected = packet.get("rejected_atomic_cohorts")
-    if isinstance(rejected, dict) and rejected.get(as_of):
-        # V3-A owns this reason.  The health consumer only chooses the state.
-        item["progress_status"] = "unavailable"
-        return
-    mode = str(packet.get("adjudication_mode") or "")
-    if mode.startswith("epoch_"):
-        item["progress_status"] = "stalled"
-        return
     # The producer/launcher outcome is the progress authority.  A packet date
     # is an observed clock only; it must not upgrade a producer no-op into
     # ``advanced``.
@@ -495,10 +521,9 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path,
             else:
                 item["observed_decision_as_of"] = artifact_date
                 if name == "candidate_effect" and artifact_date is None:
-                    # V3-A owns the stable explanation for a valid current
-                    # summary that has no observed evidence clock.  V4 may
-                    # downgrade progress, but must not replace this reason
-                    # with its generic missing-clock classification.
+                    # Health preserves the stable explanation from the
+                    # validated authoritative artifact; it does not invent a
+                    # generic missing-clock reason over that fact.
                     item["error_code"] = item["error_code"] or "candidate_effect_no_observed_evidence"
                     item["error_detail"] = item["error_detail"] or \
                         "authoritative_summary_observed_as_of=missing"
@@ -506,7 +531,7 @@ def _normalise_outcome(raw: dict[str, Any], *, as_of: str, project_root: Path,
         else:
             item["observed_decision_as_of"] = None
             item["observed_data_through"] = None
-            _set_contract_failure(item, None, None)
+            _set_contract_failure(item, _artifact_code, _artifact_detail)
 
     if policy == "validated_current_packet":
         _theme_packet_progress(item, as_of=as_of, project_root=project_root)

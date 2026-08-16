@@ -655,7 +655,8 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str,
                           markdown_path: str | Path | None = None,
                           write_public: bool = True,
                           run_revision_id: str | None = None,
-                          official_project_root: str | Path | None = None) -> dict[str, Any]:
+                          official_project_root: str | Path | None = None,
+                          sidecar_result: dict[str, Any] | None = None) -> dict[str, Any]:
     """Settle only existing captures, then return the current de-identified P2 reminder.
 
     ``write_public=False`` is the weekly-pipeline path: it needs the summary for
@@ -675,6 +676,28 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str,
                 official_project_root, _date(as_of), run_revision_id
             )
         private_path, ledger = _load_or_initialize(root)
+
+        def outcome_snapshot(value: dict[str, Any]) -> dict[tuple[Any, ...], str]:
+            snapshot: dict[tuple[Any, ...], str] = {}
+            for track in TRACK_ADMISSIONS:
+                epoch = _active_epoch(value, create=False, track=track)
+                if epoch is None:
+                    continue
+                for record in epoch.get("records", []):
+                    identity = (
+                        track, record.get("decision_date"),
+                        record.get("run_revision_id"),
+                    )
+                    for field in ("target_entries", "breakout_entries"):
+                        for index, entry in enumerate(record.get(field) or []):
+                            if isinstance(entry, dict):
+                                snapshot[identity + (field, index)] = json.dumps(
+                                    entry.get("outcomes"), ensure_ascii=False,
+                                    sort_keys=True, allow_nan=False,
+                                )
+            return snapshot
+
+        outcomes_before = outcome_snapshot(ledger)
         if daily_cache_path is not None and Path(daily_cache_path).is_file():
             for track in TRACK_ADMISSIONS:
                 epoch = _active_epoch(ledger, create=True, track=track)
@@ -693,6 +716,12 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str,
                     selected_records = [record for record in epoch["records"]
                                         if run_revision_id is None or record.get("run_revision_id") == run_revision_id]
                 _settle_existing_records(selected_records, Path(daily_cache_path), track=track)
+        outcomes_after = outcome_snapshot(ledger)
+        if sidecar_result is not None:
+            sidecar_result["outcomes_updated"] = sum(
+                outcomes_before.get(key) != outcomes_after.get(key)
+                for key in set(outcomes_before) | set(outcomes_after)
+            )
         _validate_ledger(ledger)
         _atomic_write(private_path, ledger)
         summary = _summary_from_ledger(
@@ -708,6 +737,8 @@ def settle_and_summarize(*, root: str | Path | None, as_of: str,
         # The weekly seam must never repeat old review_due text if this sidecar
         # is corrupt or unavailable.  The caller keeps M6.7 authoritative, and
         # the published pair stays at its last checked state.
+        if sidecar_result is not None:
+            sidecar_result.pop("outcomes_updated", None)
         return _unavailable_summary(as_of, configured=True)
 
 

@@ -937,6 +937,14 @@ class MainWiringTests(unittest.TestCase):
             _sidecar_result_fields({"status": "accumulating"}, settlement=True)[0],
             "unavailable",
         )
+        self.assertEqual(
+            _sidecar_result_fields({"status": "no_count", "reason": "selection_empty"}, settlement=True),
+            ("not_applicable", "selection_empty", "reason=ValueError: selection_empty"),
+        )
+        self.assertEqual(
+            _sidecar_result_fields({"status": "settled", "reason_code": "no_count"}, settlement=True)[0],
+            "not_applicable",
+        )
 
     def _write_inputs(self, td, feed=None, ai=None):
         ai = ai if ai is not None else _analysis_input(

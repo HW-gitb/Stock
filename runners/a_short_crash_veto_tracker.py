@@ -907,11 +907,13 @@ def settle_existing(
     *, as_of: str, state_path: Path = STATE_PATH, summary_path: Path = SUMMARY_PATH,
     price_path: Path = PRICE_CACHE_PATH, run_revision_id: str,
     official_project_root: str | Path,
+    sidecar_result: dict | None = None,
 ) -> dict:
     """Rebuild only the official rolling view; never recapture or fetch prices."""
     revision = validate_run_revision_id(run_revision_id)
     require_official_revision(official_project_root, as_of, revision)
     state = _load_state(state_path)
+    progress_before = _progress_digest(state)
     cache = _load_price_cache(price_path)
     summary = build_summary(
         state, cache, as_of, official_project_root=official_project_root,
@@ -919,9 +921,15 @@ def settle_existing(
     state["updated_at"] = summary["generated_at"]
     _atomic_json(state_path, state)
     _atomic_json(summary_path, summary)
+    progress_status = (
+        "advanced" if _progress_digest(state) != progress_before else "already_current"
+    )
+    if sidecar_result is not None:
+        sidecar_result["progress_status"] = progress_status
     return {
         "status": "settled",
         "official_revision_id": summary.get("official_revision_id"),
+        "progress_status": progress_status,
     }
 
 

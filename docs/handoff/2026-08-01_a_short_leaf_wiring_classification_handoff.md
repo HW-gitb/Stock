@@ -8795,3 +8795,98 @@ a-short full-pack：fingerprint=a9d5bb199dfc；discovered=3138；ran=3138；equa
 **方法学教训五：先分清触发条件是环境还是日历。** 我上一轮把问题 1 归进「证据只来自冷根」，是因为只比对了产物没读产生条件。实际触发条件写在 `engine/a_short_theme_forward_comparison.py` 的「决策日晚于今天」上——**周一决策日、周末跑，必然成立**，与哪棵树无关；两棵树的 packet 现在也确实带着同一条 rejection、字节数都相同。**先把触发条件读出来，再决定要不要用「跑错根」解释现象**，否则会像我这样把一条真漏洞误判成环境噪声。该更正已回写 register。
 
 **下一步**：这条与既有四项队列无依赖，可排在其后；暖根复现只要在决策日之前于主树跑一次真实周流程即可。
+
+## 2026-08-16 追加：按桌面 3a_testrun0816 执行问题1最小修复（Codex；8c7a）
+
+### 状态与范围
+
+本节是 `docs/handoff/README.md` 路由到的 A-short leaf wiring/classification 当前 handoff 的最新追加；风险单一来源是 `docs/system_risk_register.md` 的 `R-ASHORT-0816-THEME-BENIGN-COHORT-REJECTION-LANDS-AS-A-SELF-INFLICTED-REASON-CONTRACT-VIOLATION`。问题1实现已修复，状态为 **repaired / OPEN-NOT-VERIFIED**：独立 reviewer/committer 和主树暖根真实周跑仍未完成。本轮只在 `D:\cnhea\Codex\worktrees\8c7a\Stock`，没有读取、修改或运行主树。
+
+### 根因、最小改动与调用链
+
+- health 对 theme 的已知 `decision_not_effective_yet` rejection 原先把健康状态改成 `unavailable`，但不带稳定 code，随后被通用 reason-contract 兜底改成 `reason_contract_violation`；epoch mismatch、packet missing/invalid 也缺少窄原因。authoritative candidate/IV artifact validator 已有具名 code/detail，但 `_normalise_outcome` 丢弃了它们。
+- weekly pipeline 的 P5/P4a settlement 原先把 `no_count`（包括带 `selection_empty` 的真实 no-count）当成 reason/stalled；其它 reason 仍必须停滞或不可用。
+- official 十轨 producer 的公开 `status` 有些恒为 `settled`/review 状态，原 `_official_outcome_row` 没有消费真实进度，导致 zero update 也被记为 advanced。修复为已有 producer 增加可选内存 carrier：`outcomes_updated` 或 `progress_status` 进入 official projector；缺失、非法、负数或冲突不猜测，直接 fail-closed。
+- 实际链路为：producer → 内存 `sidecar_result` → official `_status` / `_official_outcome_row` 或 weekly `_sidecar_result_fields` → sidecar outcomes → health。直接消费者是 weekly pipeline、official ten-track settlement 和 sidecar health；M6.7 正式输出、selection、sizing、provider/live seam 不消费该 carrier。
+
+### 文件与边界
+
+- 生产改动：`runners/a_short_weekly_sidecar_health.py`、`runners/a_short_weekly_pipeline.py`、`runners/a_short_official_settlement.py`、`engine/a_short_factor_comparison_v2_weekly.py`、`runners/a_short_target_policy_comparison_runner.py`、`runners/forward_tracker.py`、`runners/a_short_theme_forward_comparison.py`、`runners/a_short_crash_veto_tracker.py`。
+- 测试改动：对应的 health/pipeline/official/factor/target/forward/theme/crash 离线测试；增加真实 producer-shape 的 positive/zero/stalled/invalid 断言。
+- schema/source-binding：沿用 `a_short_weekly_sidecar_outcomes` `1.0.0` 和既有五态枚举；无 schema bump、无新持久字段、无 receipt/hash/state 层；`as_of`、`run_revision_id`、`require_official_revision` 和官方 source binding 不变。
+- cache/write：无 provider 或数据源变化；forward 仍 cache-only；carrier 不写盘；既有 producer private/public 写盘边界不变；health 只读取已校验 packet/artifact。没有把瞬态 review/commit 状态写入 `docs/CURRENT.md`。
+
+### 按类自审与负向控制
+
+已逐项核对并有测试承重：
+
+1. benign `decision_not_effective_yet` 保留 launcher `succeeded/already_current`，真实 code 可读；epoch mismatch 优先为 stalled；其它 rejection 不放行。
+2. packet missing/invalid 与 candidate/IV artifact 的 validator code/detail 不再被 generic code 覆盖；其它 sidecar 无合法原因仍由通用契约门 fail-closed。
+3. P5/P4a 精确 `no_count` → `succeeded/not_applicable`；其它 reason 仍 stalled/unavailable；零更新不伪装成 advanced。
+4. official 十轨覆盖 operation、factor、margin、industry、target、final、overlay、forward、theme、crash：positive update → advanced，zero update → already_current，明确 pending/no-count/no-official capture → not_applicable；missing/invalid/negative/conflicting progress → failure/unavailable；forward stale 不报成功。
+5. target/theme/crash 重复结算与真实 durable progress 已有 producer-shape 断言；没有改 selection、veto、sizing、provider、cache source 或正式输出。
+
+### 精确验证与原始终态
+
+固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。
+
+精确 focused 命令：
+
+```powershell
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' --version
+& '.\.tools\run_unittest_with_repo_pythonpath.cmd' tests.test_a_short_weekly_sidecar_health tests.test_a_short_weekly_pipeline tests.test_a_short_official_settlement tests.test_a_short_factor_comparison_v2_weekly tests.test_a_short_target_policy_comparison tests.phase6.test_forward_tracker_cache_guard tests.test_a_short_theme_forward_comparison_runner tests.test_a_short_crash_veto_tracker
+```
+
+原始 focused 终态：`Ran 761 tests in 103.439s — OK`，launcher receipt `receipt:bf345b90e47dc2ba4b2ad107`。
+
+因本轮改动触及生产顶层 weekly pipeline，按项目 rule 3 执行唯一一次离线 full-pack：
+
+```powershell
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' .tools\full_pack_ledger.py run a_short '3a_testrun0816 问题1最小修复：health reason/artifact透传、P5/P4a no_count、official十轨结构化进度' 860 -- discover -s tests -p 'test_a_short*.py'
+```
+
+原始 full-pack 终态：静态 `diff_check=PASS`、`py_compile=16`；`discovered=3171 ran=3171 equal=True`、`132/132` modules、`PASS exit=0`、`138.0s/860s`；fingerprint `e624dcfb44ecf2252b3b89904fbf045c690291aed55c4d1bc972590d2b5aae05`。测试仅有项目既存 `ResourceWarning`，无失败。
+
+### 交接边界
+
+未运行 provider/live、真实主树周流程、账户或下单；未启动 reviewer sub-agent；未 stage、commit、push、merge。full-pack PASS 只证明当前工作树离线回归通过，不等于 independent review PASS、主树暖根 closure 或 ship。下一步由 Claude Code 在本工作树做独立 current-diff review；review/commit 通过后，再由用户单独授权主树暖根真实周跑。
+
+## 2026-08-16 追加：问题1 Required + Optional 最小修复（Codex；8c7a）
+
+### 状态与范围
+
+本轮承接问题1审查留下的一条 Required 和一条 Optional，只在 `D:\cnhea\Codex\worktrees\8c7a\Stock` 修复；状态为 **repaired / OPEN-NOT-VERIFIED**。不读取、修改或运行主树，不改变问题2—6或其它工作树内容。
+
+### 根因与最小改动
+
+- Required 是执行方旧 SESSION_LOG repair entry 缺少机器门要求的 register pointer、Proof/Pre-Codex closeout 五字段和 door 终态；另有 reviewer 标题含“修复代码”，被守卫误识别为执行方 repair entry。只补既有 entry 字段，并把 reviewer 标题改成准确的“代码审查”，没有伪造 reviewer 自审。
+- Optional 是 health 对已校验 theme packet 的 `decision_not_effective_yet` 良性 rejection 只接受 launcher `advanced/already_current`；合法的 launcher `not_applicable` 因而被改成 `unavailable/theme_cohort_rejected`。只把 `not_applicable` 加入同一良性白名单，保留状态并写入既有具名原因。
+
+### 调用链、消费者和边界
+
+theme launcher outcome → `runners/a_short_weekly_sidecar_health.py::_theme_packet_progress` → `sidecar_health.json/.md/.receipt.json`。只影响 health 对既有进度状态的投影；M6.7、selection、sizing、official settlement、provider/live 和正式结论不消费新规则。schema 仍为 `a_short_weekly_sidecar_outcomes` 1.0.0；`as_of`、revision、source binding 不变；无 provider、cache、receipt/hash/state、永久字段或新写盘层。
+
+### 按类自审与负向控制
+
+- 良性 `decision_not_effective_yet` 的 `succeeded/not_applicable` 现在保留且有可读 `decision_not_effective_yet`；原有 `succeeded/already_current` 绿腿仍保留。
+- epoch mismatch、其它 cohort rejection、packet missing/invalid、artifact 具名失败和通用 reason-contract fail-closed 分支未放宽。
+- 新增精确测试覆盖 `not_applicable` 良性分支；没有改状态枚举、健康计数定义或生产策略。
+
+### 精确命令与原始终态
+
+固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`。
+
+精确 focused 命令仍为：
+
+```powershell
+& 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' --version
+& '.\.tools\run_unittest_with_repo_pythonpath.cmd' tests.test_a_short_weekly_sidecar_health tests.test_a_short_weekly_pipeline tests.test_a_short_official_settlement tests.test_a_short_factor_comparison_v2_weekly tests.test_a_short_target_policy_comparison tests.phase6.test_forward_tracker_cache_guard tests.test_a_short_theme_forward_comparison_runner tests.test_a_short_crash_veto_tracker
+```
+
+focused：`Ran 762 tests in 127.955s — OK`，receipt `receipt:e5cdac8c5bd6f98e7e3d107`。固定 Python 运行文档治理与 A-short preflight：`Ran 60 tests in 6.694s — OK`；实际 `.githooks/pre-commit`：route-doc `14 OK`、doc-governance `42 OK`、`HOOK_EXIT=0`。
+
+本轮第一次 full-pack 因旧文档门 fail-fast：`discovered=3172 ran=1357 equal=False`，红点为 `test_a_short_preflight`/doc-governance，不是业务回归；修正文档后以同一最终代码 fingerprint 重跑，最终终态为：static `diff_check=PASS`、`py_compile=16`；`discovered=3172 ran=3172 equal=True`、`132/132` modules、`PASS exit=0`、`130.951s/860s`；fingerprint `51b85694c083206d34a0bef91d175018e0b1303cd153f0cd580c638fa6324fc9`。仅见项目既存 `ResourceWarning`，无测试失败。
+
+### 交接边界
+
+风险登记与 SESSION_LOG 已同步，`docs/CURRENT.md` 未写 review/commit 瞬态状态。未运行 provider/live、主树暖根真实周流程、账户或下单；未启动 reviewer sub-agent；未 stage、commit、push、merge。full-pack PASS 与文档门 PASS 只证明本工作树离线和交接门通过，不等于 independent review PASS、主树暖根 closure 或 ship；下一步仍由 Claude Code 独立复审当前 diff。
