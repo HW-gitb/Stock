@@ -187,7 +187,12 @@ def _validate_state_json_file(path: Path | str, *, field: str, must_exist: bool)
     return resolved
 
 
-def _validate_summary_path(path: Path | str, *, expected_decision_date: str | None = None) -> Path:
+def _validate_summary_path(
+    path: Path | str,
+    *,
+    expected_decision_date: str | None = None,
+    allow_legacy_read: bool = False,
+) -> Path:
     resolved = _resolve_repo_path(path, field="summary_path")
     if resolved.suffix != ".json":
         raise FullUniverseThemeProducerError("summary_path must be a .json path")
@@ -196,9 +201,19 @@ def _validate_summary_path(path: Path | str, *, expected_decision_date: str | No
     try:
         relative = resolved.relative_to((ROOT / SAMPLE_REL_ROOT).resolve())
     except ValueError as exc:
-        raise FullUniverseThemeProducerError(
-            "summary_path must be the canonical tracked summary or under this runner's provider_samples folder"
-        ) from exc
+        if not allow_legacy_read:
+            raise FullUniverseThemeProducerError(
+                "summary_path must be the canonical tracked summary or under this runner's provider_samples folder"
+            ) from exc
+        try:
+            resolved.relative_to((ROOT / LEGACY_SAMPLE_REL_ROOT).resolve())
+        except ValueError:
+            raise FullUniverseThemeProducerError(
+                "summary_path must be the canonical tracked summary or under this runner's provider_samples folder"
+            ) from exc
+        if not _git_ignored(resolved):
+            raise FullUniverseThemeProducerError("legacy summary_path must be gitignored")
+        return resolved
     if len(relative.parts) < 2:
         raise FullUniverseThemeProducerError(
             "summary_path must include a decision-date directory under the theme provider_samples root"
@@ -351,6 +366,7 @@ def _load_context(
     output_projection_path: Path,
     summary_path: Path,
     generated_at: str | None,
+    allow_legacy_summary_read: bool = False,
 ) -> dict[str, Any]:
     generated_at = generated_at or iso_now()
     if not _valid_observed_at(generated_at):
@@ -381,7 +397,11 @@ def _load_context(
         candidate_artifact_path=candidate_artifact_path,
         expected_decision_date=series_clock["expected_decision_date"],
     )
-    _validate_summary_path(summary_path, expected_decision_date=series_clock["expected_decision_date"])
+    _validate_summary_path(
+        summary_path,
+        expected_decision_date=series_clock["expected_decision_date"],
+        allow_legacy_read=allow_legacy_summary_read,
+    )
     if series_clock["candidate_price_basis_date"] != artifact["price_basis_date"]:
         raise FullUniverseThemeProducerError("series candidate_price_basis_date must match the candidate artifact")
     if class_clock["candidate_price_basis_date"] != artifact["price_basis_date"]:
@@ -649,12 +669,13 @@ def _resolve_paths(
     classification_packet_path: Path,
     output_projection_path: Path,
     summary_path: Path,
+    allow_legacy_summary_read: bool = False,
 ) -> dict[str, Path]:
     candidate_path = _validate_state_json_file(candidate_artifact_path, field="candidate_artifact_path", must_exist=True)
     series_path = _validate_state_json_file(series_packet_path, field="series_packet_path", must_exist=True)
     class_path = _validate_state_json_file(classification_packet_path, field="classification_packet_path", must_exist=True)
     output_path = _validate_state_json_file(output_projection_path, field="output_projection_path", must_exist=False)
-    summary_resolved = _validate_summary_path(summary_path)
+    summary_resolved = _validate_summary_path(summary_path, allow_legacy_read=allow_legacy_summary_read)
     if len({candidate_path, series_path, class_path, output_path}) != 4:
         raise FullUniverseThemeProducerError("candidate / series / classification / output paths must be distinct")
     return {
@@ -681,6 +702,7 @@ def run_preflight(
         classification_packet_path=classification_packet_path,
         output_projection_path=output_projection_path,
         summary_path=summary_path,
+        allow_legacy_summary_read=True,
     )
     context = _load_context(
         candidate_artifact_path=paths["candidate"],
@@ -689,6 +711,7 @@ def run_preflight(
         output_projection_path=paths["output"],
         summary_path=paths["summary"],
         generated_at=generated_at,
+        allow_legacy_summary_read=True,
     )
     projection, details = _build_projection(context)
     return {
