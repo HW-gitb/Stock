@@ -172,9 +172,9 @@ def _validate_summary_path(path: Path | str, *, expected_decision_date: str | No
             "summary_path must be the canonical tracked summary or under this runner's provider_samples folder"
         )
     if matched_provider_sample_root == LEGACY_PROVIDER_SAMPLE_REL_ROOT:
-        if not relative.parts or not _git_ignored(resolved):
-            raise FullCandidatePass2PreflightError("legacy summary_path must be gitignored")
-        return resolved
+        raise FullCandidatePass2PreflightError(
+            "legacy summary_path is read-only and cannot be a Pass2 preflight write target"
+        )
     if len(relative.parts) < 2 or len(relative.parts[0]) != 8 or not relative.parts[0].isdigit():
         raise FullCandidatePass2PreflightError(
             "summary_path must include a decision-date directory under the preflight provider_samples root"

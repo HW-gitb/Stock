@@ -184,6 +184,24 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         self.assertNotIn("data.sec.gov", text.lower())
         self.assertNotIn('"payload"', text)
 
+    def test_legacy_summary_path_cannot_be_written_by_preflight(self):
+        runner = self._module()
+        legacy_summary = ROOT / runner.LEGACY_PROVIDER_SAMPLE_REL_ROOT / f"{self.slug}.json"
+
+        with self.assertRaisesRegex(runner.FullCandidatePass2PreflightError, "legacy summary_path"):
+            runner.run_preflight(
+                candidate_artifact_path=self.paths["candidate"],
+                expected_decision_date=_DECISION_DATE,
+                momentum_projection_path=self.paths["momentum"],
+                theme_projection_path=self.paths["theme"],
+                summary_path=legacy_summary,
+                authorized_total_call_budget=33,
+                confirm_user_authorization=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+            )
+
+        self.assertFalse(legacy_summary.exists())
+
     def test_stale_clock_source_projection_binding_is_rejected(self):
         # Reverse control (Required B, Top-K consumer): a same-ticker momentum projection whose
         # source_binding decision clock is stale is rejected against the CANDIDATE clock before any

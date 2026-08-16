@@ -382,6 +382,22 @@ class FullUniverseOverextensionProducerTest(unittest.TestCase):
         self.assertFalse(self.paths["projection"].exists())
         self.assertFalse(self.paths["summary"].exists())
 
+    def test_legacy_summary_path_is_preflight_only(self):
+        legacy_summary = ROOT / _runner().LEGACY_SAMPLE_REL_ROOT / f"{self.slug}.json"
+        result = _runner().run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            series_packet_path=self.paths["packet"],
+            output_projection_path=self.paths["projection"],
+            summary_path=legacy_summary,
+            generated_at="2026-06-15T12:00:00+00:00",
+        )
+        self.assertEqual(result["paths"]["summary_path"], _runner()._repo_rel(legacy_summary))
+        self.assertFalse(self.paths["projection"].exists())
+        with self.assertRaises(_runner().FullUniverseOverextensionProducerError):
+            self._run_packet(summary_path=legacy_summary)
+        self.assertFalse(self.paths["projection"].exists())
+        self.assertFalse(legacy_summary.exists())
+
     def test_output_projection_path_must_be_gitignored_state_json(self):
         with self.assertRaises(_runner().FullUniverseOverextensionProducerError):
             self._run_packet(output_projection_path=ROOT / "docs" / f"{self.slug}_overextension.json")
