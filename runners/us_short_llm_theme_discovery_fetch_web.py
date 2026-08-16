@@ -137,6 +137,12 @@ _RFC1123_UNKNOWN_ZONE_SUFFIX = " -0000"
 CONFORMANCE_GUARDS = ("_guard_generated_before_open",)
 DIAGNOSTIC_ONLY_EXECUTION_STATUSES = frozenset({
     "live_authorized_budget_aborted",
+    "live_authorized_engineering_smoke_response_captured",
+    "live_authorized_engineering_smoke_call_failed",
+})
+ENGINEERING_SMOKE_EXECUTION_STATUSES = frozenset({
+    "live_authorized_engineering_smoke_response_captured",
+    "live_authorized_engineering_smoke_call_failed",
 })
 
 
@@ -441,6 +447,25 @@ def publish_budget_abort_diagnostic(
             payload, path, root=ROOT, state_dir=STATE_DIR, gitignored=_gitignored,
             ledger_kind="budget_abort", evidence_rank=_budget_abort_evidence_rank,
         )
+    except DiscoveryPublishPolicyError as exc:
+        raise WebThemeDiscoveryError(str(exc)) from exc
+    return path
+
+
+def publish_engineering_smoke_diagnostic(summary: dict[str, Any]) -> Path:
+    """Write the one-shot regroup smoke summary to its fixed private slot."""
+    if not isinstance(summary, dict) or summary.get("status") not in ENGINEERING_SMOKE_EXECUTION_STATUSES:
+        raise WebThemeDiscoveryError("engineering-smoke summary status is not diagnostic-only")
+    if summary.get("formal_decision_slots_occupied") is not False:
+        raise WebThemeDiscoveryError("engineering-smoke summary must forbid formal decision output")
+    path = (
+        STATE_DIR / "runs_private" / "soft_discovery_engineering_smoke"
+        / "us_short_web_regroup_engineering_smoke_20260815_summary.json"
+    )
+    if not _gitignored(path) or path.name.startswith("us_short_llm_theme_discovery_web_"):
+        raise WebThemeDiscoveryError("engineering-smoke summary path is not a private ignored slot")
+    try:
+        write_immutable_json(summary, path, clock_keys=(), recursive=True)
     except DiscoveryPublishPolicyError as exc:
         raise WebThemeDiscoveryError(str(exc)) from exc
     return path
