@@ -3330,6 +3330,8 @@ def _sidecar_result_fields(result: object, *, settlement: bool = False) -> tuple
     detail = None
     if reason:
         detail = f"reason={safe_exception_summary(ValueError(str(reason)))}"[:512]
+    if settlement and (value == "no_count" or code == "no_count"):
+        return "not_applicable", code, detail
     if settlement and reason:
         return "stalled", code, detail
     if settlement and value in {"unavailable", "evidence_unavailable_or_inconclusive"}:
@@ -7621,12 +7623,20 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     summary_status = str((p5_settlement or {}).get("status") or "")
                     settlement_codes = industry_weight_settlement_result.get("reason_codes") or []
                     if settlement_codes:
-                        settlement_code = str(settlement_codes[0])
-                        _record_sidecar(
-                            "industry_weight_settlement", execution_status="succeeded",
-                            progress_status="stalled", error_code=settlement_code,
-                            error_detail=f"reason={settlement_code}"[:512],
-                            observed_decision_as_of=args.as_of)
+                        settlement_codes = [str(code) for code in settlement_codes]
+                        if all(code == "no_count" for code in settlement_codes):
+                            _record_sidecar(
+                                "industry_weight_settlement", execution_status="succeeded",
+                                progress_status="not_applicable", error_code="no_count",
+                                error_detail="reason=no_count",
+                                observed_decision_as_of=args.as_of)
+                        else:
+                            settlement_code = settlement_codes[0]
+                            _record_sidecar(
+                                "industry_weight_settlement", execution_status="succeeded",
+                                progress_status="stalled", error_code=settlement_code,
+                                error_detail=f"reason={settlement_code}"[:512],
+                                observed_decision_as_of=args.as_of)
                     elif summary_status == "evidence_unavailable_or_inconclusive":
                         _record_sidecar(
                             "industry_weight_settlement", execution_status="not_due",
@@ -7871,12 +7881,19 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     summary_status = str((p4_settlement or {}).get("status") or "")
                     settlement_codes = overlay_settlement_result.get("reason_codes") or []
                     if settlement_codes:
+                        settlement_codes = [str(code) for code in settlement_codes]
                         settlement_code = str(settlement_codes[0])
                         if settlement_code == "overlay_daily_cache_unavailable":
                             _record_sidecar(
                                 "overlay_adjudication_settlement", execution_status="not_due",
                                 progress_status="not_applicable", error_code=settlement_code,
                                 error_detail="overlay daily cache is unavailable",
+                                observed_decision_as_of=args.as_of)
+                        elif all(code == "no_count" for code in settlement_codes):
+                            _record_sidecar(
+                                "overlay_adjudication_settlement", execution_status="succeeded",
+                                progress_status="not_applicable", error_code="no_count",
+                                error_detail="reason=no_count",
                                 observed_decision_as_of=args.as_of)
                         else:
                             _record_sidecar(

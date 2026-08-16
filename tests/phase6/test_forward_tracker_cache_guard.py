@@ -631,10 +631,12 @@ class ForwardTrackerCacheGuardTests(unittest.TestCase):
                 patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
                 patch.object(forward_tracker, "_today_yyyymmdd", return_value="20260809"),
             ):
-                rc = forward_tracker.backfill([5, 10, 20])
+                carrier = {}
+                rc = forward_tracker.backfill([5, 10, 20], sidecar_result=carrier)
             written = pd.read_csv(tracker_path, dtype={"as_of": str})
 
         self.assertEqual(rc, 0)
+        self.assertGreater(carrier["outcomes_updated"], 0)
         self.assertTrue((written[["ret_5d_status", "ret_10d_status", "ret_20d_status"]] == "ok").all().all())
 
     def test_backfill_emits_stale_banner_when_cohort_missing_from_cache(self) -> None:
@@ -662,7 +664,8 @@ class ForwardTrackerCacheGuardTests(unittest.TestCase):
                 patch.object(forward_tracker, "_today_yyyymmdd", return_value="20260701"),
                 redirect_stdout(buf),
             ):
-                rc = forward_tracker.backfill([5, 10, 20])
+                carrier = {}
+                rc = forward_tracker.backfill([5, 10, 20], sidecar_result=carrier)
 
         out = buf.getvalue()
         # The banner alone dies with the terminal, so a stalled ledger must also leave a
@@ -672,6 +675,7 @@ class ForwardTrackerCacheGuardTests(unittest.TestCase):
         self.assertIn("FORWARD-TRACKER CACHE STALE", out)
         self.assertIn("forward_tracker.py refresh", out)
         self.assertIn("20260515", out)
+        self.assertEqual(carrier["progress_status"], "stalled")
 
     def test_globally_blocked_cache_also_reports_stalled_not_success(self) -> None:
         # The other way the ledger freezes: the cache is readable but its benchmark
@@ -719,7 +723,11 @@ class ForwardTrackerCacheGuardTests(unittest.TestCase):
                 patch.object(forward_tracker, "_today_yyyymmdd", return_value="20260701"),
                 redirect_stdout(buf),
             ):
-                self.assertEqual(forward_tracker.backfill([5, 10, 20]), 0)
+                empty_carrier = {}
+                self.assertEqual(
+                    forward_tracker.backfill([5, 10, 20], sidecar_result=empty_carrier), 0,
+                )
+            self.assertEqual(empty_carrier["outcomes_updated"], 0)
             df = pd.DataFrame([_tracker_row("20260630", "000001.SZ")])   # captured yesterday
             with patch.object(forward_tracker, "TRACKER_CSV", tracker_path):
                 forward_tracker._write_tracker(df)
@@ -728,7 +736,11 @@ class ForwardTrackerCacheGuardTests(unittest.TestCase):
                 patch.object(forward_tracker, "_today_yyyymmdd", return_value="20260701"),
                 redirect_stdout(buf),
             ):
-                self.assertEqual(forward_tracker.backfill([5, 10, 20]), 0)
+                young_carrier = {}
+                self.assertEqual(
+                    forward_tracker.backfill([5, 10, 20], sidecar_result=young_carrier), 0,
+                )
+            self.assertEqual(young_carrier["outcomes_updated"], 0)
 
     def test_truly_young_cohort_does_not_emit_stale_banner(self) -> None:
         import io

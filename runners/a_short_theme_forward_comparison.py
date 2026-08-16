@@ -162,7 +162,10 @@ def _private_artifact_digest(private_root: Path) -> str:
 
 
 def _emit_sidecar_outcome(*, as_of: str, run_revision_id: str | None,
-                          progress_status: str) -> None:
+                          progress_status: str,
+                          sidecar_result: dict | None = None) -> None:
+    if sidecar_result is not None:
+        sidecar_result["progress_status"] = progress_status
     print(SIDECAR_OUTCOME_PREFIX + json.dumps({
         "name": "theme_forward_comparison",
         "as_of": str(as_of),
@@ -471,7 +474,7 @@ def _start_or_reset_epoch(
     return new_epoch
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, sidecar_result: dict | None = None) -> int:
     parser = argparse.ArgumentParser(description="Evaluate local A-short theme comparison evidence; no data fetch or promotion.")
     parser.add_argument("--tracker", default=str(DEFAULT_TRACKER))
     parser.add_argument("--out", default=str(DEFAULT_OUTPUT))
@@ -549,7 +552,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[OK] opened frozen theme comparison epoch: {epoch['epoch_id']}; clock starts from {epoch['epoch_start_as_of']}")
         _emit_sidecar_outcome(as_of=str(args.as_of or args.epoch_start_as_of),
                               run_revision_id=run_revision_id,
-                              progress_status="advanced")
+                              progress_status="advanced",
+                              sidecar_result=sidecar_result)
         return 0
     if args.epoch_start_as_of or args.reset_epoch:
         raise SystemExit("[FATAL] --epoch-start-as-of and --reset-epoch require --start-epoch")
@@ -595,6 +599,7 @@ def main(argv: list[str] | None = None) -> int:
         run_revision_id=run_revision_id,
         progress_status=("advanced" if _private_artifact_digest(private_root) != private_digest_before
                          else "already_current"),
+        sidecar_result=sidecar_result,
     )
     return 0
 

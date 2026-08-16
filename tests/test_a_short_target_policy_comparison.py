@@ -432,10 +432,22 @@ class TargetLedgerTests(unittest.TestCase):
             cache.write_text(json.dumps({"rows": [dict(row, ts_code="600000.SH")
                                                    for row in _execution_rows_with_stale_unverified_action()]}),
                              encoding="utf-8")
-            refreshed = settle_and_summarize(root=ledger, as_of=as_of, daily_cache_path=cache,
-                                              summary_path=public, markdown_path=markdown)
+            first_carrier = {}
+            refreshed = settle_and_summarize(
+                root=ledger, as_of=as_of, daily_cache_path=cache,
+                summary_path=public, markdown_path=markdown,
+                sidecar_result=first_carrier,
+            )
             self.assertEqual(refreshed["status"], "accumulating")
             self.assertEqual(refreshed["target_exit"]["evaluable_plans"], 1)
+            self.assertGreater(first_carrier["outcomes_updated"], 0)
+            second_carrier = {}
+            settle_and_summarize(
+                root=ledger, as_of=as_of, daily_cache_path=cache,
+                summary_path=public, markdown_path=markdown,
+                sidecar_result=second_carrier,
+            )
+            self.assertEqual(second_carrier["outcomes_updated"], 0)
             self.assertIn("只显示脱敏进度", markdown.read_text(encoding="utf-8"))
 
     def test_corrupt_private_state_never_replays_a_review_reminder(self):

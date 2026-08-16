@@ -229,6 +229,8 @@ def settle_and_summarize_v2_weekly(*, root: str | Path | None,
         settlement = settle_v2_from_daily_payload(root=private_root, daily_payload=payload,
                                                   run_revision_id=run_revision_id,
                                                   official_project_root=official_project_root)
+        if sidecar_result is not None and isinstance(settlement.get("updated_dates"), list):
+            sidecar_result["outcomes_updated"] = len(settlement["updated_dates"])
         if settlement.get("status") != "settled_from_existing_cache":
             if (sidecar_result is not None and
                     settlement.get("status") == "no_official_v2_captures"):

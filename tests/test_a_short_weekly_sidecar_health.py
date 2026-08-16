@@ -790,7 +790,10 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertEqual(result["overall"], "degraded")
         self.assertEqual(result["sidecars"][0]["execution_status"], "succeeded")
         self.assertEqual(result["sidecars"][0]["progress_status"], "unavailable")
-        self.assertEqual(result["sidecars"][0]["error_code"], "reason_contract_violation")
+        self.assertEqual(
+            result["sidecars"][0]["error_code"],
+            "candidate_effect_artifact_schema_invalid",
+        )
 
     def test_candidate_summary_with_stale_policy_binding_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -814,7 +817,10 @@ class AShortSidecarHealthTests(unittest.TestCase):
             result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
         self.assertEqual(result["overall"], "degraded")
         self.assertEqual(result["sidecars"][0]["execution_status"], "succeeded")
-        self.assertEqual(result["sidecars"][0]["error_code"], "reason_contract_violation")
+        self.assertEqual(
+            result["sidecars"][0]["error_code"],
+            "iv_feed_artifact_identity_mismatch",
+        )
 
     def test_missing_candidate_effect_outcome_is_unavailable_and_failed(self):
         manifest = _manifest([], expected=["candidate_effect"])
@@ -957,6 +963,104 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertEqual(item["progress_status"], "unavailable")
         self.assertEqual(item["error_code"], "theme_cohort_rejected")
         self.assertIn("invalid taxonomy L3 snapshot date", item["error_detail"])
+
+    def test_theme_pre_freeze_rejection_keeps_launcher_success_and_is_readable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            packet = root / "research" / "results" / "a_short_theme_forward_comparison.json"
+            packet.parent.mkdir(parents=True)
+            packet.write_text(json.dumps({
+                "latest_evidence_as_of": "20260727",
+                "adjudication_mode": "audit_only_pre_freeze",
+                "rejected_atomic_cohorts": {"20260727": "decision_not_effective_yet"},
+            }), encoding="utf-8")
+            manifest = _manifest([_row(
+                "theme_forward_comparison",
+                progress="already_current",
+                observed_decision_as_of=None,
+            )])
+            with patch("engine.a_short_theme_forward_comparison.validate_comparison_packet"):
+                result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+        item = result["sidecars"][0]
+        self.assertEqual(result["overall"], "healthy")
+        self.assertEqual(item["execution_status"], "succeeded")
+        self.assertEqual(item["progress_status"], "already_current")
+        self.assertEqual(item["error_code"], "decision_not_effective_yet")
+        self.assertNotIn("reason_contract_violation", item.get("error_detail", ""))
+
+    def test_theme_pre_freeze_rejection_keeps_launcher_not_applicable_and_is_readable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            packet = root / "research" / "results" / "a_short_theme_forward_comparison.json"
+            packet.parent.mkdir(parents=True)
+            packet.write_text(json.dumps({
+                "latest_evidence_as_of": "20260727",
+                "adjudication_mode": "audit_only_pre_freeze",
+                "rejected_atomic_cohorts": {"20260727": "decision_not_effective_yet"},
+            }), encoding="utf-8")
+            manifest = _manifest([_row(
+                "theme_forward_comparison",
+                progress="not_applicable",
+                observed_decision_as_of=None,
+            )])
+            with patch("engine.a_short_theme_forward_comparison.validate_comparison_packet"):
+                result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+        item = result["sidecars"][0]
+        self.assertEqual(item["execution_status"], "succeeded")
+        self.assertEqual(item["progress_status"], "not_applicable")
+        self.assertEqual(item["error_code"], "decision_not_effective_yet")
+        self.assertNotIn("reason_contract_violation", item.get("error_detail", ""))
+
+    def test_theme_epoch_mismatch_wins_over_same_day_rejection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            packet = root / "research" / "results" / "a_short_theme_forward_comparison.json"
+            packet.parent.mkdir(parents=True)
+            packet.write_text(json.dumps({
+                "latest_evidence_as_of": "20260727",
+                "adjudication_mode": "epoch_contract_mismatch",
+                "rejected_atomic_cohorts": {"20260727": "decision_not_effective_yet"},
+            }), encoding="utf-8")
+            manifest = _manifest([_row(
+                "theme_forward_comparison",
+                progress="already_current",
+                observed_decision_as_of=None,
+            )])
+            with patch("engine.a_short_theme_forward_comparison.validate_comparison_packet"):
+                result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+        item = result["sidecars"][0]
+        self.assertEqual(item["progress_status"], "stalled")
+        self.assertEqual(item["error_code"], "evidence_clock_blocked_epoch_contract_mismatch")
+        self.assertNotIn("reason_contract_violation", item.get("error_detail", ""))
+
+    def test_theme_packet_missing_and_invalid_are_narrow_failures(self):
+        for packet_bytes, expected_code in (
+            (None, "theme_packet_missing"),
+            (b"{not-json", "theme_packet_invalid"),
+        ):
+            with self.subTest(expected_code=expected_code), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                packet = root / "research" / "results" / "a_short_theme_forward_comparison.json"
+                packet.parent.mkdir(parents=True)
+                if packet_bytes is not None:
+                    packet.write_bytes(packet_bytes)
+                manifest = _manifest([_row("theme_forward_comparison", progress="already_current")])
+                with patch("engine.a_short_theme_forward_comparison.validate_comparison_packet"):
+                    result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+            item = result["sidecars"][0]
+            self.assertEqual(item["progress_status"], "unavailable")
+            self.assertEqual(item["error_code"], expected_code)
+            self.assertNotIn("reason_contract_violation", item.get("error_detail", ""))
+
+    def test_authoritative_artifact_validator_reason_is_preserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = _manifest([_row("candidate_effect")])
+            result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=root)
+        item = result["sidecars"][0]
+        self.assertEqual(item["progress_status"], "unavailable")
+        self.assertEqual(item["error_code"], "candidate_effect_artifact_missing")
+        self.assertEqual(item["error_detail"], "artifact=missing")
 
     def test_reason_contract_violation_keeps_health_bundle_durable(self):
         manifest = _manifest([

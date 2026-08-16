@@ -27,20 +27,33 @@ def _callback_values(*, failing: str | None = None) -> dict[str, object]:
     return {
         "operation": RuntimeError("settlement failed") if failing == "operation" else {
             "status": "settled_from_existing_shared_cache",
+            "outcomes_updated": 0,
         },
         "factor": RuntimeError("settlement failed") if failing == "factor" else {
             "status": "evidence_unavailable_or_inconclusive",
             "_official_settlement_class": "no_official_captures",
+            "outcomes_updated": 0,
         },
         "margin": RuntimeError("settlement failed") if failing == "margin" else {
             "status": "evidence_unavailable_or_inconclusive",
             "_official_settlement_class": "no_official_captures",
+            "outcomes_updated": 0,
         },
-        "industry": RuntimeError("settlement failed") if failing == "industry" else {"status": "accumulating"},
-        "target": RuntimeError("settlement failed") if failing == "target" else {"status": "review_pass_pending_confirmation"},
-        "final": RuntimeError("settlement failed") if failing == "final" else {"status": "review_due"},
-        "overlay": RuntimeError("settlement failed") if failing == "overlay" else {"status": "manual_promotion_candidate"},
-        "crash": RuntimeError("settlement failed") if failing == "crash" else {"status": "advanced"},
+        "industry": RuntimeError("settlement failed") if failing == "industry" else {
+            "status": "accumulating", "outcomes_updated": 0,
+        },
+        "target": RuntimeError("settlement failed") if failing == "target" else {
+            "status": "review_pass_pending_confirmation", "outcomes_updated": 0,
+        },
+        "final": RuntimeError("settlement failed") if failing == "final" else {
+            "status": "review_due", "outcomes_updated": 0,
+        },
+        "overlay": RuntimeError("settlement failed") if failing == "overlay" else {
+            "status": "manual_promotion_candidate", "outcomes_updated": 0,
+        },
+        "crash": RuntimeError("settlement failed") if failing == "crash" else {
+            "status": "settled", "progress_status": "already_current",
+        },
     }
 
 
@@ -66,8 +79,16 @@ def _patched_callbacks(stack: ExitStack, *, failing: str | None = None) -> None:
                     carrier["official_settlement_status"] = "no_official_captures"
             return _value
         stack.enter_context(patch(target, side_effect=callback))
-    stack.enter_context(patch("runners.forward_tracker.backfill", return_value=0))
-    stack.enter_context(patch("runners.a_short_theme_forward_comparison.main", return_value=0))
+    def forward_callback(*args, **kwargs):
+        kwargs["sidecar_result"]["outcomes_updated"] = 0
+        return 0
+
+    def theme_callback(*args, **kwargs):
+        kwargs["sidecar_result"]["progress_status"] = "already_current"
+        return 0
+
+    stack.enter_context(patch("runners.forward_tracker.backfill", side_effect=forward_callback))
+    stack.enter_context(patch("runners.a_short_theme_forward_comparison.main", side_effect=theme_callback))
 
 
 class OfficialSettlementOutcomeTests(unittest.TestCase):
@@ -101,7 +122,7 @@ class OfficialSettlementOutcomeTests(unittest.TestCase):
             "manual_promotion_candidate", "do_not_promote", "retired_for_epoch",
             "preliminary_review", "review_pass_pending_confirmation",
         ):
-            row = _official_outcome_row({"track": "x", "status": status})
+            row = _official_outcome_row({"track": "x", "status": status, "outcomes_updated": 0})
             self.assertEqual(row["execution_status"], "succeeded")
         marked = _official_outcome_row({
             "track": "x", "status": "evidence_unavailable_or_inconclusive",
@@ -114,6 +135,34 @@ class OfficialSettlementOutcomeTests(unittest.TestCase):
         })
         self.assertEqual(unmarked["execution_status"], "failed")
         self.assertEqual(unmarked["error_code"], "settlement_unavailable")
+
+    def test_structured_update_delta_controls_official_progress(self):
+        self.assertEqual(
+            _official_outcome_row({
+                "track": "x", "status": "settled", "outcomes_updated": 0,
+            })["progress_status"],
+            "already_current",
+        )
+        self.assertEqual(
+            _official_outcome_row({
+                "track": "x", "status": "settled", "outcomes_updated": 2,
+            })["progress_status"],
+            "advanced",
+        )
+        missing = _official_outcome_row({"track": "x", "status": "settled"})
+        self.assertEqual(missing["execution_status"], "failed")
+        self.assertEqual(missing["progress_status"], "unavailable")
+        negative = _official_outcome_row({
+            "track": "x", "status": "settled", "outcomes_updated": -1,
+        })
+        self.assertEqual(negative["execution_status"], "failed")
+        self.assertEqual(negative["progress_status"], "unavailable")
+        conflict = _official_outcome_row({
+            "track": "x", "status": "settled", "outcomes_updated": 0,
+            "progress_status": "advanced",
+        })
+        self.assertEqual(conflict["execution_status"], "failed")
+        self.assertEqual(conflict["progress_status"], "unavailable")
 
     def test_one_callback_failure_is_degraded_but_keeps_the_other_nine_rows(self):
         with tempfile.TemporaryDirectory() as tmp:

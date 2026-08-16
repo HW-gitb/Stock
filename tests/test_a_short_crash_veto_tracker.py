@@ -24,6 +24,7 @@ from runners.a_short_crash_veto_tracker import (
     main,
     match_controls,
     run_update,
+    settle_existing,
 )
 from runners.a_short_m67_render import render_weekly_markdown
 from runners.a_short_weekly_pipeline import build_weekly_report
@@ -34,6 +35,38 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CrashVetoTrackerTest(unittest.TestCase):
+    def test_official_settlement_reports_repeated_noop_and_durable_progress(self):
+        revision = "a" * 32
+        states = [{"cohorts": []}, {"cohorts": []}]
+        calls = {"count": 0}
+
+        def summary(state, _cache, _as_of, *, official_project_root):
+            if calls["count"] == 1:
+                state["cohorts"].append({"cohort_id": "new"})
+            calls["count"] += 1
+            return {"official_revision_id": revision, "generated_at": "now"}
+
+        with tempfile.TemporaryDirectory() as td, \
+                mock.patch("runners.a_short_crash_veto_tracker.require_official_revision"), \
+                mock.patch("runners.a_short_crash_veto_tracker._load_state", side_effect=states), \
+                mock.patch("runners.a_short_crash_veto_tracker._load_price_cache", return_value={}), \
+                mock.patch("runners.a_short_crash_veto_tracker.build_summary", side_effect=summary), \
+                mock.patch("runners.a_short_crash_veto_tracker._atomic_json"):
+            first = {}
+            settle_existing(
+                as_of="20260816", state_path=Path(td) / "state.json",
+                summary_path=Path(td) / "summary.json", price_path=Path(td) / "prices.pkl",
+                run_revision_id=revision, official_project_root=td, sidecar_result=first,
+            )
+            second = {}
+            settle_existing(
+                as_of="20260816", state_path=Path(td) / "state.json",
+                summary_path=Path(td) / "summary.json", price_path=Path(td) / "prices.pkl",
+                run_revision_id=revision, official_project_root=td, sidecar_result=second,
+            )
+        self.assertEqual(first["progress_status"], "already_current")
+        self.assertEqual(second["progress_status"], "advanced")
+
     def test_make_cohort_returns_revision_binding(self):
         features = pd.DataFrame(columns=["l1_name", "l2_name", "total_mv", "pct_20d", "avg_amount_20d"])
         cohort = _make_cohort(

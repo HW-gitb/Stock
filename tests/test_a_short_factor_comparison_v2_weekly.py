@@ -159,9 +159,20 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
             root = _root(tmp)
             self._capture(root)
             (root / DAILY_CACHE_NAME).write_text(json.dumps(_daily_cache()), encoding="utf-8")
-            summary = settle_and_summarize_v2_weekly(root=root, as_of=DECISION_DATE)
+            first_carrier = {}
+            summary = settle_and_summarize_v2_weekly(
+                root=root, as_of=DECISION_DATE, sidecar_result=first_carrier,
+            )
             self.assertEqual(summary["status"], PUBLIC_STATUS_CURRENT)
             self.assertEqual(summary["reminder_count"], 0)
+            self.assertIsInstance(first_carrier.get("outcomes_updated"), int)
+            self.assertGreaterEqual(first_carrier["outcomes_updated"], 0)
+            second_carrier = {}
+            settle_and_summarize_v2_weekly(
+                root=root, as_of=DECISION_DATE, sidecar_result=second_carrier,
+            )
+            self.assertIsInstance(second_carrier.get("outcomes_updated"), int)
+            self.assertGreaterEqual(second_carrier["outcomes_updated"], 0)
             self.assertTrue((root / "reminder.json").is_file())
             self.assertIn("current_epoch_id", summary["public_progress"])
             rendered = json.dumps(summary["public_progress"], ensure_ascii=False).lower()

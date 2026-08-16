@@ -574,15 +574,28 @@ def backfill(
     windows: list[int],
     run_revision_id: str | None = None,
     official_project_root: str | Path | None = None,
+    sidecar_result: dict[str, Any] | None = None,
 ) -> int:
+    def record_progress(*, outcomes_updated: int | None = None,
+                        progress_status: str | None = None) -> None:
+        if sidecar_result is None:
+            return
+        sidecar_result.pop("outcomes_updated", None)
+        if outcomes_updated is not None:
+            sidecar_result["outcomes_updated"] = outcomes_updated
+        if progress_status is not None:
+            sidecar_result["progress_status"] = progress_status
+
     if run_revision_id is not None:
         try:
             run_revision_id = validate_run_revision_id(run_revision_id)
         except ValueError as exc:
             print(f"[FATAL] invalid run_revision_id: {exc}")
+            record_progress(progress_status="unavailable")
             return 2
     if official_project_root is not None and run_revision_id is None:
         print("[FATAL] official backfill requires run_revision_id")
+        record_progress(progress_status="unavailable")
         return 2
     all_df = _load_existing_tracker()
     df = all_df.copy()
@@ -603,14 +616,17 @@ def backfill(
                 "[OK] no official tracker rows; "
                 f"excluded {legacy_rows} legacy audit row(s), formal backfill count=0"
             )
+            record_progress(outcomes_updated=0)
             return 0
         print("[OK] tracker is empty, nothing to backfill")
+        record_progress(outcomes_updated=0)
         return 0
 
     today = _today_yyyymmdd()
     mature_as_ofs = _mature_as_ofs(df, today, windows)
     if not mature_as_ofs:
         print(f"[OK] no calendar-age eligible as_of with pending rows (today={today})")
+        record_progress(outcomes_updated=0)
         return 0
     print(f"[INFO] calendar-age eligible as_of with pending rows: {mature_as_ofs}")
 
@@ -627,6 +643,7 @@ def backfill(
         for line in _cache_refresh_hint(block_msg):
             print(line)
         _print_cache_stale_banner(mature_as_ofs, block_msg)
+        record_progress(progress_status="stalled")
         return EXIT_LEDGER_STALLED
     if not ready:
         print("[INFO] no calendar-age eligible cohort has an as_of row in the shared cache; "
@@ -636,7 +653,11 @@ def backfill(
                 needs_refresh,
                 "matured as_of is absent from stock rows; " + _cache_coverage_description(cached),
             )
-        return EXIT_LEDGER_STALLED if needs_refresh else 0
+        if needs_refresh:
+            record_progress(progress_status="stalled")
+            return EXIT_LEDGER_STALLED
+        record_progress(outcomes_updated=0)
+        return 0
 
     # Strictly cache-only: settle from the already-read cache payload; never
     # fetch here. attach_forward_returns expects samples with a trade_date
@@ -647,7 +668,11 @@ def backfill(
     work_mask = df["as_of"].astype(str).isin(ready) & _pending_backfill_mask(df, windows)
     work = df[work_mask].copy()
     if work.empty:
-        return EXIT_LEDGER_STALLED if needs_refresh else 0
+        if needs_refresh:
+            record_progress(progress_status="stalled")
+            return EXIT_LEDGER_STALLED
+        record_progress(outcomes_updated=0)
+        return 0
     pending_before_attach = {
         (str(row.as_of), str(getattr(row, "run_revision_id", "") or ""), str(row.ts_code), window): str(getattr(row, f"ret_{window}d_status"))
         for row in work.itertuples(index=False)
@@ -748,7 +773,11 @@ def backfill(
           + (f"; deferred {deferred} cohort(s)" if deferred else ""))
     # Some cohorts settled, but a matured one still could not: the ledger is only
     # partly advanced, so report stalled rather than a clean success.
-    return EXIT_LEDGER_STALLED if stale_cohorts else 0
+    if stale_cohorts:
+        record_progress(progress_status="stalled")
+        return EXIT_LEDGER_STALLED
+    record_progress(outcomes_updated=len(updated_keys))
+    return 0
 
 
 def refresh(windows: list[int]) -> int:

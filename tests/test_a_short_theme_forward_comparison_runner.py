@@ -932,6 +932,7 @@ def _future_frozen_receipt_writer(epoch, cohort, path):
             tracker_path.write_text("as_of,ts_code\n20260102,000001.SZ\n", encoding="utf-8")
             private_root = Path(temp) / "state" / "a_short" / "theme_forward_comparison_private" / "v1"
             pre_epoch = {"mode": "pre_freeze_audit_only"}
+            carrier = {}
             with mock.patch.object(runner, "evaluate_theme_forward_comparison", return_value=packet), \
                     mock.patch.object(runner, "validate_comparison_packet"), \
                     mock.patch.object(runner, "load_epoch", return_value=pre_epoch), \
@@ -942,7 +943,8 @@ def _future_frozen_receipt_writer(epoch, cohort, path):
                 self.assertEqual(runner.main([
                     "--tracker", str(tracker_path), "--out", str(Path(temp) / "out.json"),
                     "--private-root", str(private_root),
-                ]), 0)
+                ], sidecar_result=carrier), 0)
+            self.assertEqual(carrier["progress_status"], "already_current")
 
 
 if __name__ == "__main__":
