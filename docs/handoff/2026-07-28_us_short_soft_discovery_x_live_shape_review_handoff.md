@@ -3030,3 +3030,41 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_s
 - **验证命令与结果**：验收超集 `.tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 900 tests.test_us_short_discovery_conformance tests.test_us_short_discovery_conformance_resources` → `Ran 32 tests in 165.337s / OK`、`status=PASS exit=0 tests=32`、`receipt:1da0de05dbfba28be4aeb977`。reviewer 自写顺序植入对照（临时 `tests/test_zz_reviewer_d_axis_order_probe.py`）：正常序 `Ran 2 / OK`，D 轴逆序 `FAILED` 并精确点名 `resource_test='...DAxisOrderProbe.test_aaa_probe_requires_clean_module_state'`；删探针后 numstat 逐字回到 `19/18` + `5/6`。纯 AST 复刻推导独立复算 `selected` 模块集 = `8 + 7 = 13`。
 - **失效的旧结论**：`_run()` 「每个测试独立解释器进程」为假（`:1973-1990` 同进程 loader + `TextTestRunner`）；`14 个模块 / 365 个测试 / 730 次子进程` 三个数字全部作废，正确为 `13 / 334 / 668`。register 顶部条目里这几处旧表述已开 `O-DAXIS-1` 待清理。
 - **下一步注意**：register 记的单遍耗时（`~52s`）在 reviewer 机器上复不出（实测 `129.1s`，干净超集 32 测试 `165.337s`），已开 `O-DAXIS-2`；引用降本幅度时别跨机器套用具体秒数。`conformance_executable`（第二名 `157.7s`）按 Codex 与 reviewer 双方判断**不得**同法收窄，它是变异矩阵不是顺序重扫。
+
+## 2026-08-16 追加：Pass2 预算夹具修复方案（交 Codex；本次 lane 全量 FAIL 的收口）
+
+对应 `R-USSHORT-PASS2-BUDGET-FIXTURES-LEFT-AT-16-BLOCK-THE-LANE-PACK`。用户明确要求：**修这个不许开新洞**，所以本节的重心是接口语义，而不是"把数字改对"。
+
+### 改了什么会红（机制，已由代码逐行确认）
+
+`runners/us_short_batch5_full_candidate_pass2_preflight.py:501` 的判据是 `authorized_total_call_budget == forecast["total_calls_for_pass2_target_cut"]` —— **恰好相等**，不是"不超过即可"。所以夹具里手写的预算一旦与当前代码算出的 forecast 不符，两种表现二选一：走到 `finalize_preflight_from_existing_derivation` 就在 `:681` 抛 `existing preflight authorized budget conflicts with the finalized Pass2 approval`（yfinance 那条红）；只跑 `run_preflight` 则状态落成 `blocked_execution_constraints`，断言 `ready_for_reviewed_live_execution` 的那行随之红（projection_inputs 那条）。**两条红同一个根，不是两个 bug。**
+
+### 接口分析：两种"看起来对"的修法各自会开什么新洞
+
+- **接口 A —— `authorized_total_call_budget` 的语义是"操作员显式审过的那个确切整数"，`:501` 的 `==` 就是这条语义的执行点。** 因此**不能**把夹具改成"读出自己刚写的 summary 里的 forecast 再喂回去"就算完：那样这条门在该路径上**恒为真**，等于把门在这条路径上悄悄拆了（自证式夹具）。允许的写法是**模拟操作员的两步**——先不传预算（`authorized_total_call_budget=None` 是合法输入，见 `:499`）跑一次拿到 forecast，再用**那个确切整数**跑第二次，这正是 CLI `--print-budget` → `--authorized-total-call-budget N` 的真实流程；但用它的前提是接口 C 的反向证明仍然存在。
+- **接口 B —— "这个场景的 forecast 该是多少"这个事实的 owner 是 `tests/provider/test_us_short_batch5_full_candidate_pass2_preflight.py`**（它已经 pin 了 32/33/34）。`projection_inputs` 与 `yfinance_grades_fetch` 是**消费方**，复述这个数字既不归它们管，也正是今天过期的来源。消费方要断言的是自己的主题（覆盖分区、摘要卫生），不是别人的契约值。
+- **接口 C —— 三样绝对不许动**：① `:501` 的 `==`；② `:681` 的 raise；③ owner 模块里那些**故意写错**的 `authorized_total_call_budget=11 / 999`——它们躺在 `assertRaisesRegex(...)` 里（`:492`、`:502` 等），是这道门唯一的反向证明。**特别禁止**给 runner 加"没传预算就自动采用 forecast"这类便利参数：那不是简化，那是把这道真配额门取消。
+
+### 逐处判定规则（禁止一刀切扫全仓）
+
+reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings 都搬了只漏两处"，那是推断不是实测。`_forecast_calls(pass2_target_count, full_candidate_count, active_analyst_source="yfinance")` 的签名说明**票数与分析师来源不同就该算出不同的值**，所以别处的 37 / 34 很可能是各自场景的正确值。逐处按这条判：
+
+- 该处断言 `status == ready_for_reviewed_live_execution`，或要继续走下游 → 属"走通路径"，改两步法。
+- 该处在 `assertRaises*` 内，或断言 blocked / not-ready → 属**反向控制**，字面量保留，一个字别动。
+- 今天全量里没红的模块 → 说明它的数字与它的场景相符，**不在本刀范围**，不要"顺手统一"。
+
+### 本刀确切范围（只有两处经实测确认）
+
+1. `tests/provider/test_us_short_yfinance_grades_fetch.py:174`（`setUp`）—— 本次全量唯一红。该模块主题是抓评级后的摘要卫生，与预算门无关，改完**不应再残留任何预算字面量**。
+2. `tests/provider/test_us_short_batch5_full_candidate_projection_inputs.py:261` 与 `:272`/`:273` —— 今早在主树实测红（`:266` 的 `'blocked_execution_constraints' != 'ready_for_reviewed_live_execution'`）。该测试主题见方法名（scored+neutral 分区算全覆盖），`:272`/`:273` 两行 pin 的是别人的契约值：删掉，或换成与具体数值无关的关系断言（例如"目标集即全部候选时，target-cut 与 full-candidate-cut 两个 total 相等"）。注意 `:273` 是另一个字段，别只改 `:272`。
+
+### 做完必须验证的（closure，缺一不算完）
+
+1. 两个模块各自单跑绿。
+2. **反向证明仍在**：在 owner 模块里确认至少一条"预算 ≠ forecast → 不 ready / 抛错"的用例仍然存在且仍然承重——把它的预算临时改成正确值应转绿、改回应转红。这一步专门用来证明"我们没有在修红的过程中把门修没了"，是本刀能否 PASS 的硬条件。
+3. lane 全量一次 `full_pack_ledger run us_short`，看 `COUNT_GATE discovered==ran`。**预期它会再往前推一格而不是一次到绿**：今天是 fail-fast 停在 `ran=5567 / discovered=5958`，后面 391 个用例根本没派发，很可能还有下一层红——那不是本刀没修好，照常按归属分派即可。
+
+### 不要顺手做的
+
+- 不要为"以后不再过期"加一条"测试里禁止手写预算常量"的全仓守卫：owner 模块里那些故意写错的用例会被它一并判红，等于用机械规则拆掉真正的门（`CLAUDE.md` §5 明禁）。
+- 真正防复发的不是守卫而是流程：改 forecast / 预算这类跨模块契约的那一刀，执行方须按 `AGENTS.md` rule 3/4 让 lane 全量绿一次再交接。今天这个红能活到现在，正是那一步没走完。
