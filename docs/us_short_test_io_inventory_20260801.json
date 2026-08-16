@@ -172,6 +172,8 @@
     "tests/test_us_short_forward_policy_shadow_stage.py:write_text:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_lifecycle_store.py:unlink:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_lifecycle_store.py:write_text:provider_samples,state/us_short:class4_unresolved_write",
+    "tests/test_us_short_llm_theme_discovery_plan_budget.py:mkdir:provider_samples,state/us_short:class4_unresolved_write",
+    "tests/test_us_short_llm_theme_discovery_plan_budget.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_llm_theme_discovery_query_policy.py:replace:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_market_diagnostic_authorization_conformance.py:write_bytes:provider_samples,state/us_short:class4_unresolved_write",
     "tests/test_us_short_market_diagnostic_lifecycle.py:helper:_orphan:provider_samples,state/us_short:class4_unresolved_write",
@@ -290,6 +292,14 @@
     },
     {
       "module": "tests/provider/test_us_short_batch5_full_candidate_live_source_packet.py",
+      "classification": "class4_unresolved_write",
+      "protected_roots": [
+        "provider_samples",
+        "state/us_short"
+      ]
+    },
+    {
+      "module": "tests/provider/test_us_short_batch5_full_candidate_pass2_preflight.py",
       "classification": "class4_unresolved_write",
       "protected_roots": [
         "provider_samples",
@@ -630,8 +640,9 @@
     },
     {
       "module": "tests/test_us_short_llm_theme_discovery_plan_budget.py",
-      "classification": "class2_write_real_root",
+      "classification": "class4_unresolved_write",
       "protected_roots": [
+        "provider_samples",
         "state/us_short"
       ]
     },

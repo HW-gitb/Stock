@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import ast
+from contextlib import ExitStack, contextmanager
 import inspect
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import tempfile
 import threading
 import unittest
 from unittest import mock
@@ -15,6 +17,7 @@ from engine import us_short_llm_theme_discovery_provider_policy as provider_poli
 from engine import us_short_llm_theme_discovery_query_plan as query_plan
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
+from runners import us_short_llm_theme_discovery_web_regroup_smoke as smoke
 from tests.provider.us_short_private_test_root_light import temporary_us_short_state_directory
 
 
@@ -56,6 +59,130 @@ def _reviewed_parent_plan() -> dict:
 def _noop_persist(_request, _value):
     """Explicit test sink for orchestration-only tests that do not build raw receipts."""
     return None
+
+
+def _k5_response(*, content: str = '{"themes": []}', model: str = "deepseek-chat",
+                 usage: dict | None = None, finish_reason: str = "stop") -> dict:
+    return {
+        "choices": [{"message": {"content": content}, "finish_reason": finish_reason}],
+        "model": model,
+        "usage": usage if usage is not None else {
+            "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15,
+        },
+        "system_fingerprint": "fp_test",
+    }
+
+
+class _K5FakeDeepSeek:
+    def __init__(self, response: object, error: BaseException | None = None):
+        self.requests: list[dict] = []
+        self._response = response
+        self._error = error
+        outer = self
+
+        class _Completions:
+            def create(self, **kwargs):
+                outer.requests.append(kwargs)
+                if outer._error is not None:
+                    raise outer._error
+                return outer._response
+
+        class _Chat:
+            completions = _Completions()
+
+        self.chat = _Chat()
+
+
+class _K5FakeBudget:
+    def __init__(self, *, parent_plan: dict, completion_error: BaseException | None = None):
+        self.parent_plan = parent_plan
+        self.completion_error = completion_error
+        self.calls: list[tuple[str, str, str]] = []
+
+    def dispatch_with_outcome(self, provider, *, scope, stage, call):
+        self.calls.append((provider, scope, stage))
+        try:
+            value = call()
+        except BaseException as exc:
+            if plan_budget.is_control_error(exc):
+                raise
+            return plan_budget.DispatchOutcome(call_error=exc)
+        return plan_budget.DispatchOutcome(value=value, completion_error=self.completion_error)
+
+
+@contextmanager
+def _k5_smoke_fixture(
+    *, response: object | None = None, client_error: BaseException | None = None,
+    completion_error: BaseException | None = None, persist_error: BaseException | None = None,
+    publish_error: BaseException | None = None,
+):
+    packet = json.loads(
+        (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    with tempfile.TemporaryDirectory(prefix="us_short_k5_") as raw:
+        root = Path(raw)
+        state_dir = root / "state" / "us_short"
+        private_root = state_dir / "runs_private" / "soft_discovery_engineering_smoke"
+        provider_root = root / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke"
+        parent_plan = {"plan_identity": "p" * 64}
+        fake_client = _K5FakeDeepSeek(
+            response if response is not None else _k5_response(), error=client_error,
+        )
+        fake_budget = _K5FakeBudget(
+            parent_plan=parent_plan, completion_error=completion_error,
+        )
+        target_rows = [{
+            "source_id": "web:" + "a" * 64,
+            "title": "Evidence title",
+            "content": "AAPL demand evidence",
+        }]
+        packet_path = root / "packet.json"
+        schema_path = root / "packet.schema.json"
+        summary_path = private_root / "us_short_web_regroup_engineering_smoke_20260815_summary.json"
+        patches = [
+            mock.patch.object(smoke, "ROOT", root),
+            mock.patch.object(smoke, "LIVE_ROOT", root),
+            mock.patch.object(smoke, "PACKET_PATH", packet_path),
+            mock.patch.object(smoke, "SCHEMA_PATH", schema_path),
+            mock.patch.object(smoke, "PRIVATE_ROOT", private_root),
+            mock.patch.object(smoke, "PARENT_PLAN_PATH", private_root / "parent_plan.json"),
+            mock.patch.object(smoke, "RAW_ROOT", provider_root),
+            mock.patch.object(smoke, "SUMMARY_PATH", summary_path),
+            mock.patch.object(web, "ROOT", root),
+            mock.patch.object(web, "STATE_DIR", state_dir),
+            mock.patch.object(web, "_gitignored", return_value=True),
+            mock.patch.object(smoke, "_validate_packet", return_value=packet),
+            mock.patch.object(smoke, "_frozen_target_rows", return_value=target_rows),
+            mock.patch.object(smoke, "_build_diagnostic_parent_plan", return_value=parent_plan),
+            mock.patch.object(smoke, "_private_gitignored", return_value=True),
+            mock.patch.object(web, "_require_single_deepseek_api_key", return_value="sk-" + "a" * 16),
+        ]
+        if persist_error is not None:
+            patches.append(mock.patch.object(web, "_persist_live_web_regroup_response", side_effect=persist_error))
+        if publish_error is not None:
+            patches.append(mock.patch.object(web, "publish_engineering_smoke_diagnostic", side_effect=publish_error))
+        with ExitStack() as stack:
+            for patch in patches:
+                stack.enter_context(patch)
+            reserve_mock = stack.enter_context(
+                mock.patch.object(plan_budget, "reserve_plan_budget", return_value=fake_budget)
+            )
+            client_constructor = stack.enter_context(
+                mock.patch.object(paid_gateway, "DeepSeekClient", return_value=fake_client)
+            )
+            yield {
+                "packet": packet,
+                "root": root,
+                "private_root": private_root,
+                "provider_root": provider_root,
+                "summary_path": summary_path,
+                "client": fake_client,
+                "budget": fake_budget,
+                "reserve_mock": reserve_mock,
+                "client_constructor": client_constructor,
+            }
 
 
 def _live_transport(*providers: str) -> paid_gateway.LiveTransport:
@@ -741,6 +868,387 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 self.assertEqual(diagnostic["packet"], {"paid": "strong"})
             finally:
                 web.STATE_DIR = old_state
+
+    def test_K5_packet_schema_and_diagnostic_parent_plan_freeze_one_web_stage2_call(self):
+        packet = json.loads(
+            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        schema = json.loads(
+            (ROOT / "schemas/us_short_web_regroup_engineering_smoke_packet.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        from jsonschema import Draft7Validator
+        errors = list(Draft7Validator(schema).iter_errors(packet))
+        self.assertEqual(errors, [])
+        self.assertEqual(packet["paid_boundary"]["call_counts"], {
+            "tavily": 0, "deepseek": 1, "xai": 0, "retry": 0,
+            "recovery": 0, "unknown_sibling": 0,
+        })
+        parent = smoke._build_diagnostic_parent_plan(packet)
+        envelopes = {
+            row["provider"]: row
+            for row in parent["canonical_plan_core"]["provider_envelopes"]
+        }
+        self.assertEqual(envelopes["web"]["stage1_max_dispatch_count"], 0)
+        self.assertEqual(envelopes["web"]["stage2_max_dispatch_count"], 1)
+        self.assertEqual(envelopes["web"]["retry_max_dispatch_count"], 0)
+        self.assertEqual(envelopes["web"]["max_dispatch_count"], 1)
+        self.assertEqual(envelopes["xai"]["max_dispatch_count"], 0)
+
+    def test_K5_requires_exact_packet_confirmation_before_fixed_main_tree_gate(self):
+        packet = json.loads(
+            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        with mock.patch.object(smoke, "_validate_packet", return_value=packet):
+            with self.assertRaisesRegex(smoke.EngineeringSmokeError, "exact packet authorization"):
+                smoke.run_one_shot(packet, confirm_user_authorization="--live")
+
+    def test_K5_smoke_statuses_use_private_publisher_and_normal_status_is_rejected(self):
+        self.assertTrue(web.is_diagnostic_only_execution_status(
+            "live_authorized_engineering_smoke_response_captured"
+        ))
+        self.assertTrue(web.is_diagnostic_only_execution_status(
+            "live_authorized_engineering_smoke_call_failed"
+        ))
+        self.assertFalse(web.is_diagnostic_only_execution_status("live_authorized_completed"))
+        with temporary_us_short_state_directory(ROOT) as raw:
+            old_state = web.STATE_DIR
+            try:
+                web.STATE_DIR = Path(raw)
+                summary = {
+                    "status": "live_authorized_engineering_smoke_call_failed",
+                    "formal_decision_slots_occupied": False,
+                }
+                with mock.patch.object(web, "_gitignored", return_value=True):
+                    path = web.publish_engineering_smoke_diagnostic(summary)
+                self.assertTrue(path.exists())
+                self.assertEqual(
+                    json.loads(path.read_text(encoding="utf-8"))["status"],
+                    summary["status"],
+                )
+                with self.assertRaisesRegex(web.WebThemeDiscoveryError, "diagnostic-only"):
+                    web.publish_engineering_smoke_diagnostic({
+                        "status": "live_authorized_completed",
+                        "formal_decision_slots_occupied": False,
+                    })
+                with self.assertRaisesRegex(web.WebThemeDiscoveryError, "diagnostic-only"):
+                    web.publish_engineering_smoke_diagnostic({
+                        "status": "live_authorized_budget_aborted",
+                        "formal_decision_slots_occupied": False,
+                    })
+            finally:
+                web.STATE_DIR = old_state
+
+    def test_K5_runner_does_not_reference_formal_decision_publisher_or_slots(self):
+        source = Path(smoke.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("publish_decision_pair", source)
+        self.assertNotIn("default_discovery_path", source)
+        self.assertNotIn("default_receipt_path", source)
+
+    def test_K5_required_2_run_one_shot_revalidates_tampered_packet_before_budget_or_client(self):
+        packet = json.loads(
+            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        forged = json.loads(json.dumps(packet))
+        forged["input"]["target_chunk_index"] = 2
+        with mock.patch.object(smoke, "_validate_packet", return_value=packet) as validate, \
+                mock.patch.object(plan_budget, "reserve_plan_budget", side_effect=AssertionError("budget constructed")) as reserve, \
+                mock.patch.object(paid_gateway, "DeepSeekClient", side_effect=AssertionError("client constructed")) as client:
+            with self.assertRaisesRegex(smoke.EngineeringSmokeError, "does not match"):
+                smoke.run_one_shot(
+                    forged, confirm_user_authorization=packet["packet_id"],
+                )
+        validate.assert_called_once_with(smoke.PACKET_PATH)
+        reserve.assert_not_called()
+        client.assert_not_called()
+
+    def test_K5_13_1_target_chunk_is_derived_from_production_order_not_receipt_storage_order(self):
+        fetched_at = datetime(2026, 8, 15, tzinfo=timezone.utc)
+        raw_rows = [{
+            "url": f"https://example.com/source-{index:02d}",
+            "title": f"Title {index:02d}",
+            "content": f"AAPL demand evidence {index:02d}",
+            "published_date": "2026-08-14T00:00:00+00:00",
+        } for index in range(34)]
+        refs, prompt_rows, drops = web._normalize_search_results(
+            raw_rows, expected_decision_date=DECISION_DATE, fetched_at=fetched_at,
+            raw_root=None, persist_raw=False,
+        )
+        self.assertEqual(drops, [])
+        chunks = web._chunk_regroup_rows(prompt_rows)
+        self.assertEqual([len(chunk) for chunk in chunks], [10, 10, 10, 4])
+        with tempfile.TemporaryDirectory(prefix="us_short_k5_order_") as raw:
+            root = Path(raw)
+            raw_dir = root / "provider_samples" / "us_short_llm_theme_discovery_fetch_web" / "raw" / DECISION_DATE
+            raw_dir.mkdir(parents=True)
+            raw_by_url = {row["url"]: row for row in raw_rows}
+            receipt_refs = []
+            for ref in refs:
+                source_id = ref["source_id"]
+                source_path = raw_dir / f"{source_id.split(':', 1)[1]}.json"
+                source_row = raw_by_url[ref["canonical_locator"]]
+                source_path.write_text(json.dumps({
+                    "source_id": source_id,
+                    "source_type": "web",
+                    "canonical_locator": ref["canonical_locator"],
+                    "title": source_row["title"],
+                    "content": source_row["content"],
+                    "published_at": ref["observed_at"],
+                }), encoding="utf-8")
+                receipt_refs.append({
+                    **ref,
+                    "raw_receipt_ref": (
+                        f"provider_samples/us_short_llm_theme_discovery_fetch_web/raw/"
+                        f"{DECISION_DATE}/{source_path.name}"
+                    ),
+                    "raw_receipt_gitignored": True,
+                })
+            stored_refs = list(reversed(receipt_refs))
+            receipt_path = root / "state" / "us_short" / "receipt.json"
+            receipt_path.parent.mkdir(parents=True)
+            receipt_path.write_text(json.dumps({
+                "decision_clock": {"expected_decision_date": DECISION_DATE},
+                "source_refs": stored_refs,
+            }), encoding="utf-8")
+            by_id = {ref["source_id"]: ref for ref in stored_refs}
+            target = chunks[1]
+            packet = {
+                "input": {
+                    "receipt_ref": "state/us_short/receipt.json",
+                    "receipt_sha256": "unused-in-direct-preflight",
+                    "accepted_source_count": 34,
+                    "target_chunk_index": 1,
+                    "target_source_ids": [row["source_id"] for row in target],
+                    "target_source_refs": [by_id[row["source_id"]] for row in target],
+                },
+            }
+            with mock.patch.object(smoke, "ROOT", root):
+                target_rows = smoke._frozen_target_rows(packet)
+            self.assertEqual(
+                [row["source_id"] for row in target_rows], packet["input"]["target_source_ids"],
+            )
+            self.assertNotEqual(
+                [ref["source_id"] for ref in stored_refs[10:20]],
+                packet["input"]["target_source_ids"],
+                "direct receipt slicing must be a live negative control",
+            )
+            flattened = [row["source_id"] for chunk in chunks for row in chunk]
+            self.assertEqual(len(flattened), len(set(flattened)))
+            self.assertEqual(set(flattened), {ref["source_id"] for ref in stored_refs})
+
+    def test_K5_13_1_cli_has_no_free_model_or_output_shape_arguments(self):
+        with self.assertRaises(SystemExit):
+            smoke.main([
+                "--confirm-user-authorization", "packet-id", "--model", "other-model",
+            ])
+
+    def test_K5_13_2_one_shot_uses_one_gateway_attempt_and_private_budget(self):
+        with _k5_smoke_fixture() as fixture:
+            summary = smoke.run_one_shot(
+                fixture["packet"], confirm_user_authorization=fixture["packet"]["packet_id"],
+            )
+            self.assertEqual(summary["transport_verdict"], "PASS")
+            self.assertEqual(len(fixture["budget"].calls), 1)
+            self.assertEqual(len(fixture["client"].requests), 1)
+            self.assertTrue(fixture["private_root"].exists())
+            self.assertNotIn("formal_decision", str(fixture["private_root"]))
+            self.assertIn("require_reviewed_policy=True", Path(smoke.__file__).read_text(encoding="utf-8"))
+
+    def test_K5_13_2_second_gateway_chunk_is_stopped_by_the_real_budget(self):
+        parent = _parent(stage1=0, stage2=1, retry=0)
+        client = _K5FakeDeepSeek(_k5_response())
+        rows = [{"source_id": "web:" + "b" * 64, "title": "t", "content": "c"}]
+        with temporary_us_short_state_directory(ROOT) as raw:
+            budget = plan_budget.reserve_plan_budget(
+                parent, state_dir=Path(raw), root=ROOT, gitignored=lambda _path: True,
+                providers=("web",), require_reviewed_policy=False,
+            )
+            batch = paid_gateway.PaidDispatchGateway(
+                budget, parent_plan=parent,
+            ).dispatch_web_regroup_all(
+                client, expected_decision_date=DECISION_DATE,
+                chunks=[(1, rows), (2, rows)], prompt_builder=lambda _date, _rows: "prompt",
+                persist_response=_noop_persist,
+            )
+        self.assertEqual(len(client.requests), 1)
+        self.assertEqual(len(batch.items), 1)
+        self.assertIsInstance(batch.stop_error, plan_budget.PlanBudgetError)
+
+    def test_K5_13_3_raw_exists_before_parser_and_bad_json_remains_replayable(self):
+        with _k5_smoke_fixture(response=_k5_response(content="not json")) as fixture:
+            raw_seen_by_parser: list[bool] = []
+            real_consumer = web._consume_regroup_response
+
+            def consume(response, *, expected_served_model, chunk_index):
+                raw_seen_by_parser.append(any(fixture["provider_root"].rglob("*.json")))
+                return real_consumer(
+                    response, expected_served_model=expected_served_model, chunk_index=chunk_index,
+                )
+
+            with mock.patch.object(web, "_consume_regroup_response", side_effect=consume):
+                summary = smoke.run_one_shot(
+                    fixture["packet"], confirm_user_authorization=fixture["packet"]["packet_id"],
+                )
+            self.assertEqual(raw_seen_by_parser, [True])
+            self.assertEqual(summary["transport_verdict"], "FAIL")
+            self.assertEqual(summary["strict_parse_status"], "failed")
+            self.assertTrue(any(fixture["provider_root"].rglob("*.json")))
+            self.assertEqual(len(fixture["budget"].calls), 1)
+
+    def test_K5_13_3_raw_write_failure_and_unsafe_response_skip_parser(self):
+        for label, kwargs in (
+            ("writer", {"persist_error": web.WebThemeDiscoveryError("raw writer failed")}),
+            ("unsafe", {"response": object()}),
+        ):
+            with self.subTest(case=label), _k5_smoke_fixture(**kwargs) as fixture:
+                with mock.patch.object(web, "_consume_regroup_response") as consume:
+                    with self.assertRaises(smoke.EngineeringSmokeError):
+                        smoke.run_one_shot(
+                            fixture["packet"],
+                            confirm_user_authorization=fixture["packet"]["packet_id"],
+                        )
+                consume.assert_not_called()
+                self.assertEqual(len(fixture["budget"].calls), 1)
+                self.assertFalse(fixture["summary_path"].exists())
+
+    def test_K5_13_4_request_and_response_metadata_are_pinned(self):
+        response = _k5_response()
+        with _k5_smoke_fixture(response=response) as fixture:
+            summary = smoke.run_one_shot(
+                fixture["packet"], confirm_user_authorization=fixture["packet"]["packet_id"],
+            )
+            request = fixture["client"].requests[0]
+            self.assertEqual(request["model"], paid_gateway.DEEPSEEK_MODEL)
+            self.assertEqual(request["temperature"], 0)
+            self.assertEqual(request["max_tokens"], paid_gateway.DEEPSEEK_REGROUP_MAX_TOKENS)
+            self.assertEqual(request["response_format"], {"type": "json_object"})
+            self.assertEqual(summary["served_model"], "deepseek-chat")
+            self.assertEqual(summary["usage"], response["usage"])
+            self.assertEqual(summary["finish_reason"], "stop")
+            self.assertEqual(summary["original_chunk_index"], 1)
+            self.assertEqual(summary["parsed_theme_count"], 0)
+            persisted_summary = json.loads(fixture["summary_path"].read_text(encoding="utf-8"))
+            self.assertNotIn("response", persisted_summary)
+            self.assertNotIn("sk-", json.dumps(persisted_summary))
+
+    def test_K5_13_4_bad_provider_metadata_is_failure_without_refill(self):
+        usage_missing = _k5_response()
+        usage_missing["usage"] = None
+        variants = {
+            "served_model_missing": _k5_response(model=None),
+            "served_model_drift": _k5_response(model="deepseek-v4-flash"),
+            "usage_missing": usage_missing,
+            "finish_length": _k5_response(finish_reason="length"),
+            "five_themes": _k5_response(content=json.dumps({"themes": [{}, {}, {}, {}, {}]})),
+        }
+        for label, response in variants.items():
+            with self.subTest(case=label), _k5_smoke_fixture(response=response) as fixture:
+                summary = smoke.run_one_shot(
+                    fixture["packet"], confirm_user_authorization=fixture["packet"]["packet_id"],
+                )
+                self.assertEqual(summary["transport_verdict"], "FAIL")
+                self.assertEqual(len(fixture["budget"].calls), 1)
+                self.assertEqual(len(fixture["client"].requests), 1)
+
+    def test_K5_13_5_formal_slots_and_publisher_are_unreachable(self):
+        with _k5_smoke_fixture() as fixture:
+            formal_paths = (
+                web.default_discovery_path(DECISION_DATE),
+                web.default_receipt_path(DECISION_DATE),
+            )
+            frozen = []
+            for path in formal_paths:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"frozen-formal-slot")
+                frozen.append(path.read_bytes())
+            with mock.patch.object(
+                web, "publish_decision_pair", side_effect=AssertionError("formal publisher reached"),
+            ):
+                summary = smoke.run_one_shot(
+                    fixture["packet"], confirm_user_authorization=fixture["packet"]["packet_id"],
+                )
+            self.assertEqual(summary["transport_verdict"], "PASS")
+            self.assertEqual([path.read_bytes() for path in formal_paths], frozen)
+            self.assertFalse(summary["formal_decision_slots_occupied"])
+
+    def test_K5_13_6_each_failure_shape_spends_once_and_replay_is_refused_before_provider(self):
+        completion = plan_budget.PostPaymentDispatchError(RuntimeError("ledger completion failed"))
+        cases = (
+            ("response_captured", {}, "PASS"),
+            ("call_failed", {"client_error": paid_gateway.PaidProviderError("provider failed")}, "FAIL"),
+            ("completion_ledger_error", {"completion_error": completion}, "FAIL"),
+            ("raw_persistence_error", {"persist_error": web.WebThemeDiscoveryError("raw failed")}, None),
+            ("summary_write_error", {"publish_error": RuntimeError("summary failed")}, None),
+        )
+        for label, kwargs, expected_verdict in cases:
+            with self.subTest(case=label), _k5_smoke_fixture(**kwargs) as fixture:
+                first_error = None
+                try:
+                    first = smoke.run_one_shot(
+                        fixture["packet"],
+                        confirm_user_authorization=fixture["packet"]["packet_id"],
+                    )
+                except BaseException as exc:
+                    first_error = exc
+                if expected_verdict is not None:
+                    self.assertIsNone(first_error)
+                    self.assertEqual(first["transport_verdict"], expected_verdict)
+                else:
+                    self.assertIsNotNone(first_error)
+                self.assertEqual(len(fixture["budget"].calls), 1)
+                with self.assertRaisesRegex(smoke.EngineeringSmokeError, "replay is forbidden"):
+                    smoke.run_one_shot(
+                        fixture["packet"],
+                        confirm_user_authorization=fixture["packet"]["packet_id"],
+                    )
+                self.assertEqual(len(fixture["budget"].calls), 1)
+                self.assertEqual(fixture["reserve_mock"].call_count, 1)
+                self.assertEqual(fixture["client_constructor"].call_count, 1)
+
+    def test_K5_13_7_raw_before_parse_mutation_control_is_load_bearing(self):
+        with _k5_smoke_fixture() as fixture:
+            raw_seen_by_parser: list[bool] = []
+            real_consumer = web._consume_regroup_response
+
+            def consume(response, *, expected_served_model, chunk_index):
+                raw_seen_by_parser.append(any(fixture["provider_root"].rglob("*.json")))
+                return real_consumer(
+                    response, expected_served_model=expected_served_model, chunk_index=chunk_index,
+                )
+
+            with mock.patch.object(web, "_consume_regroup_response", side_effect=consume):
+                summary = smoke.run_one_shot(
+                    fixture["packet"], confirm_user_authorization=fixture["packet"]["packet_id"],
+                )
+            self.assertEqual(summary["transport_verdict"], "PASS")
+            self.assertEqual(raw_seen_by_parser, [True])
+
+    def test_K5_13_7_formal_publisher_mutation_control_is_runtime_not_grep_only(self):
+        with _k5_smoke_fixture() as fixture:
+            with mock.patch.object(
+                web, "publish_decision_pair", side_effect=AssertionError("formal publisher reached"),
+            ):
+                summary = smoke.run_one_shot(
+                    fixture["packet"], confirm_user_authorization=fixture["packet"]["packet_id"],
+                )
+            self.assertEqual(summary["transport_verdict"], "PASS")
+
+    def test_K5_13_7_status_consumer_disconnect_is_rejected(self):
+        with _k5_smoke_fixture() as fixture:
+            with mock.patch.object(web, "ENGINEERING_SMOKE_EXECUTION_STATUSES", frozenset()):
+                with self.assertRaisesRegex(web.WebThemeDiscoveryError, "diagnostic-only"):
+                    smoke.run_one_shot(
+                        fixture["packet"],
+                        confirm_user_authorization=fixture["packet"]["packet_id"],
+                    )
+            self.assertEqual(len(fixture["budget"].calls), 1)
 
     def test_A4_P_D_web_and_x_post_payment_grid_keeps_paid_transport_evidence(self):
         class CompletionAfterReturn:
