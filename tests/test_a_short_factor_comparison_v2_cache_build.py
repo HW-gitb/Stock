@@ -398,6 +398,64 @@ class ComparisonV2CacheBuildTests(unittest.TestCase):
             self.assertEqual(result["status"], "cache_current")
             self.assertEqual([name for name, _kwargs in provider.calls], ["trade_cal"])
 
+    def test_cache_current_refreshes_physical_run_date_without_refetching_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            _capture(root)
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
+                materialize_incremental_cache(root=root, run_date=RUN_DATE, pro=FakeTushare())
+            provider = FakeTushare()
+            next_run_date = "20260228"
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=next_run_date):
+                result = materialize_incremental_cache(root=root, run_date=next_run_date,
+                                                       max_provider_calls=1, pro=provider)
+            self.assertEqual(result["status"], "cache_current")
+            self.assertEqual([name for name, _kwargs in provider.calls], ["trade_cal"])
+            cache = json.loads((root / "daily_cache.json").read_text(encoding="utf-8"))
+            self.assertEqual(cache["meta"]["last_run_date"], next_run_date)
+
+    def test_zero_selected_p4_window_fetches_only_benchmarks_and_registers_consumer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            provider = FakeTushare()
+            p4_window = [{
+                "consumer": "p4_overlay_adjudication", "decision_date": DECISION_DATE,
+                "price_data_through": DECISION_DATE, "window_mode": "managed_exit",
+                "pre_history_days": 0, "horizon_days": 20, "symbols": [],
+            }]
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE), \
+                    mock.patch("runners.a_short_factor_comparison_v2_cache_build._p4_windows", return_value=p4_window):
+                result = materialize_incremental_cache(
+                    root=root, run_date=RUN_DATE, max_provider_calls=3, pro=provider,
+                    overlay_adjudication_root=Path(tmp) / "p4",
+                )
+            self.assertEqual(result["status"], "cache_updated")
+            self.assertEqual(result["provider_calls"], 3)
+            self.assertEqual([kind for kind, _kwargs in provider.calls].count("index_daily"), 2)
+            self.assertFalse(any(kind in {"daily", "adj_factor", "stk_limit"} for kind, _kwargs in provider.calls))
+            cache = json.loads((root / "daily_cache.json").read_text(encoding="utf-8"))
+            self.assertEqual(cache["meta"]["consumers"], ["p4_overlay_adjudication"])
+            self.assertEqual({row["ts_code"] for row in cache["benchmarks"]}, {"000852.SH", "000300.SH"})
+
+    def test_zero_selected_p4_window_budget_deferral_is_positive_and_not_current(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            provider = FakeTushare()
+            p4_window = [{
+                "consumer": "p4_overlay_adjudication", "decision_date": DECISION_DATE,
+                "price_data_through": DECISION_DATE, "window_mode": "managed_exit",
+                "pre_history_days": 0, "horizon_days": 20, "symbols": [],
+            }]
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE), \
+                    mock.patch("runners.a_short_factor_comparison_v2_cache_build._p4_windows", return_value=p4_window):
+                result = materialize_incremental_cache(
+                    root=root, run_date=RUN_DATE, max_provider_calls=2, pro=provider,
+                    overlay_adjudication_root=Path(tmp) / "p4",
+                )
+            self.assertEqual(result["status"], "cache_updated_with_deferrals")
+            self.assertGreater(result["deferred_symbols_by_consumer"]["p4_overlay_adjudication"], 0)
+            self.assertEqual([kind for kind, _kwargs in provider.calls], ["trade_cal"])
+
     def test_p2_and_p3_share_the_same_cache_and_execution_projection(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp)
@@ -643,6 +701,22 @@ class ComparisonV2CacheBuildTests(unittest.TestCase):
                     mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
                 with self.assertRaises(RuntimeError):
                     materialize_incremental_cache(root=root, run_date=RUN_DATE, pro=provider)
+            self.assertEqual(path.read_text(encoding="utf-8"), original)
+
+    def test_cache_current_does_not_rewrite_legacy_cache_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            _capture(root)
+            root.mkdir(parents=True, exist_ok=True)
+            path = root / "daily_cache.json"
+            original = json.dumps(_legacy_cache())
+            path.write_text(original, encoding="utf-8")
+            provider = FakeTushare()
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._missing_symbols", return_value=set()), \
+                    mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
+                result = materialize_incremental_cache(root=root, run_date=RUN_DATE,
+                                                       max_provider_calls=1, pro=provider)
+            self.assertEqual(result["status"], "cache_current")
             self.assertEqual(path.read_text(encoding="utf-8"), original)
 
 

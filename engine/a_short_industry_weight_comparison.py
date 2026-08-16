@@ -550,6 +550,8 @@ def _qfq(row: dict, field: str) -> float | None:
 
 def _arm_horizon(*, selected: list[dict], decision_date: str, horizon: int, dates: list[str], date_pos: dict[str, int],
                  stocks: dict[tuple[str, str], dict], limits: dict[tuple[str, str], dict], cost_pct: float) -> dict:
+    if not selected:
+        return {"status": "no_count", "reason": "selection_empty"}
     if decision_date not in date_pos or date_pos[decision_date] + horizon >= len(dates):
         return {"status": "pending", "portfolio_net_return_pct": None, "positions": []}
     entry_date, exit_date = dates[date_pos[decision_date] + 1], dates[date_pos[decision_date] + horizon]
@@ -728,6 +730,8 @@ def _question_progress(root: Path, question_id: str, as_of: str) -> dict:
             if row.get("same_list") is False:
                 difference += 1
         elif h10.get("status") == "no_count":
+            if h10.get("reason") == "selection_empty":
+                continue
             mature += 1
             no_count += 1
     # Pre-freeze evidence is audit-only: it must not trigger the P5b build reminder.
@@ -820,6 +824,8 @@ def build_public_progress(*, root: str | Path | None, as_of: str,
                     continue
                 h10 = (outcome_question.get("horizons") or {}).get("h10") or {}
                 if h10.get("status") == "no_count":
+                    if h10.get("reason") == "selection_empty":
+                        continue
                     mature[question_id] += 1; no_count[question_id] += 1
                     continue
                 if h10.get("status") != "settled":

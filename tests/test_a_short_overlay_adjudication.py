@@ -16,8 +16,9 @@ if str(ROOT) not in sys.path:
 
 from engine.a_short_overlay_adjudication import (  # noqa: E402
     OverlayAdjudicationError, build_public_summary, capture_after_published_weekly,
-    _active_profile_binding, _adjudicate, _contract_fingerprint, _epoch_context, _monthly_cluster_t,
-    _screening_runtime_recipe_binding, _stage3_payload, select_stage3_top5,
+    _active_profile_binding, _adjudicate, _arm_return, _contract_fingerprint, _digest, _epoch_context,
+    _monthly_cluster_t, _cache_frames, _screening_runtime_recipe_binding, _seal_record, _stage3_payload,
+    select_stage3_top5,
     settle_and_summarize_weekly, settle_from_daily_payload, validate_public_summary, write_public_summary,
 )
 from engine import a_short_experiment_admission_registry as _admission_registry  # noqa: E402
@@ -95,6 +96,18 @@ def _daily(codes: list[str], *, missing_adjustment: bool = False) -> dict:
             "deferred_due_to_budget": {}}}
 
 
+def _daily_before(codes: list[str], last_run_date: str, consumers: list[str] | None = None) -> dict:
+    cache = _daily(codes)
+    for group in ("stocks", "limits", "benchmarks", "rows"):
+        cache[group] = [
+            row for row in cache[group]
+            if row["trade_date"] <= last_run_date
+        ]
+    cache["meta"]["last_run_date"] = last_run_date
+    cache["meta"]["consumers"] = list(consumers or [])
+    return cache
+
+
 class OverlayAdjudicationTests(unittest.TestCase):
     def setUp(self):
         # These cases assert the ENFORCED epoch contract (the historical default).
@@ -163,6 +176,116 @@ class OverlayAdjudicationTests(unittest.TestCase):
                 second = settle_from_daily_payload(root=root, daily_payload=later_clock, as_of="20260731")
         self.assertGreater(first["outcomes_updated"], 0)
         self.assertEqual(second["outcomes_updated"], 0)
+
+    def test_weekend_cache_run_date_allows_next_decision_date_without_p4_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._capture(tmp)
+            capture = json.loads((root / "weeks" / DECISION / "capture.json").read_text(encoding="utf-8"))
+            codes = sorted({row["ts_code"] for row in capture["payload"]["baseline_selected"] + capture["payload"]["candidate_selected"]})
+            cache = _daily_before(codes, "20260709")
+            with mock.patch("engine.a_short_overlay_adjudication._today", return_value="20260709"):
+                result = settle_from_daily_payload(root=root, daily_payload=cache, as_of=DECISION)
+            self.assertEqual(result["status"], "settled_from_existing_cache")
+            outcome = json.loads((root / "weeks" / DECISION / "outcome.json").read_text(encoding="utf-8"))
+            self.assertEqual(outcome["payload"]["horizons"]["h10"]["status"], "pending")
+
+    def test_due_capture_without_p4_registration_remains_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._capture(tmp)
+            capture = json.loads((root / "weeks" / DECISION / "capture.json").read_text(encoding="utf-8"))
+            codes = sorted({row["ts_code"] for row in capture["payload"]["baseline_selected"] + capture["payload"]["candidate_selected"]})
+            cache = _daily_before(codes, DECISION)
+            with mock.patch("engine.a_short_overlay_adjudication._today", return_value=DECISION):
+                with self.assertRaisesRegex(OverlayAdjudicationError, "does not register the consumer"):
+                    settle_from_daily_payload(root=root, daily_payload=cache, as_of=DECISION)
+
+    def test_empty_selection_benchmark_only_cache_is_no_count_without_clock_consumption(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._capture(tmp)
+            capture_path = root / "weeks" / DECISION / "capture.json"
+            capture = json.loads(capture_path.read_text(encoding="utf-8"))
+            capture["payload"]["baseline_selected"] = []
+            capture["payload"]["candidate_selected"] = []
+            capture["payload"]["same_list"] = True
+            capture["payload"]["capture_payload_sha256"] = _digest(
+                {key: value for key, value in capture["payload"].items() if key != "capture_payload_sha256"}
+            )
+            capture_path.write_text(json.dumps(_seal_record(capture)), encoding="utf-8")
+            cache = _daily([])
+            stocks, limits, _benchmarks, dates = _cache_frames(cache)
+            date_pos = {day: index for index, day in enumerate(dates)}
+            for horizon in (10, 20):
+                for arm in ([], []):
+                    self.assertEqual(
+                        _arm_return(arm, DECISION, horizon, dates, date_pos, stocks, limits),
+                        {"status": "no_count", "reason": "selection_empty"},
+                    )
+            with mock.patch("engine.a_short_overlay_adjudication._today", return_value="20260730"):
+                settle_from_daily_payload(root=root, daily_payload=cache, as_of="20260730")
+            outcome = json.loads((root / "weeks" / DECISION / "outcome.json").read_text(encoding="utf-8"))
+            self.assertEqual(outcome["payload"]["horizons"]["h10"],
+                             {"status": "no_count", "reason": "selection_empty"})
+            summary = build_public_summary(root=root, as_of="20260730")
+            self.assertEqual(summary["eligible_policy_weeks"], 0)
+            self.assertEqual(summary["nonoverlap_blocks"], 0)
+            self.assertEqual(summary["mature_opportunities"], 0)
+
+    def test_nonempty_selection_missing_stock_row_stays_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._capture(tmp)
+            capture = json.loads((root / "weeks" / DECISION / "capture.json").read_text(encoding="utf-8"))
+            codes = sorted({row["ts_code"] for row in capture["payload"]["baseline_selected"] + capture["payload"]["candidate_selected"]})
+            cache = _daily(codes)
+            cache["stocks"] = [row for row in cache["stocks"]
+                               if not (row["ts_code"] == codes[0] and row["trade_date"] == "20260711")]
+            with mock.patch("engine.a_short_overlay_adjudication._today", return_value="20260730"):
+                settle_from_daily_payload(root=root, daily_payload=cache, as_of="20260730")
+            outcome = json.loads((root / "weeks" / DECISION / "outcome.json").read_text(encoding="utf-8"))
+            self.assertEqual(outcome["payload"]["horizons"]["h10"]["status"], "pending")
+            summary = build_public_summary(root=root, as_of="20260730")
+            self.assertEqual(summary["eligible_policy_weeks"], 0)
+            self.assertEqual(summary["mature_opportunities"], 0)
+            self.assertEqual(summary["no_count_weeks"], 0)
+
+    def test_settled_through_is_bounded_by_the_physical_cache_run_date(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._capture(tmp)
+            capture = json.loads((root / "weeks" / DECISION / "capture.json").read_text(encoding="utf-8"))
+            codes = sorted({row["ts_code"] for row in capture["payload"]["baseline_selected"] + capture["payload"]["candidate_selected"]})
+            with mock.patch("engine.a_short_overlay_adjudication._today", return_value="20260730"):
+                settle_from_daily_payload(root=root, daily_payload=_daily(codes), as_of="20260830")
+            outcome = json.loads((root / "weeks" / DECISION / "outcome.json").read_text(encoding="utf-8"))
+            self.assertEqual(outcome["payload"]["settled_through"], "20260730")
+
+    def test_cache_rows_cannot_extend_past_physical_cache_run_date(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._capture(tmp)
+            capture = json.loads((root / "weeks" / DECISION / "capture.json").read_text(encoding="utf-8"))
+            codes = sorted({row["ts_code"] for row in capture["payload"]["baseline_selected"] + capture["payload"]["candidate_selected"]})
+            cache = _daily_before(codes, "20260709")
+            future = next(row for row in _daily(codes)["stocks"] if row["trade_date"] == DECISION)
+            cache["stocks"].append(future)
+            with mock.patch("engine.a_short_overlay_adjudication._today", return_value="20260709"):
+                with self.assertRaisesRegex(OverlayAdjudicationError, "future-dated"):
+                    settle_from_daily_payload(root=root, daily_payload=cache, as_of=DECISION)
+
+    def test_decision_date_cannot_precede_physical_cache_run_date(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._capture(tmp)
+            capture = json.loads((root / "weeks" / DECISION / "capture.json").read_text(encoding="utf-8"))
+            codes = sorted({row["ts_code"] for row in capture["payload"]["baseline_selected"] + capture["payload"]["candidate_selected"]})
+            cache = _daily_before(codes, DECISION)
+            with mock.patch("engine.a_short_overlay_adjudication._today", return_value=DECISION):
+                with self.assertRaisesRegex(OverlayAdjudicationError, "decision date"):
+                    settle_from_daily_payload(root=root, daily_payload=cache, as_of="20260709")
+
+    def test_benchmark_only_dates_are_available_to_settlement_clock(self) -> None:
+        cache = _daily([])
+        stocks, limits, benchmarks, dates = _cache_frames(cache)
+        self.assertEqual(stocks, {})
+        self.assertEqual(limits, {})
+        self.assertTrue(benchmarks)
+        self.assertIn("20260710", dates)
 
     def test_future_price_request_uses_settled_price_clock_not_decision_date(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
