@@ -27,7 +27,7 @@ from tests.provider.test_us_short_batch5_full_universe_momentum_producer import 
 )
 from tests.provider.test_us_short_batch5_data_context import _constant_projection  # noqa: E402
 from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
-from tests.provider.us_short_private_test_root import (  # noqa: E402
+from tests.provider.us_short_private_test_root_light import (  # noqa: E402
     temporary_us_short_directory,
     temporary_us_short_state_directory,
 )

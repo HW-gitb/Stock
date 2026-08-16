@@ -70,7 +70,7 @@ class ProvisionalThemeValidationTests(unittest.TestCase):
         self.runner_module = importlib.import_module(MODULE)
         self.discovery_writer = importlib.import_module("runners.us_short_llm_theme_discovery")
         self.universe_writer = importlib.import_module("runners.us_short_universe_fetch")
-        from tests.provider.us_short_private_test_root import temporary_provider_directory
+        from tests.provider.us_short_private_test_root_light import temporary_provider_directory
         self.tempdir = temporary_provider_directory(ROOT)
         self.test_state_dir = Path(self.tempdir.__enter__()) / "state" / "us_short"
         self.state_patch = mock.patch.object(self.runner_module, "STATE_DIR", self.test_state_dir)

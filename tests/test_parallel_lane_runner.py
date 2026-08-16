@@ -395,11 +395,12 @@ class ParallelLaneRunnerTests(unittest.TestCase):
             ["discover", "-s", "tests", "-p", "test_us_short*.py"]
         )
         # a_short reaches no cross-process lock, which is why its whole pack
-        # runs concurrently; us_short shares one private root helper, and its
-        # dependents produced `Resource deadlock avoided` before this existed.
+        # runs concurrently; the US-short private-root fixture is light now,
+        # while the production decision lock must remain in the serial tail.
         self.assertEqual(driver.serial_tail_modules(a_short, a_paths), set())
         us_tail = driver.serial_tail_modules(us_short, us_paths)
-        self.assertIn("provider.test_us_short_universe_fetch", us_tail)
+        self.assertIn("provider.test_us_short_weekly_capstone", us_tail)
+        self.assertNotIn("provider.test_us_short_universe_fetch", us_tail)
 
     def test_the_serial_tail_runs_after_the_wave_and_counts_toward_the_same_gate(self):
         with tempfile.TemporaryDirectory() as tmp:

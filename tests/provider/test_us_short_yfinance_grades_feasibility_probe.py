@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from runners import us_short_yfinance_grades_feasibility_probe as probe  # noqa: E402
-from tests.provider.us_short_private_test_root import temporary_us_short_directory  # noqa: E402
+from tests.provider.us_short_private_test_root_light import temporary_us_short_directory  # noqa: E402
 
 
 def _artifacts():

@@ -22,7 +22,7 @@ from jsonschema import Draft7Validator  # noqa: E402
 from engine.us_short_seam_theme import DISPOSITION_NEUTRAL_MISSING_THEME_AND_INDUSTRY_BASE  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import _DECISION_DATE, _candidate_artifact  # noqa: E402
 from tests.provider.test_us_short_batch5_momentum_price_source import _source_packet  # noqa: E402
-from tests.provider.us_short_private_test_root import (  # noqa: E402
+from tests.provider.us_short_private_test_root_light import (  # noqa: E402
     temporary_us_short_directory,
     temporary_us_short_state_directory,
 )

@@ -49,7 +49,7 @@ def _payload():
 
 class OfflineLLMThemeDiscoveryTests(unittest.TestCase):
     def setUp(self):
-        from tests.provider.us_short_private_test_root import temporary_provider_directory
+        from tests.provider.us_short_private_test_root_light import temporary_provider_directory
         self.slug = f"test_llm_theme_discovery_{os.getpid()}_{self._testMethodName}"
         self.tempdir = temporary_provider_directory(ROOT)
         self.test_state_dir = Path(self.tempdir.__enter__()) / "state" / "us_short"

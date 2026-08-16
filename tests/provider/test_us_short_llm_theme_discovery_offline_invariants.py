@@ -9,7 +9,7 @@ from unittest import mock
 
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
-from tests.provider.us_short_private_test_root import temporary_provider_directory
+from tests.provider.us_short_private_test_root_light import temporary_provider_directory
 
 
 WEB_GOOD = {

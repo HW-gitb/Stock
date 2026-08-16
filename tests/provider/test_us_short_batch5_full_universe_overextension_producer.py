@@ -25,7 +25,7 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _PRICE_BASIS_DATE,
     _USED_DATE,
 )
-from tests.provider.us_short_private_test_root import (  # noqa: E402
+from tests.provider.us_short_private_test_root_light import (  # noqa: E402
     temporary_us_short_directory,
     temporary_us_short_state_directory,
 )

@@ -17,7 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from runners import us_short_massive_corporate_action_normalize as normalizer  # noqa: E402
-from tests.provider.us_short_private_test_root import temporary_us_short_directory  # noqa: E402
+from tests.provider.us_short_private_test_root_light import temporary_us_short_directory  # noqa: E402
 
 
 def _ny_midnight_ms(day: str) -> int:

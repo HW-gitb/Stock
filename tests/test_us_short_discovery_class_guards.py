@@ -13,6 +13,7 @@ from runners import us_short_llm_theme_discovery_fetch_x as x_fetch
 
 
 ROOT = Path(__file__).resolve().parent.parent
+TEMP_ROOT_MARKER = ".us_short_test_temp_root_owned"
 PROTECTED_PRIVATE_ROOTS = {
     "state/us_short": ROOT / "state" / "us_short",
     "provider_samples": ROOT / "provider_samples",
@@ -38,10 +39,19 @@ class LaneResidueConformance(unittest.TestCase):
 
     @staticmethod
     def _growth(root: Path, baseline: frozenset[str]) -> list[str]:
+        def is_active_temp_file(path: Path) -> bool:
+            cursor = path.parent
+            while cursor != root:
+                if (cursor / TEMP_ROOT_MARKER).is_file():
+                    return True
+                cursor = cursor.parent
+            return False
+
         return sorted(
             path.relative_to(root).as_posix()
             for path in root.rglob("*") if path.is_file()
             and path.relative_to(root).as_posix() not in baseline
+            and not is_active_temp_file(path)
         )
 
     def test_private_roots_do_not_grow_during_the_pack(self):
@@ -61,6 +71,14 @@ class LaneResidueConformance(unittest.TestCase):
     def test_growth_predicate_dies_in_a_temporary_root(self):
         with TemporaryDirectory() as td:
             root = Path(td)
+            active = root / "active-temp"
+            active.mkdir()
+            (active / TEMP_ROOT_MARKER).touch()
+            active_file = active / "raw" / "receipt.json"
+            active_file.parent.mkdir()
+            active_file.write_text("{}", encoding="utf-8")
+            self.assertEqual(self._growth(root, frozenset()), [])
+
             residue = root / "raw" / "receipt.json"
             residue.parent.mkdir()
             residue.write_text("{}", encoding="utf-8")

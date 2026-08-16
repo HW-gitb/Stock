@@ -19,7 +19,7 @@ from engine import us_short_llm_theme_discovery_query_plan as query_plan
 from engine import us_short_llm_theme_discovery_provider_policy as provider_policy
 from runners import us_short_llm_theme_discovery_fetch_web as fetch
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
-from tests.provider.us_short_private_test_root import (
+from tests.provider.us_short_private_test_root_light import (
     temporary_provider_directory,
     temporary_us_short_state_directory,
 )

@@ -15,7 +15,7 @@ from engine import us_short_llm_theme_discovery_provider_policy as provider_poli
 from engine import us_short_llm_theme_discovery_query_plan as query_plan
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
-from tests.provider.us_short_private_test_root import temporary_us_short_state_directory
+from tests.provider.us_short_private_test_root_light import temporary_us_short_state_directory
 
 
 ROOT = plan_budget.ROOT

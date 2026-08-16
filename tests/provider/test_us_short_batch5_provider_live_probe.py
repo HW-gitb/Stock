@@ -6,7 +6,7 @@ from unittest import mock
 from urllib.parse import parse_qs, urlparse
 
 from runners import us_short_batch5_provider_live_probe as probe
-from tests.provider.us_short_private_test_root import temporary_us_short_directory
+from tests.provider.us_short_private_test_root_light import temporary_us_short_directory
 
 
 class FakeJsonClient:
