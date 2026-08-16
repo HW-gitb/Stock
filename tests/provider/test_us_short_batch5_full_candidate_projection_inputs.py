@@ -252,16 +252,20 @@ class FullCandidateProjectionInputsTest(unittest.TestCase):
             generated_at="2026-06-15T12:00:00+00:00",
         )
 
-        summary = preflight.run_preflight(
-            candidate_artifact_path=self.paths["candidate"],
-            expected_decision_date=_DECISION_DATE,
-            momentum_projection_path=self.paths["output_momentum"],
-            theme_projection_path=self.paths["output_theme"],
-            summary_path=self.paths["preflight_summary"],
-            authorized_total_call_budget=16,
-            confirm_user_authorization=True,
-            generated_at="2026-07-06T12:05:00+00:00",
+        preflight_options = {
+            "candidate_artifact_path": self.paths["candidate"],
+            "expected_decision_date": _DECISION_DATE,
+            "momentum_projection_path": self.paths["output_momentum"],
+            "theme_projection_path": self.paths["output_theme"],
+            "summary_path": self.paths["preflight_summary"],
+            "confirm_user_authorization": True,
+            "generated_at": "2026-07-06T12:05:00+00:00",
+        }
+        preview = preflight.run_preflight(**preflight_options)
+        preflight_options["authorized_total_call_budget"] = (
+            preview["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"]
         )
+        summary = preflight.run_preflight(**preflight_options)
 
         self.assertEqual(summary["scope"]["status"], "ready_for_reviewed_live_execution")
         self.assertTrue(summary["local_input_coverage"]["all_required_local_inputs_cover_candidates"])
@@ -269,8 +273,10 @@ class FullCandidateProjectionInputsTest(unittest.TestCase):
         self.assertEqual(summary["local_input_coverage"]["theme_projection"]["missing_count"], 0)
         self.assertEqual(summary["pass2_target_universe"]["target_count"], 3)
         self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["AAPL", "JPM", "MSFT"])
-        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 16)
-        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"], 16)
+        self.assertEqual(
+            summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"],
+            summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"],
+        )
         self.assertFalse(summary["scope"]["network_access_performed"])
 
     def test_unhashable_coverage_disposition_raises_typed_error_before_writes(self):

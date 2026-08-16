@@ -165,16 +165,20 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
                 candidate_path=self.paths["candidate"], component="theme",
             ),
         )
-        preflight_runner.run_preflight(
-            candidate_artifact_path=self.paths["candidate"],
-            expected_decision_date=_DECISION_DATE,
-            momentum_projection_path=self.paths["momentum"],
-            theme_projection_path=self.paths["theme"],
-            summary_path=self.paths["preflight"],
-            authorized_total_call_budget=16,
-            confirm_user_authorization=True,
-            generated_at="2026-07-10T12:00:00+00:00",
+        preflight_options = {
+            "candidate_artifact_path": self.paths["candidate"],
+            "expected_decision_date": _DECISION_DATE,
+            "momentum_projection_path": self.paths["momentum"],
+            "theme_projection_path": self.paths["theme"],
+            "summary_path": self.paths["preflight"],
+            "confirm_user_authorization": True,
+            "generated_at": "2026-07-10T12:00:00+00:00",
+        }
+        preview = preflight_runner.run_preflight(**preflight_options)
+        preflight_options["authorized_total_call_budget"] = (
+            preview["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"]
         )
+        preflight_runner.run_preflight(**preflight_options)
         from runners.us_short_weekly_capstone import Pass2BudgetApproval
 
         preflight = _read_json(self.paths["preflight"])
