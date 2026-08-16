@@ -21,7 +21,7 @@ if str(ROOT) not in sys.path:
 from engine.a_short_industry_weight_comparison import (  # noqa: E402
     ADMISSION_IDS, PROGRAM_ID, IndustryWeightComparisonError,
     _atomic_write, _boundary, _contract_fingerprint,
-    _digest, _epoch_id, _runtime_source_fingerprint,
+    _arm_horizon, _digest, _epoch_id, _question_progress, _runtime_source_fingerprint,
     _aggregate_terminal_verdict, _p_value_function, _validate_private_record, build_public_progress, cache_consumer_windows,
     capture_after_published_weekly, load_governance, prepare_public_artifact_set, settle_from_daily_payload,
     validate_public_progress, write_public_progress,
@@ -181,6 +181,44 @@ class IndustryWeightComparisonTests(unittest.TestCase):
         ]
         self.assertEqual(_aggregate_terminal_verdict(terminal, governance), "do_not_promote")
         self.assertEqual(_aggregate_terminal_verdict(list(reversed(terminal)), governance), "do_not_promote")
+
+    def test_empty_selection_is_no_count_and_nonempty_missing_rows_stays_no_count(self):
+        dates = _dates(date(2026, 8, 3), 8)
+        date_pos = {day: index for index, day in enumerate(dates)}
+        empty = _arm_horizon(selected=[], decision_date=dates[0], horizon=5, dates=dates,
+                             date_pos=date_pos, stocks={}, limits={}, cost_pct=0.6)
+        self.assertEqual(empty, {"status": "no_count", "reason": "selection_empty"})
+        missing = _arm_horizon(selected=[{"ts_code": "600001.SH"}], decision_date=dates[0], horizon=5,
+                               dates=dates, date_pos=date_pos, stocks={}, limits={}, cost_pct=0.6)
+        self.assertEqual(missing["status"], "no_count")
+        self.assertEqual(missing["reason"], "missing_required_cache_row")
+
+    def test_empty_selection_does_not_count_as_p5_mature_or_eligible(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _p5_root(tmp)
+            _capture(root, tmp, same_profiles=True)
+            capture_path = root / "weeks" / DECISION / "capture.json"
+            capture = json.loads(capture_path.read_text(encoding="utf-8"))
+            codes = sorted({row["ts_code"] for arm in capture["payload"]["profiles"].values()
+                            for row in arm["selected"]})
+            for profile in capture["payload"]["profiles"].values():
+                profile["selected"] = []
+            capture["payload"]["capture_payload_sha256"] = _digest(
+                {key: value for key, value in capture["payload"].items()
+                 if key != "capture_payload_sha256"}
+            )
+            capture_path.write_text(json.dumps(capture), encoding="utf-8")
+            settle_from_daily_payload(root=root, daily_payload=_daily_cache(codes), as_of=SETTLE_AS_OF)
+            summary = build_public_progress(root=root, as_of=SETTLE_AS_OF)
+            for question in summary["questions"]:
+                progress = question["progress"]
+                self.assertEqual(progress["eligible_policy_weeks"], 0)
+                self.assertEqual(progress["difference_weeks"], 0)
+                self.assertEqual(progress["mature_opportunities"], 0)
+                self.assertEqual(progress["no_count_weeks"], 0)
+                direct_progress = _question_progress(root, question["question_id"], SETTLE_AS_OF)
+                self.assertEqual(direct_progress["mature_opportunities"], 0)
+                self.assertEqual(direct_progress["no_count_weeks"], 0)
 
     def test_pre_freeze_accepts_a_source_bound_bundle_published_before_parking(self):
         """Old valid P5 bundles must not become uncapturable when parking lands."""

@@ -8461,3 +8461,135 @@ runners/a_short_official_settlement.py optional margin sidecar / runners/a_short
 **未覆盖维度**：未跑真实周实盘；「早退 return 键集不一致」这一类未跨模块普查；问题 4 未涉及。
 
 **下一步**：桌面 `2a_testrun0815.md` 只剩问题 4（P4a 的两项前置条件——缓存 `last_run_date` 与决策日比错、`consumers` 不含 P4a），它是唯一每周必挂且与本周偶发无关的一条。
+
+## 2026-08-15 追加：桌面 2a 问题4 P4a shared-cache 双时钟与 consumer class 修复（Codex executor/fixer；8c7a；repaired / OPEN-NOT-VERIFIED）
+
+### 问题、根因与最小改动
+
+- `engine/a_short_overlay_adjudication.py` 原先把 `meta.last_run_date == as_of`、`as_of == _today()`、所有行 `trade_date <= as_of` 和 P4 consumer registration 绑成一个无条件门，混淆物理缓存时钟与决策时钟。结果是合法的 weekend/next-decision 场景被拒绝，未来 capture 也被迫要求当前 P4 registration。
+- `_cache_frames` 原先只从 stocks 生成可用日期，benchmark-only 日期不能推动结算时钟。修复改为 stocks 与 benchmarks 日期并集，同时保留缺 stock rows 时 pending/fail-closed。
+- `runners/a_short_factor_comparison_v2_cache_build.py` 原先按 symbol union 推导需要日期，空 symbols 会丢失 P4 窗口；`cache_current` 原先只返回不刷新 `last_run_date`；zero-symbol P4 benchmark-only 分支会错误地 return defer，预算不足时 P4 defer 可能是 0。修复只在该函数加 window-date union、当前 metadata 原子刷新、P4 benchmark-only 及正数 defer 分支。
+
+### 调用链、消费者、schema/source-binding 与边界
+
+P4 capture / `cache_consumer_windows` → `materialize_incremental_cache` → single-writer private `daily_cache.json` → `settle_from_daily_payload` → P4a outcome。v2/P5/P2/P3/official-operation 继续消费同一 cache；没有新增 provider、launcher、weekly pipeline 或 schema。沿用既有 daily-cache schema、writer、epoch/capture identity、official revision 和 outcome source-binding。
+
+结算只接受真实当前的物理 `cache_run_date`，要求 `cache_run_date <= as_of`；四类 cache rows 只能到物理缓存日。P4 consumer 仅在当前 epoch capture 已到期（`decision_date <= cache_run_date`）时强制存在；`cache_run_date < decision_date <= as_of` 的 capture 保持 pending。`cache_current` 只用既有 schema validation + `_atomic_write` 刷 metadata，不重取或改变数据行。zero-symbol P4 window 只抓既有两个 `index_daily` benchmark endpoint；预算不足写正数 `deferred_due_to_budget`，不伪造 current。未访问 provider/live/真实周实盘/账户/下单，也未写真实生产 state。
+
+### 红绿控制、精确测试与原始终态
+
+固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。修复前新增聚焦为 `Ran 61 tests`、`FAILED (failures=7, errors=1)`。临时植入旧 `as_of == _today()` 门时，weekend/next-decision 回归按预期以错误门失败；临时改动随后恢复。
+
+四模块精确聚焦：
+
+    tests.test_a_short_overlay_adjudication tests.test_a_short_factor_comparison_v2_cache_build tests.test_a_short_fourth_knife_p4 tests.test_a_short_weekly_pipeline
+    Ran 640 tests in 61.965s
+    OK
+    [bounded-unittest] FOCUSED_RECEIPT token=receipt:dcd61ae0e7b94184a2e50191 tests=640 python=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe
+
+兄弟 consumer 包：
+
+    tests.test_a_short_factor_comparison_v2 tests.test_a_short_industry_weight_comparison tests.test_a_short_target_policy_comparison tests.test_a_short_final_action_validation tests.test_a_short_official_operation_evidence tests.test_a_short_effect_contract tests.test_a_short_effect_consumer_probe
+    Ran 189 tests in 70.866s
+    OK
+    [bounded-unittest] FOCUSED_RECEIPT token=receipt:edd8c825e5cc3e470de41ba0 tests=189 python=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe
+
+full-pack 原始终态：
+
+    full_pack_ledger.py run a_short 'P4a shared-cache dual-clock and consumer class repair' 860 -- discover -s tests -p 'test_a_short*.py'
+    [full-pack-ledger] STATIC status=PASS diff_check=PASS py_compile=4
+    [parallel-lane] COUNT_GATE discovered=3134 ran=3134 equal=True
+    Ran 3134 tests in 123.010s
+    [full-pack-ledger] RESULT status=PASS exit=0 tests=3134 elapsed=123.0s deadline=860s mode=parallel
+
+当前未 stage/commit/push/merge；仍待 Claude Code 独立 reviewer/committer 审查最终 diff。文档三门 `67/67 PASS`，receipt `f1495c8b7c602d785860ef30`；不把 offline PASS 当 provider/live/真实周实盘或 ship 结论。
+
+## 2026-08-15 追加：桌面 2a 问题 4 的独立审查 = FAIL（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：FAIL，一条 Required、三条 Optional。正文只在 `docs/system_risk_register.md`。
+
+**该表扬的部分**：两个根因都换对了轴——`cache_run_date == _today()` 取代了「物理运行日 == 决策日」这个盘前永假的判据，逐行 `trade_date` 上界也从 `as_of` 收紧到 `cache_run_date`；写入方真的把 P4a 注册进 `meta.consumers`。consumer 检查虽从无条件改成条件式（一处放松），但位置在任何缓存行被消费之前，我做植入对照确认其 fail-closed 用例承重。
+
+**为什么仍 FAIL**：两处看似无关的改动叠加出一条新路——`_cache_frames` 把 benchmark 日期并进可用日期集，加上 builder 改成零选周也抓基准，使得「一行个股都没有」的缓存也能让 `decision_date` 进 `date_pos`；而 `_arm_return` 在 `selected == []` 时循环体整个不执行、没有任何 pending 出口，直接算出 `portfolio = sum([])/TOP_K = 0.0` 并标 `settled`。这个 0.0 不是测量值，却会喂进超额判定、非重叠区块和 12/24/36 周晋级时钟。模块自己有 `no_count` 词汇，零选周的诚实结论本该是它。
+
+**独立 agent 的处置与我的边界**：agent 首报此条并做了端到端复现；我复核的是组成部件——整读 `_arm_return` 真实函数体确认空选走向 settled 0.0、读 diff 确认两处改动、grep 确认 `egs_main.py:1712` 的 eligible 池无非空守卫且 overlay 侧没有空选分支。**端到端那一跑我未独立重跑**，已在 register 写明。agent 另报的两条（`as_of` 失去上界、`cache_current` 重写升级后的 legacy 字节）我降为 Optional，后者 agent 自己也未能构造出可达路径。
+
+**未覆盖维度**：未跑真实周实盘；未跑 full lane；legacy 缓存那条未复现。
+
+**下一步**：Codex 给 `selected == []` 一条显式 `no_count` 出口，并补「空选周不得进 eligible/区块/晋级计数」与「非空选择缺个股行仍 pending」两格对照。
+
+## 2026-08-15 追加：桌面 `2a_testrun0815.md` 问题4 Required + Optional 最小修复（Codex executor/fixer；8c7a；repaired / OPEN-NOT-VERIFIED）
+
+### 问题、根因与最小改动
+
+- Required `R-ASHORT-2A-P4A-EMPTY-SELECTION-SETTLES-A-FABRICATED-ZERO`：`_cache_frames` 的 benchmark 日期并集与 builder 的 zero-symbol P4 benchmark-only 路径使空选 capture 能进入 settlement clock；`_arm_return` 原先把空列表算成 portfolio/NAV 0.0。现在在任何计算前显式返回 `no_count / selection_empty`，并让 public summary 不把该 no-count reason 计入 `mature_opportunities`，因此不进入 eligible、nonoverlap block 或晋级时钟。
+- 非空选择缺股票行仍使用原有 `pending / missing_required_cache_row` 路径；没有把所有缺数据扩大成 no-count。
+- Optional `O-2A-P4A-NO-UPPER-BOUND-ON-AS-OF`：`settled_through` 改以物理 `cache_run_date` 为上界，保留未来 `as_of` 的 pending 语义。
+- Optional `O-2A-P4A-CACHE-CURRENT-REWRITES-UPGRADED-LEGACY-BYTES`：builder 保留原始 schema version；legacy 输入在无新窗口/缺失 symbol 的 `cache_current` 分支不再把内存升级副本写回原文件，当前 schema 的既有 metadata refresh 不变。
+- Optional `O-2A-P4A-CONSUMER-FLAG-CERTIFIES-LESS-THAN-ITS-MESSAGE`：缺 consumer 报错改为只描述“未注册 consumer”，不暗示发生过 P4a provider 抓取。
+
+### 调用链、消费者、schema/source-binding 与边界
+
+P4 capture → `settle_from_daily_payload` → `_arm_return` baseline/candidate → horizon outcome → `build_public_summary` / `_adjudicate` / `_block_rows` / risk gates。沿用既有 private capture/outcome、public summary、shared daily-cache schema、epoch/record/capture digest 和 outcome source-binding；未新增 provider、launcher、schema、weekly pipeline、配置或真实 state 写盘。Optional 2 只收紧 legacy `cache_current` 的写盘边界。
+
+### 负向控制、精确测试与原始终态
+
+固定解释器为 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。临时去掉空选早退、恢复旧 `settled_through`、去掉 legacy 原字节门、恢复旧 consumer 文案，四个对应回归均按预期 FAIL；每次立即恢复。
+
+```text
+两模块：Ran 65 tests / OK
+四模块：Ran 644 tests / OK
+a-short full-pack：fingerprint=a9d5bb199dfc；discovered=3138；ran=3138；equal=True；Ran 3138 tests；terminal PASS
+```
+
+未运行 provider/live、真实周实盘、账户或下单；未 stage/commit/push/merge。当前结论仍为 `OPEN-NOT-VERIFIED`，等待 Claude Code 独立 reviewer/committer 审查。
+
+## 2026-08-15 追加：桌面 2a 问题 4 复审 = FAIL（轴一已闭、轴二未做；Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：FAIL，一条 Required。正文只在 `docs/system_risk_register.md`。
+
+**轴一做得好**：空选出口加在 `_arm_return` 首行（任何日期/价格检查之前），`build_public_summary` 同步让该 reason 不再计入 mature，顺带把 `settled_through` 从 `as_of` 改成 `cache_run_date`（闭掉我上轮那条 Optional）。我做植入对照——删掉那两行后模块转红且点名 `selection_empty`——确认出口承重、新用例非恒真。
+
+**轴二为什么判 FAIL**：我上一轮把验收明确写进 register：「要么给出 P5 侧不可达的判据，要么补上同样的出口；不接受只写『已检查』」。执行方跑了兄弟 consumer 包 189 OK 就算交差，那是「既有测试仍绿」，两个选项都没做。更关键的是——我**直调** `a_short_industry_weight_comparison._arm_horizon(selected=[], …)`，拿到 `{'status':'settled','portfolio_net_return_pct':0.0}`，与 P4a 修前完全同形。所以这不是文档缺项，是同一个洞还在兄弟轨里开着。
+
+**这一条正是本会话反复出现的根因**：同一条纪律只铺到被点名的那个成员。轴一刚证明这条纪律是对的，轴二放着不做等于同一个错误再来一次。P5 已有一整套 `no_count` reason，加同构出口成本极低。
+
+**我的诚实边界**：复现的是**函数级行为**；P5 空选 capture 在生产中是否可达我没验证（它的 selected 来自行业权重档而非 EGS Stage3 池）。所以 repair 允许二选一：补出口，或给出不可达判据并把前提写进代码。
+
+**未覆盖维度**：未跑真实周实盘；执行方自报的四组植入我只独立复跑了空选那一组；未跑 full lane。
+
+**下一步**：Codex 二选一闭轴二并留证据。
+## 2026-08-15 追加：桌面 2a 问题 4 P5 轴二 Required 修复（Codex executor/fixer；8c7a）
+
+**判定**：`R-ASHORT-2A-P5-ARM-HORIZON-HAS-THE-SAME-FABRICATED-ZERO` repaired / `OPEN-NOT-VERIFIED`。本轮只修 P5 轴二；P4a 轴一沿用前一条已修复结论，不扩展新的设计或防御。
+
+**漏洞与根因**：P5 `engine/a_short_industry_weight_comparison.py::_arm_horizon` 收到 `selected=[]` 时，空循环继续执行 `sum([]) / 15.0`，把没有持仓的周错误标成 `settled` 且收益为 `0.0`。函数级复现成立；真实生产 capture 的空选集可达性仍未验证。
+
+**最小改动**：在 `_arm_horizon` 计算前加入 `no_count/selection_empty` 早退；在 `_question_progress` 与 `build_public_progress` 只排除这一 reason，不改变其他 no-count 的 mature 计数。P5 的非空缺缓存行继续返回既有 `missing_required_cache_row`。
+
+**调用链、消费者与边界**：P5 capture selected → `settle_from_daily_payload` → `_question_outcome` → `_arm_horizon` → h10 outcome → P5 weekly/public progress、12/24/36 clock、P5b adjudication。沿用现有 private schema、capture digest、epoch/admission/source binding 和 cache-only 写盘；未改 schema、provider、runner 或生产 state，测试使用临时私有根并更新既有 payload digest。
+
+**自审与精确测试**：
+
+- 新回归覆盖空选集 `no_count/selection_empty`、非空缺行 `missing_required_cache_row`、以及空选集不增加 P5 mature/eligible/no-count 统计。
+- 固定 Python P5 聚焦 `24/24 PASS` receipt:e77df1af4a47dea6087c9d52；相邻调用链 `668/668 PASS` receipt:6e11803181d39248d1e2eeec。
+- 移除新出口的负向控制按预期 FAIL 并复现 settled 0，随后恢复；a-short full lane `discovered=3140 ran=3140 equal=True`，fingerprint:b8eff22b7d8d，terminal PASS；ledger check 为 exact-state cached green。
+- 未运行 provider/live/真实周跑/账户/下单；未 stage/commit/push/merge。当前待 Claude Code reviewer/committer 独立审查。
+
+**下一步**：Claude Code：审查。
+
+## 2026-08-16 追加：桌面 2a 问题 4 轴二收口的复审 = PASS（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：PASS，上一轮 Required 已闭。正文只在 `docs/system_risk_register.md`。
+
+**这一轮把「按类扫」跑完整了**：轴一（P4a）上轮已闭，轴二（P5 兄弟轨）本轮补上同构出口。值得记的是——上一轮执行方一度用「兄弟 consumer 包 189 OK」交差，我判 FAIL 并直调 P5 函数拿到 `settled/0.0`；本轮同一次直调返回 `no_count/selection_empty`。**同一个探针在修前修后各跑一次，是这条 Required 最干净的闭环证据**，比任何转述都直接。
+
+**我实际验了什么**：复跑上轮的直调（四格：P5 空选 / P5 非空缺行 / P4a 空选 / P4a 非空缺行），确认新出口生效且没有吞掉既有的 `missing_required_cache_row` 降级腿；做 C2 植入对照（删掉 P5 那两行 → 模块转红且点名 `selection_empty`）确认出口承重；焦点包 156 OK。
+
+**顺带更正我自己上一轮的一句话**：我把 P4a 的 `build_public_summary` 说成「`no_count` 不再计入 mature」，实际现码只把 `selection_empty` 单独排除在 mature 之外，`no_count += 1` 与其他原因的 mature 计数都没动——那一刀比我说的更保守。
+
+**新记的 Optional**：同一事件两轨计数口径不同（P4a 计入 `no_count` 只排除 mature；P5 直接 continue 全不计）。另外 P4a 晋级判据里有 `no_count_rate_pct_max`，若该率由 `no_count` 派生，一个空选周会卡住 P4a 晋级而 P5 侧完全不可见——**该联动我未验证**，只作需确认项记录。
+
+**未覆盖维度**：未跑真实周实盘；P5 空选的生产可达性仍未验证（本刀选了「补出口」这条允许的路径）；未跑 full lane。
+
+**下一步**：桌面 `2a_testrun0815.md` 的六条至此全部处理完毕（1/2/3/4 已闭，5/6 早前已闭）。

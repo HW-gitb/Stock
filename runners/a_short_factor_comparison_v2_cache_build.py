@@ -167,17 +167,17 @@ def _empty_cache() -> dict:
     }
 
 
-def _load_existing_cache(root: Path) -> dict:
+def _load_existing_cache(root: Path) -> tuple[dict, str | None]:
     path = root / DAILY_CACHE_NAME
     if not path.exists():
-        return _empty_cache()
+        return _empty_cache(), None
     try:
         document = _load_json(path)
         schema = _load_json(DAILY_CACHE_SCHEMA_PATH)
         jsonschema.validate(document, schema)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
         raise ComparisonV2Error("v2 existing daily cache violates its frozen contract") from exc
-    return _upgrade_cache_document(document)
+    return _upgrade_cache_document(document), str(document.get("schema_version") or "")
 
 
 def _upgrade_cache_document(document: dict) -> dict:
@@ -514,11 +514,12 @@ def _calendar_start_hint(windows: list[dict]) -> str:
 
 def _needed_dates_by_symbol(
     windows: list[dict], trading_dates: list[str], run_date: str,
-) -> tuple[dict[str, set[str]], dict[str, tuple[int, str, str]], dict[str, set[str]]]:
+) -> tuple[dict[str, set[str]], dict[str, tuple[int, str, str]], dict[str, set[str]], set[str]]:
     date_pos = {day: index for index, day in enumerate(trading_dates)}
     needed: dict[str, set[str]] = {}
     order: dict[str, tuple[int, str, str]] = {}
     consumers: dict[str, set[str]] = {}
+    window_dates: set[str] = set()
     for window in windows:
         decision = window["decision_date"]
         if decision not in date_pos:
@@ -538,6 +539,7 @@ def _needed_dates_by_symbol(
         end_index = min(len(trading_dates) - 1, date_pos[decision] + int(window["horizon_days"]))
         wanted = set(trading_dates[start_index:end_index + 1])
         wanted = {day for day in wanted if day <= run_date}
+        window_dates.update(wanted)
         consumer = str(window["consumer"])
         priority = CONSUMER_PRIORITY[consumer]
         for symbol in window["symbols"]:
@@ -545,7 +547,7 @@ def _needed_dates_by_symbol(
             order[symbol] = min(order.get(symbol, (priority, decision, symbol)),
                                 (priority, decision, symbol))
             consumers.setdefault(symbol, set()).add(consumer)
-    return needed, order, consumers
+    return needed, order, consumers, window_dates
 
 
 def _frame_records(frame: pd.DataFrame, fields: tuple[str, ...], label: str) -> dict[tuple[str, str], dict]:
@@ -954,7 +956,7 @@ def materialize_incremental_cache(
     requested_symbols = {symbol for window in windows for symbol in window["symbols"]}
     if any(not is_a_share_main_board(symbol) for symbol in requested_symbols):
         raise ComparisonV2Error("shared cache request contains a non-main-board or malformed symbol")
-    existing = _load_existing_cache(private_root)
+    existing, existing_schema_version = _load_existing_cache(private_root)
     existing_stocks = _dedupe_rows(existing["stocks"], key_names=("ts_code", "trade_date"), label="existing stocks")
     existing_limits = _dedupe_rows(existing["limits"], key_names=("ts_code", "trade_date"), label="existing limits")
     existing_benchmarks = _dedupe_rows(existing.get("benchmarks") or [], key_names=("ts_code", "trade_date"), label="existing benchmarks")
@@ -976,7 +978,7 @@ def materialize_incremental_cache(
         pro = init_tushare_pro(token)
     trading_dates = _single_attempt_trade_calendar(pro, _calendar_start_hint(windows), run_date)
     consumer_names = sorted({str(window["consumer"]) for window in windows})
-    needed, _all_order, _all_consumers = _needed_dates_by_symbol(windows, trading_dates, run_date)
+    needed, _all_order, _all_consumers, _all_window_dates = _needed_dates_by_symbol(windows, trading_dates, run_date)
     windows_by_consumer = {
         "v2_factor_comparison": v2_windows,
         "p5_industry_weight": p5_windows,
@@ -987,13 +989,16 @@ def materialize_incremental_cache(
     }
     missing_by_consumer: dict[str, set[str]] = {}
     missing_order: dict[str, tuple[int, str, str]] = {}
+    window_dates_by_consumer: dict[str, set[str]] = {}
     for consumer, consumer_windows in windows_by_consumer.items():
         if not consumer_windows:
             missing_by_consumer[consumer] = set()
+            window_dates_by_consumer[consumer] = set()
             continue
-        consumer_needed, consumer_order, consumer_map = _needed_dates_by_symbol(
+        consumer_needed, consumer_order, consumer_map, consumer_window_dates = _needed_dates_by_symbol(
             consumer_windows, trading_dates, run_date
         )
+        window_dates_by_consumer[consumer] = consumer_window_dates
         consumer_missing = _missing_symbols(
             needed=consumer_needed, consumers=consumer_map, stocks=existing_stocks, limits=existing_limits,
         )
@@ -1008,8 +1013,27 @@ def materialize_incremental_cache(
         )
     missing_symbols = set(missing_order)
     p4_symbols = {symbol for window in p4_windows for symbol in window["symbols"]}
-    p4_needed_dates = set().union(*(needed.get(symbol, set()) for symbol in p4_symbols)) if p4_symbols else set()
+    p4_needed_dates = window_dates_by_consumer["p4_overlay_adjudication"]
     if not missing_symbols and not p4_windows:
+        if existing_schema_version not in (None, DAILY_CACHE_SCHEMA_VERSION):
+            return {"status": "cache_current", "provider_calls": 1, "consumers": consumer_names,
+                    "p5_deferred_due_to_budget": 0,
+                    "production_unchanged": True}
+        payload = dict(existing)
+        payload["meta"] = dict(existing["meta"])
+        payload["meta"].update({
+            "cache_kind": "a_short_shared_incremental",
+            "writer": "runners/a_short_factor_comparison_v2_cache_build.py",
+            "last_run_date": run_date,
+            "consumers": consumer_names,
+            "provider_call_ceiling": max_provider_calls,
+            "deferred_due_to_budget": {},
+        })
+        try:
+            jsonschema.validate(payload, _load_json(DAILY_CACHE_SCHEMA_PATH))
+        except jsonschema.ValidationError as exc:
+            raise ComparisonV2Error("shared cache builder produced an invalid current private cache") from exc
+        _atomic_write(private_root / DAILY_CACHE_NAME, payload)
         return {"status": "cache_current", "provider_calls": 1, "consumers": consumer_names,
                 "p5_deferred_due_to_budget": 0,
                 "production_unchanged": True}
@@ -1022,7 +1046,7 @@ def materialize_incremental_cache(
         consumer: sum(symbol in missing_by_consumer[consumer] for symbol in deferred)
         for consumer in consumer_names
     }
-    if not scheduled and not p4_symbols:
+    if not scheduled and not p4_windows:
         return {
             "status": "deferred_due_to_budget", "provider_calls": 1,
             "consumers": consumer_names,
@@ -1054,7 +1078,7 @@ def materialize_incremental_cache(
     )]
     benchmark_calls = 0
     new_benchmarks: list[dict] = []
-    if p4_symbols and not p4_stock_deferred and benchmark_missing:
+    if p4_windows and not p4_stock_deferred and benchmark_missing:
         available_calls = max_provider_calls - (1 + 3 * len(scheduled))
         if available_calls >= len(benchmark_missing):
             for code in benchmark_missing:
@@ -1062,7 +1086,7 @@ def materialize_incremental_cache(
                 new_benchmarks.extend(_provider_benchmark_rows(symbol=code, wanted_dates=p4_needed_dates, frame=frame))
             benchmark_calls = len(benchmark_missing)
         else:
-            deferred_by_consumer["p4_overlay_adjudication"] = deferred_by_consumer.get("p4_overlay_adjudication", 0) + len(p4_symbols)
+            deferred_by_consumer["p4_overlay_adjudication"] = deferred_by_consumer.get("p4_overlay_adjudication", 0) + max(1, len(p4_symbols))
     merged_stocks = _merge_partial_rows(existing_stocks, new_stocks, label="stocks")
     merged_limits = _merge_partial_rows(existing_limits, new_limits, label="limits")
     merged_benchmarks = _merge_partial_rows(existing_benchmarks, new_benchmarks, label="benchmarks")

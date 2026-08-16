@@ -569,7 +569,7 @@ def cache_consumer_windows(*, root: str | Path, run_date: str) -> list[dict]:
     return windows
 
 
-def _validate_shared_daily_cache(payload: dict, as_of: str) -> None:
+def _validate_shared_daily_cache(payload: dict, as_of: str) -> str:
     """Reject replay/future/hand-built evidence before it can settle a P4 week."""
     try:
         jsonschema.validate(payload, _load(DAILY_CACHE_SCHEMA))
@@ -578,15 +578,18 @@ def _validate_shared_daily_cache(payload: dict, as_of: str) -> None:
     meta = payload.get("meta") or {}
     if payload.get("schema_version") not in {"1.1.0", "1.2.0"} or meta.get("cache_kind") != "a_short_shared_incremental" or \
             meta.get("writer") != "runners/a_short_factor_comparison_v2_cache_build.py" or \
-            meta.get("last_run_date") != as_of or "p4_overlay_adjudication" not in (meta.get("consumers") or []) or \
             not isinstance(meta.get("provider_call_ceiling"), int) or meta["provider_call_ceiling"] > 91:
         raise OverlayAdjudicationError("P4a requires the current bounded single-writer shared daily cache")
-    if as_of != _today():
-        raise OverlayAdjudicationError("P4a settlement accepts only the real current canonical date")
+    cache_run_date = _date(meta.get("last_run_date"), "shared cache last_run_date")
+    if cache_run_date != _today():
+        raise OverlayAdjudicationError("P4a settlement accepts only the real current canonical cache run date")
+    if cache_run_date > as_of:
+        raise OverlayAdjudicationError("P4a decision date cannot precede physical cache run date")
     for group in ("stocks", "limits", "benchmarks", "rows"):
         for row in payload.get(group) or []:
-            if _date(row.get("trade_date"), f"{group} trade_date") > as_of:
+            if _date(row.get("trade_date"), f"{group} trade_date") > cache_run_date:
                 raise OverlayAdjudicationError("P4a shared cache contains future-dated evidence")
+    return cache_run_date
 
 
 def _cache_frames(payload: dict) -> tuple[dict, dict, dict, list[str]]:
@@ -616,7 +619,7 @@ def _cache_frames(payload: dict) -> tuple[dict, dict, dict, list[str]]:
     stocks = index(payload["stocks"], ("ts_code", "trade_date"), "stocks")
     limits = index(payload["limits"], ("ts_code", "trade_date"), "limits")
     benchmarks = index(payload.get("benchmarks", []), ("ts_code", "trade_date"), "benchmarks")
-    return stocks, limits, benchmarks, sorted({date for _, date in stocks})
+    return stocks, limits, benchmarks, sorted({date for _, date in stocks} | {date for _, date in benchmarks})
 
 
 def _qfq(row: dict, field: str) -> float | None:
@@ -626,6 +629,8 @@ def _qfq(row: dict, field: str) -> float | None:
 
 
 def _arm_return(selected: list[dict], decision_date: str, horizon: int, dates: list[str], date_pos: dict[str, int], stocks: dict, limits: dict) -> dict:
+    if not selected:
+        return {"status": "no_count", "reason": "selection_empty"}
     if decision_date not in date_pos or date_pos[decision_date] + horizon >= len(dates):
         return {"status": "pending"}
     entry_date, exit_date = dates[date_pos[decision_date] + 1], dates[date_pos[decision_date] + horizon]
@@ -710,14 +715,17 @@ def settle_from_daily_payload(*, root: str | Path, daily_payload: dict, as_of: s
         raise OverlayAdjudicationError("official settlement requires run_revision_id")
     if cache_path is not None and Path(cache_path).resolve().name != "daily_cache.json":
         raise OverlayAdjudicationError("P4a settlement cache must be the canonical daily_cache.json artifact")
-    _validate_shared_daily_cache(daily_payload, as_of)
+    cache_run_date = _validate_shared_daily_cache(daily_payload, as_of)
     stocks, limits, benchmarks, available_dates = _cache_frames(daily_payload)
     dates = [day for day in available_dates if day <= as_of]; date_pos = {day: index for index, day in enumerate(dates)}; changed = 0
     cache_sha256 = _digest(daily_payload); context = epoch_context or _epoch_context()
     official_selected_count = 0
-    for capture in _current_records(private_root, context):
-        if capture["decision_date"] > as_of:
-            continue
+    captures = [capture for capture in _current_records(private_root, context)
+                if capture["decision_date"] <= as_of]
+    if any(capture["decision_date"] <= cache_run_date for capture in captures) and \
+            "p4_overlay_adjudication" not in (daily_payload.get("meta") or {}).get("consumers", []):
+        raise OverlayAdjudicationError("P4a shared cache does not register the consumer for an expired capture")
+    for capture in captures:
         if official_project_root is not None:
             capture_revision = capture.get("run_revision_id")
             if capture_revision in (None, ""):
@@ -772,7 +780,7 @@ def settle_from_daily_payload(*, root: str | Path, daily_payload: dict, as_of: s
                    "decision_date": capture["decision_date"], "run_revision_id": capture.get("run_revision_id"),
                    "epoch_id": capture["epoch_id"], "contract_fingerprint": capture["contract_fingerprint"],
                     "payload": {"capture_sha256": _digest(capture), "cache_sha256": cache_sha256,
-                                "settled_through": max(as_of, str((existing or {}).get("payload", {}).get("settled_through") or "")),
+                                "settled_through": max(cache_run_date, str((existing or {}).get("payload", {}).get("settled_through") or "")),
                                 "horizons": horizons}, "boundary": _boundary()})
         _validate_record(outcome)
         existing = _load(path) if path.exists() else None
@@ -1043,7 +1051,9 @@ def build_public_summary(*, root: str | Path | None, as_of: str,
             rows.append({"decision_date": capture["decision_date"], "same_list": capture["payload"]["same_list"],
                          "h5": h5, "h5_complete": h5_is_complete, "h10": h10,
                          "h20": h20, "h20_complete": complete})
-        elif h10.get("status") == "no_count": mature += 1; no_count += 1
+        elif h10.get("status") == "no_count":
+            no_count += 1
+            if h10.get("reason") != "selection_empty": mature += 1
     verdict, metrics = _adjudicate(rows, mature, no_count); eligible, difference, blocks = len(rows), sum(not row["same_list"] for row in rows), len(_block_rows(rows))
     preliminary, formal, _ = _checkpoint_contract()
     h5_status = "not_due" if eligible < preliminary[0] else "complete" if h5_complete else "pending_h5_coverage"
