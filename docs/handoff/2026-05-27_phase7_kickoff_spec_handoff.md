@@ -5100,3 +5100,20 @@ Claude Code：独立审查问题6当前 diff；PASS 后按项目流程提交，m
 ### 下一步
 
 用户：决定是否重跑一次周实盘，用真实厂商响应验证多页续传（本轮翻页正确性由离线两页端到端用例与 51 条反向控制覆盖，真实 `next_url` 形状仍属 NOT_VERIFIED）。
+
+## 2026-08-16 追加：R-USSHORT-THEME-PRODUCER-SUMMARY-PATH-REJECTS-ITS-OWN-LEGACY-ROOT（Codex executor/fixer，dc41，OPEN-NOT-VERIFIED）
+
+- **判断**：成立。按决策日分区的最新提交保留了主题 producer 的 legacy root 供历史 preflight 只读兼容，但 `_validate_summary_path` 只检查新 root，导致主题 producer 自己拒绝该 legacy path。
+- **修复**：增加默认关闭的 `allow_legacy_read`。只有 `run_preflight` 开启；正式 `run_packet` 仍拒绝 legacy root，避免旧目录再次写入。未改 schema、新日期目录规则或其他 producer。
+- **验证**：固定 Python 主题 producer `16/16 OK`，相关 `py_compile` 和 `git diff --check` 通过；正向 preflight 可接受 legacy path，正式 packet 反向拒绝且无输出写盘。无 provider/network/live/full lane，未提交。
+- **下一步**：Claude Code 独立审查本条。
+
+## 2026-08-16 Claude Code 独立审查：主题 producer legacy summary path — PASS
+
+放松被正确收窄：`allow_legacy_read` 默认关闭，只有只读的 `run_preflight` 开启，`run_packet` 不含该开关，`run_preflight` 函数体无任何写调用。审查者自写反向控制 22/22 通过——开关打开后仍只对 legacy 根生效（兄弟 runner 根、前缀相似目录、`..` 穿越等六形状全拒），新根的日期分区契约零损伤，`_git_ignored` 经植入对照证明承重。细目见 `docs/system_risk_register.md` 同日节。
+
+同轮另开两条整类 finding，均非本刀引入：`R-USSHORT-PASS2-PREFLIGHT-LEGACY-ROOT-IS-STILL-A-WRITE-TARGET`（P2 Required，`pass2_preflight` 无开关接受 legacy 且随后写入，与问题2 契约相反，属我上轮审查遗漏）；`O-THEME-LEGACY-1`（`momentum` / `overextension` 一律拒绝自己的 legacy 根、其 legacy 常量为死常量，同一契约现有三种行为）。
+
+### 下一步
+
+Codex：修复 P2 Required，并按整类一次收敛四个 runner 的 legacy 契约。
