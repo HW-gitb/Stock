@@ -5117,3 +5117,28 @@ Claude Code：独立审查问题6当前 diff；PASS 后按项目流程提交，m
 ### 下一步
 
 Codex：修复 P2 Required，并按整类一次收敛四个 runner 的 legacy 契约。
+
+## 2026-08-16 追加：Pass2 legacy 写入门 + 四 runner 契约收敛（Codex executor/fixer，dc41，OPEN-NOT-VERIFIED）
+
+### 修复范围
+
+- `R-USSHORT-PASS2-PREFLIGHT-LEGACY-ROOT-IS-STILL-A-WRITE-TARGET`：Pass2 summary validator 现在拒绝 legacy root；`run_preflight` 和 `finalize_preflight_from_existing_derivation` 都在写盘前被同一门拦下。对应 approval 测试临时根迁到新日期分区，避免测试继续把旧根当正常写目标。
+- `O-THEME-LEGACY-1`：`momentum`、`overextension` 复用已审 theme 的最小模式——只在无写入 `run_preflight` 打开 legacy read，正式 `run_packet` 维持拒绝。未新增共享模块、schema 或泛化防御。
+- 四 runner 的收敛口径：legacy root 永不写入；有纯无写 preflight 的三个 producer 可在该入口读 legacy；Pass2 的两个公开入口均会写摘要，故均拒绝 legacy。
+
+### 验证与交接边界
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`：theme / momentum / overextension / Pass2 preflight + Pass2 approval finalization 共 `76/76 OK`；七个改动 Python 文件 `py_compile`、`git diff --check` 通过。
+- 无 provider/network/live/full lane、桌面文档、主树、提交或 merge；当前为 `OPEN-NOT-VERIFIED`，仅待 Claude Code 独立审查。
+
+### 下一步
+
+Claude Code：独立审查本工作树的 P2 Required 与 `O-THEME-LEGACY-1` 收敛修复。
+
+## 2026-08-16 Claude Code 独立审查：legacy summary path 整类收敛 — PASS
+
+上轮两条 finding 同轮闭合。`momentum` / `overextension` 已与 `theme` 逐条对齐（仅只读 `run_preflight` 可读 legacy，`run_packet` 不含开关）；`pass2_preflight` 走"一律拒绝"的相反解法，该差异经核实成立——它的 `_validate_summary_path` 两个调用点都落到 `_write_summary_validated`，没有只读消费者，给它开只读口是虚设。legacy preflight 摘要仍可被 `live_source_packet` 自己的校验器读取，读路径无回归。审查者自写反向控制 40/40 通过，细目见 `docs/system_risk_register.md` 同日节。
+
+### 下一步
+
+用户：决定是否重跑周实盘（真实 `next_url` 形状仍为 NOT_VERIFIED）。

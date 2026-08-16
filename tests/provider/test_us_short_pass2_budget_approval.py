@@ -102,7 +102,7 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
         self.actual_clock_patch.start()
         self.tempdir = temporary_provider_directory(
             ROOT,
-            Path("provider_samples/us_short_batch5_full_candidate_pass2_preflight_20260706"),
+            Path("provider_samples/us_short_batch5_full_candidate_pass2_preflight") / DECISION_DATE,
         )
         self.test_root = Path(self.tempdir.__enter__())
         self.state_dir = self.test_root / "state" / "us_short"
@@ -220,6 +220,19 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
             self.runner.finalize_preflight_from_existing_derivation(
                 preflight_summary_path=self.paths["summary"], approval_binding=forged_binding
             )
+
+    def test_legacy_summary_path_cannot_be_finalized_as_a_write_target(self):
+        preview = self._preview()
+        approval = self._approval(preview)
+        legacy_summary = ROOT / self.runner.LEGACY_PROVIDER_SAMPLE_REL_ROOT / "test_finalize_summary.json"
+
+        with self.assertRaisesRegex(self.runner.FullCandidatePass2PreflightError, "legacy summary_path"):
+            self.runner.finalize_preflight_from_existing_derivation(
+                preflight_summary_path=legacy_summary,
+                approval_binding=approval.binding_summary(),
+            )
+
+        self.assertFalse(legacy_summary.exists())
 
     def test_existing_manual_budget_conflict_cannot_be_overwritten_by_new_approval(self):
         preview = self._preview()
