@@ -28,7 +28,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import runners.us_short_universe_fetch as _mod
-from tests.provider.us_short_private_test_root import (
+from tests.provider.us_short_private_test_root_light import (
     temporary_us_short_directory,
     temporary_us_short_state_directory,
 )

@@ -23,7 +23,7 @@ from tests.provider.test_us_short_batch5_full_universe_momentum_producer import 
     _DECISION_DATE,
     _candidate_artifact,
 )
-from tests.provider.us_short_private_test_root import (  # noqa: E402
+from tests.provider.us_short_private_test_root_light import (  # noqa: E402
     temporary_us_short_directory,
     temporary_us_short_state_directory,
 )

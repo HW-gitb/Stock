@@ -3132,3 +3132,37 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 ### 估算（供排期，不是承诺）
 
 若 50 个模块全部转入并行，468.1s 由串行变成 8 worker 摊分（约 60-70s），总墙钟大致落到 450s 上下，余量从 0.5% 回到 ~48%。这个数字只用于判断值不值得做，不作为验收口径——验收看上面第 2 条的实测。
+
+## 2026-08-16 追加：Codex 实施「把不必要的模块请出串行尾巴」（8d8c）
+
+本节记录方案实施结果；full lane 按用户要求等周跑结束后再跑。
+
+- 工作树先对齐到 `c2c48f97`。新增 `tests/provider/us_short_private_test_root_light.py`：只建唯一私有临时根、写本地 `.gitignore`、维护所有权标记并清理；不含 `msvcrt.locking`、`fcntl.flock` 或 `fcntl.lockf` 锁字面量。
+- 41 个只依赖私有临时根的模块改导入轻夹具。13 个直接导入旧夹具的模块保留不动：它们属于生产决策锁依赖或 D 轴 conformance 保护面。生产锁、`.tools/parallel_lane_runner.py` 的锁探测规则、D 轴两条并发断言均未改。
+- 用准确 lane pattern `discover -s tests -p test_us_short*.py` 静态重算：`318 modules / 5958 tests` 不变；`serial_tail=67 → 23`，`serial_tests=1404 → 580`。剩余 23 个是当前代码图中的 20 个生产决策锁依赖模块和 3 个 conformance/D 轴模块；因此不是把历史方案里的 17 机械改写成数字，而是如实记录当前派生结果。
+- 反向控制：将 `provider.test_us_short_batch5_full_candidate_pass2_preflight` 临时恢复为旧持锁夹具导入，得到 `serial_tail=24` 且目标模块回尾；随后恢复轻夹具导入，回到 23。该检查只做静态派生，没有运行 full lane。
+- focused 超集：45 个模块、857 个测试、270.888 秒、`OK`；覆盖静态/可执行/资源 conformance 与 `test_parallel_lane_runner`。固定 Python `py_compile` 43 个修改 Python 文件通过，`git diff --check` 通过。
+- 当前状态：实现完成，`OPEN-NOT-VERIFIED`。全量 closure 的唯一未做项仍是 ≤731 秒且 `discovered==ran`；必须等用户宣布周跑结束后，再按 ledger 只跑一次 US-short full lane。
+
+## 2026-08-16 追加：Claude Code 独立审查串行尾巴拆分 —— FAIL（未提交、未合入）
+
+- **用户当轮指示先跑全量**（实盘尚未开跑，故不受周跑 hold 约束），结果 `status=FAIL exit=1 tests=489 elapsed=163.0s`、`COUNT_GATE discovered=5958 ran=489`、`serial_tail=23`。**拆分方向是成立的**（67 → 23，且 focused 超集 857 例绿、探测器本体未改、其自身测试是改期望成员且更严），但有两条必须先闭合。
+- **Required 1 `R-USSHORT-LIGHT-PRIVATE-ROOT-HELPER-OVERLAP-REMOVES-A-PARENT-IN-USE`**：新轻夹具 `:36-47` 的向上清理会把「除 marker 外为空」的父目录 `rmdir` 掉，不看别的进程是否正卡在「已 mkdir、未建子目录」那一瞬。reviewer 用真实函数 + 临时根打了确定性重叠探针：A 删掉了 B 的父目录，B 抛 `FileNotFoundError [WinError 3]`。这正是旧锁在防、且旧夹具 D 轴至今仍断言的那件事。**本轮全量没撞到不算反证**。
+- **Required 2 `R-USSHORT-SERIAL-TAIL-SPLIT-BREAKS-THE-RESIDUE-GUARD-PREMISE`**（本轮变红的直接原因）：唯一红是 `LaneResidueConformance.test_private_roots_do_not_grow_during_the_pack (root='provider_samples')`。**不是泄漏**——跑完 `provider_samples` 为空、全树未跟踪只剩轻夹具本身；是那条守卫在第 2.2 秒、并行波正忙时比对增量，把**别的 worker 的活温目录**当成了残留。它此前一直绿，恰恰因为这 42 个模块被关在串行尾巴里。**串行尾巴挡住的不只是锁，还有这条守卫的前提。**
+- **失效的旧结论（我方案里的疏漏，一并认下）**：handoff 那节的「验收四条」只想到了并发**安全**，没想到并发**可见性**——没有任何一条要求「守卫与私有根用户同时跑仍成立」。修复轮请把这一条补进验收。
+- **下一步**：Codex 修这两条；修完 focused 与静态派生照旧，但 lane 全量仍按上一节的约束——等用户宣布周跑结束后再跑一次。
+
+## 2026-08-16 追加：Codex 最小修复两条 Required（8d8c）
+
+- `tests/provider/us_short_private_test_root_light.py` 删除共享父目录的 ownership marker 和向上清理；共享父目录只 `mkdir(exist_ok=True)`，每次调用仍由 `TemporaryDirectory` 创建并清理唯一子目录。这样不再有「A 清理时删掉 B 刚创建的父目录」的窗口。
+- 新增 `tests/provider/test_us_short_private_test_root_light.py`，用受控暂停复现「B 已到父目录创建后、尚未创建临时子目录；A 先退出」的重叠场景。当前通过；临时植入 `parent.rmdir()` 后精确转红。
+- `tests/test_us_short_discovery_class_guards.py` 的 `_growth` 只忽略带 `.us_short_test_temp_root_owned` 标记的活临时目录；同一测试保留未标记 `raw/receipt.json` 植入，确保真实残留仍转红。选择该方案是因为并行波中活临时目录本来就是允许的测试证据，且不需要改变 runner 调度或削弱守卫。
+- 验收：`47 modules / 867 tests / 261.826s / OK`；静态 `319 modules / 5959 tests / serial_tail=23 / serial_tests=580`。本轮未跑 full lane；当前状态 `repaired / OPEN-NOT-VERIFIED`，交 Claude 独立审查两条 Required。
+
+## 2026-08-16 追加：Claude Code 复审串行尾巴拆分 —— PASS（已提交并合入 master）
+
+- **改了什么**：轻夹具删掉整段向上清理，只建共享父目录 + 唯一子目录自清理，**没有任何一方会删共享父目录**；residue guard 的 `_growth` 忽略带 `.us_short_test_temp_root_owned` 活标记的温目录，裸残留仍判红；新增 `tests/provider/test_us_short_private_test_root_light.py` 覆盖重叠序。
+- **为什么这么改是对的**：第一条把竞态从"概率变小"变成"结构上不存在"——这是我上一轮 Required 的 ① 要的那种闭合；第二条按 Required 的 (a)，且守卫的**双向**植入对照都在（带标记不算、裸残留仍算）。
+- **验证命令与结果**：lane 全量 `status=PASS exit=0 tests=5959 elapsed=710.3s deadline=860s`、`COUNT_GATE 5959=5959`、`serial_tail=23`、`319 PASS / 0 FAIL / 0 SKIPPED`、跑完零残留。**reviewer 自打反向控制**：把 `finally: parent.rmdir()` 临时改回轻夹具 → 新那条重叠测试精确转红（`AssertionError: False is not true`）；按备份还原后 sha256 回到 `cfadb192b19a185b2de45cca`。三样不可动（旧持锁夹具 / 探测器 / D 轴 conformance）diff 全空。
+- **失效的旧结论（我自己的估算，认下）**：方案里估「总墙钟落到 450s 上下、余量回到 ~48%」**过于乐观**。实测 `855.6s → 710.3s`，只省 145.3s，余量 17.4%——因为串行尾巴仍留着 `conformance_executable`（171.7s，现占墙钟 24.2%）等大件，而它们本就不许为墙钟牺牲。今后引用降本幅度，以这次实测为准。
+- **下一步注意**：新开 `O-RESIDUE-GUARD-BLIND-TO-LEAKED-MARKED-TEMP-ROOTS`（不阻断）——带标记的温目录一旦真泄漏就对守卫永久不可见；建议把「收尾时私有根不得残留带标记温目录」放进 `full_pack_ledger` 做一次跑后扫描，不要在守卫内部继续加条件。

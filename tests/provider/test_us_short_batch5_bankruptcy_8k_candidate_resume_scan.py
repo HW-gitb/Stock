@@ -23,7 +23,7 @@ from tests.provider.test_us_short_batch5_bankruptcy_8k_candidate_scan import (  
     _write_json,
 )
 from tests.provider.test_us_short_batch5_data_context import _DECISION_DATE  # noqa: E402
-from tests.provider.us_short_private_test_root import (  # noqa: E402
+from tests.provider.us_short_private_test_root_light import (  # noqa: E402
     temporary_us_short_directory,
     temporary_us_short_state_directory,
 )

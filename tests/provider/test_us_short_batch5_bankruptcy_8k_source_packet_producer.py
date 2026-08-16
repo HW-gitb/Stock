@@ -17,7 +17,7 @@ if str(ROOT) not in sys.path:
 
 from jsonschema import Draft7Validator  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import _DECISION_DATE, _candidate_artifact  # noqa: E402
-from tests.provider.us_short_private_test_root import (  # noqa: E402
+from tests.provider.us_short_private_test_root_light import (  # noqa: E402
     temporary_us_short_directory,
     temporary_us_short_state_directory,
 )

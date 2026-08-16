@@ -13,7 +13,7 @@ from tests.provider.us_short_test_io_inventory import (
     _accesses,
     build_inventory,
 )
-from tests.provider.us_short_private_test_root import temporary_us_short_state_directory
+from tests.provider.us_short_private_test_root_light import temporary_us_short_state_directory
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -426,7 +426,7 @@ def planted():
     def test_shared_helper_path_is_outside_static_guard_model(self):
         source = '''
 from pathlib import Path
-from tests.provider.us_short_private_test_root import temporary_us_short_state_directory
+from tests.provider.us_short_private_test_root_light import temporary_us_short_state_directory
 ROOT = Path(__file__).resolve().parents[1]
 def planted_positive():
     with temporary_us_short_state_directory(ROOT) as temp_root:

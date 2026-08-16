@@ -20,7 +20,7 @@ from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
 from runners import us_short_llm_theme_discovery_merge as merge
 from runners import us_short_provisional_theme_validate as knife2
-from tests.provider.us_short_private_test_root import temporary_provider_directory
+from tests.provider.us_short_private_test_root_light import temporary_provider_directory
 
 
 DATE = "20260725"

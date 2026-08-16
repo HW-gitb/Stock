@@ -16,7 +16,7 @@ from engine.us_short_market_diagnostic_local_adapter import (
 from engine.us_short_market_diagnostic_total_return import validate_etf_total_return_sidecar
 from runners import us_short_market_diagnostic_etf_sidecar_fetch as fetch
 from tests.test_us_short_market_diagnostic_local_adapter import _packet
-from tests.provider.us_short_private_test_root import temporary_provider_directory
+from tests.provider.us_short_private_test_root_light import temporary_provider_directory
 
 
 ROOT = Path(__file__).resolve().parents[1]

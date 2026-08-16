@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from runners import us_short_batch5_bankruptcy_8k_probe as probe
-from tests.provider.us_short_private_test_root import temporary_us_short_directory
+from tests.provider.us_short_private_test_root_light import temporary_us_short_directory
 
 
 ROOT = Path(".").resolve()

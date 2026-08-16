@@ -10,7 +10,7 @@ import unittest
 
 from engine import us_short_llm_theme_discovery_policy_decision as decision
 from engine import us_short_serenity_structural_theme_annotation as annotation
-from tests.provider.us_short_private_test_root import temporary_us_short_directory
+from tests.provider.us_short_private_test_root_light import temporary_us_short_directory
 
 
 ROOT = Path(__file__).resolve().parents[1]

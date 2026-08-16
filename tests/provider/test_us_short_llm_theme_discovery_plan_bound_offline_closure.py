@@ -31,7 +31,7 @@ from tests.provider.test_us_short_batch5_data_context import (
 )
 from tests.provider.test_us_short_batch5_full_universe_momentum_producer import _DECISION_DATE
 from tests.provider.test_us_short_batch5_full_universe_theme_producer import _classification_packet
-from tests.provider.us_short_private_test_root import temporary_provider_directory
+from tests.provider.us_short_private_test_root_light import temporary_provider_directory
 
 
 DECISION_DATE = _DECISION_DATE

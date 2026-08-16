@@ -16,7 +16,7 @@ if str(ROOT) not in sys.path:
 
 from engine import us_short_status_source as status_source  # noqa: E402
 from runners import us_short_forward_lifecycle_capture as lifecycle  # noqa: E402
-from tests.provider.us_short_private_test_root import temporary_us_short_state_directory  # noqa: E402
+from tests.provider.us_short_private_test_root_light import temporary_us_short_state_directory  # noqa: E402
 
 
 OBSERVED_AT = "2026-07-13T13:00:00Z"

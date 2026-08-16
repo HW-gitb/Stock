@@ -15,7 +15,7 @@ if str(ROOT) not in sys.path:
 
 from runners import us_short_batch5_massive_corporate_action_shape_probe as probe  # noqa: E402
 from runners import us_egs_sample_validation as sample_validation  # noqa: E402
-from tests.provider.us_short_private_test_root import temporary_us_short_state_directory  # noqa: E402
+from tests.provider.us_short_private_test_root_light import temporary_us_short_state_directory  # noqa: E402
 
 
 _FAKE_KEY = "FAKE-MASSIVE-KEY-should-never-appear-in-tracked-summary"

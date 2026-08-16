@@ -21,7 +21,7 @@ from runners.us_short_forward_universe_snapshot import (  # noqa: E402
     write_forward_universe_snapshot,
 )
 from runners import us_short_forward_universe_snapshot as snapshot_runner  # noqa: E402
-from tests.provider.us_short_private_test_root import temporary_us_short_state_directory  # noqa: E402
+from tests.provider.us_short_private_test_root_light import temporary_us_short_state_directory  # noqa: E402
 
 
 STATE_DIR = ROOT / "state" / "us_short"
