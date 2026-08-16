@@ -1,11 +1,13 @@
 import copy
 import unittest
 from datetime import date, timedelta
+from unittest import mock
 
 from engine import us_short_seam_catalyst as catalyst_seam
 from engine import us_short_seam_momentum as momentum_seam
 from engine import us_short_seam_score as score_seam
 from engine import us_short_seam_theme as theme_seam
+from engine import us_short_provisional_theme_boost as provisional_theme_boost
 from engine.us_short_catalyst import load_catalyst_governance
 from engine.us_short_catalyst_source import resolve_catalyst_signals
 from engine.us_short_core_score import PROFILE_NAMES, core_score
@@ -269,6 +271,53 @@ class ScoreComposerHappyPathTest(unittest.TestCase):
             },
         )
         self.assertAlmostEqual(enabled["selection_inputs"]["per_ticker"]["MSFT"]["core_score"], 47.0)
+
+    def test_provisional_theme_boost_semantic_validation_legs_have_named_failures(self):
+        identity = {
+            "expected_decision_date": "20260615",
+            "expected_input_digests": {
+                "discovery_artifact_sha256": "a" * 64,
+                "candidate_artifact_sha256": "b" * 64,
+                "classification_packet_sha256": "c" * 64,
+            },
+        }
+
+        def build(artifact):
+            with mock.patch.object(provisional_theme_boost, "_schema_validate", return_value=None):
+                return provisional_theme_boost.build_provisional_theme_boost_map(
+                    artifact, target_tickers=["AAPL", "MSFT", "JPM", "NVDA"], **identity,
+                )
+
+        mutations = (
+            ("semantic validation is missing", lambda theme: theme.pop("semantic_validation")),
+            ("semantic final member set is inconsistent", lambda theme: theme["semantic_validation"].update(final_member_tickers=["AAPL"])),
+            ("semantic member count is inconsistent", lambda theme: theme["semantic_validation"].update(semantically_linked_qualified_member_count=3)),
+            ("semantic industry count is inconsistent", lambda theme: theme["semantic_validation"].update(semantically_linked_sec_sic_industry_count=3)),
+            ("semantic passing origins are missing", lambda theme: theme["semantic_validation"].update(passing_origins=[])),
+            ("semantic passing refs are unbound", lambda theme: theme["semantic_validation"].update(passing_source_ref_ids=["unbound"])),
+            ("semantic passing origin members are unbound", lambda theme: theme["semantic_validation"]["passing_origins"][0].update(linked_tickers=["TSLA"])),
+        )
+        for message, mutate in mutations:
+            with self.subTest(message=message):
+                artifact = _validated_theme_artifact()
+                mutate(artifact["themes"][0])
+                with self.assertRaisesRegex(provisional_theme_boost.ProvisionalThemeBoostError, message):
+                    build(artifact)
+
+        narrow = _validated_theme_artifact()
+        narrow_result = build(narrow)
+        self.assertEqual(narrow_result["MSFT"]["theme_soft_boost"], 2.0)
+
+        wide = _validated_theme_artifact()
+        wide_theme = wide["themes"][0]
+        wide_member = next(row for row in wide_theme["members"] if row["ticker"] == "MSFT")
+        wide_member.update(source_ref_ids=["web:theme"], source_types=["web", "x"], evidence_tier="both")
+        wide_theme["semantic_validation"]["passing_origins"][1]["linked_tickers"].append("MSFT")
+        with self.assertRaisesRegex(
+            provisional_theme_boost.ProvisionalThemeBoostError,
+            "semantic source origin lacks member evidence",
+        ):
+            build(wide)
 
     def test_consumer_schema_gate_is_load_bearing(self):
         """The consumer's >=3-member, <=8-theme and effect-flag gates live ONLY in its `_schema_validate`

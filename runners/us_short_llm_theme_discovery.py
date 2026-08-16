@@ -43,6 +43,25 @@ DEFAULT_INPUT_PATH = STATE_US_SHORT_DIR / "us_short_llm_theme_discovery_input.js
 SAFE_SOURCE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,127}$")
 KNIFE1_SOURCE_REF_KEYS = ("source_id", "source_type", "observed_at")
 THEME_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,63}$")
+SEMANTIC_BASIS_VALUES = {
+    "shared_commercial_driver",
+    "shared_event_bucket",
+    "market_wide_move",
+    "issuer_specific_collection",
+    "insufficient_evidence",
+}
+SEMANTIC_ROLES = {
+    "supplier",
+    "customer",
+    "beneficiary",
+    "enabler",
+    "competitor",
+    "substitute",
+    "exposed_operator",
+    "other_linked_role",
+}
+SEMANTIC_ORIGIN_SCOPE_TYPES = {"web_chunk", "x_response"}
+SEMANTIC_DISCOVERY_SCHEMA_VERSION = "2.0.0"
 FORBIDDEN_OPERATIONAL_KEYS = {
     "score",
     "theme_score",
@@ -184,6 +203,11 @@ def _input_sha256(payload: dict[str, Any]) -> str:
                     if isinstance(member, dict) and isinstance(member.get("source_ref_ids"), list):
                         member["source_ref_ids"] = sorted(set(member["source_ref_ids"]))
                 theme["members"].sort(key=lambda row: str(row.get("ticker", "")) if isinstance(row, dict) else str(row))
+            if isinstance(theme.get("semantic_assertions"), list):
+                theme["semantic_assertions"].sort(
+                    key=lambda row: json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                    if isinstance(row, dict) else str(row)
+                )
         stable["themes"].sort(key=lambda row: str(row.get("theme_id", "")) if isinstance(row, dict) else str(row))
     try:
         canonical = json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -252,6 +276,147 @@ def project_knife1_source_refs(refs: list[dict[str, Any]]) -> list[dict[str, Any
     return [{key: ref[key] for key in KNIFE1_SOURCE_REF_KEYS} for ref in sorted(refs, key=lambda ref: ref["source_id"])]
 
 
+def normalize_semantic_assertions(
+    raw_assertions: Any,
+    *,
+    theme_ref_ids: set[str],
+    member_ref_ids: dict[str, set[str]],
+    ref_types: dict[str, str],
+    ref_times: dict[str, datetime],
+    theme_observed_at: datetime,
+    origin_source_type: str | None = None,
+    origin_scope_type: str | None = None,
+    origin_scope_index: int | None = None,
+    field: str = "semantic_assertions",
+) -> list[dict[str, Any]]:
+    """Normalize the machine-checkable commercial-driver assertion contract.
+
+    Provider adapters may supply the origin because they own the chunk/response boundary.  The
+    frozen discovery artifact always stores it, so an assertion can never become anonymous after
+    parsing or merge.
+    """
+    if type(raw_assertions) is not list:
+        raise LLMThemeDiscoveryError(f"{field} must be a list")
+    if not raw_assertions:
+        return []
+    allowed_keys = {
+        "basis", "basis_explanation", "common_driver", "member_links",
+        "origin_source_type", "origin_scope_type", "origin_scope_index",
+    }
+    normalized: list[dict[str, Any]] = []
+    for index, raw in enumerate(raw_assertions):
+        if type(raw) is not dict or not set(raw).issubset(allowed_keys):
+            raise LLMThemeDiscoveryError(f"{field}[{index}] has an unexpected shape")
+        basis = raw.get("basis")
+        explanation = raw.get("basis_explanation")
+        if basis not in SEMANTIC_BASIS_VALUES:
+            raise LLMThemeDiscoveryError(f"{field}[{index}].basis is invalid")
+        if type(explanation) is not str or not explanation.strip() or len(explanation) > 1000:
+            raise LLMThemeDiscoveryError(f"{field}[{index}].basis_explanation is invalid")
+        source_type = origin_source_type if origin_source_type is not None else raw.get("origin_source_type")
+        scope_type = origin_scope_type if origin_scope_type is not None else raw.get("origin_scope_type")
+        scope_index = origin_scope_index if origin_scope_index is not None else raw.get("origin_scope_index")
+        if source_type not in {"web", "x"}:
+            raise LLMThemeDiscoveryError(f"{field}[{index}].origin_source_type is invalid")
+        if scope_type not in SEMANTIC_ORIGIN_SCOPE_TYPES:
+            raise LLMThemeDiscoveryError(f"{field}[{index}].origin_scope_type is invalid")
+        if (scope_type == "web_chunk" and source_type != "web") or (
+            scope_type == "x_response" and source_type != "x"
+        ):
+            raise LLMThemeDiscoveryError(f"{field}[{index}] origin source/scope mismatch")
+        if isinstance(scope_index, bool) or not isinstance(scope_index, int) or scope_index < 0:
+            raise LLMThemeDiscoveryError(f"{field}[{index}].origin_scope_index is invalid")
+        common = raw.get("common_driver")
+        links = raw.get("member_links")
+        if basis == "shared_commercial_driver":
+            if type(common) is not dict or set(common) != {
+                "driver_statement", "transmission_mechanism", "source_ref_ids",
+            }:
+                raise LLMThemeDiscoveryError(f"{field}[{index}].common_driver is invalid")
+            driver_statement = common.get("driver_statement")
+            mechanism = common.get("transmission_mechanism")
+            if (
+                type(driver_statement) is not str or not driver_statement.strip() or len(driver_statement) > 1000
+                or type(mechanism) is not str or not mechanism.strip() or len(mechanism) > 1000
+            ):
+                raise LLMThemeDiscoveryError(f"{field}[{index}].common_driver text is invalid")
+            common_refs = common.get("source_ref_ids")
+            if (
+                type(common_refs) is not list
+                or not common_refs
+                or any(type(ref_id) is not str for ref_id in common_refs)
+            ):
+                raise LLMThemeDiscoveryError(f"{field}[{index}].common_driver.source_ref_ids is invalid")
+            normalized_common_refs = sorted(set(common_refs))
+            if any(
+                type(ref_id) is not str or ref_id not in theme_ref_ids
+                or ref_types.get(ref_id) != source_type
+                or ref_times[ref_id] > theme_observed_at
+                for ref_id in normalized_common_refs
+            ):
+                raise LLMThemeDiscoveryError(f"{field}[{index}].common_driver source binding is invalid")
+            if type(links) is not list:
+                raise LLMThemeDiscoveryError(f"{field}[{index}].member_links is invalid")
+            normalized_links: list[dict[str, Any]] = []
+            seen_tickers: set[str] = set()
+            for link_index, raw_link in enumerate(links):
+                if type(raw_link) is not dict or set(raw_link) != {
+                    "ticker", "role", "link_statement", "source_ref_ids",
+                }:
+                    raise LLMThemeDiscoveryError(f"{field}[{index}].member_links[{link_index}] is invalid")
+                ticker = canonical_us_ticker(raw_link.get("ticker"))
+                role = raw_link.get("role")
+                statement = raw_link.get("link_statement")
+                link_refs = raw_link.get("source_ref_ids")
+                if ticker is None or ticker not in member_ref_ids or ticker in seen_tickers:
+                    raise LLMThemeDiscoveryError(f"{field}[{index}].member_links[{link_index}].ticker is invalid")
+                if role not in SEMANTIC_ROLES:
+                    raise LLMThemeDiscoveryError(f"{field}[{index}].member_links[{link_index}].role is invalid")
+                if type(statement) is not str or not statement.strip() or len(statement) > 1000:
+                    raise LLMThemeDiscoveryError(f"{field}[{index}].member_links[{link_index}].link_statement is invalid")
+                if type(link_refs) is not list or not link_refs:
+                    raise LLMThemeDiscoveryError(f"{field}[{index}].member_links[{link_index}].source_ref_ids is invalid")
+                if any(type(ref_id) is not str for ref_id in link_refs):
+                    raise LLMThemeDiscoveryError(f"{field}[{index}].member_links[{link_index}].source_ref_ids is invalid")
+                normalized_link_refs = sorted(set(link_refs))
+                if any(
+                    type(ref_id) is not str or ref_id not in theme_ref_ids
+                    or ref_id not in member_ref_ids[ticker]
+                    or ref_types.get(ref_id) != source_type
+                    or ref_times[ref_id] > theme_observed_at
+                    for ref_id in normalized_link_refs
+                ):
+                    raise LLMThemeDiscoveryError(f"{field}[{index}].member_links[{link_index}] source binding is invalid")
+                seen_tickers.add(ticker)
+                normalized_links.append({
+                    "ticker": ticker, "role": role, "link_statement": statement.strip(),
+                    "source_ref_ids": normalized_link_refs,
+                })
+            if len(normalized_links) < 3:
+                raise LLMThemeDiscoveryError(f"{field}[{index}].member_links must contain at least 3 rows")
+            normalized_common = {
+                "driver_statement": driver_statement.strip(),
+                "transmission_mechanism": mechanism.strip(),
+                "source_ref_ids": normalized_common_refs,
+            }
+        else:
+            if common is not None or links != []:
+                raise LLMThemeDiscoveryError(f"{field}[{index}] non-shared basis must have no driver links")
+            normalized_common = None
+            normalized_links = []
+        normalized.append({
+            "basis": basis,
+            "basis_explanation": explanation.strip(),
+            "common_driver": normalized_common,
+            "member_links": normalized_links,
+            "origin_source_type": source_type,
+            "origin_scope_type": scope_type,
+            "origin_scope_index": scope_index,
+        })
+    normalized.sort(key=lambda row: json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+    return normalized
+
+
 def normalize_discovery_payload(
     payload: Any,
     *,
@@ -265,6 +430,7 @@ def normalize_discovery_payload(
     cutoff = _decision_open_et(expected_decision_date)
     generated = _parse_rfc3339(generated_at, field="generated_at")
     refs, ref_times = _source_refs(payload.get("source_refs"), cutoff=cutoff)
+    ref_types = {ref["source_id"]: ref["source_type"] for ref in refs}
     raw_themes = _require_list(payload.get("themes"), field="themes")
     themes: list[dict[str, Any]] = []
     seen_theme_ids: set[str] = set()
@@ -335,7 +501,7 @@ def normalize_discovery_payload(
                 "source_ref_ids": sorted(normalized_member_refs),
             })
         members.sort(key=lambda item: item["ticker"])
-        themes.append({
+        theme = {
             "theme_id": theme_id,
             "display_name": display_name.strip(),
             "summary": summary.strip(),
@@ -345,11 +511,25 @@ def normalize_discovery_payload(
             "members": members,
             "cross_industry_validation_status": "not_run",
             "market_confirmation_status": "not_run",
-        })
+        }
+        if "semantic_assertions" in raw_theme:
+            member_ref_ids = {
+                member["ticker"]: set(member["source_ref_ids"]) for member in members
+            }
+            theme["semantic_assertions"] = normalize_semantic_assertions(
+                raw_theme.get("semantic_assertions"),
+                theme_ref_ids=set(normalized_theme_refs), member_ref_ids=member_ref_ids,
+                ref_types=ref_types, ref_times=ref_times,
+                theme_observed_at=observed_at,
+            )
+        themes.append(theme)
     themes.sort(key=lambda item: item["theme_id"])
     artifact = {
         "schema_name": "us_short_llm_theme_discovery",
-        "schema_version": "1.0.0",
+        "schema_version": (
+            SEMANTIC_DISCOVERY_SCHEMA_VERSION
+            if any("semantic_assertions" in theme for theme in themes) else "1.0.0"
+        ),
         "generated_at": generated.isoformat(),
         "input_sha256": _input_sha256(payload),
         "decision_clock": {

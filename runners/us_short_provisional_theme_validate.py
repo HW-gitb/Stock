@@ -359,6 +359,165 @@ def validate_provisional_themes(
                 "industry_source": "sec_sic_major_group",
             })
         members.sort(key=lambda row: row["ticker"])
+        # The production structural gates remain first.  Semantic evidence cannot turn a
+        # sub-sized or single-industry theme into a production candidate.
+        structural_industry_codes = sorted({row["industry_code"] for row in members})
+        if len(members) < MIN_THEME_MEMBERS:
+            drops.append({"stage": "theme", "theme_id": theme_id, "reason": "fewer_than_3_qualified_members"})
+            continue
+        if len(structural_industry_codes) < 2:
+            drops.append({"stage": "theme", "theme_id": theme_id, "reason": "fewer_than_2_sec_sic_industries"})
+            continue
+        semantic_validation: dict[str, Any] | None = None
+        if "semantic_assertions" in raw_theme:
+            if type(raw_theme.get("semantic_assertions")) is not list:
+                drops.append({
+                    "stage": "theme", "theme_id": theme_id,
+                    "reason": "semantic_assertion_malformed_or_unbound",
+                    "detail": "semantic_assertions",
+                })
+                continue
+            raw_member_ref_ids = {
+                canonical_us_ticker(raw_member.get("ticker")): set(raw_member.get("source_ref_ids", []))
+                for raw_member in raw_theme["members"]
+                if isinstance(raw_member, dict)
+                and canonical_us_ticker(raw_member.get("ticker")) is not None
+                and isinstance(raw_member.get("source_ref_ids"), list)
+            }
+            qualified_by_ticker = {member["ticker"]: member for member in members}
+            theme_ref_ids = set(raw_theme["source_ref_ids"])
+            passing_assertions: list[dict[str, Any]] = []
+            for assertion_index, assertion in enumerate(raw_theme.get("semantic_assertions", [])):
+                detail = f"assertion[{assertion_index}]"
+                if type(assertion) is not dict:
+                    drops.append({"stage": "theme", "theme_id": theme_id, "reason": "semantic_assertion_malformed_or_unbound", "detail": detail})
+                    continue
+                basis = assertion.get("basis")
+                if basis != "shared_commercial_driver":
+                    drops.append({"stage": "theme", "theme_id": theme_id, "reason": "semantic_basis_not_shared_commercial_driver", "detail": f"{detail}:{basis}"})
+                    continue
+                origin_source_type = assertion.get("origin_source_type")
+                origin_scope_type = assertion.get("origin_scope_type")
+                origin_scope_index = assertion.get("origin_scope_index")
+                common = assertion.get("common_driver")
+                links = assertion.get("member_links")
+                if (
+                    origin_source_type not in {"web", "x"}
+                    or (origin_source_type == "web" and origin_scope_type != "web_chunk")
+                    or (origin_source_type == "x" and origin_scope_type != "x_response")
+                    or isinstance(origin_scope_index, bool)
+                    or not isinstance(origin_scope_index, int)
+                    or origin_scope_index < 0
+                    or type(common) is not dict
+                    or not isinstance(links, list)
+                ):
+                    drops.append({"stage": "theme", "theme_id": theme_id, "reason": "semantic_assertion_malformed_or_unbound", "detail": detail})
+                    continue
+                common_refs = common.get("source_ref_ids")
+                if (
+                    not isinstance(common_refs, list)
+                    or not common_refs
+                    or any(
+                        ref not in theme_ref_ids or source_types.get(ref) != origin_source_type
+                        for ref in common_refs
+                    )
+                ):
+                    drops.append({"stage": "theme", "theme_id": theme_id, "reason": "semantic_assertion_malformed_or_unbound", "detail": f"{detail}:common_refs"})
+                    continue
+                linked_tickers: list[str] = []
+                linked_source_ref_ids: set[str] = set(common_refs)
+                malformed = False
+                for link in links:
+                    if type(link) is not dict:
+                        malformed = True
+                        break
+                    ticker = canonical_us_ticker(link.get("ticker"))
+                    link_refs = link.get("source_ref_ids")
+                    if (
+                        ticker is None or ticker in linked_tickers
+                        or ticker not in raw_member_ref_ids
+                        or not isinstance(link_refs, list) or not link_refs
+                        or any(
+                            ref not in theme_ref_ids
+                            or ref not in raw_member_ref_ids[ticker]
+                            or source_types.get(ref) != origin_source_type
+                            for ref in link_refs
+                        )
+                    ):
+                        malformed = True
+                        break
+                    linked_tickers.append(ticker)
+                    linked_source_ref_ids.update(link_refs)
+                if malformed:
+                    drops.append({"stage": "theme", "theme_id": theme_id, "reason": "semantic_assertion_malformed_or_unbound", "detail": detail})
+                    continue
+                qualified_linked = sorted(set(linked_tickers) & set(qualified_by_ticker))
+                if len(qualified_linked) < MIN_THEME_MEMBERS:
+                    drops.append({"stage": "theme", "theme_id": theme_id, "reason": "fewer_than_3_semantically_linked_qualified_members", "detail": detail})
+                    continue
+                linked_industries = sorted({qualified_by_ticker[ticker]["industry_code"] for ticker in qualified_linked})
+                if len(linked_industries) < 2:
+                    drops.append({"stage": "theme", "theme_id": theme_id, "reason": "fewer_than_2_semantically_linked_sec_sic_industries", "detail": detail})
+                    continue
+                passing_assertions.append({
+                    "assertion": assertion,
+                    "linked_tickers": qualified_linked,
+                    "origin_source_type": origin_source_type,
+                    "origin_scope_type": origin_scope_type,
+                    "origin_scope_index": origin_scope_index,
+                    "source_ref_ids": sorted(linked_source_ref_ids),
+                })
+            if not passing_assertions:
+                continue
+            final_tickers = sorted({
+                ticker for row in passing_assertions for ticker in row["linked_tickers"]
+            })
+            for member in list(members):
+                if member["ticker"] not in final_tickers:
+                    drops.append({
+                        "stage": "member", "theme_id": theme_id, "ticker": member["ticker"],
+                        "reason": "member_not_linked_to_passing_common_driver",
+                        "source_ref_ids": list(member["source_ref_ids"]),
+                    })
+            members = [member for member in members if member["ticker"] in final_tickers]
+            for member in members:
+                semantic_types = sorted({
+                    row["origin_source_type"]
+                    for row in passing_assertions
+                    if member["ticker"] in row["linked_tickers"]
+                })
+                member["source_types"] = semantic_types
+                member["evidence_tier"] = "both" if set(semantic_types) == {"web", "x"} else "single"
+            semantic_industry_codes = sorted({member["industry_code"] for member in members})
+            if len(members) < MIN_THEME_MEMBERS:
+                drops.append({"stage": "theme", "theme_id": theme_id, "reason": "fewer_than_3_semantically_linked_qualified_members"})
+                continue
+            if len(semantic_industry_codes) < 2:
+                drops.append({"stage": "theme", "theme_id": theme_id, "reason": "fewer_than_2_semantically_linked_sec_sic_industries"})
+                continue
+            semantic_validation = {
+                "status": "validated_shared_commercial_driver",
+                "anchor_origin": {
+                    "origin_source_type": passing_assertions[0]["origin_source_type"],
+                    "origin_scope_type": passing_assertions[0]["origin_scope_type"],
+                    "origin_scope_index": passing_assertions[0]["origin_scope_index"],
+                },
+                "passing_origins": [
+                    {
+                        "origin_source_type": row["origin_source_type"],
+                        "origin_scope_type": row["origin_scope_type"],
+                        "origin_scope_index": row["origin_scope_index"],
+                        "linked_tickers": row["linked_tickers"],
+                    }
+                    for row in passing_assertions
+                ],
+                "semantically_linked_qualified_member_count": len(members),
+                "semantically_linked_sec_sic_industry_count": len(semantic_industry_codes),
+                "passing_source_ref_ids": sorted({
+                    ref_id for row in passing_assertions for ref_id in row["source_ref_ids"]
+                }),
+                "final_member_tickers": [member["ticker"] for member in members],
+            }
         industry_codes = sorted({row["industry_code"] for row in members})
         if len(members) < MIN_THEME_MEMBERS:
             drops.append({"stage": "theme", "theme_id": theme_id, "reason": "fewer_than_3_qualified_members"})
@@ -368,13 +527,13 @@ def validate_provisional_themes(
             continue
         source_counts = {
             kind: sum(
-                kind in {source_types.get(ref) for ref in member["source_ref_ids"]}
+                kind in (set(member["source_types"]) if semantic_validation is not None else {source_types.get(ref) for ref in member["source_ref_ids"]})
                 for member in members
             )
             for kind in ("web", "x")
         }
         source_counts["both"] = sum(member["evidence_tier"] == "both" for member in members)
-        accepted.append({
+        accepted_theme = {
             "theme_id": theme_id, "display_name": raw_theme["display_name"], "summary": raw_theme["summary"],
             "status": "provisional_validated", "observed_at": raw_theme["observed_at"],
             "source_ref_ids": sorted(raw_theme["source_ref_ids"]), "members": members,
@@ -385,7 +544,10 @@ def validate_provisional_themes(
                 "industry_count": len(industry_codes), "industry_codes": industry_codes,
                 "source_type_counts": source_counts,
             },
-        })
+        }
+        if semantic_validation is not None:
+            accepted_theme["semantic_validation"] = semantic_validation
+        accepted.append(accepted_theme)
     for theme in accepted:
         # Ranking evidence is the union actually retained by validated members.  The theme-level
         # list remains full provenance, so a redundant lane ref pruned from every member cannot
@@ -402,7 +564,14 @@ def validate_provisional_themes(
     # then newest PIT observation, then stable theme id. This is selection bookkeeping, not a score.
     accepted.sort(key=lambda theme: (
         -theme["validation"]["source_type_counts"].get("both", 0),
-        -theme["validation"]["qualified_member_count"],
+        -(
+            theme["semantic_validation"]["semantically_linked_qualified_member_count"]
+            if "semantic_validation" in theme else theme["validation"]["qualified_member_count"]
+        ),
+        -(
+            theme["semantic_validation"]["semantically_linked_sec_sic_industry_count"]
+            if "semantic_validation" in theme else theme["validation"]["industry_count"]
+        ),
         -theme["validation"]["distinct_web_x_source_ref_count"],
         -_parse_instant(theme["observed_at"], f"themes[{theme['theme_id']}].observed_at").timestamp(),
         theme["theme_id"],
@@ -422,9 +591,11 @@ def build_artifact(inputs: dict[str, Any], *, generated_at: str) -> dict[str, An
         candidate_reasons_by_ticker=inputs.get("candidate_reasons", {}),
         sectors_by_ticker=inputs["sectors"],
     )
+    semantic_mode = any("semantic_assertions" in theme for theme in inputs["discovery"]["themes"])
     payload = {
         "schema_name": "us_short_provisional_theme_validation",
-        "schema_version": "1.1.0", "generated_at": generated.isoformat(),
+        "schema_version": "1.2.0" if semantic_mode else "1.1.0",
+        "generated_at": generated.isoformat(),
         "decision_clock": {
             "expected_decision_date": inputs["candidate"]["decision_date"],
             "candidate_price_basis_date": inputs["candidate"]["price_basis_date"],

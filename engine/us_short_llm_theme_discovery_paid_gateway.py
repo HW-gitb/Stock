@@ -257,6 +257,17 @@ def _provider_response_is_safe(response: dict[str, Any]) -> bool:
     return persisted_text_violation({"provider_response": response}) is None
 
 
+SEMANTIC_ASSERTION_PROMPT = (
+    "Every theme must include semantic_assertions. Each assertion must use basis "
+    "shared_commercial_driver or one of the explicit negative bases shared_event_bucket, "
+    "market_wide_move, issuer_specific_collection, insufficient_evidence. For "
+    "shared_commercial_driver provide basis_explanation, common_driver "
+    "{driver_statement, transmission_mechanism, source_urls}, and at least three "
+    "member_links {ticker, role, link_statement, source_urls}. Use only URLs from this "
+    "response. Do not use a theme name or a keyword list as the semantic decision."
+)
+
+
 def _grok_prompt(expected_decision_date: str, query: str) -> str:
     return (
         "You are a US-short cross-industry theme discovery grouper. Use only the supplied X search evidence; "
@@ -267,6 +278,7 @@ def _grok_prompt(expected_decision_date: str, query: str) -> str:
         "\"observed_at\":\"RFC3339\",\"source_urls\":[\"https://x.com/...\"],"
         "\"members\":[{\"ticker\":\"AAPL\",\"source_urls\":[\"https://x.com/...\"]}]}]}. "
         "Every source must include its post creation time; omit sources without a trustworthy creation time.\n"
+        + SEMANTIC_ASSERTION_PROMPT + "\n"
         f"POST query\nTITLE: {query}\nTEXT: {query}"
     )
 

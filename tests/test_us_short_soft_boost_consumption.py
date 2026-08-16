@@ -102,7 +102,7 @@ class SoftBoostFixture:
             },
             "immutable_conflict": None,
             "validated_theme_count": 1,
-            "boostable_ticker_count": 3,
+            "boostable_ticker_count": 4,
             "drop_summary": {"merge_dropped_theme_count": 0, "validation_drop_count": 0},
             "error_summary": None,
             "effects": {

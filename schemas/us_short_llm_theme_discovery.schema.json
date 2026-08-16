@@ -18,7 +18,7 @@
       "const": "us_short_llm_theme_discovery"
     },
     "schema_version": {
-      "const": "1.0.0"
+      "enum": ["1.0.0", "2.0.0"]
     },
     "generated_at": {
       "type": "string",
@@ -106,6 +106,20 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "2.0.0"}}
+      },
+      "then": {
+        "properties": {
+          "themes": {
+            "items": {"required": ["semantic_assertions"]}
+          }
+        }
+      }
+    }
+  ],
   "definitions": {
     "source_ref": {
       "type": "object",
@@ -198,12 +212,85 @@
             "$ref": "#/definitions/member"
           }
         },
+        "semantic_assertions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/semantic_assertion"}
+        },
         "cross_industry_validation_status": {
           "const": "not_run"
         },
         "market_confirmation_status": {
           "const": "not_run"
         }
+      }
+    },
+    "semantic_assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis", "basis_explanation", "common_driver", "member_links",
+        "origin_source_type", "origin_scope_type", "origin_scope_index"
+      ],
+      "properties": {
+        "basis": {
+          "enum": [
+            "shared_commercial_driver", "shared_event_bucket", "market_wide_move",
+            "issuer_specific_collection", "insufficient_evidence"
+          ]
+        },
+        "basis_explanation": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "common_driver": {
+          "oneOf": [
+            {"$ref": "#/definitions/common_driver"},
+            {"type": "null"}
+          ]
+        },
+        "member_links": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/member_link"}
+        },
+        "origin_source_type": {"enum": ["web", "x"]},
+        "origin_scope_type": {"enum": ["web_chunk", "x_response"]},
+        "origin_scope_index": {"type": "integer", "minimum": 0}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"basis": {"const": "shared_commercial_driver"}}},
+          "then": {
+            "required": ["common_driver"],
+            "properties": {"member_links": {"minItems": 3}}
+          },
+          "else": {
+            "properties": {"common_driver": {"const": null}, "member_links": {"const": []}}
+          }
+        },
+        {
+          "if": {"properties": {"origin_source_type": {"const": "web"}}},
+          "then": {"properties": {"origin_scope_type": {"const": "web_chunk"}}},
+          "else": {"properties": {"origin_scope_type": {"const": "x_response"}}}
+        }
+      ]
+    },
+    "common_driver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["driver_statement", "transmission_mechanism", "source_ref_ids"],
+      "properties": {
+        "driver_statement": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "transmission_mechanism": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "source_ref_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}}
+      }
+    },
+    "member_link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticker", "role", "link_statement", "source_ref_ids"],
+      "properties": {
+        "ticker": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{0,5}([.\\-][A-Z]{1,3})?$"},
+        "role": {"enum": ["supplier", "customer", "beneficiary", "enabler", "competitor", "substitute", "exposed_operator", "other_linked_role"]},
+        "link_statement": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "source_ref_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}}
       }
     }
   }

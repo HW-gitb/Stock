@@ -171,6 +171,12 @@ def build_provisional_theme_boost_map(
         }
         for ticker in targets
     }
+    # A pre-semantic validation artifact remains readable for diagnostics, but it cannot cross the
+    # scoring seam.  This is the one-way compatibility boundary for the third knife.
+    if artifact.get("schema_version") != "1.2.0":
+        for record in out.values():
+            validate_provisional_theme_boost_record(record)
+        return out
     seen_theme_ids: set[str] = set()
     for theme in artifact["themes"]:
         theme_id = theme["theme_id"]
@@ -188,6 +194,34 @@ def build_provisional_theme_boost_map(
         member_industries = sorted(set(member_industry_values))
         if expected_industries != member_industries or len(expected_industries) < 2:
             raise ProvisionalThemeBoostError(f"validated theme industry evidence is inconsistent: {theme_id}")
+        semantic = theme.get("semantic_validation")
+        if not isinstance(semantic, dict):
+            raise ProvisionalThemeBoostError(f"semantic validation is missing: {theme_id}")
+        final_member_tickers = sorted(
+            canonical_us_ticker(member["ticker"]) for member in theme["members"]
+            if canonical_us_ticker(member["ticker"]) is not None
+        )
+        if final_member_tickers != sorted(semantic.get("final_member_tickers", [])):
+            raise ProvisionalThemeBoostError(f"semantic final member set is inconsistent: {theme_id}")
+        if semantic.get("semantically_linked_qualified_member_count") != len(final_member_tickers):
+            raise ProvisionalThemeBoostError(f"semantic member count is inconsistent: {theme_id}")
+        if semantic.get("semantically_linked_sec_sic_industry_count") != len(expected_industries):
+            raise ProvisionalThemeBoostError(f"semantic industry count is inconsistent: {theme_id}")
+        passing_origins = semantic.get("passing_origins")
+        if not isinstance(passing_origins, list) or not passing_origins:
+            raise ProvisionalThemeBoostError(f"semantic passing origins are missing: {theme_id}")
+        passing_source_refs = semantic.get("passing_source_ref_ids")
+        if not isinstance(passing_source_refs, list) or not set(passing_source_refs).issubset(theme_refs):
+            raise ProvisionalThemeBoostError(f"semantic passing refs are unbound: {theme_id}")
+        for origin in passing_origins:
+            if not isinstance(origin, dict) or origin.get("origin_source_type") not in {"web", "x"}:
+                raise ProvisionalThemeBoostError(f"semantic passing origin is malformed: {theme_id}")
+            expected_scope = "web_chunk" if origin["origin_source_type"] == "web" else "x_response"
+            if origin.get("origin_scope_type") != expected_scope:
+                raise ProvisionalThemeBoostError(f"semantic passing origin scope is inconsistent: {theme_id}")
+            linked = origin.get("linked_tickers")
+            if not isinstance(linked, list) or not set(linked).issubset(set(final_member_tickers)):
+                raise ProvisionalThemeBoostError(f"semantic passing origin members are unbound: {theme_id}")
         seen_member_tickers: set[str] = set()
         for member in theme["members"]:
             ticker = canonical_us_ticker(member["ticker"])
@@ -205,11 +239,18 @@ def build_provisional_theme_boost_map(
                 raise ProvisionalThemeBoostError(f"validated member source type binding is missing: {ticker}")
             bound_types = {source_ref_types[ref] for ref in member_refs}
             independent_bound_types = bound_types & {"web", "x"}
-            if independent_bound_types != source_types:
+            semantic_types = {
+                origin["origin_source_type"]
+                for origin in passing_origins
+                if ticker in origin["linked_tickers"]
+            }
+            if semantic_types != source_types:
                 raise ProvisionalThemeBoostError(
                     f"validated member source type binding mismatch for {ticker}: "
-                    f"{sorted(independent_bound_types)!r} vs {sorted(source_types)!r}"
+                    f"{sorted(semantic_types)!r} vs {sorted(source_types)!r}"
                 )
+            if not semantic_types.issubset(independent_bound_types):
+                raise ProvisionalThemeBoostError(f"semantic source origin lacks member evidence: {ticker}")
             expected_tier = "both" if source_types == {"web", "x"} else "single" if len(source_types) == 1 else None
             if expected_tier != tier:
                 raise ProvisionalThemeBoostError(

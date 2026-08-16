@@ -77,6 +77,22 @@ def _themes(
                 {"ticker": ticker, "source_urls": list(source_urls)}
                 for ticker in tickers
             ]
+        if source_refs is not None or source_urls is not None:
+            ref_key = "source_ref_ids" if source_refs is not None else "source_urls"
+            refs = list(source_refs if source_refs is not None else source_urls)
+            if len(tickers) >= 3:
+                theme["semantic_assertions"] = [{
+                    "basis": "shared_commercial_driver",
+                    "basis_explanation": "Power demand reaches the linked issuers.",
+                    "common_driver": {"driver_statement": "Power demand is increasing.", "transmission_mechanism": "Load growth drives infrastructure spending.", ref_key: refs},
+                    "member_links": [{"ticker": ticker, "role": "beneficiary", "link_statement": "The issuer is linked to the common demand.", ref_key: refs} for ticker in tickers],
+                }]
+            else:
+                theme["semantic_assertions"] = [{
+                    "basis": "insufficient_evidence",
+                    "basis_explanation": "This small fixture has fewer than three members.",
+                    "common_driver": None, "member_links": [],
+                }]
         output.append(theme)
     return output
 
