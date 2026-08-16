@@ -348,12 +348,18 @@ def _verify_receipt(
     try:
         if source_type == "web":
             web._validate_schema(receipt)
-            if receipt.get("schema_version") == "1.2.0":
-                web._validate_member_binding_ledger(receipt, artifact)
         else:
             xfetch._validate_schema(receipt)
     except Exception as exc:
         raise ThemeDiscoveryMergeError(f"{source_type} receipt schema is invalid") from exc
+    if source_type == "web" and receipt.get("schema_version") == "1.2.0":
+        # Kept separate from the schema door: a ledger/consistency failure and a shape
+        # failure need different diagnoses, and reporting both as "schema is invalid"
+        # sent a reviewer down the wrong path once already.
+        try:
+            web._validate_member_binding_ledger(receipt, artifact)
+        except Exception as exc:
+            raise ThemeDiscoveryMergeError("web receipt member binding ledger is invalid") from exc
     if receipt.get("decision_clock", {}).get("expected_decision_date") != expected_decision_date:
         raise ThemeDiscoveryMergeError(f"{source_type} receipt decision date does not match merge clock")
     if artifact.get("decision_clock", {}).get("expected_decision_date") != expected_decision_date:
