@@ -59,7 +59,7 @@ class Pass2BudgetApprovalScriptEntryTest(unittest.TestCase):
                 candidate_artifact_sha256="0" * 64,
                 momentum_top_k=200,
                 target_count=200,
-                exact_pass2_calls=1001,
+                exact_pass2_calls=231,
                 authorization_mode="one_click_test",
                 authorization_ref="one_click_test:direct-script",
                 generated_at="2026-08-13T12:00:00+00:00",
@@ -176,7 +176,7 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
             generated_at=summary["generated_at"],
         )
 
-    def test_one_click_preview_200_finalizes_to_1001_without_second_budget_derivation(self):
+    def test_one_click_preview_200_finalizes_to_231_without_second_budget_derivation(self):
         with mock.patch.object(self.runner, "_forecast_calls", wraps=self.runner._forecast_calls) as forecast:
             preview = self._preview()
             approval = self._approval(preview)
@@ -186,7 +186,7 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
             )
 
         self.assertEqual(preview["pass2_target_universe"]["target_count"], 200)
-        self.assertEqual(preview["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 1001)
+        self.assertEqual(preview["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 231)
         self.assertEqual(forecast.call_count, 1)
         self.assertTrue(final["execution_gate"]["ready_to_run_full_candidate_live_packet"])
         self.assertTrue(final["execution_gate"]["authorized_budget_matches_rederived_forecast"])
@@ -244,18 +244,20 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
             preflight_summary_path=self.paths["summary"], approval_binding=approval.binding_summary()
         )
         with self.assertRaisesRegex(live.FullCandidateLiveSourcePacketError, "requires the matching Pass2 budget approval"):
-            live._load_ready_preflight(self.paths["summary"], 1001)
+            live._load_ready_preflight(self.paths["summary"], 231)
         with self.assertRaisesRegex(live.FullCandidateLiveSourcePacketError, "finalized Pass2 budget approval"):
             live._fetch_live_records(
                 selected_symbols=[],
+                source_as_of="2026-06-15",
+                observed_at=GENERATED_AT,
                 raw_root=self.paths["candidate"].parent,
                 client=mock.Mock(),
                 fmp_env=SimpleNamespace(value="fmp"),
                 sec_env=SimpleNamespace(value="sec"),
                 massive_env=SimpleNamespace(value="massive"),
                 sec_sleep_seconds=0.0,
-                max_total_endpoint_calls=1001,
-                max_total_http_attempts=1001,
+                max_total_endpoint_calls=231,
+                max_total_http_attempts=231,
                 provider_pace_seconds=0.0,
                 max_retries_per_call=0,
                 retry_backoff_seconds=0.0,
@@ -275,13 +277,13 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["summary"],
             momentum_top_k=200,
-            authorized_total_call_budget=1001,
+            authorized_total_call_budget=231,
             confirm_user_authorization=True,
             generated_at=GENERATED_AT,
         )
         self.assertNotIn("approval_binding", legacy_ready["execution_gate"])
         with self.assertRaisesRegex(live.FullCandidateLiveSourcePacketError, "requires the matching Pass2 budget approval"):
-            live._load_ready_preflight(self.paths["summary"], 1001)
+            live._load_ready_preflight(self.paths["summary"], 231)
         with self.assertRaisesRegex(yfinance.YFinanceGradesFetchError, "requires the matching Pass2 budget approval"):
             yfinance._load_ready_preflight(self.paths["summary"])
 
@@ -303,7 +305,7 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
             price_basis_date=PRICE_BASIS_DATE,
             candidate_path=self.paths["candidate"],
             authorized_momentum_top_k=200,
-            authorized_pass2_call_budget=1001,
+            authorized_pass2_call_budget=231,
         )
         restored = capstone._restore_pass2_budget_approval(ctx, final)
         self.assertEqual(restored.binding_summary(), manual.binding_summary())
@@ -342,7 +344,7 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
             batch4_template_path=ROOT / "schemas" / "examples" / "us_short_weekend_batch4_context_packet.empty.example.json",
             account_state_path=account_path,
             authorized_momentum_top_k=200,
-            authorized_pass2_call_budget=1001,
+            authorized_pass2_call_budget=231,
             confirm_user_authorization=True,
             state_dir=state_dir,
             sample_root=state_dir,
@@ -356,7 +358,7 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
             candidate_artifact_sha256=candidate_sha,
             momentum_top_k=200,
             target_count=200,
-            exact_pass2_calls=1001,
+            exact_pass2_calls=231,
             authorization_mode="manual",
             authorization_ref="manual:resume-unit",
             generated_at="2026-07-09T08:00:00+00:00",
@@ -373,12 +375,12 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
                 "candidate_artifact_path": str(ctx.candidate_path),
             },
             "pass2_target_universe": {"momentum_top_k": 200, "target_count": 200},
-            "endpoint_call_forecast": {"total_calls_for_pass2_target_cut": 1001},
+                "endpoint_call_forecast": {"total_calls_for_pass2_target_cut": 231},
             "execution_gate": {
                 "ready_to_run_full_candidate_live_packet": True,
                 "block_reasons": [],
                 "authorized_momentum_top_k": 200,
-                "authorized_total_call_budget": 1001,
+                "authorized_total_call_budget": 231,
                 "approval_binding": manual.binding_summary(),
             },
         }
@@ -473,7 +475,7 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
                 batch4_template_path=ctx.batch4_template_path,
                 account_state_path=account_path,
                 authorized_momentum_top_k=200,
-                authorized_pass2_call_budget=1001,
+                authorized_pass2_call_budget=231,
                 dry_run=False,
                 confirm_user_authorization=True,
                 state_dir=state_dir,
@@ -528,7 +530,7 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
         approval = capstone._build_pass2_budget_approval(
             ctx, preview, authorization_mode="one_click_test")
         self.assertEqual(approval.target_count, 200)
-        self.assertEqual(approval.exact_pass2_calls, 1001)
+        self.assertEqual(approval.exact_pass2_calls, 231)
         self.assertNotIn("X000", approval.binding_summary()["authorization_ref"])
 
     def test_pass2_binding_mismatch_rejects_before_provider_client(self):
@@ -546,7 +548,7 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
         with self.assertRaisesRegex(live.FullCandidateLiveSourcePacketError, "approval binding"):
             live.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["summary"],
-                expected_total_call_budget=1001,
+                expected_total_call_budget=231,
                 budget_approval=forged,
                 client=client,
                 confirm_user_authorization=True,
@@ -576,7 +578,7 @@ class Pass2BudgetApprovalContractTest(unittest.TestCase):
             preflight_summary_path=self.paths["summary"],
             approval_binding=approval.binding_summary(),
         )
-        forged = replace(approval, exact_pass2_calls=1000)
+        forged = replace(approval, exact_pass2_calls=230)
         client = mock.Mock()
         with self.assertRaisesRegex(yfinance.YFinanceGradesFetchError, "approval binding"):
             yfinance.run_yfinance_grades_fetch(

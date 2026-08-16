@@ -149,7 +149,7 @@ class CapstoneDryRunTest(unittest.TestCase):
             capstone._automatic_pass2_http_attempt_cap(
                 exact_pass2_calls=1001, target_count=200, max_retries=2,
             ),
-            1121,
+            1013,
         )
 
     def test_retry_policy_is_not_checkpoint_identity(self):
@@ -196,7 +196,7 @@ class CapstoneDryRunTest(unittest.TestCase):
                           # rather than sneaking a request in behind an ungated stage.
                           "vix_regime", "forward_policy_corporate_actions", "market_diagnostic_fetch"])
         pass2 = next(stage for stage in plan["stages"] if stage["name"] == "pass2_fetch")
-        self.assertEqual(pass2["contract_version"], "2.2.0")
+        self.assertEqual(pass2["contract_version"], "2.3.0")
         self.assertIn(
             "state/us_short/us_short_batch5_full_universe_ohlcv_series_20260708_packet.json",
             pass2["inputs"],
@@ -1343,7 +1343,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertEqual(observed, {
             "max_retries_per_call": 2,
             "retry_backoff_seconds": 65.0,
-            "max_total_http_attempts": 13,
+            "max_total_http_attempts": 23,
             "exact_pass2_calls": 11,
         })
 
@@ -2865,7 +2865,10 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
                 "target_count": len(sec_target_symbols),
                 "target_symbols": sec_target_symbols,
             },
-            "source_artifacts": {"analyst_grade_actions_consumed_from": "fmp_analyst_grade_actions"},
+            "source_artifacts": {
+                "active_analyst_source": "fmp",
+                "analyst_grade_actions_consumed_from": "fmp_analyst_grade_actions",
+            },
         }),
                         encoding="utf-8")
         # The direct projector is the canonical unit; the write seam is covered separately below.
@@ -3163,7 +3166,7 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
             self.assertEqual(
                 self._run_on_raw(bad),
                 {"universe_status": "missing", "universe_market_cap": "missing", "massive_momentum": "missing",
-                 "sec_sic": "missing", "analyst_grades": "missing", "sec_offering_audit": "down",
+                 "sec_sic": "missing", "analyst_grades": "down", "sec_offering_audit": "down",
                  "massive_events": "missing", "fmp_vix": "missing"},
                 f"input={bad!r}",
             )
@@ -3172,7 +3175,7 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
         # invalid JSON and an empty/0-byte file -> fail closed to down, no crash.
         expected = {
             "universe_status": "missing", "universe_market_cap": "missing", "massive_momentum": "missing",
-            "sec_sic": "missing", "analyst_grades": "missing", "sec_offering_audit": "down",
+            "sec_sic": "missing", "analyst_grades": "down", "sec_offering_audit": "down",
             "massive_events": "missing", "fmp_vix": "missing",
         }
         self.assertEqual(self._run_on_raw("{not valid json"), expected)

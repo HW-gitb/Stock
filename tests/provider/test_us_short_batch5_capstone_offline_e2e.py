@@ -145,7 +145,8 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
             momentum_top_k=200,
-            authorized_total_call_budget=16,
+            active_analyst_source="fmp",
+            authorized_total_call_budget=37,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -159,6 +160,36 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             exact_pass2_calls=preflight["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"],
             authorization_mode="manual",
             authorization_ref="manual:test_fixture",
+            generated_at=preflight["generated_at"],
+        )
+        preflight_runner.finalize_preflight_from_existing_derivation(
+            preflight_summary_path=self.paths["preflight"],
+            approval_binding=self.budget_approval.binding_summary(),
+        )
+
+    def _use_yfinance_preflight(self) -> None:
+        preflight_runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["preflight"],
+            momentum_top_k=200,
+            active_analyst_source="yfinance",
+            authorized_total_call_budget=34,
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+        preflight = json.loads(self.paths["preflight"].read_text(encoding="utf-8"))
+        self.budget_approval = Pass2BudgetApproval(
+            decision_date=preflight["decision_clock"]["expected_decision_date"],
+            candidate_price_basis_date=preflight["decision_clock"]["candidate_price_basis_date"],
+            candidate_artifact_sha256=preflight["candidate_universe"]["candidate_artifact_sha256"],
+            momentum_top_k=preflight["pass2_target_universe"]["momentum_top_k"],
+            target_count=preflight["pass2_target_universe"]["target_count"],
+            exact_pass2_calls=preflight["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"],
+            authorization_mode="manual",
+            authorization_ref="manual:test_fixture_yfinance",
             generated_at=preflight["generated_at"],
         )
         preflight_runner.finalize_preflight_from_existing_derivation(
@@ -244,7 +275,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             funnel_summary = funnel.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
                 budget_approval=self.budget_approval,
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -318,7 +349,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             funnel_summary = funnel.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
                 budget_approval=self.budget_approval,
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 overextension_projection_path=self.paths["overextension"],
@@ -371,6 +402,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             self.assertEqual(machine_rows["MSFT"]["overextension"]["overextension_state"], "warning")
 
     def test_yfinance_grade_actions_flow_to_components_action_table_and_machine_record(self) -> None:
+        self._use_yfinance_preflight()
         _write_json(
             self.paths["yfinance"],
             resolve_yfinance_grade_actions(
@@ -394,7 +426,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             funnel_summary = funnel.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
                 budget_approval=self.budget_approval,
-                expected_total_call_budget=16,
+                expected_total_call_budget=34,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 yfinance_grade_actions_path=self.paths["yfinance"],
@@ -411,7 +443,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
 
         self.assertTrue(funnel_summary["prohibited_claims"]["yfinance_used"])
         self.assertEqual(funnel_summary["endpoint_call_budget"]["fmp_grades_calls"], 0)
-        self.assertEqual(funnel_summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 13)
+        self.assertEqual(funnel_summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 7)
         self.assertFalse(any("financialmodelingprep.com" in url for url in client.urls))
         self.assertEqual(
             funnel_summary["source_artifacts"]["analyst_grade_actions_consumed_from"],
@@ -440,7 +472,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
             source_refs = components["run_provenance"]["families"]["selection_inputs"]["source_refs"]
             self.assertIn(
-                {"role": "yfinance_grade_actions", "path": self.paths["yfinance"].relative_to(ROOT).as_posix()},
+                {"role": "analyst_grade_actions", "path": self.paths["yfinance"].relative_to(ROOT).as_posix()},
                 source_refs,
             )
             self.assertNotIn(
@@ -468,6 +500,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             self.assertEqual(machine_rows["AAPL"]["risk_downgrade"]["components"]["analyst"], 8.0)
 
     def test_yfinance_resolver_rejection_and_analyst_grades_down_still_emit_with_neutral_grades(self) -> None:
+        self._use_yfinance_preflight()
         yfinance_summary = yfinance_fetch.run_yfinance_grades_fetch(
             preflight_summary_path=self.paths["preflight"],
             budget_approval=self.budget_approval,
@@ -490,7 +523,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             funnel_summary = funnel.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
                 budget_approval=self.budget_approval,
-                expected_total_call_budget=16,
+                expected_total_call_budget=34,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 yfinance_grade_actions_path=self.paths["yfinance"],
@@ -547,7 +580,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             funnel_summary = funnel.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
                 budget_approval=self.budget_approval,
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -658,7 +691,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             funnel_summary = funnel.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
                 budget_approval=self.budget_approval,
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],

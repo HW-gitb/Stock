@@ -52,12 +52,22 @@ DEFAULT_THEME_PROJECTION_PATH = (
 )
 BENCHMARK_SYMBOLS = ("SPY", "QQQ")
 FMP_FREE_DAILY_GRADE_CALL_CAP = 250
+ACTIVE_ANALYST_SOURCES = ("yfinance", "fmp")
 PASS2_TARGET_SELECTION_MODE = "momentum_theme_top_k_plus_catalyst_recall_plus_forced_holdings"
 MOMENTUM_TOP_K_DEFAULT = 200
+MASSIVE_BATCH_LOGICAL_CALL_CAP = universe_fetch.MASSIVE_BATCH_LOGICAL_CALL_CAP
 
 
 class FullCandidatePass2PreflightError(ValueError):
     """The full-candidate Pass2 live cut is not ready to execute safely."""
+
+
+def _validate_active_analyst_source(value: Any) -> str:
+    if type(value) is not str or value not in ACTIVE_ANALYST_SOURCES:
+        raise FullCandidatePass2PreflightError(
+            "active_analyst_source must be exactly yfinance or fmp"
+        )
+    return value
 
 
 def iso_now() -> str:
@@ -148,12 +158,23 @@ def _validate_summary_path(path: Path | str, *, expected_decision_date: str | No
         raise FullCandidatePass2PreflightError("summary_path must be a .json file")
     if resolved == SUMMARY_PATH.resolve():
         return resolved
-    try:
-        relative = resolved.relative_to((ROOT / PROVIDER_SAMPLE_REL_ROOT).resolve())
-    except ValueError as exc:
+    relative = None
+    matched_provider_sample_root = None
+    for provider_sample_root in (PROVIDER_SAMPLE_REL_ROOT, LEGACY_PROVIDER_SAMPLE_REL_ROOT):
+        try:
+            relative = resolved.relative_to((ROOT / provider_sample_root).resolve())
+            matched_provider_sample_root = provider_sample_root
+            break
+        except ValueError:
+            continue
+    if relative is None:
         raise FullCandidatePass2PreflightError(
             "summary_path must be the canonical tracked summary or under this runner's provider_samples folder"
-        ) from exc
+        )
+    if matched_provider_sample_root == LEGACY_PROVIDER_SAMPLE_REL_ROOT:
+        if not relative.parts or not _git_ignored(resolved):
+            raise FullCandidatePass2PreflightError("legacy summary_path must be gitignored")
+        return resolved
     if len(relative.parts) < 2 or len(relative.parts[0]) != 8 or not relative.parts[0].isdigit():
         raise FullCandidatePass2PreflightError(
             "summary_path must include a decision-date directory under the preflight provider_samples root"
@@ -331,6 +352,7 @@ def _pass2_target_universe(
     catalyst_recall_tickers: list[str] | tuple[str, ...] | None,
     forced_holding_tickers: list[str] | tuple[str, ...] | None,
     momentum_top_k: int,
+    active_analyst_source: str,
 ) -> dict[str, Any]:
     eligible = set(eligible_tickers)
     momentum_scores = momentum_coverage["_scored_score_map"]
@@ -361,7 +383,7 @@ def _pass2_target_universe(
         raise FullCandidatePass2PreflightError("Pass2 eligible partition does not conserve the candidate universe")
     target_count = len(targets)
     full_eligible = target_count == len(eligible_tickers)
-    within_cap = target_count <= FMP_FREE_DAILY_GRADE_CALL_CAP
+    within_cap = active_analyst_source == "yfinance" or target_count <= FMP_FREE_DAILY_GRADE_CALL_CAP
     return {
         "selection_mode": PASS2_TARGET_SELECTION_MODE,
         "eligible_count": len(eligible_tickers),
@@ -381,24 +403,35 @@ def _pass2_target_universe(
         "eligible_unscored_not_selected_count": len(partition["eligible_unscored_not_selected"]),
         "eligible_partition_conserved": True,
         "fmp_grade_call_cap": FMP_FREE_DAILY_GRADE_CALL_CAP,
+        "active_analyst_source": active_analyst_source,
         "fmp_grade_calls_within_free_daily_cap": within_cap,
         "neutral_fill_tickers_excluded_from_expensive_pass2": True,
         "expensive_pass2_targets_full_eligible_set": full_eligible,
     }
 
 
-def _forecast_calls(pass2_target_count: int, full_candidate_count: int) -> dict[str, Any]:
+def _forecast_calls(
+    pass2_target_count: int,
+    full_candidate_count: int,
+    active_analyst_source: str = "yfinance",
+) -> dict[str, Any]:
+    active_analyst_source = _validate_active_analyst_source(active_analyst_source)
+    massive_batch_pages = MASSIVE_BATCH_LOGICAL_CALL_CAP
+    fmp_grades_calls = pass2_target_count if active_analyst_source == "fmp" else 0
     pass2 = {
+        "active_analyst_source": active_analyst_source,
         "sec_company_tickers_mapping_calls": 1,
-        "fmp_grades_calls": pass2_target_count,
+        "fmp_grades_calls": fmp_grades_calls,
         "sec_submissions_calls": pass2_target_count,
-        "massive_reference_news_calls": pass2_target_count,
-        "total_calls": 1 + (pass2_target_count * 3),
+        "massive_batch_logical_call_cap": massive_batch_pages,
+        "massive_reference_news_calls": 0,
+        "total_calls": 1 + pass2_target_count + fmp_grades_calls + massive_batch_pages,
     }
     corporate_action = {
-        "massive_split_calls": pass2_target_count,
-        "massive_dividend_calls": pass2_target_count,
-        "total_calls": pass2_target_count * 2,
+        "massive_split_calls": 0,
+        "massive_dividend_calls": 0,
+        "total_calls": 0,
+        "uses_shared_massive_batch_logical_call_cap": True,
         "corporate_action_reconciliation_performed_by_preflight": False,
     }
     momentum_refresh = {
@@ -407,7 +440,8 @@ def _forecast_calls(pass2_target_count: int, full_candidate_count: int) -> dict[
         "not_in_total_until_separate_price_packet_review": True,
     }
     total = pass2["total_calls"] + corporate_action["total_calls"]
-    hypothetical_full_candidate_total = 1 + (full_candidate_count * 3) + (full_candidate_count * 2)
+    hypothetical_fmp_grades_calls = full_candidate_count if active_analyst_source == "fmp" else 0
+    hypothetical_full_candidate_total = 1 + full_candidate_count + hypothetical_fmp_grades_calls + massive_batch_pages
     return {
         "families": {
             "pass2_source_packet": pass2,
@@ -437,7 +471,9 @@ def _build_summary(
     forced_holding_tickers: list[str] | tuple[str, ...] | None,
     momentum_top_k: int,
     authorized_total_call_budget: int | None,
+    active_analyst_source: str,
 ) -> dict[str, Any]:
+    active_analyst_source = _validate_active_analyst_source(active_analyst_source)
     eligible = list(artifact["eligible_tickers"])
     candidate_count = len(eligible)
     pass2_targets = _pass2_target_universe(
@@ -447,13 +483,16 @@ def _build_summary(
         catalyst_recall_tickers=catalyst_recall_tickers,
         forced_holding_tickers=forced_holding_tickers,
         momentum_top_k=momentum_top_k,
+        active_analyst_source=active_analyst_source,
     )
     local_ready = (
         momentum_coverage["status"] == "full_coverage"
         and theme_coverage["status"] == "full_coverage"
     )
     pass2_targets_ready = pass2_targets["target_count"] > 0 and pass2_targets["fmp_grade_calls_within_free_daily_cap"]
-    forecast = _forecast_calls(pass2_targets["target_count"], candidate_count)
+    forecast = _forecast_calls(
+        pass2_targets["target_count"], candidate_count, active_analyst_source
+    )
     # A missing budget is a preview, never an implicit authorization.  The forecast is intentionally visible so the
     # operator can make the independently authorized exact-budget rerun, but downstream live-source runners still
     # require a ready gate whose budget exactly matches this value.
@@ -484,9 +523,10 @@ def _build_summary(
     theme_coverage = _public_projection_coverage(theme_coverage, path=theme_path)
     return {
         "schema_name": "us_short_batch5_full_candidate_pass2_preflight_summary",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "schema_ref": "schemas/us_short_batch5_full_candidate_pass2_preflight_summary.schema.json",
         "authorization_ref": AUTHORIZATION_REF,
+        "active_analyst_source": active_analyst_source,
         "generated_at": generated_at,
         "scope": {
             "market": "US",
@@ -709,10 +749,12 @@ def run_preflight(
     forced_holding_tickers: list[str] | tuple[str, ...] | None = None,
     catalyst_recall_tickers: list[str] | tuple[str, ...] | None = None,
     momentum_top_k: int = MOMENTUM_TOP_K_DEFAULT,
+    active_analyst_source: str = "yfinance",
     authorized_total_call_budget: int | None = None,
     confirm_user_authorization: bool = False,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
+    active_analyst_source = _validate_active_analyst_source(active_analyst_source)
     if not confirm_user_authorization:
         raise FullCandidatePass2PreflightError("full-candidate Pass2 preflight requires explicit user authorization")
     if authorized_total_call_budget is not None and (
@@ -796,6 +838,7 @@ def run_preflight(
         forced_holding_tickers=forced_holding_tickers,
         momentum_top_k=momentum_top_k,
         authorized_total_call_budget=authorized_total_call_budget,
+        active_analyst_source=active_analyst_source,
     )
     _write_summary_validated(summary, summary_resolved)
     return summary
@@ -816,6 +859,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--forced-holding-ticker", action="append", default=[])
     parser.add_argument("--catalyst-recall-ticker", action="append", default=[])
     parser.add_argument("--momentum-top-k", type=int, default=MOMENTUM_TOP_K_DEFAULT)
+    parser.add_argument("--active-analyst-source", choices=ACTIVE_ANALYST_SOURCES, default="yfinance")
     budget_mode = parser.add_mutually_exclusive_group(required=True)
     budget_mode.add_argument("--authorized-total-call-budget", type=int)
     budget_mode.add_argument(
@@ -840,6 +884,7 @@ def main(argv: list[str] | None = None) -> int:
             forced_holding_tickers=args.forced_holding_ticker,
             catalyst_recall_tickers=args.catalyst_recall_ticker,
             momentum_top_k=args.momentum_top_k,
+            active_analyst_source=args.active_analyst_source,
             authorized_total_call_budget=args.authorized_total_call_budget,
             confirm_user_authorization=args.confirm_user_authorization,
             generated_at=args.generated_at,

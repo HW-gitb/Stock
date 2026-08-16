@@ -321,8 +321,9 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         )
         packet = {
             "schema_name": "us_short_batch5_data_context_source_packet",
-            "schema_version": "1.3.0",
+            "schema_version": "1.4.0",
             "generated_at": "2026-07-04T00:00:00Z",
+            "active_analyst_source": "fmp",
             "scope": {
                 "market": "US",
                 "lane": "us_short",
@@ -874,8 +875,9 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
                     ),
                 )
                 packet = self._packet_payload()
-                packet["paths"]["yfinance_grade_actions_path"] = _rel(self.paths["yfinance"])
-                packet["source_artifact_sha256"]["yfinance_grade_actions_path"] = hashlib.sha256(
+                packet["active_analyst_source"] = "yfinance"
+                packet["paths"]["analyst_grade_actions_path"] = _rel(self.paths["yfinance"])
+                packet["source_artifact_sha256"]["analyst_grade_actions_path"] = hashlib.sha256(
                     self.paths["yfinance"].read_bytes()
                 ).hexdigest()
                 _write_json(self.packet, packet)
@@ -884,7 +886,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
                 mutate(payload)
                 _write_json(self.paths["yfinance"], payload)
                 if refresh_digest:
-                    packet["source_artifact_sha256"]["yfinance_grade_actions_path"] = hashlib.sha256(
+                    packet["source_artifact_sha256"]["analyst_grade_actions_path"] = hashlib.sha256(
                         self.paths["yfinance"].read_bytes()
                     ).hexdigest()
                     _write_json(self.packet, packet)
@@ -906,8 +908,9 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             ),
         )
         packet = self._packet_payload()
-        packet["paths"]["yfinance_grade_actions_path"] = _rel(self.paths["yfinance"])
-        packet["source_artifact_sha256"]["yfinance_grade_actions_path"] = hashlib.sha256(
+        packet["active_analyst_source"] = "yfinance"
+        packet["paths"]["analyst_grade_actions_path"] = _rel(self.paths["yfinance"])
+        packet["source_artifact_sha256"]["analyst_grade_actions_path"] = hashlib.sha256(
             self.paths["yfinance"].read_bytes()
         ).hexdigest()
         _write_json(self.packet, packet)
@@ -950,8 +953,9 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         packet["source_artifact_sha256"]["analyst_grade_actions_path"] = hashlib.sha256(
             self.paths["analyst"].read_bytes()
         ).hexdigest()
-        packet["paths"]["yfinance_grade_actions_path"] = _rel(self.paths["yfinance"])
-        packet["source_artifact_sha256"]["yfinance_grade_actions_path"] = hashlib.sha256(
+        packet["active_analyst_source"] = "yfinance"
+        packet["paths"]["analyst_grade_actions_path"] = _rel(self.paths["yfinance"])
+        packet["source_artifact_sha256"]["analyst_grade_actions_path"] = hashlib.sha256(
             self.paths["yfinance"].read_bytes()
         ).hexdigest()
         packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
@@ -1256,8 +1260,9 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             ),
         )
         packet = self._packet_payload()
-        packet["paths"]["yfinance_grade_actions_path"] = _rel(self.paths["yfinance"])
-        packet["source_artifact_sha256"]["yfinance_grade_actions_path"] = hashlib.sha256(
+        packet["active_analyst_source"] = "yfinance"
+        packet["paths"]["analyst_grade_actions_path"] = _rel(self.paths["yfinance"])
+        packet["source_artifact_sha256"]["analyst_grade_actions_path"] = hashlib.sha256(
             self.paths["yfinance"].read_bytes()
         ).hexdigest()
         packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
@@ -1265,7 +1270,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
 
         result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
 
-        self.assertEqual(result["source_artifacts"]["local_source_artifacts_read"], 10)
+        self.assertEqual(result["source_artifacts"]["local_source_artifacts_read"], 9)
         components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
         selection = components["data_context"]["selection_inputs"]["per_ticker"]
         self.assertAlmostEqual(selection["AAPL"]["core_score"], 51.5)
@@ -1278,9 +1283,9 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         self.assertNotIn("emit", components)
         self.assertNotIn("ship_gate", components)
         source_refs = components["run_provenance"]["families"]["selection_inputs"]["source_refs"]
-        self.assertIn({"role": "yfinance_grade_actions", "path": _rel(self.paths["yfinance"])}, source_refs)
-        self.assertNotIn({"role": "analyst_grade_actions", "path": _rel(self.paths["analyst"])}, source_refs)
-        self.assertIn(
+        self.assertIn({"role": "analyst_grade_actions", "path": _rel(self.paths["yfinance"])}, source_refs)
+        self.assertNotIn({"role": "yfinance_grade_actions", "path": _rel(self.paths["yfinance"])}, source_refs)
+        self.assertNotIn(
             "yfinance_grade_actions_path",
             {field for field, _, _ in source_packet_input_manifest(self.packet)},
         )

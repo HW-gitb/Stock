@@ -86,6 +86,7 @@ STATE_DIR = ROOT / "state" / "us_short"
 # — a per-run gitignored sidecar under the reviewed provider_samples/ tree, partitioned by decision date.
 _PREFLIGHT_SAMPLE_REL_ROOT = PROVIDER_SAMPLE_REL_ROOT
 MASSIVE_RATE_LIMIT_WINDOW_CAPACITY = universe_fetch.MASSIVE_RATE_LIMIT_WINDOW_CAPACITY
+MASSIVE_BATCH_LOGICAL_CALL_CAP = universe_fetch.MASSIVE_BATCH_LOGICAL_CALL_CAP
 
 
 def _normalize_capstone_retry_policy(
@@ -125,7 +126,7 @@ def _normalize_capstone_retry_policy(
 
 
 def _automatic_pass2_http_attempt_cap(*, exact_pass2_calls: int, target_count: int, max_retries: int) -> int:
-    massive_logical_calls = target_count * 3
+    massive_logical_calls = MASSIVE_BATCH_LOGICAL_CALL_CAP
     retry_headroom = max_retries * (
         (massive_logical_calls + MASSIVE_RATE_LIMIT_WINDOW_CAPACITY - 1)
         // MASSIVE_RATE_LIMIT_WINDOW_CAPACITY
@@ -1369,14 +1370,14 @@ def default_pipeline(
               contract_version="1.0.0", reuse_policy="frozen_inputs"),
         Stage("pass2_preflight", False, lambda c: [c.merged_momentum_path, c.merged_theme_path],
               lambda c: [c.preflight_summary_path], st.run_pass2_preflight,
-              contract_version="1.0.0", reuse_policy="frozen_inputs"),
+              contract_version="1.2.0", reuse_policy="frozen_inputs"),
         Stage("yfinance_grades_fetch", True, lambda c: [c.preflight_summary_path],
               lambda c: [c.yfinance_grade_source_package_path, c.yfinance_grade_actions_path],
               st.run_yfinance_grades_fetch, contract_version="1.1.0"),
         Stage("pass2_fetch", True, lambda c: [c.preflight_summary_path, c.overextension_projection_path,
                                                c.yfinance_grade_actions_path, c.ohlcv_series_packet_path],
               lambda c: [c.source_packet_path, c.context_components_path], st.run_pass2_fetch,
-              contract_version="2.2.0"),
+              contract_version="2.3.0"),
         Stage("vix_regime", True, lambda c: [], lambda c: [c.vix_regime_summary_path], st.run_vix_regime),
         Stage("forward_policy_shadow", False,
               lambda c: [c.data_context_path, c.context_components_path, c.ohlcv_series_packet_path,

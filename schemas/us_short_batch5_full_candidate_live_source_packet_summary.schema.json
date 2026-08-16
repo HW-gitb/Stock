@@ -18,6 +18,7 @@
     "pass2_target_universe",
     "bankruptcy_screening",
     "endpoint_call_budget",
+    "massive_batch_coverage",
     "endpoint_results",
     "raw_capture_manifest",
     "storage",
@@ -29,7 +30,7 @@
   ],
   "properties": {
     "schema_name": { "const": "us_short_batch5_full_candidate_live_source_packet_summary" },
-    "schema_version": { "const": "1.1.0" },
+    "schema_version": { "const": "1.2.0" },
     "schema_ref": { "const": "schemas/us_short_batch5_full_candidate_live_source_packet_summary.schema.json" },
     "authorization_ref": {
       "enum": [
@@ -62,6 +63,8 @@
         "datahub_consumption_performed",
         "production_storage_performed",
         "full_market_call_performed",
+        "full_market_event_window_fetch_performed",
+        "full_market_security_universe_download_performed",
         "yfinance_consumption_performed",
         "broker_or_order_execution_performed",
         "ship_gate_or_live_normalized_evidence_claimed",
@@ -99,6 +102,8 @@
         "datahub_consumption_performed": { "const": false },
         "production_storage_performed": { "const": false },
         "full_market_call_performed": { "const": false },
+        "full_market_event_window_fetch_performed": { "const": true },
+        "full_market_security_universe_download_performed": { "const": false },
         "yfinance_consumption_performed": { "type": "boolean" },
         "broker_or_order_execution_performed": { "const": false },
         "ship_gate_or_live_normalized_evidence_claimed": { "const": false },
@@ -275,6 +280,7 @@
         "sec_ticker_reference_calls",
         "fmp_grades_calls",
         "sec_submissions_calls",
+        "massive_batch_logical_call_cap",
         "massive_reference_news_calls",
         "massive_stock_split_calls",
         "massive_dividend_calls",
@@ -292,6 +298,7 @@
         "sec_ticker_reference_calls": { "const": 1 },
         "fmp_grades_calls": { "type": "integer", "minimum": 0 },
         "sec_submissions_calls": { "type": "integer", "minimum": 0 },
+        "massive_batch_logical_call_cap": { "const": 30 },
         "massive_reference_news_calls": { "type": "integer", "minimum": 1 },
         "massive_stock_split_calls": { "type": "integer", "minimum": 1 },
         "massive_dividend_calls": { "type": "integer", "minimum": 1 },
@@ -301,6 +308,16 @@
         "retry_count_used": { "type": "integer", "minimum": 0 },
         "massive_429_retry_wait_seconds": { "enum": [0, 65] },
         "within_budget": { "const": true }
+      }
+    },
+    "massive_batch_coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference_news", "stock_splits", "dividends"],
+      "properties": {
+        "reference_news": { "$ref": "#/$defs/massiveBatchCoverage" },
+        "stock_splits": { "$ref": "#/$defs/massiveBatchCoverage" },
+        "dividends": { "$ref": "#/$defs/massiveBatchCoverage" }
       }
     },
     "endpoint_results": {
@@ -345,6 +362,9 @@
         "candidate_subset_path",
         "offering_audit_source_path",
         "analyst_grade_actions_path",
+        "active_analyst_source",
+        "analyst_grade_actions_consumed_from",
+        "analyst_grade_actions_exclusion",
         "massive_news_events_path",
         "corporate_action_capture_path",
         "momentum_projection_path",
@@ -355,12 +375,7 @@
         "candidate_subset_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
         "offering_audit_source_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
         "analyst_grade_actions_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
-        "yfinance_grade_actions_path": {
-          "anyOf": [
-            { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
-            { "type": "null" }
-          ]
-        },
+        "active_analyst_source": { "enum": ["yfinance", "fmp"] },
         "analyst_grade_actions_consumed_from": {
           "enum": ["fmp_analyst_grade_actions", "yfinance_grade_actions"]
         },
@@ -506,7 +521,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["provider_id", "endpoint_family", "symbol", "sha256"],
+            "required": ["provider_id", "endpoint_family", "symbol", "raw_sample_ref", "sha256"],
             "properties": {
               "provider_id": { "enum": ["sec_edgar", "financial_modeling_prep", "massive"] },
               "endpoint_family": {
@@ -517,6 +532,11 @@
                   { "type": "string", "pattern": "^[A-Z][A-Z0-9.:-]*$" },
                   { "type": "null" }
                 ]
+              },
+              "raw_sample_ref": {
+                "type": "string",
+                "pattern": "^(provider_samples/us_short_batch5_full_candidate_live_source_packet/[0-9]{8}/.+\\.json|provider_samples/us_short_batch5_full_candidate_live_source_packet_20260706/.+\\.json)$",
+                "not": { "pattern": "\\.\\." }
               },
               "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
             }
@@ -531,6 +551,8 @@
       "required": [
         "provider_selected",
         "full_market_download_performed",
+        "full_market_event_window_fetch_performed",
+        "full_market_security_universe_download_performed",
         "yfinance_used",
         "paid_access_used",
         "datahub_consumed",
@@ -545,6 +567,8 @@
       "properties": {
         "provider_selected": { "const": false },
         "full_market_download_performed": { "const": false },
+        "full_market_event_window_fetch_performed": { "const": true },
+        "full_market_security_universe_download_performed": { "const": false },
         "yfinance_used": { "type": "boolean" },
         "paid_access_used": { "const": false },
         "datahub_consumed": { "const": false },
@@ -564,6 +588,44 @@
     }
   },
   "$defs": {
+    "massiveBatchCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_window",
+        "page_count",
+        "pagination_exhausted",
+        "result_count",
+        "status",
+        "failure_reason"
+      ],
+      "properties": {
+        "query_window": { "$ref": "#/$defs/massiveBatchQueryWindow" },
+        "page_count": { "type": "integer", "minimum": 0, "maximum": 30 },
+        "pagination_exhausted": { "type": "boolean" },
+        "result_count": { "type": "integer", "minimum": 0 },
+        "status": { "enum": ["complete", "incomplete"] },
+        "failure_reason": {
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "massiveBatchQueryWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["date_field", "date_from", "date_to", "limit", "sort", "order"],
+      "properties": {
+        "date_field": { "type": "string", "minLength": 1 },
+        "date_from": { "type": "string", "minLength": 1 },
+        "date_to": { "type": "string", "minLength": 1 },
+        "limit": { "type": "integer", "minimum": 1 },
+        "sort": { "type": "string", "minLength": 1 },
+        "order": { "const": "asc" }
+      }
+    },
     "endpointResult": {
       "type": "object",
       "additionalProperties": false,

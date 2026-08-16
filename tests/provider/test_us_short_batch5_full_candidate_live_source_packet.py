@@ -108,6 +108,7 @@ class FullCandidateFakeClient:
     ):
         self.urls: list[str] = []
         self._massive_429_once = set(massive_429_once)
+        self._massive_batch_page_calls = {}
         self._bankruptcy_symbols = set(bankruptcy_symbols)
         self._missing_cik_symbols = set(missing_cik_symbols)
         self._failed_submissions = set(failed_submissions)
@@ -118,6 +119,66 @@ class FullCandidateFakeClient:
         self.urls.append(url)
         parsed = urlparse(url)
         query = parse_qs(parsed.query)
+        if parsed.netloc == "api.massive.com" and parsed.path in {
+            "/v2/reference/news", "/stocks/v1/splits", "/stocks/v1/dividends",
+        } and "ticker" not in query:
+            if parsed.path.endswith("/news"):
+                family = "reference_news"
+                page_rows = [
+                    {
+                        "id": "aapl-news-1",
+                        "published_utc": "2026-06-12T12:00:00Z",
+                        "publisher": {"name": "Publisher"},
+                        "title": "Apple catalyst",
+                        "article_url": "https://example.test/aapl",
+                        "tickers": ["AAPL"],
+                        "insights": [{"ticker": "AAPL", "sentiment": "positive", "sentiment_reasoning": "source sentiment"}],
+                    }
+                ]
+            elif parsed.path.endswith("/splits"):
+                family = "stock_splits"
+                page_rows = [
+                    {
+                        "ticker": symbol,
+                        "execution_date": "2026-06-12",
+                        "split_from": 1,
+                        "split_to": 4,
+                        "adjustment_type": "split",
+                        "historical_adjustment_factor": 0.25,
+                        "id": f"{symbol}-split-1",
+                    }
+                    for symbol in ("AAPL", "MSFT", "JPM")
+                ]
+            else:
+                family = "dividends"
+                page_rows = [
+                    {
+                        "ticker": symbol,
+                        "ex_dividend_date": "2026-06-12",
+                        "cash_amount": 0.25,
+                        "pay_date": "2026-06-16",
+                        "record_date": "2026-06-15",
+                        "declaration_date": "2026-06-01",
+                        "currency": "USD",
+                        "frequency": 4,
+                        "distribution_type": "CD",
+                        "split_adjusted_cash_amount": 0.25,
+                        "historical_adjustment_factor": 1.0,
+                        "id": f"{symbol}-div-1",
+                    }
+                    for symbol in ("AAPL", "MSFT", "JPM")
+                ]
+            page_number = self._massive_batch_page_calls.get(family, 0) + 1
+            self._massive_batch_page_calls[family] = page_number
+            if (family, page_number) in self._massive_429_once or any(
+                key[0] == family and not isinstance(key[1], int) for key in self._massive_429_once
+            ):
+                self._massive_429_once.discard((family, page_number))
+                self._massive_429_once = {
+                    key for key in self._massive_429_once if not (key[0] == family and not isinstance(key[1], int))
+                }
+                return ({"error": "rate limited"}, 429, False, "http_error")
+            return ({"results": page_rows}, 200, True, None)
         if parsed.netloc == "api.massive.com" and parsed.path in {
             "/stocks/v1/splits", "/stocks/v1/dividends",
         }:
@@ -204,7 +265,7 @@ class FullCandidateFakeClient:
                     "results": [
                         {
                             "ticker": symbol,
-                            "execution_date": "2020-08-31",
+                            "execution_date": "2026-06-12",
                             "split_from": 1,
                             "split_to": 4,
                             "adjustment_type": "split",
@@ -224,7 +285,7 @@ class FullCandidateFakeClient:
                     "results": [
                         {
                             "ticker": symbol,
-                            "ex_dividend_date": "2026-05-09",
+                            "ex_dividend_date": "2026-06-12",
                             "cash_amount": 0.25,
                             "pay_date": "2026-05-16",
                             "record_date": "2026-05-12",
@@ -342,7 +403,8 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
-            authorized_total_call_budget=16,
+            authorized_total_call_budget=37,
+            active_analyst_source="fmp",
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -480,7 +542,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             summary = runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -494,14 +556,14 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
                 sec_sleep_seconds=0,
             )
 
-        self.assertEqual(len(client.urls), 16)
-        self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 16)
-        self.assertEqual(summary["endpoint_call_budget"]["max_total_http_attempts"], 16)
-        self.assertEqual(summary["endpoint_call_budget"]["actual_total_http_attempts"], 16)
+        self.assertEqual(len(client.urls), 10)
+        self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 10)
+        self.assertEqual(summary["endpoint_call_budget"]["max_total_http_attempts"], 37)
+        self.assertEqual(summary["endpoint_call_budget"]["actual_total_http_attempts"], 10)
         self.assertEqual(summary["endpoint_call_budget"]["retry_count_used"], 0)
         self.assertEqual(summary["endpoint_call_budget"]["massive_429_retry_wait_seconds"], 0.0)
-        self.assertEqual(summary["endpoint_call_budget"]["massive_stock_split_calls"], 3)
-        self.assertEqual(summary["endpoint_call_budget"]["massive_dividend_calls"], 3)
+        self.assertEqual(summary["endpoint_call_budget"]["massive_stock_split_calls"], 1)
+        self.assertEqual(summary["endpoint_call_budget"]["massive_dividend_calls"], 1)
         self.assertEqual(summary["source_artifacts"]["analyst_grade_actions_consumed_from"], "fmp_analyst_grade_actions")
         self.assertIsNone(summary["source_artifacts"]["analyst_grade_actions_exclusion"])
         self.assertTrue(summary["scope"]["provider_calls_performed"])
@@ -529,11 +591,11 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertTrue(capture_path.exists())
         capture = json.loads(capture_path.read_text(encoding="utf-8"))
         self.assertEqual(capture["schema_version"], "1.1.0")
-        self.assertEqual(capture["aggregate_counts"]["split_endpoint_call_count"], 3)
-        self.assertEqual(capture["aggregate_counts"]["split_endpoint_success_count"], 3)
+        self.assertEqual(capture["aggregate_counts"]["split_endpoint_call_count"], 1)
+        self.assertEqual(capture["aggregate_counts"]["split_endpoint_success_count"], 1)
         self.assertEqual(capture["aggregate_counts"]["split_endpoint_error_count"], 0)
-        self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_call_count"], 3)
-        self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_success_count"], 3)
+        self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_call_count"], 1)
+        self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_success_count"], 1)
         self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_error_count"], 0)
         self.assertEqual(capture["aggregate_counts"]["split_event_count"], 3)
         self.assertEqual(capture["aggregate_counts"]["dividend_event_count"], 3)
@@ -587,7 +649,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ), mock.patch.object(runner.time, "sleep", side_effect=sleeps.append):
             summary = runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -601,32 +663,27 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
                 sec_sleep_seconds=0,
                 max_retries_per_call=2,
                 retry_backoff_seconds=65.0,
-                max_total_http_attempts=18,
+                max_total_http_attempts=39,
             )
 
         budget = summary["endpoint_call_budget"]
-        self.assertEqual(budget["actual_total_endpoint_calls"], 16)
-        self.assertEqual(budget["actual_total_http_attempts"], 18)
-        self.assertEqual(budget["max_total_http_attempts"], 18)
+        self.assertEqual(budget["actual_total_endpoint_calls"], 10)
+        self.assertEqual(budget["actual_total_http_attempts"], 12)
+        self.assertEqual(budget["max_total_http_attempts"], 39)
         self.assertEqual(budget["retry_count_used"], 2)
         self.assertEqual([value for value in sleeps if value == 65.0], [65.0, 65.0])
-        final_status = {
-            (row["endpoint_family"], row["symbol"]): row["status"]
-            for row in summary["endpoint_results"]
-            if row["provider_id"] == "massive"
-        }
-        self.assertEqual(final_status[("stock_splits", "AAPL")], "success")
-        self.assertEqual(final_status[("dividends", "MSFT")], "success")
+        self.assertEqual(summary["massive_batch_coverage"]["stock_splits"]["status"], "complete")
+        self.assertEqual(summary["massive_batch_coverage"]["dividends"]["status"], "complete")
 
         capture_path = self.paths["prefix"].with_name(
             self.paths["prefix"].name + "_corporate_action_capture.json"
         )
         capture = json.loads(capture_path.read_text(encoding="utf-8"))
-        self.assertEqual(capture["aggregate_counts"]["split_endpoint_call_count"], 3)
-        self.assertEqual(capture["aggregate_counts"]["split_endpoint_success_count"], 3)
+        self.assertEqual(capture["aggregate_counts"]["split_endpoint_call_count"], 1)
+        self.assertEqual(capture["aggregate_counts"]["split_endpoint_success_count"], 1)
         self.assertEqual(capture["aggregate_counts"]["split_endpoint_error_count"], 0)
-        self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_call_count"], 3)
-        self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_success_count"], 3)
+        self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_call_count"], 1)
+        self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_success_count"], 1)
         self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_error_count"], 0)
 
         news_path = self.paths["prefix"].with_name(self.paths["prefix"].name + "_massive_news_events.json")
@@ -846,6 +903,17 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
                 },
             ),
         )
+        preflight_runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["preflight"],
+            active_analyst_source="yfinance",
+            authorized_total_call_budget=34,
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
         client = FullCandidateFakeClient()
         original_read_required_env = runner.sample_validation.read_required_env
 
@@ -869,7 +937,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             runner.sample_validation.os.environ.pop("FMP_API_KEY", None)
             summary = runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=34,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -896,7 +964,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertNotIn("provider_health", summary)
         self.assertNotIn("provider_health_facts", summary)
         self.assertEqual(summary["endpoint_call_budget"]["fmp_grades_calls"], 0)
-        self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 13)
+        self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 7)
         self.assertNotIn("financialmodelingprep.com", "\n".join(client.urls))
 
     def test_existing_pass2_submissions_drive_bankruptcy_candidate_exclusion_without_extra_call(self):
@@ -906,7 +974,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             summary = runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -920,7 +988,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
                 sec_sleep_seconds=0,
             )
 
-        self.assertEqual(len(client.urls), 16)
+        self.assertEqual(len(client.urls), 10)
         self.assertNotIn("bankruptcy_8k", "\n".join(client.urls))
         self.assertEqual(summary["endpoint_call_budget"]["sec_submissions_calls"], 3)
         self.assertEqual(
@@ -959,7 +1027,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1051,7 +1119,8 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
             forced_holding_tickers=["AAPL"],
-            authorized_total_call_budget=16,
+            active_analyst_source="fmp",
+            authorized_total_call_budget=37,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -1061,7 +1130,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1089,7 +1158,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             summary = runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1127,7 +1196,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
                 ), self.assertRaises(runner.FullCandidateLiveSourcePacketError):
                     runner.run_full_candidate_live_source_packet(
                         preflight_summary_path=self.paths["preflight"],
-                        expected_total_call_budget=16,
+                        expected_total_call_budget=37,
                         output_data_context_path=self.paths["output"],
                         context_components_output_path=self.paths["components"],
                         source_artifact_prefix=self.paths["prefix"],
@@ -1147,7 +1216,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             summary = runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1190,7 +1259,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "FMP_API_KEY"):
                 runner.run_full_candidate_live_source_packet(
                     preflight_summary_path=self.paths["preflight"],
-                    expected_total_call_budget=16,
+                    expected_total_call_budget=37,
                     output_data_context_path=self.paths["output"],
                     context_components_output_path=self.paths["components"],
                     source_artifact_prefix=self.paths["prefix"],
@@ -1215,7 +1284,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1228,7 +1297,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
                 sec_sleep_seconds=0,
                 max_retries_per_call=2,
                 retry_backoff_seconds=65.0,
-                max_total_http_attempts=19,
+                max_total_http_attempts=50,
             )
         self.assertEqual(client.urls, [])
 
@@ -1240,7 +1309,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 ohlcv_series_packet_path=self.paths["ohlcv"],
@@ -1295,7 +1364,8 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
             momentum_top_k=2,
-            authorized_total_call_budget=11,
+            active_analyst_source="fmp",
+            authorized_total_call_budget=35,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -1309,7 +1379,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             summary = runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=11,
+                expected_total_call_budget=35,
                 authorized_momentum_top_k=2,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
@@ -1331,7 +1401,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             self.paths["prefix"].name + "_source_packet.json"
         )
         packet = json.loads(source_packet_path.read_text(encoding="utf-8"))
-        self.assertEqual(packet["schema_version"], "1.3.0")
+        self.assertEqual(packet["schema_version"], "1.4.0")
         self.assertEqual(packet["paths"]["candidate_artifact_path"], str(
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_candidate_subset.json").relative_to(ROOT)
         ).replace("\\", "/"))
@@ -1356,7 +1426,8 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
             momentum_top_k=2,
-            authorized_total_call_budget=11,
+            active_analyst_source="fmp",
+            authorized_total_call_budget=35,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -1373,7 +1444,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ), self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "overextension source"):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=11,
+                expected_total_call_budget=35,
                 authorized_momentum_top_k=2,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
@@ -1411,7 +1482,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1451,7 +1522,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "changed after reviewed preflight"):
                 runner.run_full_candidate_live_source_packet(
                     preflight_summary_path=self.paths["preflight"],
-                    expected_total_call_budget=16,
+                    expected_total_call_budget=37,
                     output_data_context_path=self.paths["output"],
                     context_components_output_path=self.paths["components"],
                     source_artifact_prefix=self.paths["prefix"],
@@ -1490,7 +1561,8 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
-            authorized_total_call_budget=11,
+            active_analyst_source="fmp",
+            authorized_total_call_budget=35,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -1501,7 +1573,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             summary = runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=11,
+                expected_total_call_budget=35,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1516,14 +1588,14 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             )
 
         joined_urls = "\n".join(client.urls)
-        self.assertEqual(len(client.urls), 11)
+        self.assertEqual(len(client.urls), 8)
         self.assertNotIn("JPM", joined_urls)
         self.assertEqual(summary["pass2_target_universe"]["target_count"], 2)
         self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["AAPL", "MSFT"])
         self.assertEqual(summary["candidate_universe"]["eligible_count"], 2)
         self.assertEqual(summary["endpoint_call_budget"]["fmp_grades_calls"], 2)
-        self.assertEqual(summary["endpoint_call_budget"]["massive_stock_split_calls"], 2)
-        self.assertEqual(summary["endpoint_call_budget"]["massive_dividend_calls"], 2)
+        self.assertEqual(summary["endpoint_call_budget"]["massive_stock_split_calls"], 1)
+        self.assertEqual(summary["endpoint_call_budget"]["massive_dividend_calls"], 1)
         contract_path = self.paths["prefix"].with_name(
             self.paths["prefix"].name + "_theme_selection_contract.json"
         )
@@ -1537,7 +1609,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "authorization"):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1560,7 +1632,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1584,13 +1656,13 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             runner.sample_validation, "_read_windows_environment_value", return_value=None
         ):
             runner.run_full_candidate_live_source_packet(
-                preflight_summary_path=self.paths["preflight"], expected_total_call_budget=16,
+                preflight_summary_path=self.paths["preflight"], expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"], context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"], summary_path=self.paths["summary"], raw_root=self.raw_root,
                 client=client, confirm_user_authorization=True, run_data_context=True,
                 generated_at="2026-07-06T12:00:00+00:00", observed_at=_OFFERING_OBSERVED_AT, sec_sleep_seconds=0,
             )
-        self.assertEqual(len(client.urls), 16)
+        self.assertEqual(len(client.urls), 10)
         contract = json.loads(contract_path.read_text(encoding="utf-8"))
         self.assertEqual(set(contract["per_ticker"]), {"AAPL", "MSFT", "JPM"})
         self.assertNotIn("stale_operator_input", contract)
@@ -1601,7 +1673,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "must remain no_strong_theme"):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1648,7 +1720,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "read JSON"):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=bad_preflight,
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1674,7 +1746,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "real calendar date"):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1699,7 +1771,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             summary = runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1769,7 +1841,8 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
-            authorized_total_call_budget=11,
+            active_analyst_source="fmp",
+            authorized_total_call_budget=35,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -1808,7 +1881,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "eligible/Pass2 partition"):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1831,11 +1904,11 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         # must be rejected before any fetch — the small-scale analog of a forged 2404 / 12021-call re-expansion.
         client = FullCandidateFakeClient()
         with mock.patch.object(runner, "FMP_FREE_DAILY_GRADE_CALL_CAP", 2), self.assertRaisesRegex(
-            runner.FullCandidateLiveSourcePacketError, "free daily grade-call cap"
+            runner.FullCandidateLiveSourcePacketError, "active analyst-source constraint"
         ):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=16,
+                expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -1868,7 +1941,8 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
             momentum_top_k=2,
-            authorized_total_call_budget=11,
+            active_analyst_source="fmp",
+            authorized_total_call_budget=35,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -1879,7 +1953,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         ):
             summary = runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
-                expected_total_call_budget=11,  # 1 SEC mapping + 2 targets * 5
+                expected_total_call_budget=35,
                 authorized_momentum_top_k=2,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
@@ -1902,26 +1976,32 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertEqual(summary["pass2_target_universe"]["eligible_scored_not_selected_count"], 1)
         self.assertEqual(summary["pass2_target_universe"]["eligible_unscored_not_selected_count"], 0)
         self.assertTrue(summary["pass2_target_universe"]["eligible_partition_conserved"])
-        self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 11)
+        self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 8)
         fetched_symbols = {row["symbol"] for row in summary["endpoint_results"] if row["symbol"] is not None}
         self.assertEqual(fetched_symbols, {"AAPL", "MSFT"})
         self.assertNotIn("JPM", fetched_symbols)
 
     def test_runner_per_target_call_constants_match_preflight_forecast_formula(self):
-        # Single-source guard: the runner's mirrored per-target / SEC-mapping call constants must equal the
-        # preflight's canonical _forecast_calls, so the re-anchored spend budget can never silently drift from the
-        # forecast the operator budget is checked against.
-        for n in (1, 2, 3, 15, 200):
-            expected = preflight_runner._forecast_calls(n, n)["total_calls_for_pass2_target_cut"]
-            actual = runner._SEC_TICKER_MAPPING_CALLS + n * runner._PASS2_ENDPOINT_CALLS_PER_TARGET
-            self.assertEqual(actual, expected, f"per-target call-count drift at n={n}")
+        # Single-source guard: the runner's active-source formula must equal the preflight forecast.
+        for source in ("yfinance", "fmp"):
+            for n in (1, 2, 3, 15, 200):
+                expected = preflight_runner._forecast_calls(
+                    n, n, active_analyst_source=source
+                )["total_calls_for_pass2_target_cut"]
+                actual = (
+                    runner._SEC_TICKER_MAPPING_CALLS
+                    + n * runner._SEC_SUBMISSIONS_CALLS_PER_TARGET
+                    + (n if source == "fmp" else 0)
+                    + runner.MASSIVE_BATCH_LOGICAL_CALL_CAP
+                )
+                self.assertEqual(actual, expected, f"active-source call-count drift at {source=} {n=}")
 
     def test_holding_outside_pass1_is_fetched_and_forwarded_as_mandatory_holding_lane(self):
         preflight_runner.run_preflight(
             candidate_artifact_path=self.paths["candidate"], expected_decision_date=_DECISION_DATE,
             momentum_projection_path=self.paths["momentum"], theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"], forced_holding_tickers=["HOLD"],
-            authorized_total_call_budget=21, confirm_user_authorization=True,
+            active_analyst_source="fmp", authorized_total_call_budget=39, confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
         client = FullCandidateFakeClient()
@@ -1929,7 +2009,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             runner.sample_validation, "_read_windows_environment_value", return_value=None
         ):
             summary = runner.run_full_candidate_live_source_packet(
-                preflight_summary_path=self.paths["preflight"], expected_total_call_budget=21,
+                preflight_summary_path=self.paths["preflight"], expected_total_call_budget=39,
                 forced_holding_tickers=["HOLD"], output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"], source_artifact_prefix=self.paths["prefix"],
                 summary_path=self.paths["summary"], raw_root=self.raw_root, client=client,
@@ -1953,7 +2033,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             runner.sample_validation, "_read_windows_environment_value", return_value=None
         ), self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "changed after reviewed preflight"):
             runner.run_full_candidate_live_source_packet(
-                preflight_summary_path=self.paths["preflight"], expected_total_call_budget=16,
+                preflight_summary_path=self.paths["preflight"], expected_total_call_budget=37,
                 output_data_context_path=self.paths["output"], context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"], summary_path=self.paths["summary"], raw_root=self.raw_root,
                 client=client, confirm_user_authorization=True, generated_at="2026-07-06T12:00:00+00:00",
@@ -1966,7 +2046,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             candidate_artifact_path=self.paths["candidate"], expected_decision_date=_DECISION_DATE,
             momentum_projection_path=self.paths["momentum"], theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"], forced_holding_tickers=["AAPL"],
-            catalyst_recall_tickers=["MSFT"], authorized_total_call_budget=16,
+            catalyst_recall_tickers=["MSFT"], active_analyst_source="fmp", authorized_total_call_budget=37,
             confirm_user_authorization=True, generated_at="2026-07-06T12:00:00+00:00",
         )
         for holdings, recall, message in (
@@ -1978,7 +2058,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
                 runner.sample_validation, "_read_windows_environment_value", return_value=None
             ), self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, message):
                 runner.run_full_candidate_live_source_packet(
-                    preflight_summary_path=self.paths["preflight"], expected_total_call_budget=16,
+                    preflight_summary_path=self.paths["preflight"], expected_total_call_budget=37,
                     forced_holding_tickers=holdings, catalyst_recall_tickers=recall,
                     output_data_context_path=self.paths["output"], context_components_output_path=self.paths["components"],
                     source_artifact_prefix=self.paths["prefix"], summary_path=self.paths["summary"], raw_root=self.raw_root,
@@ -2004,18 +2084,20 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
             momentum_top_k=1,  # honest reviewed run: single richest target AAPL, forecast 6
-            authorized_total_call_budget=6,
+            active_analyst_source="fmp",
+            authorized_total_call_budget=33,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
         forged = json.loads(self.paths["preflight"].read_text(encoding="utf-8"))
         self.assertEqual(forged["pass2_target_universe"]["target_symbols"], ["AAPL"])
-        self.assertEqual(forged["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 6)
+        self.assertEqual(forged["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 33)
         forged["pass2_target_universe"]["momentum_top_k"] = 3
         forged["pass2_target_universe"]["target_count"] = 3
         forged["pass2_target_universe"]["target_symbols"] = ["AAPL", "JPM", "MSFT"]
         forged["pass2_target_universe"]["target_symbol_sample"] = ["AAPL", "JPM", "MSFT"]
-        _write_json(self.paths["preflight"], forged)  # forecast LEFT at the honest 6
+        forged["endpoint_call_forecast"]["families"]["pass2_source_packet"]["fmp_grades_calls"] = 3
+        _write_json(self.paths["preflight"], forged)  # total forecast stays at the honest 33
 
         client = FullCandidateFakeClient()
         with self._env(), mock.patch.object(
@@ -2024,7 +2106,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             with self.assertRaises(runner.FullCandidateLiveSourcePacketError) as ctx:
                 runner.run_full_candidate_live_source_packet(
                     preflight_summary_path=self.paths["preflight"],
-                    expected_total_call_budget=6,  # the HONEST reviewed budget
+                    expected_total_call_budget=33,  # the HONEST reviewed budget
                     output_data_context_path=self.paths["output"],
                     context_components_output_path=self.paths["components"],
                     source_artifact_prefix=self.paths["prefix"],
@@ -2040,6 +2122,149 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertIn("independently authorized K", str(ctx.exception))
         self.assertEqual(client.urls, [])  # zero provider calls spent
         self.assertFalse(self.paths["summary"].exists())
+
+
+class MassiveBatchPaginationContractTest(unittest.TestCase):
+    class _QueueClient:
+        def __init__(self, responses):
+            self.responses = list(responses)
+            self.urls: list[str] = []
+
+        def get_json(self, url, headers=None, timeout_seconds=30):
+            self.urls.append(url)
+            return self.responses.pop(0)
+
+    class _EndlessClient:
+        def __init__(self):
+            self.page_counts: dict[str, int] = {}
+
+        def get_json(self, url, headers=None, timeout_seconds=30):
+            parsed = urlparse(url)
+            family = {
+                "/v2/reference/news": "reference_news",
+                "/stocks/v1/splits": "stock_splits",
+                "/stocks/v1/dividends": "dividends",
+            }[parsed.path]
+            page = self.page_counts.get(family, 0) + 1
+            self.page_counts[family] = page
+            if family == "reference_news":
+                row = {
+                    "id": f"{family}-{page}",
+                    "published_utc": "2026-07-06T12:00:00Z",
+                    "tickers": ["AAPL"],
+                }
+            else:
+                date_field = "execution_date" if family == "stock_splits" else "ex_dividend_date"
+                row = {"id": f"{family}-{page}", "ticker": "AAPL", date_field: "2026-07-06"}
+            return (
+                {"results": [row], "next_url": f"https://api.massive.com{parsed.path}?cursor={family}-{page}"},
+                200,
+                True,
+                None,
+            )
+
+    @staticmethod
+    def _fetch_family(family, client, raw_root, shared_page_count, records):
+        return runner._fetch_massive_batch_family(
+            family=family,
+            family_index=runner._MASSIVE_BATCH_FAMILIES.index(family),
+            source_as_of="2026-07-06",
+            observed_at="2026-07-06T13:00:00+00:00",
+            target_symbols=["AAPL"],
+            raw_root=raw_root,
+            client=client,
+            massive_api_key="UNIT_TEST_MASSIVE_SECRET",
+            massive_headers={"User-Agent": "unit-test"},
+            max_total_endpoint_calls=runner.MASSIVE_BATCH_LOGICAL_CALL_CAP,
+            records=records,
+            attempt_budget=runner.HttpAttemptBudget(runner.MASSIVE_BATCH_LOGICAL_CALL_CAP),
+            max_retries=0,
+            retry_stats={"used": 0},
+            provider_pace_seconds=0.0,
+            sleep_func=lambda _seconds: None,
+            shared_page_count=shared_page_count,
+        )
+
+    def test_shared_continuation_accepts_cursor_only_and_literal_plus(self):
+        window = runner._massive_batch_query_window(
+            family="reference_news",
+            source_as_of="2026-07-06",
+            observed_at="2026-07-06T13:00:00+00:00",
+        )
+        cursor_only = runner._massive_batch_next_url(
+            "https://api.massive.com/v2/reference/news?cursor=page-2",
+            family="reference_news",
+            query_window=window,
+            api_key="UNIT_TEST_MASSIVE_SECRET",
+        )
+        self.assertIn("cursor=page-2", cursor_only)
+        self.assertIn("apiKey=UNIT_TEST_MASSIVE_SECRET", cursor_only)
+        literal_plus = runner._massive_batch_next_url(
+            "https://api.massive.com/v2/reference/news?cursor=page-2&published_utc.lte="
+            "2026-07-06T13:00:00+00:00",
+            family="reference_news",
+            query_window=window,
+            api_key="UNIT_TEST_MASSIVE_SECRET",
+        )
+        self.assertIn("published_utc.lte=2026-07-06T13%3A00%3A00%2B00%3A00", literal_plus)
+        with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "changed its date window"):
+            runner._massive_batch_next_url(
+                "https://api.massive.com/v2/reference/news?cursor=page-2&published_utc.lte=2026-07-06T13:00:00Z",
+                family="reference_news",
+                query_window=window,
+                api_key="UNIT_TEST_MASSIVE_SECRET",
+            )
+
+    def test_two_page_batch_accumulates_cursor_only_and_literal_plus(self):
+        first = {
+            "id": "news-1",
+            "published_utc": "2026-07-06T12:00:00Z",
+            "tickers": ["AAPL"],
+        }
+        second = {
+            "id": "news-2",
+            "published_utc": "2026-07-06T12:30:00Z",
+            "tickers": ["AAPL"],
+        }
+        client = self._QueueClient([
+            ({
+                "results": [first],
+                "next_url": (
+                    "https://api.massive.com/v2/reference/news?cursor=page-2&"
+                    "published_utc.lte=2026-07-06T13:00:00+00:00"
+                ),
+            }, 200, True, None),
+            ({"results": [second]}, 200, True, None),
+        ])
+        with temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_live_source_packet" / "pagination_contract"
+        ) as temp:
+            records: list = []
+            coverage = self._fetch_family(
+                "reference_news", client, Path(temp) / "raw", [0], records
+            )
+        self.assertEqual(coverage["status"], "complete")
+        self.assertEqual(coverage["page_count"], 2)
+        self.assertEqual(coverage["result_count"], 2)
+        self.assertEqual([row["id"] for row in coverage["rows_by_ticker"]["AAPL"]], ["news-1", "news-2"])
+        self.assertIn("cursor=page-2", client.urls[1])
+        self.assertIn("%2B00%3A00", client.urls[1])
+
+    def test_each_family_has_a_fair_page_cap_within_shared_cap(self):
+        client = self._EndlessClient()
+        records: list = []
+        shared_page_count = [0]
+        with temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_live_source_packet" / "pagination_fairness"
+        ) as temp:
+            for family in runner._MASSIVE_BATCH_FAMILIES:
+                coverage = self._fetch_family(
+                    family, client, Path(temp) / "raw", shared_page_count, records
+                )
+                self.assertEqual(coverage["page_count"], runner.MASSIVE_BATCH_FAMILY_LOGICAL_CALL_CAP)
+                self.assertEqual(coverage["failure_reason"], "pagination_limit_exceeded")
+        self.assertEqual(shared_page_count[0], runner.MASSIVE_BATCH_LOGICAL_CALL_CAP)
+        self.assertEqual(len(records), runner.MASSIVE_BATCH_LOGICAL_CALL_CAP)
 
 
 if __name__ == "__main__":
