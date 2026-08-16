@@ -3068,3 +3068,18 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 
 - 不要为"以后不再过期"加一条"测试里禁止手写预算常量"的全仓守卫：owner 模块里那些故意写错的用例会被它一并判红，等于用机械规则拆掉真正的门（`CLAUDE.md` §5 明禁）。
 - 真正防复发的不是守卫而是流程：改 forecast / 预算这类跨模块契约的那一刀，执行方须按 `AGENTS.md` rule 3/4 让 lane 全量绿一次再交接。今天这个红能活到现在，正是那一步没走完。
+
+## 2026-08-16 追加：Pass2 预算夹具最小修复完成，交 Claude 复审
+
+- `tests/provider/test_us_short_yfinance_grades_fetch.py` 的 `setUp` 改为现有接口的两步法：先 `authorized_total_call_budget=None` 取 forecast，再将 `total_calls_for_pass2_target_cut` 原样作为第二次授权预算。删除硬编码 `16`。
+- `tests/provider/test_us_short_batch5_full_candidate_projection_inputs.py` 同样改成两步法；保留 `ready_for_reviewed_live_execution`、覆盖和 target symbols 断言；把两条 `16` 改为 target-cut 与 full-candidate-cut 相等关系。未改 runner 的 `==` 门、`:681` raise 或 owner 反向控制。
+- 证据：修复前两模块 `23 tests` 中 yfinance 17 errors + projection 1 failure；修复后 `23/23 OK`；Pass2 owner 模块 `15/15 OK`。未联网、未调用 provider、未改 `860s`、未跑 full lane。
+- 当前状态：`repaired / OPEN-NOT-VERIFIED`，下一步由 Claude 独立审查这两个测试文件。
+
+## 2026-08-16 追加：Claude Code 独立审查 Pass2 预算夹具两步法 —— PASS（已提交并合入 master）
+
+- **改了什么**：两个消费方夹具（`test_us_short_yfinance_grades_fetch.py`、`test_us_short_batch5_full_candidate_projection_inputs.py`）由手写预算改成 preview→exact-budget 两步；projection 的两条数字断言换成「target-cut 与 full-candidate-cut 相等」的关系断言。零生产代码改动，numstat 全程只有 5 个文件。
+- **一处更正我自己下的方案措辞**：我原写「两步法是允许的写法」，实测后应改成——**它就是这个接口写明的正确用法**。`runners/us_short_batch5_full_candidate_pass2_preflight.py:496-498` 的注释原文：`A missing budget is a preview, never an implicit authorization. The forecast is intentionally visible so the operator can make the independently authorized exact-budget rerun`；`:518-521` 另把「尚未授权」与「与重算 forecast 不符」分成两条 block reason。
+- **验证命令与结果**：验收超集（两个被修模块 + 契约 owner 模块）`Ran 38 tests in 12.364s / OK`、`receipt:301c1be90b9390ee575f2554`。**reviewer 自打的反向腿**：把 `:499-502` 的 `budget_ready` 挖成恒 `True`，三模块合跑 → owner 模块精确转红两条（`test_budget_preview_derives_exact_forecast_but_does_not_authorize_execution`、`test_mismatched_independent_budget_blocks_ready_gate`），两个消费方夹具仍绿；`git checkout --` 还原后 runner diff 为空。
+- **失效的旧结论**：方案里 closure ③ 写的「把预算改回 16 应重新抛同一个错」这条反向控制**不够**——它只证明夹具口径变了。真正该打的是**挖门**那一枪（证明门的证明力还在 owner 手里）。后续同类「把断言从 A 模块挪到 B 模块」的刀，按挖门这条做。
+- **下一步注意**：本刀只保证它自己这一层过了。lane 全量上一轮 fail-fast 停在 `ran=5567 / discovered=5958`，`43` 个模块当轮没派发到，下一次全量大概率还会撞出新的一层，按归属分派即可，不要记在本刀账上。
