@@ -1324,8 +1324,67 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
             official_project_root=Path(self.temp.name) / "official-project-without-pointer",
         )
         self.assertEqual(public["status"], track.PUBLIC_STATUS_UNAVAILABLE)
-        self.assertEqual(public["official_revision_id"], "a" * 32)
+        self.assertNotIn("official_revision_id", public)
         self.assertEqual(self._stored("reminder.json")["reminders"], [])
+
+    def test_official_revision_identity_mismatch_does_not_bind_unavailable_summary(self):
+        self._capture()
+        with patch.object(
+            track, "resolve_official_revision",
+            return_value={"selected_revision_id": "b" * 32},
+        ):
+            public = track.settle_and_summarize_margin_overheat_weekly(
+                root=self.root,
+                daily_cache_path=self.cache_path,
+                as_of=AS_OF,
+                strict=True,
+                run_revision_id="a" * 32,
+                official_project_root=Path(self.temp.name) / "official-project",
+            )
+        self.assertEqual(public["status"], track.PUBLIC_STATUS_UNAVAILABLE)
+        self.assertNotIn("official_revision_id", public)
+
+    def test_exact_official_revision_can_bind_unavailable_summary_without_capture(self):
+        self._capture()
+        week_root = self.root / "weeks" / AS_OF
+        (week_root / "capture.json").unlink()
+        (week_root / "source_receipt.json").unlink()
+        week_root.rmdir()
+        revision = "a" * 32
+        with patch.object(
+            track, "resolve_official_revision",
+            return_value={"selected_revision_id": revision},
+        ):
+            public = track.settle_and_summarize_margin_overheat_weekly(
+                root=self.root,
+                daily_cache_path=self.cache_path,
+                as_of=AS_OF,
+                strict=True,
+                run_revision_id=revision,
+                official_project_root=Path(self.temp.name) / "official-project",
+            )
+        self.assertEqual(public["status"], track.PUBLIC_STATUS_UNAVAILABLE)
+        self.assertEqual(public["official_revision_id"], revision)
+        track.validate_margin_public_summary(public)
+
+    def test_exact_official_revision_can_bind_evidence_current_summary(self):
+        revision = "b" * 32
+        self._capture(run_revision_id=revision)
+        with patch.object(
+            track, "resolve_official_revision",
+            return_value={"selected_revision_id": revision},
+        ):
+            public = track.settle_and_summarize_margin_overheat_weekly(
+                root=self.root,
+                daily_cache_path=self.cache_path,
+                as_of=AS_OF,
+                strict=True,
+                run_revision_id=revision,
+                official_project_root=Path(self.temp.name) / "official-project",
+            )
+        self.assertEqual(public["status"], track.PUBLIC_STATUS_CURRENT)
+        self.assertEqual(public["official_revision_id"], revision)
+        track.validate_margin_public_summary(public)
 
     def test_same_day_drift_is_rejected_by_exact_replay_gate(self):
         self._capture()

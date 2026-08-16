@@ -71,7 +71,11 @@ from engine.a_short_regulatory_advisory import (
 from engine.a_short_tushare_client import is_retryable_tushare_error
 from engine.a_short_observability import safe_exception_summary  # noqa: E402
 from engine.a_share_market_clock import a_share_market_date  # noqa: E402
-from engine.a_short_run_revision import public_revision_root, validate_run_revision_id  # noqa: E402
+from engine.a_short_run_revision import (  # noqa: E402
+    RevisionSelectionBlocked,
+    public_revision_root,
+    validate_run_revision_id,
+)
 
 _RUNTIME_CONFIGURATION = load_runtime_configuration()
 _WEEKLY_WINDOWS = _RUNTIME_CONFIGURATION["m67"]["weekly_windows"]
@@ -7044,6 +7048,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 strict=True,
                 sidecar_result=margin_settlement_result,
             )
+            margin_overheat_cash_control = dict(margin_overheat_cash_control)
+            margin_overheat_cash_control.pop("official_revision_id", None)
             _validate_margin_overheat_public_summary_shape(margin_overheat_cash_control)
         except Exception as exc:
             margin_overheat_cash_control = _margin_overheat_unavailable_public_summary()
@@ -7413,6 +7419,15 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                         run_revision_id=args.run_revision_id,
                         official_project_root=args.official_project_root,
                     )
+                except RevisionSelectionBlocked:
+                    _record_sidecar(
+                        "official_operation_settlement",
+                        execution_status="not_due", progress_status="not_applicable",
+                        error_code="official_selection_pending",
+                        error_detail="official revision selection is pending",
+                        observed_decision_as_of=args.as_of,
+                    )
+                    print("[official-operation-evidence] official selection pending; settlement deferred")
                 except Exception as exc:
                     _record_sidecar_failure("official_operation_settlement", stage=stage, exc=exc,
                                             error_code="settlement_unavailable")
@@ -7573,6 +7588,20 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     p5_settlement = settle_and_summarize_weekly(**p5_settlement_kwargs)
                     if p5_settlement_result is not None:
                         industry_weight_settlement_result = p5_settlement_result
+                except RevisionSelectionBlocked:
+                    capture_progress, capture_code, capture_detail = _sidecar_result_fields(p5_capture)
+                    _record_sidecar("industry_weight_capture", execution_status="succeeded",
+                                    progress_status=capture_progress, error_code=capture_code,
+                                    error_detail=capture_detail,
+                                    observed_decision_as_of=args.as_of)
+                    _record_sidecar(
+                        "industry_weight_settlement",
+                        execution_status="not_due", progress_status="not_applicable",
+                        error_code="official_selection_pending",
+                        error_detail="official revision selection is pending",
+                        observed_decision_as_of=args.as_of,
+                    )
+                    print("[industry-weight-p5] official selection pending; settlement deferred")
                 except Exception as exc:
                     capture_progress, capture_code, capture_detail = _sidecar_result_fields(p5_capture)
                     _record_sidecar("industry_weight_capture", execution_status="succeeded",
@@ -7589,6 +7618,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                     progress_status=capture_progress, error_code=capture_code,
                                     error_detail=capture_detail,
                                     observed_decision_as_of=args.as_of)
+                    summary_status = str((p5_settlement or {}).get("status") or "")
                     settlement_codes = industry_weight_settlement_result.get("reason_codes") or []
                     if settlement_codes:
                         settlement_code = str(settlement_codes[0])
@@ -7597,12 +7627,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                             progress_status="stalled", error_code=settlement_code,
                             error_detail=f"reason={settlement_code}"[:512],
                             observed_decision_as_of=args.as_of)
-                    elif str((p5_settlement or {}).get("status")) in {
-                            "evidence_unavailable_or_inconclusive", "not_configured"}:
+                    elif summary_status == "evidence_unavailable_or_inconclusive":
                         _record_sidecar(
-                            "industry_weight_settlement", execution_status="failed",
-                            progress_status="unavailable", error_code="settlement_unavailable",
-                            error_detail=f"summary_status={p5_settlement.get('status')}"[:512],
+                            "industry_weight_settlement", execution_status="not_due",
+                            progress_status="not_applicable", error_code="official_selection_pending",
+                            error_detail="official revision selection is pending",
                             observed_decision_as_of=args.as_of)
                     else:
                         settlement_progress, settlement_code, settlement_detail = _sidecar_result_fields(
@@ -7711,6 +7740,20 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     final_settlement = settle_final_action_validation(**final_settlement_kwargs)
                     if final_settlement_result is not None:
                         final_action_settlement_result = final_settlement_result
+                except RevisionSelectionBlocked:
+                    capture_progress, capture_code, capture_detail = _sidecar_result_fields(p3_capture)
+                    _record_sidecar("final_action_capture", execution_status="succeeded",
+                                    progress_status=capture_progress, error_code=capture_code,
+                                    error_detail=capture_detail,
+                                    observed_decision_as_of=args.as_of)
+                    _record_sidecar(
+                        "final_action_settlement",
+                        execution_status="not_due", progress_status="not_applicable",
+                        error_code="official_selection_pending",
+                        error_detail="official revision selection is pending",
+                        observed_decision_as_of=args.as_of,
+                    )
+                    print("[final-action-p3] official selection pending; settlement deferred")
                 except Exception as exc:
                     capture_progress, capture_code, capture_detail = _sidecar_result_fields(p3_capture)
                     _record_sidecar("final_action_capture", execution_status="succeeded",
@@ -7794,6 +7837,20 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                     p4_settlement = settle_and_summarize_weekly(**p4_settlement_kwargs)
                     if p4_settlement_result is not None:
                         overlay_settlement_result = p4_settlement_result
+                except RevisionSelectionBlocked:
+                    capture_progress, capture_code, capture_detail = _sidecar_result_fields(p4_capture)
+                    _record_sidecar("overlay_adjudication_capture", execution_status="succeeded",
+                                    progress_status=capture_progress, error_code=capture_code,
+                                    error_detail=capture_detail,
+                                    observed_decision_as_of=args.as_of)
+                    _record_sidecar(
+                        "overlay_adjudication_settlement",
+                        execution_status="not_due", progress_status="not_applicable",
+                        error_code="official_selection_pending",
+                        error_detail="official revision selection is pending",
+                        observed_decision_as_of=args.as_of,
+                    )
+                    print("[overlay-adjudication-p4a] official selection pending; settlement deferred")
                 except Exception as exc:
                     capture_progress, capture_code, capture_detail = _sidecar_result_fields(p4_capture)
                     _record_sidecar("overlay_adjudication_capture", execution_status="succeeded",
@@ -7811,20 +7868,27 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                     progress_status=capture_progress, error_code=capture_code,
                                     error_detail=capture_detail,
                                     observed_decision_as_of=args.as_of)
+                    summary_status = str((p4_settlement or {}).get("status") or "")
                     settlement_codes = overlay_settlement_result.get("reason_codes") or []
                     if settlement_codes:
                         settlement_code = str(settlement_codes[0])
+                        if settlement_code == "overlay_daily_cache_unavailable":
+                            _record_sidecar(
+                                "overlay_adjudication_settlement", execution_status="not_due",
+                                progress_status="not_applicable", error_code=settlement_code,
+                                error_detail="overlay daily cache is unavailable",
+                                observed_decision_as_of=args.as_of)
+                        else:
+                            _record_sidecar(
+                                "overlay_adjudication_settlement", execution_status="succeeded",
+                                progress_status="stalled", error_code=settlement_code,
+                                error_detail=f"reason={settlement_code}"[:512],
+                                observed_decision_as_of=args.as_of)
+                    elif summary_status == "evidence_unavailable_or_inconclusive":
                         _record_sidecar(
-                            "overlay_adjudication_settlement", execution_status="succeeded",
-                            progress_status="stalled", error_code=settlement_code,
-                            error_detail=f"reason={settlement_code}"[:512],
-                            observed_decision_as_of=args.as_of)
-                    elif str((p4_settlement or {}).get("status")) in {
-                            "evidence_unavailable_or_inconclusive", "not_configured"}:
-                        _record_sidecar(
-                            "overlay_adjudication_settlement", execution_status="failed",
-                            progress_status="unavailable", error_code="settlement_unavailable",
-                            error_detail=f"summary_status={p4_settlement.get('status')}"[:512],
+                            "overlay_adjudication_settlement", execution_status="not_due",
+                            progress_status="not_applicable", error_code="official_selection_pending",
+                            error_detail="official revision selection is pending",
                             observed_decision_as_of=args.as_of)
                     else:
                         settlement_progress, settlement_code, settlement_detail = _sidecar_result_fields(

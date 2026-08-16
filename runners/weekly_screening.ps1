@@ -1333,10 +1333,14 @@ if ($SkipRegime) {
     }
 }
 
- # P4: health is a separate post-run companion.  The already-published M6.7
- # JSON/Markdown/receipt are intentionally not rewritten here.  V5-A keeps
- # this bundle inside the same revision root as IV and M6.7.
+# P4: health inputs are de-identified manifests written before revision selection.  Health is
+# deliberately finalized only after the selected official settlement has written
+# its revision-scoped outcome manifest below.
 $HealthDir = $M67Dir
+$OfficialSettlementOutcomesPath = Join-Path $HealthDir 'official_settlement_outcomes.json'
+$OfficialSettlementComplete = $false
+$SelectionStatus = $null
+$HealthComplete = $false
 $PipelineExpected = @()
 if (-not $SkipSemanticRisk -and -not $IsHistoricalAsOf) {
     $PipelineExpected = @(
@@ -1371,47 +1375,11 @@ try {
     Write-Host "[sidecar-health] UNAVAILABLE (launcher outcome manifest closeout failed; M6.7/selection unchanged)" -ForegroundColor Red
 }
 
-if ($LauncherManifestWritten) {
-    # A failed companion must never leave a previous valid health bundle visible.
-    foreach ($Leaf in @('sidecar_health.receipt.json', 'sidecar_health.json', 'sidecar_health.md')) {
-        Invalidate-M67Artifact -LiteralPath (Join-Path $HealthDir $Leaf) | Out-Null
-    }
-    $HealthArgs = @(
-        'runners\a_short_weekly_sidecar_health.py', '--as-of', $AsOf,
-        '--project-root', $ProjectRoot, '--out-dir', $HealthDir,
-        '--launcher-outcomes', $LauncherManifestPath,
-        '--run-revision-id', $RunRevisionId,
-        '--m67-invocation', $(if ($SkipSemanticRisk) { 'skipped' } else { 'requested' }),
-        '--iv-feed', $IvFeed
-    )
-    if (-not $SkipSemanticRisk) {
-        $HealthArgs += @('--pipeline-outcomes', $PipelineManifestPath)
-    }
-    & $PythonExe @HealthArgs
-    $HealthExitCode = $LASTEXITCODE
-    if ($null -eq $HealthExitCode) { $HealthExitCode = 1 }
-    $HealthComplete = ($HealthExitCode -eq 0)
-    foreach ($Leaf in @('sidecar_health.receipt.json', 'sidecar_health.json', 'sidecar_health.md')) {
-        $HealthPath = Join-Path $HealthDir $Leaf
-        if (-not (Test-Path -LiteralPath $HealthPath -PathType Leaf)) {
-            $HealthComplete = $false
-        } elseif ((Get-Item -LiteralPath $HealthPath).Length -le 0) {
-            $HealthComplete = $false
-        }
-    }
-    if (-not $HealthComplete) {
-        foreach ($Leaf in @('sidecar_health.receipt.json', 'sidecar_health.json', 'sidecar_health.md')) {
-            Invalidate-M67Artifact -LiteralPath (Join-Path $HealthDir $Leaf) | Out-Null
-        }
-        Write-Host "[sidecar-health] UNAVAILABLE (health companion failed or returned an incomplete JSON/Markdown/receipt trio; M6.7/selection unchanged)" -ForegroundColor Red
-    }
-}
-
 # V5-A closeout: only a structurally complete EGS/M6.7/IV/health bundle can
 # create the immutable revision manifest.  Pointer and selection receipt are
 # committed together through the Python rollback boundary; a failed selection
 # leaves the previous pointer untouched and makes the run non-zero.
-if ($EgsExitCode -eq 0 -and $M67InvocationState -eq 'complete' -and $HealthComplete) {
+if ($EgsExitCode -eq 0 -and $M67InvocationState -eq 'complete') {
     $RevisionManifestPath = Join-Path $ResearchRevisionDir 'revision_manifest.json'
     $OfficialPointerPath = Join-Path $ProjectRoot "research\results\a_short\$AsOf\official_revision.json"
     $SelectionReceiptPath = Join-Path $ProjectRoot "research\results\a_short\$AsOf\official_selection_receipt.json"
@@ -1426,9 +1394,6 @@ if ($EgsExitCode -eq 0 -and $M67InvocationState -eq 'complete' -and $HealthCompl
         phase4_reports_manifest = (Join-Path $PublicRevisionDir 'phase4_reports_manifest.json')
         launcher_sidecar_outcomes = $LauncherManifestPath
         pipeline_sidecar_outcomes = $PipelineManifestPath
-        sidecar_health = (Join-Path $HealthDir 'sidecar_health.json')
-        sidecar_health_markdown = (Join-Path $HealthDir 'sidecar_health.md')
-        sidecar_health_receipt = (Join-Path $HealthDir 'sidecar_health.receipt.json')
     }
     try {
         $ReportsIndexArgs = @(
@@ -1494,18 +1459,65 @@ if ($EgsExitCode -eq 0 -and $M67InvocationState -eq 'complete' -and $HealthCompl
                 $SelectionStatus = [string]$SelectionResult.status
             }
             if ($SelectionStatus -in @('selected', 'already_current')) {
+                if (-not (Invalidate-M67Artifact -LiteralPath $OfficialSettlementOutcomesPath)) {
+                    throw 'unable to invalidate stale official settlement outcomes'
+                }
                 $SettlementArgs = @(
                     'runners\a_short_official_settlement.py', '--project-root', $ProjectRoot,
-                    '--as-of', $AsOf, '--run-revision-id', $RunRevisionId
+                    '--as-of', $AsOf, '--run-revision-id', $RunRevisionId,
+                    '--outcomes', $OfficialSettlementOutcomesPath
                 )
                 if ($IsHistoricalAsOf) { $SettlementArgs += '--skip-forward' }
-                & $PythonExe @SettlementArgs
+                $SettlementRaw = & $PythonExe @SettlementArgs
                 $OfficialSettlementExitCode = $LASTEXITCODE
                 if ($null -eq $OfficialSettlementExitCode) { $OfficialSettlementExitCode = 1 }
                 if ($OfficialSettlementExitCode -ne 0) {
                     throw "official settlement runner exit $OfficialSettlementExitCode"
                 }
-                Write-Host "[revision] manifest + official pointer + post-selector settlement committed for $RunRevisionId" -ForegroundColor Yellow
+                try {
+                    $SettlementResult = (($SettlementRaw | Select-Object -Last 1) | ConvertFrom-Json -ErrorAction Stop)
+                } catch {
+                    throw "official settlement runner returned invalid status JSON"
+                }
+                $OfficialSettlementStatus = [string]$SettlementResult.status
+                if ($OfficialSettlementStatus -notin @('settled', 'degraded')) {
+                    throw "official settlement runner returned unexpected status: $OfficialSettlementStatus"
+                }
+                if (-not (Test-Path -LiteralPath $OfficialSettlementOutcomesPath -PathType Leaf)) {
+                    throw 'official settlement outcome manifest is missing'
+                }
+                try {
+                    $OfficialSettlementOutcomes = Get-Content -Raw -Encoding UTF8 -LiteralPath $OfficialSettlementOutcomesPath | ConvertFrom-Json -ErrorAction Stop
+                    $ExpectedOfficialSettlementNames = @(
+                        'official_operation_settlement', 'factor_v2_settlement',
+                        'margin_overheat_cash_control_settlement', 'industry_weight_settlement',
+                        'target_policy_settlement', 'final_action_settlement',
+                        'overlay_adjudication_settlement', 'forward_tracker_official_settlement',
+                        'theme_forward_official_settlement', 'crash_veto_official_settlement'
+                    )
+                    $ActualOfficialExpectedNames = @($OfficialSettlementOutcomes.expected_sidecars | ForEach-Object { [string]$_ })
+                    $ActualOfficialNames = @($OfficialSettlementOutcomes.sidecars | ForEach-Object { [string]$_.name })
+                    if ([string]$OfficialSettlementOutcomes.schema_name -ne 'a_short_weekly_sidecar_outcomes' -or
+                        [string]$OfficialSettlementOutcomes.schema_version -ne '1.0.0' -or
+                        [string]$OfficialSettlementOutcomes.as_of -ne [string]$AsOf -or
+                        [string]$OfficialSettlementOutcomes.run_revision_id -ne [string]$RunRevisionId -or
+                        $ActualOfficialExpectedNames.Count -ne 10 -or
+                        $ActualOfficialNames.Count -ne 10 -or
+                        (($ActualOfficialExpectedNames | Sort-Object) -join '|') -ne (($ExpectedOfficialSettlementNames | Sort-Object) -join '|') -or
+                        (($ActualOfficialNames | Sort-Object) -join '|') -ne (($ExpectedOfficialSettlementNames | Sort-Object) -join '|') -or
+                        (($ActualOfficialExpectedNames | Sort-Object -Unique).Count -ne 10) -or
+                        (($ActualOfficialNames | Sort-Object -Unique).Count -ne 10)) {
+                        throw 'official settlement outcome manifest identity or track set is invalid'
+                    }
+                } catch {
+                    throw "official settlement outcome manifest is invalid: $($_.Exception.Message)"
+                }
+                $OfficialSettlementComplete = $true
+                if ($OfficialSettlementStatus -eq 'degraded') {
+                    Write-Host "[revision] manifest + official pointer committed; post-selector settlement degraded for $RunRevisionId" -ForegroundColor Yellow
+                } else {
+                    Write-Host "[revision] manifest + official pointer + post-selector settlement settled for $RunRevisionId" -ForegroundColor Yellow
+                }
             } elseif ($SelectionStatus -in @('equivalent_replay', 'validation_only')) {
                 Write-Host "[revision] non-official replay retained audit-only; official pointer unchanged" -ForegroundColor DarkGray
             } else {
@@ -1517,5 +1529,59 @@ if ($EgsExitCode -eq 0 -and $M67InvocationState -eq 'complete' -and $HealthCompl
         }
     }
 }
+
+# P4 finalizer: health consumes the pre-selector manifests plus the exact
+# revision-scoped official settlement outcomes.  The official outcomes are the
+# only allowed override for same-name pre-selector self-reports.  A non-complete
+# M6.7 run still has useful launcher/sidecar diagnostics; only an unresolved
+# selected official revision blocks the final health write.
+foreach ($Leaf in @('sidecar_health.receipt.json', 'sidecar_health.json', 'sidecar_health.md')) {
+    Invalidate-M67Artifact -LiteralPath (Join-Path $HealthDir $Leaf) | Out-Null
+}
+$HealthSelectionBlocked = (
+    $SelectionStatus -in @('selected', 'already_current') -and
+    -not $OfficialSettlementComplete
+)
+$HealthSelectionReady = -not $HealthSelectionBlocked
+if ($LauncherManifestWritten -and $HealthSelectionReady) {
+    $HealthArgs = @(
+        'runners\a_short_weekly_sidecar_health.py', '--as-of', $AsOf,
+        '--project-root', $ProjectRoot, '--out-dir', $HealthDir,
+        '--launcher-outcomes', $LauncherManifestPath,
+        '--run-revision-id', $RunRevisionId,
+        '--m67-invocation', $(if ($SkipSemanticRisk) { 'skipped' } else { 'requested' }),
+        '--iv-feed', $IvFeed
+    )
+    if (-not $SkipSemanticRisk) {
+        $HealthArgs += @('--pipeline-outcomes', $PipelineManifestPath)
+    }
+    if ($OfficialSettlementComplete) {
+        $HealthArgs += @('--official-settlement-outcomes', $OfficialSettlementOutcomesPath)
+    }
+    & $PythonExe @HealthArgs
+    $HealthExitCode = $LASTEXITCODE
+    if ($null -eq $HealthExitCode) { $HealthExitCode = 1 }
+    $HealthComplete = ($HealthExitCode -eq 0)
+    foreach ($Leaf in @('sidecar_health.receipt.json', 'sidecar_health.json', 'sidecar_health.md')) {
+        $HealthPath = Join-Path $HealthDir $Leaf
+        if (-not (Test-Path -LiteralPath $HealthPath -PathType Leaf)) {
+            $HealthComplete = $false
+        } elseif ((Get-Item -LiteralPath $HealthPath).Length -le 0) {
+            $HealthComplete = $false
+        }
+    }
+    if (-not $HealthComplete) {
+        $script:FinalExitCode = if ($script:FinalExitCode -eq 0) { 1 } else { $script:FinalExitCode }
+        foreach ($Leaf in @('sidecar_health.receipt.json', 'sidecar_health.json', 'sidecar_health.md')) {
+            Invalidate-M67Artifact -LiteralPath (Join-Path $HealthDir $Leaf) | Out-Null
+        }
+        Write-Host "[sidecar-health] UNAVAILABLE (health companion failed or returned an incomplete JSON/Markdown/receipt trio; M6.7/selection unchanged)" -ForegroundColor Red
+    }
+} elseif ($LauncherManifestWritten -and $HealthSelectionBlocked) {
+    Write-Host "[sidecar-health] DEFERRED (official revision was selected but post-selector settlement is incomplete; stale health remains invalidated)" -ForegroundColor Yellow
+} elseif ($LauncherManifestWritten) {
+    Write-Host "[sidecar-health] UNAVAILABLE (health closeout was not reached; M6.7 state=$M67InvocationState; stale health remains invalidated)" -ForegroundColor Red
+}
+
 Write-Host "=== Pipeline done ===" -ForegroundColor Cyan
 exit $FinalExitCode

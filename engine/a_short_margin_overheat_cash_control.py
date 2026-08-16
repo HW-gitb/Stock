@@ -3707,14 +3707,23 @@ def settle_and_summarize_margin_overheat_weekly(*, root: str | Path | None,
             run_revision_id=run_revision_id,
             official_project_root=official_project_root,
         )
+        official_revision_id = None
+        if official_project_root is not None:
+            selected = resolve_official_revision(
+                official_project_root, as_of, require=False,
+            )
+            if selected is not None and selected["selected_revision_id"] == run_revision_id:
+                official_revision_id = run_revision_id
         if sidecar_result is not None:
             sidecar_result["outcomes_updated"] = result.get("outcomes_updated")
         if result.get("status") == "no_official_margin_captures":
+            if sidecar_result is not None:
+                sidecar_result["official_settlement_status"] = "no_official_captures"
             _clear_private_margin_reminder(private_root)
             return _public_margin_summary(
                 PUBLIC_STATUS_UNAVAILABLE,
                 as_of=as_of,
-                official_revision_id=(run_revision_id if official_project_root is not None else None),
+                official_revision_id=official_revision_id,
             )
         reminder = result["reminder"]
         validate_margin_reminder(reminder)
@@ -3726,7 +3735,7 @@ def settle_and_summarize_margin_overheat_weekly(*, root: str | Path | None,
             evidence_status=state["evidence_status"],
             stage=state["stage"],
             pending_user_receipt_count=len(reminder["reminders"]),
-            official_revision_id=run_revision_id if official_project_root is not None else None,
+            official_revision_id=official_revision_id,
         )
         validate_margin_public_summary(summary)
         return summary

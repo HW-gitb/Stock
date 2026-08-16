@@ -245,7 +245,11 @@ class AShortV5RevisionMatrixTests(unittest.TestCase):
                 project_root=root, as_of=DATE, run_revision_id=revision,
                 include_forward=False,
             )
-            self.assertEqual(result["status"], "settled")
+            # The selected revision gate passes, but bounded synthetic state has
+            # no usable factor/margin evidence and the optional overlay callback
+            # is unavailable.  The post-selector result must expose that
+            # degradation instead of claiming an unconditional settled status.
+            self.assertEqual(result["status"], "degraded")
             self.assertEqual(result["official_revision_id"], revision)
             self.assertEqual(result["formal_count"], 1)
             self.assertTrue(result["tracks"])

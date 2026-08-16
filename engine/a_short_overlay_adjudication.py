@@ -1213,14 +1213,21 @@ def settle_and_summarize_weekly(*, root: str | Path | None, daily_cache_path: st
                 if sidecar_result is not None:
                     sidecar_result["outcomes_updated"] = settlement.get("outcomes_updated")
                 if official_project_root is not None and settlement.get("status") != "settled_from_existing_cache":
+                    if (sidecar_result is not None and
+                            settlement.get("status") == "no_official_overlay_captures"):
+                        sidecar_result["official_settlement_status"] = "no_official_captures"
                     summary = unavailable_public_summary(as_of, epoch_context=epoch_context)
                 else:
                     summary = build_public_summary(root=private_root, as_of=as_of, epoch_context=epoch_context,
                                                    run_revision_id=run_revision_id,
                                                    official_project_root=official_project_root)
+            else:
+                if sidecar_result is not None:
+                    sidecar_result["reason_codes"] = ["overlay_daily_cache_unavailable"]
+                summary = unavailable_public_summary(as_of, epoch_context=epoch_context)
         if write_public:
             write_public_summary(summary, json_path=public_json_path, markdown_path=public_markdown_path)
-        if sidecar_result is not None:
+        if sidecar_result is not None and "reason_codes" not in sidecar_result:
             sidecar_result["reason_codes"] = _settlement_reason_codes(
                 root=root, as_of=as_of, epoch_context=epoch_context, run_revision_id=run_revision_id)
         return summary

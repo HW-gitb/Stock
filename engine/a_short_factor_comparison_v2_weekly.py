@@ -204,6 +204,7 @@ def load_v2_daily_cache(*, root: str | Path, daily_cache_path: str | Path | None
 
 def settle_and_summarize_v2_weekly(*, root: str | Path | None,
                                    daily_cache_path: str | Path | None = None, as_of: str,
+                                   sidecar_result: dict | None = None,
                                    run_revision_id: str | None = None,
                                    official_project_root: str | Path | None = None) -> dict:
     """Settle then adjudicate before M6.7, returning only a de-identified current summary.
@@ -229,6 +230,9 @@ def settle_and_summarize_v2_weekly(*, root: str | Path | None,
                                                   run_revision_id=run_revision_id,
                                                   official_project_root=official_project_root)
         if settlement.get("status") != "settled_from_existing_cache":
+            if (sidecar_result is not None and
+                    settlement.get("status") == "no_official_v2_captures"):
+                sidecar_result["official_settlement_status"] = "no_official_captures"
             return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=private_root, as_of=as_of,
                                     run_revision_id=run_revision_id,
                                     official_project_root=official_project_root)

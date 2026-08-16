@@ -44,6 +44,8 @@ PUBLIC_WRITER_FUNCTIONS = frozenset({
     "runners/a_short_margin_ratio_source_probe.py:_write_json",
     "runners/a_short_northbound_market_silence_lookback.py:_write_json",
     "runners/a_short_official_operation_evidence.py:_atomic_write",
+    # Writes the official ten-row settlement outcomes consumed by health.
+    "runners/a_short_official_settlement.py:_write_official_outcomes",
     "runners/a_short_phase5_engine.py:write_m67_report",
     "runners/a_short_regime_comparison_runner.py:_write_json",
     "runners/a_short_rule6_report_rc_coverage_audit.py:_write_json",
