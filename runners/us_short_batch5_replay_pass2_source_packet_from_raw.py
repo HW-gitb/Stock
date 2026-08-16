@@ -325,6 +325,20 @@ def run_replay(
         source_raw_root=source_root,
         expected_total_call_budget=expected_total_call_budget,
     )
+    source_decision_date = capture["source_expected_decision_date"]
+    for field, path in (("replay_raw_root", replay_root), ("summary_path", Path(summary_path).resolve())):
+        try:
+            relative = path.relative_to((ROOT / live_source_packet.RAW_SAMPLE_REL_ROOT).resolve())
+        except ValueError as exc:
+            raise ReplayError(
+                f"{field} must stay under the decision-date Pass2 provider_samples root"
+            ) from exc
+        if len(relative.parts) < 2 or relative.parts[0] != source_decision_date:
+            raise ReplayError(
+                f"{field} must use the source capture decision-date provider_samples root"
+            )
+    if Path(summary_path).suffix != ".json":
+        raise ReplayError("summary_path must be a JSON file")
     if observed_at is not None and observed_at != capture_observed_at:
         raise ReplayError("offline replay must retain the source capture observation clock")
     try:

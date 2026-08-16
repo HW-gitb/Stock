@@ -337,7 +337,7 @@
       "properties": {
         "tracked_summary_path": {
           "type": "string",
-          "pattern": "^(docs/us_short_batch5_full_candidate_pass2_preflight_summary_20260706\\.json|provider_samples/us_short_batch5_full_candidate_pass2_preflight_20260706/.+\\.json)$",
+          "pattern": "^(docs/us_short_batch5_full_candidate_pass2_preflight_summary_20260706\\.json|provider_samples/us_short_batch5_full_candidate_pass2_preflight/[0-9]{8}/.+\\.json|provider_samples/us_short_batch5_full_candidate_pass2_preflight_20260706/.+\\.json)$",
           "not": { "pattern": "\\.\\." }
         },
         "tracked_summary_contains_raw_rows": { "const": false },

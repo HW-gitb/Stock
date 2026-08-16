@@ -20,6 +20,7 @@ if str(ROOT) not in sys.path:
 
 from tests.provider.test_us_short_batch5_full_universe_momentum_producer import (  # noqa: E402
     _ALL_ELIGIBLE,
+    _DECISION_DATE,
     _candidate_artifact,
 )
 from tests.provider.us_short_private_test_root import (  # noqa: E402
@@ -30,8 +31,8 @@ from tests.provider.us_short_private_test_root import (  # noqa: E402
 
 STATE_DIR = ROOT / "state" / "us_short"
 SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_momentum_fetch"
-PRODUCER_SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_momentum_20260707"
-OVEREXT_PRODUCER_SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_overextension_20260709"
+PRODUCER_SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_momentum" / _DECISION_DATE
+OVEREXT_PRODUCER_SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_overextension" / _DECISION_DATE
 FETCH_MODULE = "runners.us_short_batch5_full_universe_momentum_fetch"
 PRODUCER_MODULE = "runners.us_short_batch5_full_universe_momentum_producer"
 OVEREXT_PRODUCER_MODULE = "runners.us_short_batch5_full_universe_overextension_producer"
@@ -121,12 +122,12 @@ class FullUniverseMomentumFetchTest(unittest.TestCase):
         self.sample_root = Path(self._sample_root_context.__enter__())
         self.addCleanup(self._sample_root_context.__exit__, None, None, None)
         self._producer_sample_root_context = temporary_us_short_directory(
-            ROOT, Path("provider_samples") / "us_short_batch5_full_universe_momentum_20260707"
+            ROOT, Path("provider_samples") / "us_short_batch5_full_universe_momentum" / _DECISION_DATE
         )
         self.producer_sample_root = Path(self._producer_sample_root_context.__enter__())
         self.addCleanup(self._producer_sample_root_context.__exit__, None, None, None)
         self._overext_sample_root_context = temporary_us_short_directory(
-            ROOT, Path("provider_samples") / "us_short_batch5_full_universe_overextension_20260709"
+            ROOT, Path("provider_samples") / "us_short_batch5_full_universe_overextension" / _DECISION_DATE
         )
         self.overext_sample_root = Path(self._overext_sample_root_context.__enter__())
         self.addCleanup(self._overext_sample_root_context.__exit__, None, None, None)

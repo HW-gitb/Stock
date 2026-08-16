@@ -32,7 +32,7 @@ from tests.provider.us_short_private_test_root import (  # noqa: E402
 
 
 STATE_DIR = ROOT / "state" / "us_short"
-SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_overextension_20260709"
+SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_overextension" / _DECISION_DATE
 RUNNER_MODULE = "runners.us_short_batch5_full_universe_overextension_producer"
 _GOV_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 _PRICE_BASIS_YMD = _USED_DATE  # "2026-06-12" — the OHLCV series as_of (== packet price_basis_date)
@@ -180,7 +180,7 @@ class FullUniverseOverextensionProducerTest(unittest.TestCase):
         self.state_root = Path(self._state_root_context.__enter__())
         self.addCleanup(self._state_root_context.__exit__, None, None, None)
         self._sample_root_context = temporary_us_short_directory(
-            ROOT, Path("provider_samples") / "us_short_batch5_full_universe_overextension_20260709"
+            ROOT, Path("provider_samples") / "us_short_batch5_full_universe_overextension" / _DECISION_DATE
         )
         self.sample_root = Path(self._sample_root_context.__enter__())
         self.addCleanup(self._sample_root_context.__exit__, None, None, None)

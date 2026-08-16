@@ -39,7 +39,8 @@ from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 AUTHORIZATION_REF = "user_chat_20260706_us_short_full_candidate_pass2_preflight"
 SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_candidate_pass2_preflight_summary.schema.json"
 SUMMARY_PATH = ROOT / "docs" / "us_short_batch5_full_candidate_pass2_preflight_summary_20260706.json"
-PROVIDER_SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_candidate_pass2_preflight_20260706")
+PROVIDER_SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_candidate_pass2_preflight")
+LEGACY_PROVIDER_SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_candidate_pass2_preflight_20260706")
 STATE_US_SHORT_DIR = ROOT / "state" / "us_short"
 ELIGIBILITY_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 DEFAULT_CANDIDATE_ARTIFACT_PATH = STATE_US_SHORT_DIR / "candidate_universe_20260706.json"
@@ -141,18 +142,28 @@ def _existing_state_json(path: Path | str, *, field: str) -> Path:
     return resolved
 
 
-def _validate_summary_path(path: Path | str) -> Path:
+def _validate_summary_path(path: Path | str, *, expected_decision_date: str | None = None) -> Path:
     resolved = _resolve_repo_path(path, field="summary_path")
     if resolved.suffix != ".json":
         raise FullCandidatePass2PreflightError("summary_path must be a .json file")
     if resolved == SUMMARY_PATH.resolve():
         return resolved
     try:
-        resolved.relative_to((ROOT / PROVIDER_SAMPLE_REL_ROOT).resolve())
+        relative = resolved.relative_to((ROOT / PROVIDER_SAMPLE_REL_ROOT).resolve())
     except ValueError as exc:
         raise FullCandidatePass2PreflightError(
             "summary_path must be the canonical tracked summary or under this runner's provider_samples folder"
         ) from exc
+    if len(relative.parts) < 2 or len(relative.parts[0]) != 8 or not relative.parts[0].isdigit():
+        raise FullCandidatePass2PreflightError(
+            "summary_path must include a decision-date directory under the preflight provider_samples root"
+        )
+    try:
+        datetime.strptime(relative.parts[0], "%Y%m%d")
+    except ValueError as exc:
+        raise FullCandidatePass2PreflightError("summary_path decision-date directory must be a real date") from exc
+    if expected_decision_date is not None and relative.parts[0] != expected_decision_date:
+        raise FullCandidatePass2PreflightError("summary_path decision-date directory must match expected_decision_date")
     if not _git_ignored(resolved):
         raise FullCandidatePass2PreflightError("non-canonical summary_path must be gitignored")
     return resolved
@@ -716,7 +727,7 @@ def run_preflight(
     candidate_path = _existing_state_json(candidate_artifact_path, field="candidate_artifact_path")
     momentum_path = _existing_state_json(momentum_projection_path, field="momentum_projection_path")
     theme_path = _existing_state_json(theme_projection_path, field="theme_projection_path")
-    summary_resolved = _validate_summary_path(summary_path)
+    summary_resolved = _validate_summary_path(summary_path, expected_decision_date=expected_decision_date)
     artifact = _load_candidate_artifact(
         candidate_artifact_path=candidate_path,
         expected_decision_date=expected_decision_date,

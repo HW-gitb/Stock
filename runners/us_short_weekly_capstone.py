@@ -73,6 +73,7 @@ from engine.us_short_weekend_private_write import (
 from runners import us_short_batch5_data_context_source_packet as source_packet_runner  # noqa: E402
 from runners.us_short_batch5_full_candidate_pass2_preflight import (  # noqa: E402
     FullCandidatePass2PreflightError,
+    PROVIDER_SAMPLE_REL_ROOT,
     canonicalize_catalyst_recall_tickers,
 )
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
@@ -82,8 +83,8 @@ STATE_DIR = ROOT / "state" / "us_short"
 # The preflight summary is BOTH stage-7's OUTPUT and stage-8's preflight INPUT, so it must live where BOTH runners'
 # fail-closed allowlists accept it. This mirrors
 # runners.us_short_batch5_full_candidate_pass2_preflight.PROVIDER_SAMPLE_REL_ROOT (a conformance test pins equality)
-# — a per-run gitignored sidecar under the reviewed provider_samples/ tree, decision-date-keyed in the filename.
-_PREFLIGHT_SAMPLE_REL_ROOT = Path("provider_samples") / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+# — a per-run gitignored sidecar under the reviewed provider_samples/ tree, partitioned by decision date.
+_PREFLIGHT_SAMPLE_REL_ROOT = PROVIDER_SAMPLE_REL_ROOT
 MASSIVE_RATE_LIMIT_WINDOW_CAPACITY = universe_fetch.MASSIVE_RATE_LIMIT_WINDOW_CAPACITY
 
 
@@ -438,7 +439,9 @@ class CapstoneContext:
         # stage-7 preflight OUTPUT + stage-8 pass2 preflight INPUT — lives under the preflight runner's accepted
         # provider_samples/ root (both runners' allowlists accept it), NOT under state/us_short/ (which the runners
         # reject). Gitignored per-run sidecar, decision-date-keyed.
-        return self.sample_root / _PREFLIGHT_SAMPLE_REL_ROOT / f"us_short_batch5_capstone_pass2_preflight_{self.decision_date}_summary.json"
+        return self.sample_root / _PREFLIGHT_SAMPLE_REL_ROOT / self.decision_date / (
+            f"us_short_batch5_capstone_pass2_preflight_{self.decision_date}_summary.json"
+        )
 
     @property
     def yfinance_grade_source_package_path(self) -> Path:

@@ -73,7 +73,8 @@ SERIES_PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_universe_mo
 CLASSIFICATION_PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_universe_sector_classification_packet.schema.json"
 SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_universe_theme_summary.schema.json"
 SUMMARY_PATH = ROOT / "docs" / "us_short_batch5_full_universe_theme_summary_20260707.json"
-SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_universe_theme_20260707")
+SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_universe_theme")
+LEGACY_SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_universe_theme_20260707")
 STATE_US_SHORT_DIR = ROOT / "state" / "us_short"
 ELIGIBILITY_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 DEFAULT_CANDIDATE_ARTIFACT_PATH = STATE_US_SHORT_DIR / "candidate_universe_20260702.json"
@@ -186,18 +187,28 @@ def _validate_state_json_file(path: Path | str, *, field: str, must_exist: bool)
     return resolved
 
 
-def _validate_summary_path(path: Path | str) -> Path:
+def _validate_summary_path(path: Path | str, *, expected_decision_date: str | None = None) -> Path:
     resolved = _resolve_repo_path(path, field="summary_path")
     if resolved.suffix != ".json":
         raise FullUniverseThemeProducerError("summary_path must be a .json path")
     if resolved == SUMMARY_PATH.resolve():
         return resolved
     try:
-        resolved.relative_to((ROOT / SAMPLE_REL_ROOT).resolve())
+        relative = resolved.relative_to((ROOT / SAMPLE_REL_ROOT).resolve())
     except ValueError as exc:
         raise FullUniverseThemeProducerError(
             "summary_path must be the canonical tracked summary or under this runner's provider_samples folder"
         ) from exc
+    if len(relative.parts) < 2:
+        raise FullUniverseThemeProducerError(
+            "summary_path must include a decision-date directory under the theme provider_samples root"
+        )
+    try:
+        datetime.strptime(relative.parts[0], "%Y%m%d")
+    except ValueError as exc:
+        raise FullUniverseThemeProducerError("summary_path decision-date directory must be a real date") from exc
+    if expected_decision_date is not None and relative.parts[0] != expected_decision_date:
+        raise FullUniverseThemeProducerError("summary_path decision-date directory must match expected_decision_date")
     if not _git_ignored(resolved):
         raise FullUniverseThemeProducerError("non-canonical summary_path must be gitignored")
     return resolved
@@ -370,6 +381,7 @@ def _load_context(
         candidate_artifact_path=candidate_artifact_path,
         expected_decision_date=series_clock["expected_decision_date"],
     )
+    _validate_summary_path(summary_path, expected_decision_date=series_clock["expected_decision_date"])
     if series_clock["candidate_price_basis_date"] != artifact["price_basis_date"]:
         raise FullUniverseThemeProducerError("series candidate_price_basis_date must match the candidate artifact")
     if class_clock["candidate_price_basis_date"] != artifact["price_basis_date"]:

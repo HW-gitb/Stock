@@ -224,40 +224,43 @@ class ReplayClientTest(unittest.TestCase):
         provider_samples = Path(root_context.__enter__())
         self.addCleanup(root_context.__exit__, None, None, None)
         with tempfile.TemporaryDirectory(prefix="test_replay_source_", dir=str(provider_samples)) as root_dir, \
-                tempfile.TemporaryDirectory(prefix="test_replay_output_", dir=str(provider_samples)) as replay_dir, \
                 tempfile.TemporaryDirectory(prefix="test_replay_summary_", dir=str(provider_samples)) as summary_dir:
             root = Path(root_dir)
-            replay_root = Path(replay_dir)
             summary_path = Path(summary_dir) / "capture_summary.json"
             self._seed(root)
             self._bound_summary(root, summary_path)
-            with self.assertRaises(replay.ReplayError):
-                replay.run_replay(
-                    source_raw_root=root,
-                    source_summary_path=summary_path,
-                    preflight_summary_path=summary_path,
-                    expected_total_call_budget=6,
-                    output_prefix=replay_root / "out",
-                    summary_path=replay_root / "summary.json",
-                    replay_raw_root=root,
-                )
-            with mock.patch.object(replay.live_source_packet, "run_full_candidate_live_source_packet", return_value={}) as run, \
-                    mock.patch.object(replay.live_source_packet, "_validate_preflight_path", return_value=summary_path), \
-                    mock.patch.object(
-                        replay.live_source_packet,
-                        "_load_ready_preflight",
-                        return_value={"decision_clock": {"expected_decision_date": "20260708"}},
-                    ):
-                replay.run_replay(
-                    source_raw_root=root,
-                    source_summary_path=summary_path,
-                    preflight_summary_path=summary_path,
-                    expected_total_call_budget=6,
-                    output_prefix=replay_root / "out",
-                    summary_path=replay_root / "summary.json",
-                    replay_raw_root=replay_root,
-                    observed_at="2026-07-08T08:00:00-04:00",
-                )
+            with temporary_us_short_directory(
+                ROOT,
+                live.RAW_SAMPLE_REL_ROOT / "20260708",
+            ) as replay_dir:
+                replay_root = Path(replay_dir)
+                with self.assertRaises(replay.ReplayError):
+                    replay.run_replay(
+                        source_raw_root=root,
+                        source_summary_path=summary_path,
+                        preflight_summary_path=summary_path,
+                        expected_total_call_budget=6,
+                        output_prefix=replay_root / "out",
+                        summary_path=replay_root / "summary.json",
+                        replay_raw_root=root,
+                    )
+                with mock.patch.object(replay.live_source_packet, "run_full_candidate_live_source_packet", return_value={}) as run, \
+                        mock.patch.object(replay.live_source_packet, "_validate_preflight_path", return_value=summary_path), \
+                        mock.patch.object(
+                            replay.live_source_packet,
+                            "_load_ready_preflight",
+                            return_value={"decision_clock": {"expected_decision_date": "20260708"}},
+                        ):
+                    replay.run_replay(
+                        source_raw_root=root,
+                        source_summary_path=summary_path,
+                        preflight_summary_path=summary_path,
+                        expected_total_call_budget=6,
+                        output_prefix=replay_root / "out",
+                        summary_path=replay_root / "summary.json",
+                        replay_raw_root=replay_root,
+                        observed_at="2026-07-08T08:00:00-04:00",
+                    )
             kwargs = run.call_args.kwargs
             self.assertFalse(kwargs["run_data_context"])
             self.assertEqual(kwargs["execution_mode"], "offline_replay")
@@ -287,22 +290,27 @@ class ReplayClientTest(unittest.TestCase):
                 )
             self._seed(root)
             self._bound_summary(root, summary_path)
-            with mock.patch.object(replay.live_source_packet, "_validate_preflight_path", return_value=summary_path), \
-                    mock.patch.object(
-                        replay.live_source_packet,
-                        "_load_ready_preflight",
-                        return_value={"decision_clock": {"expected_decision_date": "20260709"}},
-                    ):
-                with self.assertRaisesRegex(replay.ReplayError, "decision date"):
-                    replay.run_replay(
-                        source_raw_root=root,
-                        source_summary_path=summary_path,
-                        preflight_summary_path=summary_path,
-                        expected_total_call_budget=6,
-                        output_prefix=root / "out",
-                        summary_path=root / "replay_summary.json",
-                        replay_raw_root=root / "replay_raw",
-                    )
+            with temporary_us_short_directory(
+                ROOT,
+                live.RAW_SAMPLE_REL_ROOT / "20260708",
+            ) as replay_dir:
+                replay_root = Path(replay_dir)
+                with mock.patch.object(replay.live_source_packet, "_validate_preflight_path", return_value=summary_path), \
+                        mock.patch.object(
+                            replay.live_source_packet,
+                            "_load_ready_preflight",
+                            return_value={"decision_clock": {"expected_decision_date": "20260709"}},
+                        ):
+                    with self.assertRaisesRegex(replay.ReplayError, "decision date"):
+                        replay.run_replay(
+                            source_raw_root=root,
+                            source_summary_path=summary_path,
+                            preflight_summary_path=summary_path,
+                            expected_total_call_budget=6,
+                            output_prefix=root / "out",
+                            summary_path=replay_root / "replay_summary.json",
+                            replay_raw_root=replay_root / "replay_raw",
+                        )
 
     def test_direct_offline_mode_rejects_unbound_client(self):
         with self.assertRaisesRegex(live.FullCandidateLiveSourcePacketError, "manifest-bound ReplayClient"):

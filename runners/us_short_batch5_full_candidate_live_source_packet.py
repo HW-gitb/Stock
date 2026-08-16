@@ -56,6 +56,7 @@ from engine.us_short_sec_offering_audit import (  # noqa: E402
 from engine import us_short_status_source as status_source  # noqa: E402
 from runners import us_egs_sample_validation as sample_validation  # noqa: E402
 from runners import us_short_batch5_data_context as data_context_assembly  # noqa: E402
+from runners import us_short_batch5_full_candidate_pass2_preflight as pass2_preflight  # noqa: E402
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 from runners.us_short_batch5_data_context_source_packet import (  # noqa: E402
     FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
@@ -70,8 +71,9 @@ SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_candidate_live_so
 PREFLIGHT_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_candidate_pass2_preflight_summary.schema.json"
 SUMMARY_PATH = ROOT / "docs" / "us_short_batch5_full_candidate_live_source_packet_summary_20260706.json"
 PREFLIGHT_SUMMARY_PATH = ROOT / "docs" / "us_short_batch5_full_candidate_pass2_preflight_summary_20260706.json"
-RAW_SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_candidate_live_source_packet_20260706")
-RAW_SAMPLE_ROOT = ROOT / RAW_SAMPLE_REL_ROOT / "raw"
+RAW_SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_candidate_live_source_packet")
+LEGACY_RAW_SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_candidate_live_source_packet_20260706")
+RAW_SAMPLE_ROOT = ROOT / RAW_SAMPLE_REL_ROOT
 STATE_US_SHORT_DIR = ROOT / "state" / "us_short"
 ELIGIBILITY_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 SOURCE_ARTIFACT_PREFIX = STATE_US_SHORT_DIR / "us_short_batch5_full_candidate_live_source_packet_20260706"
@@ -246,15 +248,55 @@ def _source_paths(prefix: Path) -> dict[str, Path]:
     }
 
 
-def _validate_raw_root(raw_root: Path | str) -> Path:
-    resolved = _resolve_repo_path(raw_root, field="raw_root")
-    approved = (ROOT / RAW_SAMPLE_REL_ROOT).resolve()
+def _provider_sample_date(
+    path: Path,
+    root: Path,
+    *,
+    field: str,
+    expected_decision_date: str | None = None,
+) -> str:
     try:
-        resolved.relative_to(approved)
+        relative = path.relative_to((ROOT / root).resolve())
     except ValueError as exc:
         raise FullCandidateLiveSourcePacketError(
-            "raw_root must stay under provider_samples/us_short_batch5_full_candidate_live_source_packet_20260706/"
+            f"{field} must stay under {root.as_posix()}/<decision_date>/"
         ) from exc
+    if len(relative.parts) < 2:
+        raise FullCandidateLiveSourcePacketError(
+            f"{field} must include a decision-date directory under {root.as_posix()}/"
+        )
+    decision_date = relative.parts[0]
+    _date8_to_ymd(decision_date)
+    if expected_decision_date is not None:
+        _date8_to_ymd(expected_decision_date)
+    if expected_decision_date is not None and decision_date != expected_decision_date:
+        raise FullCandidateLiveSourcePacketError(
+            f"{field} decision-date directory must match the preflight decision date"
+        )
+    return decision_date
+
+
+def _default_raw_root(decision_date: str) -> Path:
+    return ROOT / RAW_SAMPLE_REL_ROOT / decision_date / "raw"
+
+
+def _default_summary_path(decision_date: str) -> Path:
+    return ROOT / RAW_SAMPLE_REL_ROOT / decision_date / f"us_short_batch5_capstone_{decision_date}_pass2_summary.json"
+
+
+def _validate_raw_root(raw_root: Path | str, *, expected_decision_date: str | None = None) -> Path:
+    resolved = _resolve_repo_path(raw_root, field="raw_root")
+    _provider_sample_date(
+        resolved,
+        RAW_SAMPLE_REL_ROOT,
+        field="raw_root",
+        expected_decision_date=expected_decision_date,
+    )
+    relative = resolved.relative_to((ROOT / RAW_SAMPLE_REL_ROOT).resolve())
+    if len(relative.parts) < 2:
+        raise FullCandidateLiveSourcePacketError(
+            "raw_root must be inside provider_samples/us_short_batch5_full_candidate_live_source_packet/<decision_date>/"
+        )
     try:
         sample_validation.validate_raw_root(resolved)
     except ValueError as exc:
@@ -262,33 +304,55 @@ def _validate_raw_root(raw_root: Path | str) -> Path:
     return resolved
 
 
-def _validate_summary_path(summary_path: Path | str) -> Path:
+def _validate_summary_path(
+    summary_path: Path | str,
+    *,
+    expected_decision_date: str | None = None,
+) -> Path:
     resolved = _resolve_repo_path(summary_path, field="summary_path")
     if resolved.suffix != ".json":
         raise FullCandidateLiveSourcePacketError("summary_path must be a .json file")
     if resolved == SUMMARY_PATH.resolve():
         return resolved
-    try:
-        resolved.relative_to((ROOT / RAW_SAMPLE_REL_ROOT).resolve())
-    except ValueError as exc:
-        raise FullCandidateLiveSourcePacketError(
-            "summary_path must be the canonical tracked summary or under this runner's provider_samples folder"
-        ) from exc
+    _provider_sample_date(
+        resolved,
+        RAW_SAMPLE_REL_ROOT,
+        field="summary_path",
+        expected_decision_date=expected_decision_date,
+    )
     if not _git_ignored(resolved):
         raise FullCandidateLiveSourcePacketError("non-canonical summary_path must be gitignored")
     return resolved
 
 
-def _validate_preflight_path(preflight_summary_path: Path | str) -> Path:
+def _validate_preflight_path(
+    preflight_summary_path: Path | str,
+    *,
+    expected_decision_date: str | None = None,
+) -> Path:
     resolved = _existing_file(preflight_summary_path, field="preflight_summary_path")
     if resolved == PREFLIGHT_SUMMARY_PATH.resolve():
         return resolved
     try:
-        resolved.relative_to((ROOT / "provider_samples/us_short_batch5_full_candidate_pass2_preflight_20260706").resolve())
+        resolved.relative_to((ROOT / pass2_preflight.PROVIDER_SAMPLE_REL_ROOT).resolve())
     except ValueError as exc:
-        raise FullCandidateLiveSourcePacketError(
-            "preflight_summary_path must be the canonical tracked summary or under its provider_samples folder"
-        ) from exc
+        try:
+            resolved.relative_to((ROOT / pass2_preflight.LEGACY_PROVIDER_SAMPLE_REL_ROOT).resolve())
+        except ValueError:
+            raise FullCandidateLiveSourcePacketError(
+                "preflight_summary_path must be the canonical tracked summary or under its provider_samples folder"
+            ) from exc
+        if expected_decision_date is not None and expected_decision_date != "20260706":
+            raise FullCandidateLiveSourcePacketError(
+                "preflight_summary_path legacy root does not match the preflight decision date"
+            )
+    else:
+        _provider_sample_date(
+            resolved,
+            pass2_preflight.PROVIDER_SAMPLE_REL_ROOT,
+            field="preflight_summary_path",
+            expected_decision_date=expected_decision_date,
+        )
     if not _git_ignored(resolved):
         raise FullCandidateLiveSourcePacketError("non-canonical preflight_summary_path must be gitignored")
     return resolved
@@ -2234,8 +2298,8 @@ def run_full_candidate_live_source_packet(
     sector_classification_packet_path: Path | None = None,
     yfinance_grade_actions_path: Path | None = None,
     source_artifact_prefix: Path = SOURCE_ARTIFACT_PREFIX,
-    summary_path: Path = SUMMARY_PATH,
-    raw_root: Path = RAW_SAMPLE_ROOT,
+    summary_path: Path | None = None,
+    raw_root: Path | None = None,
     budget_approval: Any = None,
     client: sample_validation.JsonHttpClient | None = None,
     confirm_user_authorization: bool = False,
@@ -2356,6 +2420,7 @@ def run_full_candidate_live_source_packet(
         raise FullCandidateLiveSourcePacketError(
             "max_total_http_attempts must be an int from the logical call budget through 20000")
     expected_decision_date = preflight["decision_clock"]["expected_decision_date"]
+    _validate_preflight_path(preflight_path, expected_decision_date=expected_decision_date)
     source_as_of = _date8_to_ymd(expected_decision_date)
     if execution_mode == _EXECUTION_MODE_OFFLINE_REPLAY:
         if replay_source_capture.get("source_expected_decision_date") != expected_decision_date \
@@ -2410,8 +2475,14 @@ def run_full_candidate_live_source_packet(
     paths = _source_paths(prefix)
     for field, path in paths.items():
         _validate_state_json_path(path, field=f"source_artifact.{field}")
-    raw_root_resolved = _validate_raw_root(raw_root)
-    summary_resolved = _validate_summary_path(summary_path)
+    raw_root_resolved = _validate_raw_root(
+        raw_root if raw_root is not None else _default_raw_root(expected_decision_date),
+        expected_decision_date=expected_decision_date,
+    )
+    summary_resolved = _validate_summary_path(
+        summary_path if summary_path is not None else _default_summary_path(expected_decision_date),
+        expected_decision_date=expected_decision_date,
+    )
 
     eligibility_governance = load_eligibility_governance(ELIGIBILITY_GOVERNANCE_PATH)
     load_catalyst_governance()
@@ -2686,8 +2757,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--ohlcv-series-packet-path", type=Path)
     parser.add_argument("--yfinance-grade-actions-path", type=Path)
     parser.add_argument("--source-artifact-prefix", type=Path, default=SOURCE_ARTIFACT_PREFIX)
-    parser.add_argument("--summary-path", type=Path, default=SUMMARY_PATH)
-    parser.add_argument("--raw-root", type=Path, default=RAW_SAMPLE_ROOT)
+    parser.add_argument("--summary-path", type=Path)
+    parser.add_argument("--raw-root", type=Path)
     parser.add_argument("--generated-at")
     parser.add_argument("--observed-at")
     parser.add_argument("--theme-opportunity-state", default="no_strong_theme")

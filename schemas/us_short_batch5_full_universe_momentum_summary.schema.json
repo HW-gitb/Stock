@@ -156,7 +156,7 @@
         "output_projection_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
         "summary_path": {
           "type": "string",
-          "pattern": "^(docs/us_short_batch5_full_universe_momentum_summary_20260707\\.json|provider_samples/us_short_batch5_full_universe_momentum_20260707/.+\\.json)$",
+          "pattern": "^(docs/us_short_batch5_full_universe_momentum_summary_20260707\\.json|provider_samples/us_short_batch5_full_universe_momentum/[0-9]{8}/.+\\.json|provider_samples/us_short_batch5_full_universe_momentum_20260707/.+\\.json)$",
           "not": { "pattern": "\\.\\." }
         }
       }
