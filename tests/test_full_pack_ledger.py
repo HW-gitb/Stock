@@ -282,7 +282,7 @@ class FullPackLedgerTests(unittest.TestCase):
             with redirect_stdout(output):
                 self.assertEqual(
                     fpl.run_full_pack(
-                        "a_short", "nested result output", FOCUSED_RECEIPT, 30,
+                        "a_short", "nested result output", 30,
                         ["discover", "-s", "tests", "-p", "test_a_short*.py"],
                         state=state, ledger=Path(tmp) / "ledger.json",
                     ),
