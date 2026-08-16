@@ -26,6 +26,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.a_short_run_revision import validate_run_revision_id  # noqa: E402
+from runners.a_short_official_settlement import OFFICIAL_SETTLEMENT_SIDECARS  # noqa: E402
 
 HEALTH_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_health.schema.json"
 OUTCOME_SCHEMA = ROOT / "schemas" / "a_short_weekly_sidecar_outcomes.schema.json"
@@ -71,15 +72,20 @@ SIDECAR_SPECS: dict[str, _SidecarSpec] = {
     "official_operation_capture": _spec("forward_evidence", "decision", "manifest_only"),
     "official_operation_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
     "factor_v2_capture": _spec("forward_evidence", "decision", "manifest_only"),
+    "factor_v2_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
     "margin_overheat_cash_control_capture": _spec("advisory", "clockless", "manifest_only"),
     "margin_overheat_cash_control_settlement": _spec("advisory", "clockless", "manifest_only"),
     "industry_weight_capture": _spec("forward_evidence", "decision", "manifest_only"),
     "industry_weight_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
     "target_policy_capture": _spec("forward_evidence", "decision", "manifest_only"),
+    "target_policy_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
     "final_action_capture": _spec("forward_evidence", "decision", "manifest_only"),
     "final_action_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
     "overlay_adjudication_capture": _spec("forward_evidence", "decision", "manifest_only"),
     "overlay_adjudication_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
+    "forward_tracker_official_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
+    "theme_forward_official_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
+    "crash_veto_official_settlement": _spec("forward_evidence", "clockless", "manifest_only"),
 }
 AUTHORITATIVE_ARTIFACT_SIDECARS = frozenset(
     name for name, spec in SIDECAR_SPECS.items()
@@ -581,6 +587,7 @@ def build_health(
     m67_invocation: str | None = None,
     iv_feed_path: Path | None = None,
     run_revision_id: str | None = None,
+    official_settlement_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     _validate_sidecar_validation_buckets()
     as_of = _safe_date(as_of)
@@ -618,6 +625,46 @@ def build_health(
             manifest_candidate_digests.add(str(manifest["candidate_digest"]))
         if manifest.get("run_revision_id") not in (None, ""):
             manifest_revisions.add(validate_run_revision_id(manifest["run_revision_id"]))
+    if official_settlement_manifest is not None:
+        jsonschema.validate(
+            official_settlement_manifest,
+            json.loads(OUTCOME_SCHEMA.read_text(encoding="utf-8")),
+        )
+        if official_settlement_manifest.get("as_of") != as_of:
+            raise ValueError("official_settlement_outcomes_clock_mismatch")
+        official_revision = official_settlement_manifest.get("run_revision_id")
+        if official_revision in (None, ""):
+            raise ValueError("official_settlement_outcomes_identity_missing")
+        official_revision = validate_run_revision_id(official_revision)
+        expected_official = list(OFFICIAL_SETTLEMENT_SIDECARS)
+        actual_expected = [
+            str(name) for name in official_settlement_manifest.get("expected_sidecars", [])
+        ]
+        if actual_expected != expected_official:
+            raise ValueError("official_settlement_outcomes_expected_set_invalid")
+        official_rows = official_settlement_manifest.get("sidecars") or []
+        official_names = [str(row.get("name") or "") for row in official_rows]
+        official_name_set = set(official_names)
+        expected_present = [name for name in expected_official if name in official_name_set]
+        missing_official = tuple(name for name in expected_official if name not in official_name_set)
+        if (len(official_names) != len(set(official_names))
+                or official_names != expected_present
+                or any(name not in set(OFFICIAL_SETTLEMENT_SIDECARS) for name in official_names)
+                or any(raw.get("expected") is not True for raw in official_rows)):
+            raise ValueError("official_settlement_outcomes_track_set_invalid")
+        manifest_revisions.add(official_revision)
+        for raw in official_rows:
+            name = str(raw["name"])
+            # The batch whitelist/order check above already rejects every
+            # non-whitelist name; only the ten final official outcomes may
+            # replace a same-name pre-selector self-report.
+            raw_by_name[name] = raw
+        # The full expected whitelist remains authoritative: an omitted row is
+        # deliberately materialised as missing_outcome below, rather than
+        # disappearing because the producer-derived list was shorter.
+        for name in missing_official:
+            raw_by_name.setdefault(name, {})
+        expected.extend(expected_official)
     if len(manifest_revisions) > 1:
         raise ValueError("launcher/pipeline manifests use different run_revision_id values")
     if run_revision_id is not None and manifest_revisions and manifest_revisions != {run_revision_id}:
@@ -792,6 +839,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--launcher-outcomes")
     parser.add_argument("--pipeline-outcomes")
+    parser.add_argument("--official-settlement-outcomes")
     parser.add_argument("--iv-feed", help="revision-scoped IV feed for authoritative health validation")
     parser.add_argument("--run-revision-id", help="expected V5 revision shared by M6.7 and both manifests")
     parser.add_argument(
@@ -801,6 +849,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     out_dir = Path(args.out_dir).resolve()
+    official_manifest = _load_manifest(args.official_settlement_outcomes)
+    if args.official_settlement_outcomes and official_manifest is None:
+        raise ValueError("official settlement outcome manifest is not valid JSON")
     payload = build_health(
         as_of=args.as_of,
         launcher_manifest=_load_manifest(args.launcher_outcomes),
@@ -810,6 +861,7 @@ def main(argv: list[str] | None = None) -> int:
         m67_invocation=args.m67_invocation,
         iv_feed_path=Path(args.iv_feed).resolve() if args.iv_feed else None,
         run_revision_id=args.run_revision_id,
+        official_settlement_manifest=official_manifest,
     )
     paths = write_health_bundle(payload, out_dir)
     print(f"[sidecar-health] overall={payload['overall']} m67={payload['m67_status']} sidecar_failed={payload['failed_count']} stalled={payload['stalled_count']} partial={payload['partial_count']} -> {paths[1].name}")

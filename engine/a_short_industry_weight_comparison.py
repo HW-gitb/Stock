@@ -1045,6 +1045,9 @@ def settle_and_summarize_weekly(*, root: str | Path | None, daily_cache_path: st
                 if sidecar_result is not None:
                     sidecar_result["outcomes_updated"] = settlement.get("outcomes_updated")
                 if official_project_root is not None and settlement.get("status") != "settled_from_existing_cache":
+                    if (sidecar_result is not None and
+                            settlement.get("status") == "no_official_p5_captures"):
+                        sidecar_result["official_settlement_status"] = "no_official_captures"
                     summary = unavailable_public_progress(as_of)
                 else:
                     summary = build_public_progress(root=private_root, as_of=as_of,

@@ -945,6 +945,239 @@ class MainWiringTests(unittest.TestCase):
         (Path(td) / "feed.json").write_text(json.dumps(feed or _feed()), encoding="utf-8")
         _write_account(Path(td) / "acct.json")
 
+    def _run_margin_settlement_summary(self, td, summary):
+        self._write_inputs(td)
+        out = Path(td) / "weekly.json"
+
+        def settle(**kwargs):
+            kwargs["sidecar_result"]["outcomes_updated"] = 0
+            return summary
+
+        with patch(
+            "engine.a_short_margin_overheat_cash_control.capture_margin_overheat_after_published_weekly",
+            return_value={"status": "captured"},
+        ), patch(
+            "engine.a_short_margin_overheat_cash_control.settle_and_summarize_margin_overheat_weekly",
+            side_effect=settle,
+        ):
+            main([
+                "--as-of", AS_OF,
+                "--analysis-input", str(Path(td) / "ai.json"),
+                "--iv-feed", str(Path(td) / "feed.json"),
+                "--account", str(Path(td) / "acct.json"),
+                "--out", str(out),
+                "--run-date", AS_OF,
+                "--margin-overheat-cash-control-root", str(Path(td) / "margin-private"),
+                "--margin-overheat-cash-control-daily-cache", str(Path(td) / "missing-cache.json"),
+            ], price_provider=lambda code: _series())
+        weekly = json.loads(out.read_text(encoding="utf-8"))
+        outcomes = json.loads(
+            out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+        )
+        return weekly, outcomes
+
+    def test_margin_weekly_consumer_projects_official_revision_id_at_boundary(self):
+        from engine import a_short_margin_overheat_cash_control as margin_track
+
+        revision = "a" * 32
+        summaries = (
+            margin_track._public_margin_summary(
+                margin_track.PUBLIC_STATUS_UNAVAILABLE,
+                as_of=AS_OF,
+                official_revision_id=revision,
+            ),
+            margin_track._public_margin_summary(
+                margin_track.PUBLIC_STATUS_CURRENT,
+                as_of=AS_OF,
+                evidence_status="accumulating",
+                official_revision_id=revision,
+            ),
+        )
+        for summary in summaries:
+            with self.subTest(status=summary["status"]), tempfile.TemporaryDirectory() as td:
+                weekly, _ = self._run_margin_settlement_summary(td, summary)
+            self.assertNotIn("official_revision_id", weekly["margin_overheat_cash_control"])
+            self.assertEqual(
+                weekly["margin_overheat_cash_control"]["status"], summary["status"]
+            )
+
+    def test_margin_weekly_consumer_leaves_no_id_summary_unchanged(self):
+        from engine import a_short_margin_overheat_cash_control as margin_track
+
+        summary = margin_track._public_margin_summary(
+            margin_track.PUBLIC_STATUS_UNAVAILABLE, as_of=AS_OF,
+        )
+        with tempfile.TemporaryDirectory() as td:
+            weekly, _ = self._run_margin_settlement_summary(td, summary)
+        self.assertEqual(weekly["margin_overheat_cash_control"], summary)
+
+    def test_margin_weekly_consumer_rejects_other_extra_fields(self):
+        from engine import a_short_margin_overheat_cash_control as margin_track
+
+        summary = margin_track._public_margin_summary(
+            margin_track.PUBLIC_STATUS_UNAVAILABLE,
+            as_of=AS_OF,
+            official_revision_id="a" * 32,
+        )
+        summary["unexpected_field"] = "must remain rejected"
+        with tempfile.TemporaryDirectory() as td:
+            weekly, outcomes = self._run_margin_settlement_summary(td, summary)
+        projected = weekly["margin_overheat_cash_control"]
+        self.assertNotIn("official_revision_id", projected)
+        self.assertNotIn("unexpected_field", projected)
+        settlement = next(
+            row for row in outcomes["sidecars"]
+            if row["name"] == "margin_overheat_cash_control_settlement"
+        )
+        self.assertEqual(settlement["execution_status"], "failed")
+        self.assertEqual(settlement["error_code"], "settlement_unavailable")
+
+    def test_preselector_p5_and_p4a_waiting_statuses_stay_not_due(self):
+        from engine.a_short_industry_weight_comparison import (
+            unavailable_public_progress,
+        )
+        from engine.a_short_overlay_adjudication import (
+            unavailable_public_summary,
+        )
+
+        cases = (
+            ("p5_waiting", "p5", unavailable_public_progress(AS_OF),
+             "not_due", "not_applicable"),
+            ("p4a_waiting", "p4a", unavailable_public_summary(AS_OF),
+             "not_due", "not_applicable"),
+        )
+        for name, track, summary, expected_execution, expected_progress in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as td:
+                self._write_inputs(td)
+                out = Path(td) / "weekly.json"
+                if track == "p5":
+                    module = "engine.a_short_industry_weight_comparison"
+                    root_option = "--industry-weight-comparison-root"
+                    sidecar = "industry_weight_settlement"
+                else:
+                    module = "engine.a_short_overlay_adjudication"
+                    root_option = "--overlay-adjudication-root"
+                    sidecar = "overlay_adjudication_settlement"
+                with patch(f"{module}.settle_and_summarize_weekly", return_value=summary), \
+                        patch(f"{module}.capture_after_published_weekly", return_value={"status": "captured"}):
+                    main([
+                        "--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                        "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                        "--out", str(out), "--run-date", AS_OF,
+                        root_option, str(Path(td) / "private"),
+                    ], price_provider=lambda code: _series())
+                outcomes = json.loads(
+                    out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+                )
+            row = next(item for item in outcomes["sidecars"] if item["name"] == sidecar)
+            self.assertEqual(row["execution_status"], expected_execution)
+            self.assertEqual(row["progress_status"], expected_progress)
+            if expected_execution == "not_due":
+                self.assertEqual(row["error_code"], "official_selection_pending")
+
+    def test_preselector_conflict_reason_code_wins_over_waiting_summary(self):
+        cases = (
+            ("p5", "engine.a_short_industry_weight_comparison",
+             "--industry-weight-comparison-root", "industry_weight_settlement"),
+            ("p4a", "engine.a_short_overlay_adjudication",
+             "--overlay-adjudication-root", "overlay_adjudication_settlement"),
+        )
+        for name, module, root_option, sidecar in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as td:
+                self._write_inputs(td)
+                out = Path(td) / "weekly.json"
+
+                def settle(**kwargs):
+                    carrier = kwargs.get("sidecar_result")
+                    if carrier is not None:
+                        carrier["outcomes_updated"] = 0
+                        carrier["reason_codes"] = ["immutable_capture_conflict"]
+                    if name == "p5":
+                        from engine.a_short_industry_weight_comparison import unavailable_public_progress
+                        return unavailable_public_progress(AS_OF)
+                    from engine.a_short_overlay_adjudication import unavailable_public_summary
+                    return unavailable_public_summary(AS_OF)
+
+                with patch(f"{module}.settle_and_summarize_weekly", side_effect=settle), \
+                        patch(f"{module}.capture_after_published_weekly", return_value={"status": "captured"}):
+                    main([
+                        "--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                        "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                        "--out", str(out), "--run-date", AS_OF,
+                        root_option, str(Path(td) / "private"),
+                    ], price_provider=lambda code: _series())
+                outcomes = json.loads(
+                    out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+                )
+            row = next(item for item in outcomes["sidecars"] if item["name"] == sidecar)
+            self.assertEqual(row["execution_status"], "succeeded")
+            self.assertEqual(row["progress_status"], "stalled")
+            self.assertEqual(row["error_code"], "immutable_capture_conflict")
+
+    def test_only_revision_selection_block_is_deferred_for_final_and_operation(self):
+        from runners.a_short_final_action_validation_runner import unavailable_public_summary
+        from engine.a_short_run_revision import RevisionSelectionBlocked
+
+        cases = (
+            ("final", "runners.a_short_final_action_validation_runner",
+             "--final-action-validation-root", "final_action_settlement"),
+            ("operation", "runners.a_short_official_operation_evidence",
+             "--official-operation-evidence-root", "official_operation_settlement"),
+        )
+        for name, module, root_option, sidecar in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as td:
+                self._write_inputs(td)
+                out = Path(td) / "weekly.json"
+                if name == "final":
+                    settle_target = f"{module}.settle_and_summarize"
+                    capture_target = f"{module}.capture_after_published_weekly"
+                    side_effect = [unavailable_public_summary(AS_OF), RevisionSelectionBlocked("pending")]
+                else:
+                    settle_target = f"{module}.settle_and_summarize"
+                    capture_target = f"{module}.capture_after_published_weekly"
+                    side_effect = RevisionSelectionBlocked("pending")
+                with patch(settle_target, side_effect=side_effect), \
+                        patch(capture_target, return_value={"status": "captured"}):
+                    main([
+                        "--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                        "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                        "--out", str(out), "--run-date", AS_OF,
+                        root_option, str(Path(td) / "private"),
+                    ], price_provider=lambda code: _series())
+                outcomes = json.loads(
+                    out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+                )
+            row = next(item for item in outcomes["sidecars"] if item["name"] == sidecar)
+            self.assertEqual(row["execution_status"], "not_due")
+            self.assertEqual(row["progress_status"], "not_applicable")
+            self.assertEqual(row["error_code"], "official_selection_pending")
+
+    def test_final_settlement_runtime_error_remains_failed(self):
+        from runners.a_short_final_action_validation_runner import unavailable_public_summary
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            with patch(
+                "runners.a_short_final_action_validation_runner.settle_and_summarize",
+                side_effect=[unavailable_public_summary(AS_OF), RuntimeError("unexpected settlement error")],
+            ), patch(
+                "runners.a_short_final_action_validation_runner.capture_after_published_weekly",
+                return_value={"status": "captured"},
+            ):
+                main([
+                    "--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                    "--out", str(out), "--run-date", AS_OF,
+                    "--final-action-validation-root", str(Path(td) / "private"),
+                ], price_provider=lambda code: _series())
+            outcomes = json.loads(
+                out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+            )
+        row = next(item for item in outcomes["sidecars"] if item["name"] == "final_action_settlement")
+        self.assertEqual(row["execution_status"], "failed")
+        self.assertEqual(row["progress_status"], "unavailable")
+
     @staticmethod
     def _price_error_candidates(count: int) -> list[dict]:
         return [_ai_candidate(f"{600000 + index:06d}.SH") for index in range(count)]
@@ -2254,6 +2487,45 @@ class MainWiringTests(unittest.TestCase):
         self.assertIsNone(by_name["overlay_adjudication_capture"]["error_detail"])
         self.assertEqual(by_name["overlay_adjudication_settlement"]["execution_status"], "failed")
         self.assertTrue(by_name["overlay_adjudication_settlement"]["error_detail"].startswith("settlement: RuntimeError:"))
+
+    def test_overlay_missing_daily_cache_keeps_cache_reason_out_of_selection_pending(self):
+        from engine.a_short_overlay_adjudication import unavailable_public_summary
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+
+            def settle(**kwargs):
+                if kwargs.get("sidecar_result") is not None:
+                    kwargs["sidecar_result"]["reason_codes"] = ["overlay_daily_cache_unavailable"]
+                return unavailable_public_summary(AS_OF)
+
+            with patch(
+                "engine.a_short_overlay_adjudication.capture_after_published_weekly",
+                return_value={"status": "captured"},
+            ), patch(
+                "engine.a_short_overlay_adjudication.settle_and_summarize_weekly",
+                side_effect=settle,
+            ):
+                main([
+                    "--as-of", AS_OF,
+                    "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"),
+                    "--account", str(Path(td) / "acct.json"),
+                    "--out", str(out),
+                    "--run-date", AS_OF,
+                    "--overlay-adjudication-root", str(Path(td) / "p4-private"),
+                    "--overlay-adjudication-daily-cache", str(Path(td) / "missing-cache.json"),
+                ], price_provider=lambda code: _series())
+            outcomes = json.loads(
+                out.with_name(f"{out.stem}.pipeline_sidecar_outcomes.json").read_text(encoding="utf-8")
+            )
+        settlement = next(row for row in outcomes["sidecars"]
+                          if row["name"] == "overlay_adjudication_settlement")
+        self.assertEqual(settlement["execution_status"], "not_due")
+        self.assertEqual(settlement["progress_status"], "not_applicable")
+        self.assertEqual(settlement["error_code"], "overlay_daily_cache_unavailable")
+        self.assertEqual(settlement["error_detail"], "overlay daily cache is unavailable")
 
     def test_margin_capture_bundle_failure_is_nonblocking_and_reaches_following_sidecars(self):
         with tempfile.TemporaryDirectory() as td:

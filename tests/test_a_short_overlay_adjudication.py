@@ -433,6 +433,20 @@ class OverlayAdjudicationTests(unittest.TestCase):
                                              public_markdown_path=Path(tmp) / "public.md")
             self.assertEqual(context.call_count, 1)
 
+    def test_weekly_settlement_missing_cache_returns_unavailable_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "state" / "a_short" / "overlay_adjudication_private" / "v1"
+            root.mkdir(parents=True)
+            sidecar_result = {}
+            with mock.patch("engine.a_short_overlay_adjudication._today", return_value="20260730"):
+                summary = settle_and_summarize_weekly(
+                    root=root, daily_cache_path=Path(tmp) / "missing_daily_cache.json",
+                    as_of="20260730", write_public=False, strict=True,
+                    sidecar_result=sidecar_result,
+                )
+        self.assertEqual(summary["status"], "evidence_unavailable_or_inconclusive")
+        self.assertEqual(sidecar_result["reason_codes"], ["overlay_daily_cache_unavailable"])
+
     def test_capture_rejects_stage3_profile_that_differs_from_its_epoch_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp); stage3, overlay, weekly, receipt, marker, identity = _sources(tmp)

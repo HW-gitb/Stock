@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -227,6 +228,38 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
         ):
             self.assertIn(f"'{expected}'", self.text)
 
+    def test_finalizer_health_gate_is_semantic_for_failed_and_unsettled_states(self) -> None:
+        gate_start = self.text.index("$HealthSelectionBlocked =")
+        gate_end = self.text.index("if ($LauncherManifestWritten -and $HealthSelectionReady)", gate_start)
+        gate = self.text[gate_start:gate_end]
+
+        def evaluate(selection: str, settled: bool) -> str:
+            selection_literal = "$null" if selection is None else f"'{selection}'"
+            settled_literal = "$true" if settled else "$false"
+            script = "\n".join((
+                f"$SelectionStatus = {selection_literal}",
+                f"$OfficialSettlementComplete = {settled_literal}",
+                "$LauncherManifestWritten = $true",
+                gate,
+                "if ($LauncherManifestWritten -and $HealthSelectionReady) { 'run' }",
+                "elseif ($LauncherManifestWritten -and $HealthSelectionBlocked) { 'defer' }",
+                "else { 'skip' }",
+            ))
+            completed = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                check=True, capture_output=True, text=True,
+            )
+            return completed.stdout.strip().splitlines()[-1]
+
+        for state in (None, "failed", "skipped", "degraded_no_new_entries", "partial_holdings_only"):
+            with self.subTest(state=state):
+                self.assertEqual(evaluate(state, settled=False), "run")
+        self.assertEqual(evaluate("selected", settled=False), "defer")
+        self.assertEqual(evaluate("already_current", settled=False), "defer")
+        self.assertEqual(evaluate("selected", settled=True), "run")
+        self.assertIn("DEFERRED (official revision was selected", self.text)
+        self.assertIn("health closeout was not reached; M6.7 state=", self.text)
+
     def test_failure_health_keeps_run_revision_and_receipt_identity_binding(self) -> None:
         self.assertIn("$Payload['run_revision_id'] = [string]$RunRevisionId", self.text)
         self.assertIn("$FailureHealthArgs += @('--run-revision-id', [string]$RunRevisionId)", self.text)
@@ -253,6 +286,30 @@ class AShortWeeklyM67FailureCloseoutTests(unittest.TestCase):
         self.assertIn("if ($SelectionStatus -in @('selected', 'already_current'))", self.text)
         self.assertIn("'runners\\a_short_official_settlement.py'", self.text)
         self.assertIn("'--as-of', $AsOf, '--run-revision-id', $RunRevisionId", self.text)
+
+    def test_normal_closeout_orders_selection_settlement_before_final_health(self) -> None:
+        write_manifest = self.text.index("'-m', 'engine.a_short_run_revision', 'write-manifest'")
+        select_official = self.text.index("'-m', 'engine.a_short_run_revision', 'select-official'")
+        settlement = self.text.index("'runners\\a_short_official_settlement.py'")
+        health = self.text.rindex("'runners\\a_short_weekly_sidecar_health.py'")
+        pipeline_done = self.text.index("=== Pipeline done ===")
+        self.assertLess(write_manifest, select_official)
+        self.assertLess(select_official, settlement)
+        self.assertLess(settlement, health)
+        self.assertLess(health, pipeline_done)
+
+    def test_revision_manifest_excludes_transient_health_roles_and_health_consumes_settlement_output(self) -> None:
+        roles = self.text.split("$RevisionRoles = [ordered]@{", 1)[1].split(
+            "$MissingRevisionRoles", 1
+        )[0]
+        for role in ("sidecar_health =", "sidecar_health_markdown =", "sidecar_health_receipt ="):
+            self.assertNotIn(role, roles)
+        self.assertIn("'--outcomes', $OfficialSettlementOutcomesPath", self.text)
+        self.assertIn("'--official-settlement-outcomes', $OfficialSettlementOutcomesPath", self.text)
+        self.assertIn("official settlement outcome manifest is missing", self.text)
+        self.assertIn("official settlement runner returned invalid status JSON", self.text)
+        self.assertIn("official settlement outcome manifest is invalid", self.text)
+        self.assertIn("manifest + official pointer committed; post-selector settlement degraded", self.text)
 
     def test_regime_sidecar_outcome_wiring_uses_the_current_revision(self) -> None:
         self.assertIn(

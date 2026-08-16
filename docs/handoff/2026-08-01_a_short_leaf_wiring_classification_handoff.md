@@ -1,5 +1,134 @@
 # A-short 371 叶重新分层交接
 
+## 2026-08-16 Codex executor/fixer：桌面 1a_testrun0816 问题1 Required + Optional 收口（8c7a；repaired / OPEN-NOT-VERIFIED）
+
+### 问题、根因与最小修复
+
+本轮只处理 Claude 复审新增的两项：1 条 Required（新 JSON writer 绕过 non-finite writer 守卫）和 1 条 Optional（日缓存缺失被 pipeline 误写成 official selection pending）。上一轮问题1/2的 Required 与六条 Optional 保持不变；Codex 是 executor/fixer，Claude Code 是独立 reviewer/committer。
+
+- Required：runners/a_short_official_settlement.py::_write_official_outcomes 新增写盘函数未登记 tests/test_a_short_public_json_writer_nonfinite_guard.py:PUBLIC_WRITER_FUNCTIONS，且 json.dumps 缺字面 allow_nan=False。最小修复只新增一条登记说明和一个参数，不改 payload、schema、原子替换或 health。
+- Optional：overlay canonical daily cache 缺失时已有 unavailable summary 没有 sidecar reason，pipeline 只能落到通用 official_selection_pending。最小修复只在已有 missing-cache 分支写 overlay_daily_cache_unavailable，并在既有 pipeline reason-code 优先级中只处理这个精确 code；其他 reason、异常和 waiting 状态不变。
+
+### 调用链、消费者、schema/source-binding 与缓存/写盘边界
+
+- Required 链：comparison/official callbacks → _official_outcomes_payload → _write_official_outcomes → official_settlement_outcomes.json → a_short_weekly_sidecar_health.py。消费者仍是既有 health merge 和 outcomes schema 读取方；复用 as_of、run_revision_id、固定十格 expected set 和原子 os.replace，不新增 provider/cache/public root。
+- Optional 链：overlay settle_and_summarize_weekly → sidecar_result["reason_codes"] → runners/a_short_weekly_pipeline.py overlay consumer → pipeline_sidecar_outcomes.json。继续复用 daily_cache_path、as_of、run_revision_id、unavailable_public_summary 和既有 outcomes schema；不创建、修补或升级 cache，不改变 official marker/public summary。
+- source-binding 仍由既有 as_of + run_revision_id + canonical daily cache / official outcome identity 约束；本轮没有增加 source、schema、配置、枚举层或持久化类型。
+
+### 负向控制与自审项目
+
+- Required：writer guard 的注册集合和字面 allow_nan=False 两格均覆盖；临时移除参数必须转红；全量中该 guard 10/10 PASS。
+- Optional：缺 cache 返回 evidence_unavailable_or_inconclusive 且 carrier 只有 overlay_daily_cache_unavailable；pipeline 结果为 not_due/not_applicable 且 error_code=overlay_daily_cache_unavailable；immutable_capture_conflict、正常 waiting、异常和未知状态的既有 fail-closed 映射不变。
+- A-F self-review：按类核对 writer registration、reason-code precedence、调用链/消费者、schema/source-binding、cache/write boundary、负向控制、精确测试、原始终态；没有把 focused/full green 写成独立 review、live 或 ship 结论。
+
+### 精确测试命令与原始终态
+
+- 固定解释器版本：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe（Python 3.13.8）。精确 focused 命令：C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\bounded_unittest.py focused 300 -- tests.test_a_short_public_json_writer_nonfinite_guard tests.test_a_short_overlay_adjudication tests.test_a_short_weekly_pipeline。
+- focused 原始终态：Ran 635 tests in 75.262s、OK；[bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=635；FOCUSED_RECEIPT token=receipt:9babf0c878c0981647f46c15。既有 weekly test ResourceWarning 不改变 exit 0。
+- 全量精确命令（固定 Python + UTF-8 输出，临时 core.whitespace=cr-at-eol 只处理工作树 CRLF diff 检查）：$env:GIT_CONFIG_COUNT='1'; $env:GIT_CONFIG_KEY_0='core.whitespace'; $env:GIT_CONFIG_VALUE_0='cr-at-eol'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -X utf8 .tools\full_pack_ledger.py run a_short 'R-ASHORT-0816-P1-NEW-JSON-WRITER-BREAKS-THE-NONFINITE-WRITER-INVARIANT closure after Required+Optional repair' 860 -- discover -s tests -p 'test_a_short*.py'。
+- full lane 原始终态：STATIC status=PASS diff_check=PASS py_compile=15；COUNT_GATE discovered=3165 ran=3165 equal=True；Ran 3165 tests in 122.480s；RESULT status=PASS exit=0 tests=3165 elapsed=122.5s deadline=860s mode=parallel；fingerprint=9f95eac7fc1f，ledger=.tools/state/full_pack_ledger.json，sidecar=.tools/state/runs/20260816T143335_a_short_parallel.jsonl。
+- 文档治理门最终原始终态：Ran 42 tests、OK；receipts=receipt:fbbbe2ba69f0f4fcc6e5dbb9、receipt:9f762db301147e7526de5036。首跑只因 SESSION_LOG 顶部模板把 Optional 识别为额外标签而失败，已只改文档模板并复跑通过，代码 fingerprint 未变。
+- 未运行 provider/live、真实周实盘、测试胶囊、sub-agent；未 stage/commit/push/merge。完整代码状态仍 repaired / OPEN-NOT-VERIFIED，等待 Claude 独立审查。
+
+### 交接
+
+Claude Code：审查本轮 Required 的 writer registration + allow_nan=False 与 Optional 的 missing-cache reason-code 接线；复核 focused 635、full 3165/3165、discovered=ran、static py_compile/diff gate；PASS 后按项目规则提交，不启动 provider/live/full lane/sub-agent。
+
+## 2026-08-16 Codex executor/fixer — Claude 审查问题1 Required + Optional 收口（8c7a；repaired / OPEN-NOT-VERIFIED）
+
+### 结论与最小修复
+
+本轮按审查意见一次处理 2 条 Required + 6 条 Optional；Codex 为 executor/fixer，Claude Code 仍为独立 reviewer/committer。没有新增抽象、配置、防御层、schema 或 provider 接口。
+
+- `weekly_screening.ps1` 初始化 `$SelectionStatus`，将 health 门改为负向阻断：只有 `selected/already_current` 且 `$OfficialSettlementComplete` 为假时 defer；M6.7 `failed/skipped/degraded_no_new_entries/partial_holdings_only` 只要 launcher manifest 写成功仍调用 health，并打印非 complete closeout 信息。official outcomes 仍只在结算完成时传给 health。
+- `a_short_official_settlement.py` 按真实 post-selector public status 重建映射；overlay 的 `manual_promotion_candidate`、`do_not_promote`、`retired_for_epoch`、`preliminary_review` 与 target 的 `review_pass_pending_confirmation` 属合法成功侧。factor/margin/industry/overlay wrapper 通过既有 `sidecar_result` 只携带内层 no-official marker；无 marker 的 `evidence_unavailable_or_inconclusive`、`unavailable`、未知状态和 exception 仍 failed/unavailable。
+- 删除官方白名单循环内不可达 duplicate guard；health expected set 增加顺序/缺名覆盖，完整 expected whitelist 仍将缺行 materialise 为 `missing_outcome`；overlay 缺 canonical cache 显式返回 unavailable；P5/P4a 删除 root guard 下不可达 not_configured 分支，并先消费 `reason_codes`，保留 `immutable_capture_conflict`。
+
+### 调用链、消费者与边界
+
+`weekly_screening.ps1 → launcher/pipeline manifests → selector → official settlement callbacks → official_settlement_outcomes.json → a_short_weekly_sidecar_health.py → health JSON/MD/receipt`。comparison wrapper → carrier → official ten-row outcome 的 private marker 不进入任何 public summary 或 schema。继续复用 `as_of`、`run_revision_id`、官方十格白名单、原子 outcomes 写盘、health stale-artifact invalidation；未改 M6.7 正式产物、selector/revision engine、provider/live、cache 数据形状、账户或订单边界。
+
+### 负向控制与精确验证
+
+- fixed Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 3.13.8；bounded focused pack `708/708 PASS`，receipt=`receipt:518c40cb26a90b2caa48340a`。
+- 覆盖 non-complete health reachability、selected/incomplete defer、十格 public status、marker-only no-evidence、unknown/exception fail、expected-set 顺序/缺名、缺行 `missing_outcome`、overlay missing cache、P5/P4a conflict reason precedence；touched-file `py_compile` PASS，PowerShell gate 真实求值 PASS。
+- 文档治理门固定 Python `42/42 PASS`，receipt=`receipt:4410ad049b13acb84f0f5fb9`；`git diff --check` PASS（仅 LF→CRLF 提示）。
+- 原始终态：上述 focused tests PASS；既有 `ResourceWarning` 仅为测试夹具输出，不影响 exit 0。未跑 provider/live、真实周实盘、full lane、测试胶囊或 sub-agent；未 stage/commit/push/merge；结论仍 `repaired / OPEN-NOT-VERIFIED`。
+
+### 交接
+
+`Claude Code：独立审查桌面 1a_testrun0816 问题1 的 2 条 Required + 6 条 Optional，重点复核 finalizer 非 complete health 门、official public status/marker 的真实生产者链、missing_outcome fail-closed 与 P5/P4a conflict reason；PASS 后按项目规则提交；不启动 provider/live/full lane/sub-agent。`
+
+## 2026-08-16 Codex executor/fixer — 桌面 1a_testrun0816.md 问题2 → 问题1 两刀连续修复（8c7a；repaired / OPEN-NOT-VERIFIED）
+
+### 执行顺序与结论
+
+严格按桌面文档执行，先完成问题2，再立即完成问题1；两刀均为最小修复，没有新增抽象、配置、防御层或 schema 版本。Codex 是本轮 executor/fixer；Claude Code 仍是独立 reviewer/committer。当前未 stage、commit、push、merge，等待独立审查。
+
+### 第一刀：问题2
+
+问题2的漏洞是 margin/overheat producer summary 可能携带官方 revision 身份，但 weekly consumer 直接把它作为既有 weekly nested schema 输入。生产者多出来的 official_revision_id 会被 closed-world consumer 拒绝；同时无 pointer 或错 revision 时又不能假装是官方结果。
+
+最小改动：
+
+- engine/a_short_margin_overheat_cash_control.py 先用既有 official resolver 读取 as_of 的 pointer；只有 selected_revision_id 与当前 run_revision_id 完全一致，producer summary 才带 official_revision_id。
+- missing pointer、非 official、revision mismatch 均不带该 ID；unavailable/current 两个 producer 分支也使用同一 local identity。
+- runners/a_short_weekly_pipeline.py 对 producer summary 浅复制，只 pop official_revision_id，再调用既有 weekly nested schema validator；任何其他额外字段仍 fail-closed。weekly schema、selector、revision engine、margin 计算未改。
+
+调用链与边界：
+
+engine producer → official pointer resolver → margin producer summary → weekly pipeline carrier → 既有 weekly report/M6.7 nested schema validator → capture/sidecar consumers。ID 是 producer 的 source identity 提示，不被写入 weekly report schema。as_of/run_revision_id 绑定和既有 source window 不变；测试只写临时 fixture，不新增 cache/provider/public/private-account 写盘。
+
+问题2负向控制覆盖：exact pointer 保留 ID；missing/mismatch/non-official 不带 ID；producer unavailable/current 仍合法；consumer 只允许移除 official_revision_id；其他 extra field 仍拒绝。固定解释器精确包：
+
+```text
+C:/Users/cnhea/AppData/Local/Programs/Python/Python313/python.exe .tools/bounded_unittest.py focused 300 -- tests.test_a_short_margin_overheat_cash_control tests.test_a_short_weekly_pipeline tests.test_a_short_effect_contract
+Ran 725 tests in 137.945s
+OK
+[bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=725
+[bounded-unittest] FOCUSED_RECEIPT token=receipt:f56e56fb59b751a2a73ccfec
+```
+
+### 第二刀：问题1
+
+问题1的漏洞是 health 在 official selector 和 post-selector settlement 之前先写，因而没有机会消费官方结算；原先部分真实 post-selector 结果被永久写成 failed。大白话：体检报告先于最终成绩封存。
+
+最小改动与真实顺序：
+
+```text
+weekly_screening.ps1
+  → EGS / IV / M6.7 / captures
+  → launcher + pipeline manifests（不含 health role）
+  → select-official
+  → a_short_official_settlement.py
+       → atomic official_settlement_outcomes.json
+  → a_short_weekly_sidecar_health.py
+       → sidecar_health.json / .md / .receipt.json（三件套）
+```
+
+- weekly_screening.ps1 移除 pre-selector health；HealthComplete 不再阻挡 manifest/selection；RevisionRoles 不登记 health JSON/MD/receipt。
+- selector 成功或 already_current 后，launcher 必须调用 official settlement，并强制传 outcomes 路径。settlement 写既有 schemas/a_short_weekly_sidecar_outcomes.schema.json 的固定十格：official_operation_settlement、factor_v2_settlement、margin_overheat_cash_control_settlement、industry_weight_settlement、target_policy_settlement、final_action_settlement、overlay_adjudication_settlement、forward_tracker_official_settlement、theme_forward_official_settlement、crash_veto_official_settlement。
+- 每个 callback 结果按既有 sidecar 状态投影；单 callback exception 只使该格 failed/unavailable，顶层变 degraded 并保留其余格。resolver、identity、schema、write failure 硬失败；optional callback failure 保持 nonblocking。临时文件与最终文件同目录，最后用 os.replace。
+- health 只接受同一 as_of、同一 run_revision_id 和固定白名单；同名官方行可覆盖 preselector 行，缺官方行转 missing_outcome，unknown/duplicate/extra/out-of-scope/cross identity 拒绝。P5/P4a not_configured 与 official-selection-pending 按方案映射为 not_configured/not_applicable 或 not_due/not_applicable；普通异常仍 failed/unavailable；official_operation/final_action 仅显式 RevisionSelectionBlocked 可 deferred。
+- equivalent_replay/validation_only 不执行正式 settlement；只允许相应 audit health。旧 M6.7 正式 JSON/Markdown/receipt、EGS、IV、selector、provider、cache、account、order 写盘边界不变；health 失败先失效旧 health 三件套，不改 published M6.7。
+
+问题1负向控制与测试：exact ten schema payload、单 callback degraded、resolver/consumer revision mismatch hard fail、schema/write failure 不留半文件、official override、missing final-only row、unknown/extra、cross as_of/revision、P5/P4a waiting、operation/final narrow exception、launcher order、stale health invalidation、output path/schema/name/count 校验。最终固定解释器精确包：
+
+```text
+C:/Users/cnhea/AppData/Local/Programs/Python/Python313/python.exe .tools/bounded_unittest.py focused 300 -- tests.test_a_short_official_settlement tests.test_a_short_weekly_sidecar_health tests.test_a_short_weekly_pipeline tests.test_a_short_weekly_screening_m67_failure_closeout tests.test_a_short_v5_revision_matrix
+Ran 669 tests in 64.841s
+OK
+[bounded-unittest] RESULT tier=focused status=PASS exit=0 tests=669
+[bounded-unittest] FOCUSED_RECEIPT token=receipt:924ab1656c9eaa8b3080edc9
+```
+
+### 自审、原始终态与交接
+
+- A-F self-review 已完成：按类核过 positive/negative、调用链消费者、schema/source-binding、cache/write boundary、fail-closed、精确测试和 stale-output invalidation；没有把单一 green 测试写成 live/full-lane/ship 结论。
+- 固定解释器 py_compile 通过；weekly_screening.ps1 的 PowerShell Parser.ParseFile 通过；git diff --check 通过（仅既有 LF/CRLF warning）；测试输出存在既有 ResourceWarning，不影响 exit 0。固定 Python 环境没有 pytest，未用其他解释器替代。
+- 未启动 provider/live、真实周实盘、full lane、测试胶囊、账户/下单或 sub-agent；没有 stage/commit/push/merge。因此本轮结论为 repaired / OPEN-NOT-VERIFIED，需 Claude Code 独立审查；PASS 后由 reviewer/committer 按项目规则提交。
+- 三类文档已同步：本轮完整风险细节在 docs/system_risk_register.md；顶部交接/原始验证状态在 docs/SESSION_LOG.md；本文件保留 A-short 主链调用、边界、测试和 reviewer handoff。未修改 docs/CURRENT.md，未写入瞬态 review/commit 状态。
+
 ## 2026-08-14 Codex executor/fixer - 5a 问题1 第四刀 Optional O-K4-1/O-K4-2（repaired / OPEN-NOT_VERIFIED，c405）
 
 ### 问题、方案与最小改动
@@ -8593,3 +8722,52 @@ a-short full-pack：fingerprint=a9d5bb199dfc；discovered=3138；ran=3138；equa
 **未覆盖维度**：未跑真实周实盘；P5 空选的生产可达性仍未验证（本刀选了「补出口」这条允许的路径）；未跑 full lane。
 
 **下一步**：桌面 `2a_testrun0815.md` 的六条至此全部处理完毕（1/2/3/4 已闭，5/6 早前已闭）。
+
+## 2026-08-16 追加：桌面 1a_testrun0816 问题 2 / 问题 1 连续两刀复审（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：刀 A（问题 2）PASS；刀 B（问题 1）FAIL，两条 Required。正文只在 `docs/system_risk_register.md`。
+
+**这轮的方法学要点，值得记下来**：
+
+1. **旧测试原本在为 bug 背书。** 刀 A 改掉的那行 `assertEqual(public["official_revision_id"], "a"*32)` 正是问题 2 的断言化形式。修复把它翻成 `assertNotIn` —— 同一行测试在修前修后各表达一次，是这条 Required 最干净的闭环证据。
+2. **绿色的测试不等于覆盖到位。** 刀 B 的新文件 `tests/test_a_short_official_settlement.py` 全绿，但它把 margin / overlay 回调打桩成 `no_official_*_captures` —— 我实跑三个真实生产者，它们在同一场景下返回的是 `evidence_unavailable_or_inconclusive`。**fixture 用了生产者产不出的字符串，绿色就不构成证据。**审下一刀时对任何 `patch(..., return_value={"status": ...})` 都要回到生产者确认该字符串真能出现。
+3. **PowerShell 的门要在 PowerShell 里求值，别靠读。** 我把 finalizer 的门表达式连同 `$SelectionStatus = $null` 丢进真实 PowerShell 跑，直接拿到 `False`；比在脑子里推 `-in` / `-notin` 的组合可靠得多。
+4. **改动移动了一段控制流时，要问它原来的调用方是谁。** 刀 B 把 health writer 从 `if ($LauncherManifestWritten)` 挪到一个带 selection 前提的门后面，却没注意 `-DeferHealth` 这条既有契约正是把失败轮的 health 托付给这个 finalizer 的。
+
+**我实际验了什么**：刀 A —— 真实函数四格 A/B（pointer 未选中 / 已选中 / 投影后 / 另加未知字段），确认投影只摘一个键且不改生产者字典；刀 B —— 真实 PowerShell 求值 finalizer 门表达式、真实生产者直调取三条轨的「无官方证据」公开状态、`git grep` 定位那三个字符串的真实产地、整读未跟踪的新测试文件正文。
+
+**未覆盖维度**：未重跑真实周实盘；未构造真实的 launcher 失败轮；未跑 full lane。
+
+**下一步**：Codex 按 register 两条 Required 修复并补 closure tests；刀 A 待刀 B 收口后一并提交。
+
+## 2026-08-16 追加：桌面 1a_testrun0816 问题 1 + 问题 2 的复审 = FAIL（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：FAIL，1 条新 Required。上一轮两条 Required 与六条 Optional 的技术内容全部复核到位，卡在一条全量才可见的仓库不变量上。正文只在 `docs/system_risk_register.md`。
+
+**这轮最该记住的一条：focused green 不覆盖「全仓 AST 守卫」这一类。**
+
+`test_a_short_public_json_writer_nonfinite_guard` 用 AST 扫全仓 A-short 模块，任何新增的 JSON 写盘函数只要没登记就红。它不属于任何一条轨的功能包，所以**执行方 708 例焦点包看不见它，我这轮精挑的 9 模块超集（883 例）也看不见它**——两边都绿，全量一跑就红。教训写死成一句：**只要这一刀新增了「写文件 / 读环境 / 起子进程」这类跨模块契约点，focused 无论多绿都不能替代一次全量。**
+
+**流程上我自己也踩了一脚（记下来别再犯）**：我先按 focused 全绿判 PASS 并提交了 `3d5d3579`，随后全量才红。已 `git reset --mixed HEAD~1` 撤回（本地未推未合，工作树保留），并把已落盘的 PASS 三件套改写成 FAIL。正确顺序是**全量绿了再提交**，不是提交完再跑全量。
+
+**我实际验了什么**：真实 PowerShell 跑遍 finalizer 门 10 个可达组合；直调 `_official_outcome_row` 覆盖成功侧/marker 侧/反向侧共 15 格；`build_health` 两格截断清单；全仓 `git grep` 核对 `no_official_*_captures` 四处产地与四个 wrapper 一一对应；整读 target / final_action 函数体确认其 unavailable 只来自 `except` 兜底；三道语义植入对照全部转红、每次恢复到字节一致。
+
+**未覆盖维度**：未重跑真实周实盘；launcher 真实失败轮未端到端构造；全量未绿（本轮 failfast 停在那条守卫）；未起独立对抗 agent。
+
+**下一步**：Codex 修那条 Required，然后重跑一次 a_short 全量并记账；绿了我再复审收口。
+
+## 2026-08-16 追加：桌面 1a_testrun0816 问题 1 + 问题 2 收口复审 = PASS（Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**判定**：PASS，三轮下来两条真漏洞与全部 Required/Optional 均已闭。正文只在 `docs/system_risk_register.md`。
+
+**这轮唯一值得记的方法学点：CACHED GREEN 不是证据，指纹才是。**
+
+全量运行器这次直接返回 `CACHED GREEN - a_short = 3165 OK; full run skipped.`。按 AGENTS rule 4，reviewer 不该照抄这行，而要**自己重算一遍代码指纹**并核 `recorded_at` 与源文件 mtime。我三件都做了：指纹与 ledger 的 `fingerprint`/`prepared_fingerprint` 三者一致；指纹覆盖的 17 个文件里 0 个 mtime 晚于记账时间；再用 `unittest.TestLoader.discover` **自己数了一遍 3165**，与记账数相等——上一轮正是栽在 `discovered=3164 ran=1185` 这种「少跑当绿」上，所以这一格必须自己数。顺带确认那条守卫模块确实落在 lane 选择器内，即我上一轮要求的 closure test 真跑到了。
+
+**上一轮我自己的流程教训（已在上一条 handoff 记过，这里只留指针）**：focused 再绿也不能替代一次全量——全仓 AST 守卫这一类结构上不在任何功能包里。
+
+**我实际验了什么**：三道语义植入对照（去掉 `allow_nan=False` / 注册表改名 / 缓存 reason code 改名），每次恢复到字节一致；整读缓存缺失那条新分支在 engine 与 pipeline 两侧的全部落点，确认 post-selector 侧仍判 failed（marker 拿不到豁免）。
+
+**未覆盖维度**：未重跑真实周实盘；launcher 真实失败轮未端到端构造；未起独立对抗 agent。
+
+**下一步**：桌面 `1a_testrun0816.md` 两条真漏洞至此全部闭合，可以准备下一次周实盘。

@@ -1580,5 +1580,133 @@ class AShortSidecarOutcomeSchemaTests(unittest.TestCase):
         self.assertTrue(expected <= set(SIDECAR_SPECS), sorted(expected - set(SIDECAR_SPECS)))
 
 
+class OfficialSettlementHealthMergeTests(unittest.TestCase):
+    _NAMES = (
+        "official_operation_settlement",
+        "factor_v2_settlement",
+        "margin_overheat_cash_control_settlement",
+        "industry_weight_settlement",
+        "target_policy_settlement",
+        "final_action_settlement",
+        "overlay_adjudication_settlement",
+        "forward_tracker_official_settlement",
+        "theme_forward_official_settlement",
+        "crash_veto_official_settlement",
+    )
+    _REVISION = "a" * 32
+
+    def _official_manifest(self, *, failed_name=None, drop_name=None):
+        rows = []
+        for name in self._NAMES:
+            if name == drop_name:
+                continue
+            failed = name == failed_name
+            rows.append(_row(
+                name,
+                execution="failed" if failed else "succeeded",
+                progress="unavailable" if failed else "advanced",
+                error_code="settlement_unavailable" if failed else None,
+            ))
+        manifest = _manifest(rows, expected=list(self._NAMES))
+        manifest["run_revision_id"] = self._REVISION
+        return manifest
+
+    def _launcher_manifest(self):
+        manifest = _manifest([_row("official_operation_settlement", execution="failed",
+                                   progress="unavailable", error_code="settlement_unavailable")])
+        manifest["run_revision_id"] = self._REVISION
+        return manifest
+
+    def test_official_success_replaces_preselector_failure_once_without_degrading_health(self):
+        result = build_health(
+            as_of="20260727",
+            launcher_manifest=self._launcher_manifest(),
+            official_settlement_manifest=self._official_manifest(),
+            run_revision_id=self._REVISION,
+            m67_invocation="skipped",
+        )
+        names = [row["name"] for row in result["sidecars"]]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertEqual(len(names), 10)
+        self.assertEqual(result["overall"], "partial")
+        self.assertEqual(result["failed_count"], 0)
+        self.assertEqual(
+            next(row for row in result["sidecars"] if row["name"] == "official_operation_settlement")[
+                "progress_status"
+            ],
+            "advanced",
+        )
+
+    def test_official_failure_is_visible_and_missing_final_only_row_is_fail_closed(self):
+        failed = build_health(
+            as_of="20260727",
+            launcher_manifest=self._launcher_manifest(),
+            official_settlement_manifest=self._official_manifest(
+                failed_name="factor_v2_settlement",
+            ),
+            run_revision_id=self._REVISION,
+            m67_invocation="skipped",
+        )
+        self.assertEqual(failed["failed_count"], 1)
+        self.assertEqual(failed["overall"], "degraded")
+
+        missing = build_health(
+            as_of="20260727",
+            launcher_manifest=self._launcher_manifest(),
+            official_settlement_manifest=self._official_manifest(
+                drop_name="theme_forward_official_settlement",
+            ),
+            run_revision_id=self._REVISION,
+            m67_invocation="skipped",
+        )
+        missing_row = next(
+            row for row in missing["sidecars"]
+            if row["name"] == "theme_forward_official_settlement"
+        )
+        self.assertEqual(missing_row["execution_status"], "missing_outcome")
+        self.assertEqual(missing_row["error_code"], "missing_outcome")
+        self.assertEqual(missing["failed_count"], 1)
+
+    def test_official_expected_set_gate_rejects_order_and_omission(self):
+        for expected in (tuple(reversed(self._NAMES)), self._NAMES[:-1]):
+            with self.subTest(expected=expected):
+                manifest = self._official_manifest()
+                manifest["expected_sidecars"] = list(expected)
+                with self.assertRaisesRegex(ValueError, "official_settlement_outcomes_expected_set_invalid"):
+                    build_health(
+                        as_of="20260727", launcher_manifest=self._launcher_manifest(),
+                        official_settlement_manifest=manifest, run_revision_id=self._REVISION,
+                        m67_invocation="skipped",
+                    )
+
+    def test_official_unknown_duplicate_and_cross_revision_are_rejected(self):
+        unknown = self._official_manifest()
+        unknown["sidecars"].append(_row("unapproved_settlement"))
+        with self.assertRaisesRegex(ValueError, "official_settlement_outcomes_track_set_invalid"):
+            build_health(
+                as_of="20260727", launcher_manifest=self._launcher_manifest(),
+                official_settlement_manifest=unknown, run_revision_id=self._REVISION,
+                m67_invocation="skipped",
+            )
+
+        cross_revision = self._official_manifest()
+        cross_revision["run_revision_id"] = "b" * 32
+        with self.assertRaisesRegex(ValueError, "launcher/pipeline manifests use different"):
+            build_health(
+                as_of="20260727", launcher_manifest=self._launcher_manifest(),
+                official_settlement_manifest=cross_revision, run_revision_id=self._REVISION,
+                m67_invocation="skipped",
+            )
+
+        cross_clock = self._official_manifest()
+        cross_clock["as_of"] = "20260726"
+        with self.assertRaisesRegex(ValueError, "official_settlement_outcomes_clock_mismatch"):
+            build_health(
+                as_of="20260727", launcher_manifest=self._launcher_manifest(),
+                official_settlement_manifest=cross_clock, run_revision_id=self._REVISION,
+                m67_invocation="skipped",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
