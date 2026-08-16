@@ -1,8 +1,9 @@
 {
   "schema_name": "us_short_batch5_full_candidate_pass2_preflight_summary",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "schema_ref": "schemas/us_short_batch5_full_candidate_pass2_preflight_summary.schema.json",
   "authorization_ref": "user_chat_20260706_us_short_full_candidate_pass2_preflight",
+  "active_analyst_source": "yfinance",
   "generated_at": "2026-07-07T15:28:42+00:00",
   "scope": {
     "market": "US",
@@ -78,6 +79,7 @@
   },
   "pass2_target_universe": {
     "selection_mode": "momentum_theme_top_k_plus_catalyst_recall_plus_forced_holdings",
+    "active_analyst_source": "yfinance",
     "eligible_count": 2404,
     "momentum_scored_candidate_count": 2400,
     "momentum_top_k": 200,
@@ -305,16 +307,19 @@
   "endpoint_call_forecast": {
     "families": {
       "pass2_source_packet": {
+        "active_analyst_source": "yfinance",
         "sec_company_tickers_mapping_calls": 1,
-        "fmp_grades_calls": 200,
+        "fmp_grades_calls": 0,
         "sec_submissions_calls": 200,
-        "massive_reference_news_calls": 200,
-        "total_calls": 601
+        "massive_batch_logical_call_cap": 30,
+        "massive_reference_news_calls": 0,
+        "total_calls": 231
       },
       "corporate_action_live_half": {
-        "massive_split_calls": 200,
-        "massive_dividend_calls": 200,
-        "total_calls": 400,
+        "massive_split_calls": 0,
+        "massive_dividend_calls": 0,
+        "total_calls": 0,
+        "uses_shared_massive_batch_logical_call_cap": true,
         "corporate_action_reconciliation_performed_by_preflight": false
       },
       "momentum_price_refresh_if_local_projection_missing": {
@@ -327,8 +332,8 @@
       }
     },
     "forecast_basis": "pass2_target_universe_not_full_eligible_count",
-    "total_calls_for_pass2_target_cut": 1001,
-    "total_calls_for_full_candidate_cut": 12021,
+    "total_calls_for_pass2_target_cut": 231,
+    "total_calls_for_full_candidate_cut": 2435,
     "total_calls_for_full_candidate_cut_is_hypothetical": true,
     "call_budget_must_be_explicit_before_network": true,
     "full_market_call_performed": false

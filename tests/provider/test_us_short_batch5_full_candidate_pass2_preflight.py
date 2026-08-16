@@ -132,7 +132,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["summary"],
-            authorized_total_call_budget=6,
+            authorized_total_call_budget=32,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -149,7 +149,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["summary"],
-            authorized_total_call_budget=11,
+            authorized_total_call_budget=33,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -162,14 +162,14 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         self.assertEqual(summary["local_input_coverage"]["theme_projection"]["missing_count"], 1)
         self.assertEqual(
             summary["endpoint_call_forecast"]["families"]["pass2_source_packet"]["total_calls"],
-            7,
+            33,
         )
         self.assertEqual(
             summary["endpoint_call_forecast"]["families"]["corporate_action_live_half"]["total_calls"],
-            4,
+            0,
         )
-        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 11)
-        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"], 16)
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 33)
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"], 34)
         self.assertTrue(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut_is_hypothetical"])
         self.assertEqual(summary["pass2_target_universe"]["eligible_count"], 3)
         self.assertEqual(summary["pass2_target_universe"]["target_count"], 2)
@@ -228,7 +228,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["summary"],
             momentum_top_k=2,
-            authorized_total_call_budget=11,
+            authorized_total_call_budget=33,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -245,7 +245,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         self.assertEqual(pass2["eligible_unscored_not_selected_count"], 0)
         self.assertTrue(pass2["eligible_partition_conserved"])
         self.assertTrue(pass2["fmp_grade_calls_within_free_daily_cap"])
-        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 11)
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 33)
 
     def test_preflight_can_mark_ready_without_network_when_local_inputs_cover_all_candidates(self):
         runner = self._module()
@@ -264,7 +264,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["summary"],
-            authorized_total_call_budget=16,
+            authorized_total_call_budget=34,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -273,8 +273,8 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         self.assertFalse(summary["scope"]["network_access_performed"])
         self.assertEqual(summary["local_input_coverage"]["momentum_projection"]["missing_count"], 0)
         self.assertEqual(summary["pass2_target_universe"]["target_count"], 3)
-        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 16)
-        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"], 16)
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 34)
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"], 34)
         self.assertTrue(summary["execution_gate"]["ready_to_run_full_candidate_live_packet"])
 
     def test_budget_preview_derives_exact_forecast_but_does_not_authorize_execution(self):
@@ -301,7 +301,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
             generated_at="2026-07-06T12:00:00+00:00",
         )
 
-        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 11)
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 33)
         self.assertEqual(summary["scope"]["status"], "blocked_execution_constraints")
         self.assertFalse(summary["execution_gate"]["ready_to_run_full_candidate_live_packet"])
         self.assertFalse(summary["execution_gate"]["authorized_budget_matches_rederived_forecast"])
@@ -334,7 +334,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["summary"],
-            authorized_total_call_budget=11,
+            authorized_total_call_budget=33,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -354,9 +354,9 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         self.assertEqual(summary["pass2_target_universe"]["eligible_unscored_not_selected_count"], 1)
         self.assertTrue(summary["pass2_target_universe"]["eligible_partition_conserved"])
         self.assertFalse(summary["pass2_target_universe"]["expensive_pass2_targets_full_eligible_set"])
-        self.assertEqual(summary["endpoint_call_forecast"]["families"]["pass2_source_packet"]["fmp_grades_calls"], 2)
-        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 11)
-        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"], 16)
+        self.assertEqual(summary["endpoint_call_forecast"]["families"]["pass2_source_packet"]["fmp_grades_calls"], 0)
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 33)
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"], 34)
 
     def test_authorization_required_before_summary_write(self):
         runner = self._module()
@@ -457,7 +457,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"], theme_projection_path=self.paths["theme"],
             summary_path=self.paths["summary"], momentum_top_k=1,
             catalyst_recall_tickers=["MSFT"], forced_holding_tickers=["HOLD"],
-            authorized_total_call_budget=16, confirm_user_authorization=True,
+            authorized_total_call_budget=34, confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
         self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["HOLD", "JPM", "MSFT"])

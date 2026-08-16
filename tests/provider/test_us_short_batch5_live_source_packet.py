@@ -281,7 +281,7 @@ class UsShortBatch5LiveSourcePacketTest(unittest.TestCase):
         packet_path = ROOT / summary["source_packet"]["path"]
         packet = json.loads(packet_path.read_text(encoding="utf-8"))
         self.assertEqual(packet["schema_name"], "us_short_batch5_data_context_source_packet")
-        self.assertEqual(packet["schema_version"], "1.3.0")
+        self.assertEqual(packet["schema_version"], "1.4.0")
         self.assertEqual(packet["paths"]["candidate_artifact_path"], summary["source_artifacts"]["candidate_subset_path"])
 
         text = self.paths["summary"].read_text(encoding="utf-8")

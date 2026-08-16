@@ -99,11 +99,23 @@ def _pass2(*, analyst_source: str = "yfinance") -> dict:
         },
         "pass2_target_universe": {"target_count": len(TARGETS), "target_symbols": list(TARGETS)},
         "source_artifacts": {
+            "active_analyst_source": analyst_source,
             "analyst_grade_actions_consumed_from": (
                 "yfinance_grade_actions" if analyst_source == "yfinance" else "fmp_analyst_grade_actions"
             ),
         },
         "endpoint_call_budget": {"fmp_grades_calls": len(TARGETS) if analyst_source == "fmp" else 0},
+        "massive_batch_coverage": {
+            family: {
+                "query_window": {"date_field": "date", "date_from": "2026-06-01", "date_to": "2026-07-06"},
+                "page_count": 1,
+                "pagination_exhausted": True,
+                "result_count": 0,
+                "status": "complete",
+                "failure_reason": None,
+            }
+            for family in ("reference_news", "stock_splits", "dividends")
+        },
         "endpoint_results": rows,
     }
 
@@ -321,9 +333,9 @@ class CapstoneProviderHealthMatrix(unittest.TestCase):
         mutations["sec_offering_audit"] = offering
 
         events = _stage_results()
-        for row in events["pass2_fetch"]["endpoint_results"]:
-            if row["provider_id"] == "massive" and row["endpoint_family"] == "dividends" and row["symbol"] == "MSFT":
-                row["status"] = "error"
+        events["pass2_fetch"]["massive_batch_coverage"]["dividends"].update(
+            {"status": "incomplete", "pagination_exhausted": False, "failure_reason": "http_error"}
+        )
         mutations["massive_events"] = events
 
         vix = _stage_results()
@@ -376,7 +388,9 @@ class CapstoneProviderHealthMatrix(unittest.TestCase):
         result = classify_provider_health(dict(facts))
         detail = provider_health_detail_line(result)
         self.assertEqual(parse_provider_health_detail_line(detail), result["sources"])
-        self.assertIsNone(parse_provider_health_detail_line(detail.replace("analyst_grades=clean", "analyst_grades=blocked")))
+        self.assertIsNone(parse_provider_health_detail_line(
+            detail.replace("analyst_grades=clean", "analyst_grades=blocked")
+        ))
         self.assertIsNone(parse_provider_health_detail_line(detail + "; yfinance=clean"))
 
 
@@ -407,7 +421,7 @@ class HostileInputFailsClosedInsteadOfCrashing(unittest.TestCase):
             ],
             "pass2_target_universe": {"target_count": 1, "target_symbols": ["AAPL"]},
         }
-        self.assertEqual(stages._massive_events_health(summary), ("massive_events", "down"))
+        self.assertEqual(stages._massive_events_health(summary), ("massive_events", "missing"))
 
     def test_huge_vix_integer_degrades_instead_of_overflowing(self):
         summary = {

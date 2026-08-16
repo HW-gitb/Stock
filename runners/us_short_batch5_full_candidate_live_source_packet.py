@@ -9,9 +9,10 @@ import sys
 import time
 from dataclasses import dataclass
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlencode
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,6 +59,10 @@ from runners import us_egs_sample_validation as sample_validation  # noqa: E402
 from runners import us_short_batch5_data_context as data_context_assembly  # noqa: E402
 from runners import us_short_batch5_full_candidate_pass2_preflight as pass2_preflight  # noqa: E402
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
+from runners.us_short_forward_policy_corporate_action_fetch import (  # noqa: E402
+    ForwardPolicyCorporateActionFetchError,
+    _continuation_url_for_endpoint,
+)
 from runners.us_short_batch5_data_context_source_packet import (  # noqa: E402
     FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
     SourcePacketError,
@@ -83,21 +88,16 @@ DEFAULT_OUTPUT_DATA_CONTEXT_PATH = (
 DEFAULT_CONTEXT_COMPONENTS_OUTPUT_PATH = (
     STATE_US_SHORT_DIR / "us_short_batch5_full_candidate_live_source_packet_20260706_context_components.json"
 )
-MASSIVE_NEWS_URL = "https://api.massive.com/v2/reference/news?ticker={ticker}&limit=10&apiKey={key}"
-# Step 3 (R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING follow-on): the per-target split/dividend capture is
-# offloaded from FMP to Massive so FMP stays under its 250/day free grade cap at K=200 (FMP per target drops 3->1,
-# grades only). Endpoint paths confirmed by the 2026-07-07 live shape probe (GET /stocks/v1/{splits,dividends};
-# Polygon-style {"results":[...]} envelope), NOT the Polygon /v3/reference/* a guess would have used.
-MASSIVE_SPLITS_URL = "https://api.massive.com/stocks/v1/splits?ticker={ticker}&limit=10&apiKey={key}"
-MASSIVE_DIVIDENDS_URL = "https://api.massive.com/stocks/v1/dividends?ticker={ticker}&limit=10&apiKey={key}"
 FMP_FREE_DAILY_GRADE_CALL_CAP = 250   # mirror the preflight; the funnel target + within-cap invariant is RE-DERIVED here at the live boundary, not trusted from the preflight
-# Mirror the preflight `_forecast_calls`: each Pass2 target costs 5 endpoint calls (3 source-packet: grades +
-# submissions + reference-news; 2 corporate-action: splits + dividends) plus 1 shared SEC ticker->CIK mapping.
+# Mirror the preflight `_forecast_calls`: each Pass2 target reserves one SEC-submission endpoint, plus an analyst
+# endpoint only for the explicit FMP fallback, one shared Massive page cap and one SEC ticker->CIK mapping.
 # The live-spend budget is RE-ANCHORED to the runner-RE-DERIVED target count (not the preflight-attested
 # forecast/momentum_top_k), so a forged preflight cannot widen K/target_count without the operator independently
 # authorizing the matching budget. Cross-checked against the preflight formula by test.
 _SEC_TICKER_MAPPING_CALLS = 1
-_PASS2_ENDPOINT_CALLS_PER_TARGET = 5
+_SEC_SUBMISSIONS_CALLS_PER_TARGET = 1
+MASSIVE_BATCH_LOGICAL_CALL_CAP = universe_fetch.MASSIVE_BATCH_LOGICAL_CALL_CAP
+ACTIVE_ANALYST_SOURCES = pass2_preflight.ACTIVE_ANALYST_SOURCES
 _EXECUTION_MODE_LIVE_PROVIDER_FETCH = "live_provider_fetch"
 _EXECUTION_MODE_OFFLINE_REPLAY = "offline_replay"
 _OPTIONAL_ELIGIBLE_PARTITION_AUDIT_FIELDS = (
@@ -421,6 +421,19 @@ def _load_ready_preflight(
     local = preflight.get("local_input_coverage") or {}
     forecast = ((preflight.get("endpoint_call_forecast") or {}).get("total_calls_for_pass2_target_cut"))
     targets = preflight.get("pass2_target_universe") or {}
+    active_analyst_source = preflight.get("active_analyst_source")
+    if active_analyst_source not in ACTIVE_ANALYST_SOURCES:
+        raise FullCandidateLiveSourcePacketError(
+            "preflight active_analyst_source must be exactly yfinance or fmp"
+        )
+    pass2_forecast = ((preflight.get("endpoint_call_forecast") or {}).get("families") or {}).get(
+        "pass2_source_packet"
+    )
+    if not isinstance(pass2_forecast, dict) or pass2_forecast.get("active_analyst_source") != active_analyst_source:
+        raise FullCandidateLiveSourcePacketError("preflight analyst-source budget binding is missing or inconsistent")
+    expected_fmp_grades = targets.get("target_count") if active_analyst_source == "fmp" else 0
+    if pass2_forecast.get("fmp_grades_calls") != expected_fmp_grades:
+        raise FullCandidateLiveSourcePacketError("preflight FMP grade budget does not match the active analyst source")
     if targets.get("selection_mode") != "momentum_theme_top_k_plus_catalyst_recall_plus_forced_holdings":
         raise FullCandidateLiveSourcePacketError("preflight uses a legacy unbound Pass2 selection contract")
     if any(
@@ -442,7 +455,7 @@ def _load_ready_preflight(
     if local.get("all_required_local_inputs_cover_candidates") is not True:
         raise FullCandidateLiveSourcePacketError("preflight local inputs are not fully covered")
     if targets.get("target_count") <= 0 or targets.get("fmp_grade_calls_within_free_daily_cap") is not True:
-        raise FullCandidateLiveSourcePacketError("preflight Pass2 target universe is not free-budget ready")
+        raise FullCandidateLiveSourcePacketError("preflight Pass2 target universe is not ready for the active analyst source")
     if forecast != expected_total_call_budget:
         raise FullCandidateLiveSourcePacketError(
             f"expected call budget must match preflight forecast: {expected_total_call_budget} != {forecast}"
@@ -752,7 +765,7 @@ def _normalize_massive_retry_policy(
 
 def automatic_http_attempt_cap(*, logical_call_budget: int, target_count: int, max_retries: int) -> int:
     """Return the one-click physical cap: all logical calls plus bounded Massive-window headroom."""
-    massive_logical_calls = target_count * 3
+    massive_logical_calls = MASSIVE_BATCH_LOGICAL_CALL_CAP
     retry_headroom = max_retries * (
         (massive_logical_calls + MASSIVE_RATE_LIMIT_WINDOW_CAPACITY - 1)
         // MASSIVE_RATE_LIMIT_WINDOW_CAPACITY
@@ -816,9 +829,325 @@ def _fetch_with_retry(
     return record
 
 
+_MASSIVE_BATCH_FAMILY_CONFIG = {
+    "reference_news": {
+        "path": "/v2/reference/news",
+        "date_field": "published_utc",
+        "limit": 1000,
+    },
+    "stock_splits": {
+        "path": "/stocks/v1/splits",
+        "date_field": "execution_date",
+        "limit": 5000,
+    },
+    "dividends": {
+        "path": "/stocks/v1/dividends",
+        "date_field": "ex_dividend_date",
+        "limit": 5000,
+    },
+}
+_MASSIVE_BATCH_FAMILIES = tuple(_MASSIVE_BATCH_FAMILY_CONFIG)
+MASSIVE_BATCH_FAMILY_LOGICAL_CALL_CAP = (
+    MASSIVE_BATCH_LOGICAL_CALL_CAP + len(_MASSIVE_BATCH_FAMILIES) - 1
+) // len(_MASSIVE_BATCH_FAMILIES)
+
+
+def _massive_batch_query_window(*, family: str, source_as_of: str, observed_at: str) -> dict[str, Any]:
+    config = _MASSIVE_BATCH_FAMILY_CONFIG.get(family)
+    if config is None:
+        raise FullCandidateLiveSourcePacketError("unknown Massive batch family")
+    as_of = datetime.strptime(source_as_of, "%Y-%m-%d").date()
+    if family == "reference_news":
+        date_from = (as_of - timedelta(days=30)).isoformat() + "T00:00:00Z"
+        date_to = observed_at
+    else:
+        date_from = (as_of - timedelta(days=7)).isoformat()
+        date_to = source_as_of
+    return {
+        "date_field": config["date_field"],
+        "date_from": date_from,
+        "date_to": date_to,
+        "limit": config["limit"],
+        "sort": config["date_field"],
+        "order": "asc",
+    }
+
+
+def _massive_batch_first_url(*, family: str, query_window: dict[str, Any], api_key: str) -> str:
+    config = _MASSIVE_BATCH_FAMILY_CONFIG[family]
+    params = {
+        f"{query_window['date_field']}.gte": query_window["date_from"],
+        f"{query_window['date_field']}.lte": query_window["date_to"],
+        "sort": query_window["sort"],
+        "order": query_window["order"],
+        "limit": query_window["limit"],
+        "apiKey": api_key,
+    }
+    return f"https://api.massive.com{config['path']}?{urlencode(params)}"
+
+
+def _massive_batch_next_url(
+    value: Any,
+    *,
+    family: str,
+    query_window: dict[str, Any],
+    api_key: str,
+) -> str | None:
+    try:
+        return _continuation_url_for_endpoint(
+            value,
+            endpoint=_MASSIVE_BATCH_FAMILY_CONFIG[family]["path"],
+            api_key=api_key,
+            expected_query={
+                f"{query_window['date_field']}.gte": str(query_window["date_from"]),
+                f"{query_window['date_field']}.lte": str(query_window["date_to"]),
+            },
+        )
+    except ForwardPolicyCorporateActionFetchError as exc:
+        raise FullCandidateLiveSourcePacketError(str(exc)) from exc
+
+
+def _massive_provider_instant(value: Any) -> datetime:
+    if type(value) is not str:
+        raise FullCandidateLiveSourcePacketError("malformed Massive batch payload")
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
+    except ValueError as exc:
+        raise FullCandidateLiveSourcePacketError("malformed Massive batch payload") from exc
+    if parsed.tzinfo is None:
+        raise FullCandidateLiveSourcePacketError("malformed Massive batch payload")
+    return parsed
+
+
+def _massive_batch_page_path(raw_root: Path, *, family: str, page_number: int) -> Path:
+    return raw_root / "massive" / "_market" / f"{family}_page_{page_number:04d}.json"
+
+
+def _fetch_massive_batch_page(
+    *,
+    family: str,
+    page_number: int,
+    url: str,
+    query_window: dict[str, Any],
+    raw_root: Path,
+    client: sample_validation.JsonHttpClient,
+    headers: dict[str, str],
+    max_retries: int,
+    retry_stats: dict[str, int],
+    attempt_budget: HttpAttemptBudget,
+    reserved_required_attempts: int,
+    pace_seconds: float,
+    sleep_func: Callable[[float], None],
+) -> sample_validation.FetchRecord:
+    _normalize_massive_retry_policy(max_retries, MASSIVE_429_RETRY_WAIT_SECONDS if max_retries else 0.0)
+    raw_path = _massive_batch_page_path(raw_root, family=family, page_number=page_number)
+    attempt = 0
+    attempt_budget.consume_required_attempt()
+    while True:
+        payload, http_status, ok, error_type = client.get_json(url, headers=headers)
+        _write_json_atomic(
+            {
+                "provider_id": "massive",
+                "endpoint_family": family,
+                "symbol": None,
+                "http_status": http_status,
+                "ok": bool(ok),
+                "error_type": error_type,
+                "payload": payload,
+                "page_number": page_number,
+                "query_window": query_window,
+            },
+            raw_path,
+        )
+        if not (not ok and http_status == 429 and attempt < max_retries):
+            break
+        if not attempt_budget.consume_retry_if_available(
+            reserved_required_attempts=reserved_required_attempts,
+        ):
+            break
+        sleep_func(MASSIVE_429_RETRY_WAIT_SECONDS)
+        retry_stats["used"] += 1
+        attempt += 1
+    if pace_seconds:
+        sleep_func(pace_seconds)
+    return sample_validation.FetchRecord(
+        provider_id="massive",
+        endpoint_family=family,
+        symbol=None,
+        raw_sample_ref=_repo_rel(raw_path),
+        ok=bool(ok),
+        http_status=http_status,
+        error_type=error_type,
+        payload=payload,
+    )
+
+
+def _validate_massive_batch_rows(
+    *,
+    family: str,
+    payload: Any,
+    query_window: dict[str, Any],
+    observed_at: str,
+    target_symbols: set[str],
+    seen_provider_ids: set[str],
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
+        raise FullCandidateLiveSourcePacketError("malformed Massive batch payload")
+    rows = payload["results"]
+    rows_by_ticker = {symbol: [] for symbol in target_symbols}
+    observed_dt = _massive_provider_instant(observed_at)
+    lower_dt = (
+        _massive_provider_instant(query_window["date_from"])
+        if family == "reference_news"
+        else None
+    )
+    date_field = query_window["date_field"]
+    for row in rows:
+        if not isinstance(row, dict):
+            raise FullCandidateLiveSourcePacketError("malformed Massive batch payload")
+        provider_id = row.get("id")
+        if type(provider_id) is not str or not provider_id or provider_id in seen_provider_ids:
+            raise FullCandidateLiveSourcePacketError("duplicate_provider_row_id")
+        seen_provider_ids.add(provider_id)
+        if family == "reference_news":
+            published_dt = _massive_provider_instant(row.get(date_field))
+            if published_dt < lower_dt or published_dt > observed_dt:
+                raise FullCandidateLiveSourcePacketError("Massive batch row escaped its query window")
+            tickers = row.get("tickers")
+            if not isinstance(tickers, list):
+                raise FullCandidateLiveSourcePacketError("malformed Massive batch payload")
+            covered = {
+                canonical_us_ticker(value)
+                for value in tickers
+                if type(value) is str and canonical_us_ticker(value) in target_symbols
+            }
+            for symbol in covered:
+                rows_by_ticker[symbol].append(row)
+        else:
+            ticker = row.get("ticker")
+            event_date = row.get(date_field)
+            if type(ticker) is not str or not ticker or type(event_date) is not str:
+                raise FullCandidateLiveSourcePacketError("malformed Massive batch payload")
+            try:
+                datetime.strptime(event_date, "%Y-%m-%d")
+            except ValueError as exc:
+                raise FullCandidateLiveSourcePacketError("malformed Massive batch payload") from exc
+            if not query_window["date_from"] <= event_date <= query_window["date_to"]:
+                raise FullCandidateLiveSourcePacketError("Massive batch row escaped its query window")
+            canonical = canonical_us_ticker(ticker)
+            if canonical in target_symbols:
+                rows_by_ticker[canonical].append(row)
+    return rows, rows_by_ticker
+
+
+def _fetch_massive_batch_family(
+    *,
+    family: str,
+    family_index: int,
+    source_as_of: str,
+    observed_at: str,
+    target_symbols: list[str],
+    raw_root: Path,
+    client: sample_validation.JsonHttpClient,
+    massive_api_key: str,
+    massive_headers: dict[str, str],
+    max_total_endpoint_calls: int,
+    records: list[sample_validation.FetchRecord],
+    attempt_budget: HttpAttemptBudget,
+    max_retries: int,
+    retry_stats: dict[str, int],
+    provider_pace_seconds: float,
+    sleep_func: Callable[[float], None],
+    shared_page_count: list[int],
+) -> dict[str, Any]:
+    query_window = _massive_batch_query_window(
+        family=family,
+        source_as_of=source_as_of,
+        observed_at=observed_at,
+    )
+    rows: list[dict[str, Any]] = []
+    rows_by_ticker = {symbol: [] for symbol in target_symbols}
+    page_records: list[sample_validation.FetchRecord] = []
+    seen_provider_ids: set[str] = set()
+    pagination_exhausted = False
+    failure_reason: str | None = None
+    url = _massive_batch_first_url(
+        family=family,
+        query_window=query_window,
+        api_key=massive_api_key,
+    )
+    for page_number in range(1, MASSIVE_BATCH_LOGICAL_CALL_CAP + 1):
+        if (
+            len(page_records) >= MASSIVE_BATCH_FAMILY_LOGICAL_CALL_CAP
+            or shared_page_count[0] >= MASSIVE_BATCH_LOGICAL_CALL_CAP
+        ):
+            failure_reason = "pagination_limit_exceeded"
+            break
+        _assert_endpoint_budget(records, max_total_endpoint_calls)
+        record = _fetch_massive_batch_page(
+            family=family,
+            page_number=page_number,
+            url=url,
+            query_window=query_window,
+            raw_root=raw_root,
+            client=client,
+            headers=massive_headers,
+            max_retries=max_retries,
+            retry_stats=retry_stats,
+            attempt_budget=attempt_budget,
+            reserved_required_attempts=max_total_endpoint_calls - (len(records) + 1),
+            pace_seconds=provider_pace_seconds,
+            sleep_func=sleep_func,
+        )
+        shared_page_count[0] += 1
+        records.append(record)
+        page_records.append(record)
+        if not record.ok:
+            failure_reason = "massive_429_exhausted" if record.http_status == 429 else "http_error"
+            break
+        try:
+            page_rows, page_rows_by_ticker = _validate_massive_batch_rows(
+                family=family,
+                payload=record.payload,
+                query_window=query_window,
+                observed_at=observed_at,
+                target_symbols=set(target_symbols),
+                seen_provider_ids=seen_provider_ids,
+            )
+            next_url = _massive_batch_next_url(
+                record.payload.get("next_url") if isinstance(record.payload, dict) else None,
+                family=family,
+                query_window=query_window,
+                api_key=massive_api_key,
+            )
+        except FullCandidateLiveSourcePacketError as exc:
+            failure_reason = str(exc)
+            break
+        rows.extend(page_rows)
+        for symbol, symbol_rows in page_rows_by_ticker.items():
+            rows_by_ticker[symbol].extend(symbol_rows)
+        if next_url is None:
+            pagination_exhausted = True
+            break
+        url = next_url
+    status = "complete" if pagination_exhausted else "incomplete"
+    return {
+        "query_window": query_window,
+        "page_count": len(page_records),
+        "pagination_exhausted": pagination_exhausted,
+        "result_count": len(rows),
+        "status": status,
+        "failure_reason": None if status == "complete" else (failure_reason or "http_error"),
+        "rows_by_ticker": rows_by_ticker,
+        "page_records": page_records,
+    }
+
+
 def _fetch_live_records(
     *,
     selected_symbols: list[str],
+    source_as_of: str,
+    observed_at: str,
     raw_root: Path,
     client: sample_validation.JsonHttpClient,
     fmp_env: sample_validation.EnvValue | None,
@@ -834,7 +1163,7 @@ def _fetch_live_records(
     budget_approval: Any = None,
     require_budget_approval: bool = True,
     sleep_func: Callable[[float], None] | None = None,
-) -> tuple[list[sample_validation.FetchRecord], dict[str, str], int, int]:
+) -> tuple[list[sample_validation.FetchRecord], dict[str, str], int, int, dict[str, Any]]:
     binding = None
     if require_budget_approval or budget_approval is not None:
         binding = _approval_binding(budget_approval)
@@ -913,69 +1242,32 @@ def _fetch_live_records(
                 )
             )
 
-        _assert_endpoint_budget(records, max_total_endpoint_calls)
-        records.append(
-            _fetch_with_retry(
-                client,
-                url=MASSIVE_NEWS_URL.format(ticker=symbol, key=massive_env.value),
-                provider_id="massive",
-                endpoint_family="reference_news",
-                symbol=symbol,
-                raw_root=raw_root,
-                headers=massive_headers,
-                pace_seconds=provider_pace_seconds,
-                max_retries=max_retries_per_call,
-                retry_backoff_seconds=retry_backoff_seconds,
-                retry_stats=retry_stats,
-                attempt_budget=attempt_budget,
-                reserved_required_attempts=_reserved_after_current(),
-                sleep_func=sleeper,
-            )
-        )
-
-        _assert_endpoint_budget(records, max_total_endpoint_calls)
-        records.append(
-            _fetch_with_retry(
-                client,
-                url=MASSIVE_SPLITS_URL.format(ticker=symbol, key=massive_env.value),
-                provider_id="massive",
-                endpoint_family="stock_splits",
-                symbol=symbol,
-                raw_root=raw_root,
-                headers=massive_headers,
-                pace_seconds=provider_pace_seconds,
-                max_retries=max_retries_per_call,
-                retry_backoff_seconds=retry_backoff_seconds,
-                retry_stats=retry_stats,
-                attempt_budget=attempt_budget,
-                reserved_required_attempts=_reserved_after_current(),
-                sleep_func=sleeper,
-            )
-        )
-
-        _assert_endpoint_budget(records, max_total_endpoint_calls)
-        records.append(
-            _fetch_with_retry(
-                client,
-                url=MASSIVE_DIVIDENDS_URL.format(ticker=symbol, key=massive_env.value),
-                provider_id="massive",
-                endpoint_family="dividends",
-                symbol=symbol,
-                raw_root=raw_root,
-                headers=massive_headers,
-                pace_seconds=provider_pace_seconds,
-                max_retries=max_retries_per_call,
-                retry_backoff_seconds=retry_backoff_seconds,
-                retry_stats=retry_stats,
-                attempt_budget=attempt_budget,
-                reserved_required_attempts=_reserved_after_current(),
-                sleep_func=sleeper,
-            )
+    shared_page_count = [0]
+    massive_batch_coverage: dict[str, Any] = {}
+    for family_index, family in enumerate(_MASSIVE_BATCH_FAMILIES):
+        massive_batch_coverage[family] = _fetch_massive_batch_family(
+            family=family,
+            family_index=family_index,
+            source_as_of=source_as_of,
+            observed_at=observed_at,
+            target_symbols=selected_symbols,
+            raw_root=raw_root,
+            client=client,
+            massive_api_key=massive_env.value,
+            massive_headers=massive_headers,
+            max_total_endpoint_calls=max_total_endpoint_calls,
+            records=records,
+            attempt_budget=attempt_budget,
+            max_retries=max_retries_per_call,
+            retry_stats=retry_stats,
+            provider_pace_seconds=provider_pace_seconds,
+            sleep_func=sleeper,
+            shared_page_count=shared_page_count,
         )
     validator = getattr(client, "assert_all_loaded_consumed", None)
     if callable(validator):
         validator()
-    return records, cik_by_symbol, retry_stats["used"], attempt_budget.used
+    return records, cik_by_symbol, retry_stats["used"], attempt_budget.used, massive_batch_coverage
 
 
 def _record_map(records: list[sample_validation.FetchRecord]) -> dict[tuple[str, str, str | None], sample_validation.FetchRecord]:
@@ -1087,7 +1379,12 @@ def _resolved_source_artifacts(
     source_as_of: str,
     observed_at: str,
     records: list[sample_validation.FetchRecord],
+    analyst_source: str = "fmp",
+    active_analyst_actions: dict[str, Any] | None = None,
+    massive_batch_coverage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if analyst_source not in ACTIVE_ANALYST_SOURCES:
+        raise FullCandidateLiveSourcePacketError("analyst_source must be yfinance or fmp")
     by_key = _record_map(records)
     submissions_by_ticker: dict[str, Any] = {}
     missing_sec: list[str] = []
@@ -1108,28 +1405,20 @@ def _resolved_source_artifacts(
     for symbol in missing_sec:
         offering_source["excluded"][symbol] = {"active_offering": "coverage=missing/parser=failed"}
 
-    grades_by_ticker: dict[str, Any] = {}
     news_by_ticker: dict[str, Any] = {}
     for symbol in selected_symbols:
-        grade_records, grade_coverage, grade_parser = _payload_list_status(
-            by_key.get(("financial_modeling_prep", "grades", symbol))
-        )
-        grades_by_ticker[symbol] = {
-            "records": grade_records,
-            "provenance": _empty_provenance(
-                provider_id="fmp",
-                endpoint_or_filing_type="grades",
-                source_as_of=source_as_of,
-                observed_at=observed_at,
-                coverage_status=grade_coverage,
-                parser_status=grade_parser,
-                lineage_id=f"{symbol.lower()}grades",
-            ),
-        }
-
-        news_records, news_coverage, news_parser = _massive_news_payload_status(
-            by_key.get(("massive", "reference_news", symbol))
-        )
+        if massive_batch_coverage is None:
+            news_records, news_coverage, news_parser = _massive_news_payload_status(
+                by_key.get(("massive", "reference_news", symbol))
+            )
+        else:
+            news_batch = massive_batch_coverage.get("reference_news")
+            if isinstance(news_batch, dict) and news_batch.get("status") == "complete":
+                rows_by_ticker = news_batch.get("rows_by_ticker")
+                news_records = list(rows_by_ticker.get(symbol, [])) if isinstance(rows_by_ticker, dict) else []
+                news_coverage, news_parser = "full", "ok"
+            else:
+                news_records, news_coverage, news_parser = [], "missing", "failed"
         news_by_ticker[symbol] = {
             "records": news_records,
             "provenance": _empty_provenance(
@@ -1144,10 +1433,34 @@ def _resolved_source_artifacts(
         }
 
     try:
-        analyst_grade_actions = resolve_analyst_grade_actions(
-            as_of=source_as_of,
-            grades_by_ticker=grades_by_ticker,
-        )
+        if analyst_source == "fmp":
+            grades_by_ticker: dict[str, Any] = {}
+            for symbol in selected_symbols:
+                grade_records, grade_coverage, grade_parser = _payload_list_status(
+                    by_key.get(("financial_modeling_prep", "grades", symbol))
+                )
+                grades_by_ticker[symbol] = {
+                    "records": grade_records,
+                    "provenance": _empty_provenance(
+                        provider_id="fmp",
+                        endpoint_or_filing_type="grades",
+                        source_as_of=source_as_of,
+                        observed_at=observed_at,
+                        coverage_status=grade_coverage,
+                        parser_status=grade_parser,
+                        lineage_id=f"{symbol.lower()}grades",
+                    ),
+                }
+            analyst_grade_actions = resolve_analyst_grade_actions(
+                as_of=source_as_of,
+                grades_by_ticker=grades_by_ticker,
+            )
+        elif isinstance(active_analyst_actions, dict):
+            analyst_grade_actions = active_analyst_actions
+        else:
+            raise FullCandidateLiveSourcePacketError(
+                "yfinance analyst actions must be loaded from the explicitly selected source artifact"
+            )
         massive_news_events = resolve_news_events(
             as_of=source_as_of,
             news_by_ticker=news_by_ticker,
@@ -1239,6 +1552,47 @@ def _event_count(record: sample_validation.FetchRecord | None) -> int:
     return int(shape["row_count"] or 0)
 
 
+def _summarize_massive_batch_for_ticker(
+    *,
+    family: str,
+    symbol: str,
+    batch: dict[str, Any] | None,
+) -> tuple[dict[str, Any], int, int, int]:
+    if not isinstance(batch, dict):
+        batch = {}
+    page_records = batch.get("page_records") if isinstance(batch.get("page_records"), list) else []
+    complete = batch.get("status") == "complete" and batch.get("pagination_exhausted") is True
+    rows_by_ticker = batch.get("rows_by_ticker")
+    rows = list(rows_by_ticker.get(symbol, [])) if complete and isinstance(rows_by_ticker, dict) else []
+    raw_refs = [record.raw_sample_ref for record in page_records if isinstance(record, sample_validation.FetchRecord)]
+    successful_pages = sum(1 for record in page_records if isinstance(record, sample_validation.FetchRecord) and record.ok)
+    error_pages = len(page_records) - successful_pages
+    latest = page_records[-1] if page_records and isinstance(page_records[-1], sample_validation.FetchRecord) else None
+    summary = {
+        "provider_id": "massive",
+        "endpoint_family": family,
+        "symbol": symbol,
+        "status": "success" if complete else "error",
+        "http_status": latest.http_status if latest is not None else None,
+        "error_type": None if complete else batch.get("failure_reason", "missing_batch_page"),
+        "raw_sample_ref": raw_refs[0] if raw_refs else None,
+        "raw_sample_refs": raw_refs,
+        "raw_sample_ref_gitignored": all(
+            ref.startswith(str(RAW_SAMPLE_REL_ROOT).replace("\\", "/")) for ref in raw_refs
+        ),
+        "payload_shape": {
+            "type": "batch_page_envelope",
+            "row_count": len(rows),
+            "page_count": batch.get("page_count", 0),
+        },
+        "query_window": batch.get("query_window"),
+        "page_count": batch.get("page_count", 0),
+        "pagination_exhausted": batch.get("pagination_exhausted", False),
+        "coverage_status": "full" if complete else "missing",
+    }
+    return summary, len(rows), successful_pages, error_pages
+
+
 def _build_corporate_action_capture(
     *,
     generated_at: str,
@@ -1247,6 +1601,7 @@ def _build_corporate_action_capture(
     observed_at: str,
     selected_symbols: list[str],
     records: list[sample_validation.FetchRecord],
+    massive_batch_coverage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     by_key = _record_map(records)
     by_ticker: dict[str, Any] = {}
@@ -1256,28 +1611,63 @@ def _build_corporate_action_capture(
     dividend_errors = 0
     split_events = 0
     dividend_events = 0
+    if massive_batch_coverage is not None:
+        split_pages = massive_batch_coverage.get("stock_splits", {}).get("page_records", [])
+        dividend_pages = massive_batch_coverage.get("dividends", {}).get("page_records", [])
+        split_successes = sum(1 for record in split_pages if isinstance(record, sample_validation.FetchRecord) and record.ok)
+        split_errors = len(split_pages) - split_successes
+        dividend_successes = sum(
+            1 for record in dividend_pages if isinstance(record, sample_validation.FetchRecord) and record.ok
+        )
+        dividend_errors = len(dividend_pages) - dividend_successes
     for symbol in selected_symbols:
-        split_rec = by_key.get(("massive", "stock_splits", symbol))
-        dividend_rec = by_key.get(("massive", "dividends", symbol))
-        split_count = _event_count(split_rec)
-        dividend_count = _event_count(dividend_rec)
-        if split_rec is not None:
-            if split_rec.ok:
-                split_successes += 1
-            else:
-                split_errors += 1
-        if dividend_rec is not None:
-            if dividend_rec.ok:
-                dividend_successes += 1
-            else:
-                dividend_errors += 1
+        if massive_batch_coverage is None:
+            split_rec = by_key.get(("massive", "stock_splits", symbol))
+            dividend_rec = by_key.get(("massive", "dividends", symbol))
+            split_count = _event_count(split_rec)
+            dividend_count = _event_count(dividend_rec)
+            if split_rec is not None:
+                if split_rec.ok:
+                    split_successes += 1
+                else:
+                    split_errors += 1
+            if dividend_rec is not None:
+                if dividend_rec.ok:
+                    dividend_successes += 1
+                else:
+                    dividend_errors += 1
+            split_summary = _summarize_endpoint(split_rec) if split_rec is not None else None
+            dividend_summary = _summarize_endpoint(dividend_rec) if dividend_rec is not None else None
+        else:
+            split_summary, split_count, _, _ = _summarize_massive_batch_for_ticker(
+                family="stock_splits",
+                symbol=symbol,
+                batch=massive_batch_coverage.get("stock_splits"),
+            )
+            dividend_summary, dividend_count, _, _ = _summarize_massive_batch_for_ticker(
+                family="dividends",
+                symbol=symbol,
+                batch=massive_batch_coverage.get("dividends"),
+            )
         split_events += split_count
         dividend_events += dividend_count
         by_ticker[symbol] = {
-            "split_endpoint": _summarize_endpoint(split_rec) if split_rec is not None else None,
-            "dividend_endpoint": _summarize_endpoint(dividend_rec) if dividend_rec is not None else None,
+            "split_endpoint": split_summary,
+            "dividend_endpoint": dividend_summary,
             "split_event_count": split_count,
             "dividend_event_count": dividend_count,
+        }
+    batch_coverage_public = None
+    if massive_batch_coverage is not None:
+        batch_coverage_public = {
+            family: {
+                key: batch.get(key)
+                for key in (
+                    "query_window", "page_count", "pagination_exhausted", "result_count", "status", "failure_reason"
+                )
+            }
+            for family, batch in massive_batch_coverage.items()
+            if isinstance(batch, dict)
         }
     return {
         "schema_name": "us_short_batch5_corporate_action_live_capture",
@@ -1308,6 +1698,7 @@ def _build_corporate_action_capture(
             "dividend_event_count": dividend_events,
         },
         "by_ticker": by_ticker,
+        **({"massive_batch_coverage": batch_coverage_public} if batch_coverage_public is not None else {}),
         "limitations": [
             "This artifact captures split/dividend endpoint response shapes and raw refs only.",
             "It does not reconcile corporate actions to prices, calculate returns, or confirm paper-performance evaluability.",
@@ -1511,7 +1902,7 @@ def _build_local_source_packet(
     overextension_projection_path: Path | None,
     overextension_candidate_artifact_path: Path | None,
     ohlcv_series_packet_path: Path | None,
-    yfinance_grade_actions_path: Path | None,
+    active_analyst_source: str,
     output_data_context_path: Path,
     context_components_output_path: Path | None,
     holdings: list[dict[str, Any]],
@@ -1527,6 +1918,8 @@ def _build_local_source_packet(
     soft_boost_comparison_ledger_path: Path | None,
     soft_boost_state_dir: Path | None,
 ) -> dict[str, Any]:
+    if active_analyst_source not in ACTIVE_ANALYST_SOURCES:
+        raise FullCandidateLiveSourcePacketError("active_analyst_source must be yfinance or fmp")
     if (overextension_projection_path is None) != (overextension_candidate_artifact_path is None):
         raise FullCandidateLiveSourcePacketError(
             "overextension projection and its full eligible-universe candidate artifact must be paired"
@@ -1548,8 +1941,6 @@ def _build_local_source_packet(
         packet_paths["overextension_candidate_artifact_path"] = _repo_rel(overextension_candidate_artifact_path)
     if ohlcv_series_packet_path is not None:
         packet_paths["ohlcv_series_packet_path"] = _repo_rel(ohlcv_series_packet_path)
-    if yfinance_grade_actions_path is not None:
-        packet_paths["yfinance_grade_actions_path"] = _repo_rel(yfinance_grade_actions_path)
     if context_components_output_path is not None:
         packet_paths["output_context_components_path"] = _repo_rel(context_components_output_path)
     soft_paths = (
@@ -1602,10 +1993,6 @@ def _build_local_source_packet(
             ("theme_selection_contract_path", paths["theme_selection_contract"]),
         )
     }
-    if yfinance_grade_actions_path is not None:
-        source_artifact_sha256["yfinance_grade_actions_path"] = hashlib.sha256(
-            yfinance_grade_actions_path.read_bytes()
-        ).hexdigest()
     if ohlcv_series_packet_path is not None:
         source_artifact_sha256["ohlcv_series_packet_path"] = hashlib.sha256(
             ohlcv_series_packet_path.read_bytes()
@@ -1619,7 +2006,8 @@ def _build_local_source_packet(
         optional_inputs["soft_discovery_stage_result"] = soft_discovery_stage_result
     return {
         "schema_name": "us_short_batch5_data_context_source_packet",
-        "schema_version": "1.3.0",
+        "schema_version": "1.4.0",
+        "active_analyst_source": active_analyst_source,
         "generated_at": generated_at,
         "scope": {
             "market": "US",
@@ -1678,10 +2066,11 @@ def _raw_capture_manifest(records: list[sample_validation.FetchRecord]) -> dict[
             "provider_id": record.provider_id,
             "endpoint_family": record.endpoint_family,
             "symbol": record.symbol,
+            "raw_sample_ref": record.raw_sample_ref,
             "sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(),
         })
-    rows.sort(key=lambda row: (row["provider_id"], row["endpoint_family"], row["symbol"] or ""))
-    identities = [(row["provider_id"], row["endpoint_family"], row["symbol"]) for row in rows]
+    rows.sort(key=lambda row: (row["provider_id"], row["endpoint_family"], row["raw_sample_ref"]))
+    identities = [(row["provider_id"], row["endpoint_family"], row["raw_sample_ref"]) for row in rows]
     if len(set(identities)) != len(identities):
         raise FullCandidateLiveSourcePacketError("captured endpoint identities are not unique")
     manifest_sha256 = hashlib.sha256(
@@ -1703,6 +2092,29 @@ def _require_bound_offline_replay_client(client: Any, replay_source_capture: dic
         raise FullCandidateLiveSourcePacketError(
             "offline replay requires the manifest-bound ReplayClient created by the replay entry point"
         )
+
+
+def _public_massive_batch_coverage(coverage: dict[str, Any] | None) -> dict[str, Any]:
+    public: dict[str, Any] = {}
+    for family in _MASSIVE_BATCH_FAMILIES:
+        batch = coverage.get(family) if isinstance(coverage, dict) else None
+        if not isinstance(batch, dict):
+            public[family] = {
+                "query_window": None,
+                "page_count": 0,
+                "pagination_exhausted": False,
+                "result_count": 0,
+                "status": "incomplete",
+                "failure_reason": "missing_batch_coverage",
+            }
+            continue
+        public[family] = {
+            key: batch.get(key)
+            for key in (
+                "query_window", "page_count", "pagination_exhausted", "result_count", "status", "failure_reason"
+            )
+        }
+    return public
 
 
 def _build_summary(
@@ -1736,18 +2148,17 @@ def _build_summary(
     run_data_context: bool,
     context_components_output_path: Path | None,
     analyst_source: str,
-    yfinance_grade_actions_path: Path | None,
+    massive_batch_coverage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if analyst_source not in {"fmp", "yfinance"}:
         raise FullCandidateLiveSourcePacketError("analyst_source must be fmp or yfinance")
-    if (analyst_source == "yfinance") != (yfinance_grade_actions_path is not None):
-        raise FullCandidateLiveSourcePacketError("analyst_source does not match the supplied analyst source path")
     endpoint_errors = sum(1 for record in endpoint_records if not record.ok)
     eligible = list(candidate_artifact["eligible_tickers"])
     offline_replay = execution_mode == _EXECUTION_MODE_OFFLINE_REPLAY
+    public_massive_batch_coverage = _public_massive_batch_coverage(massive_batch_coverage)
     return {
         "schema_name": "us_short_batch5_full_candidate_live_source_packet_summary",
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "schema_ref": "schemas/us_short_batch5_full_candidate_live_source_packet_summary.schema.json",
         "authorization_ref": (
             "offline_replay_from_bound_source_capture" if offline_replay else AUTHORIZATION_REF
@@ -1786,6 +2197,8 @@ def _build_summary(
             "datahub_consumption_performed": False,
             "production_storage_performed": False,
             "full_market_call_performed": False,
+            "full_market_event_window_fetch_performed": True,
+            "full_market_security_universe_download_performed": False,
             "yfinance_consumption_performed": analyst_source == "yfinance",
             "broker_or_order_execution_performed": False,
             "ship_gate_or_live_normalized_evidence_claimed": False,
@@ -1841,6 +2254,7 @@ def _build_summary(
             "sec_ticker_reference_calls": _endpoint_count(endpoint_records, "sec_edgar", "company_tickers_mapping"),
             "fmp_grades_calls": _endpoint_count(endpoint_records, "financial_modeling_prep", "grades"),
             "sec_submissions_calls": _endpoint_count(endpoint_records, "sec_edgar", "submissions"),
+            "massive_batch_logical_call_cap": MASSIVE_BATCH_LOGICAL_CALL_CAP,
             "massive_reference_news_calls": _endpoint_count(endpoint_records, "massive", "reference_news"),
             "massive_stock_split_calls": _endpoint_count(endpoint_records, "massive", "stock_splits"),
             "massive_dividend_calls": _endpoint_count(endpoint_records, "massive", "dividends"),
@@ -1851,6 +2265,7 @@ def _build_summary(
             "massive_429_retry_wait_seconds": massive_429_retry_wait_seconds,
             "within_budget": actual_total_http_attempts <= max_total_http_attempts,
         },
+        "massive_batch_coverage": public_massive_batch_coverage,
         "endpoint_results": [_summarize_endpoint(record) for record in endpoint_records],
         "raw_capture_manifest": _raw_capture_manifest(endpoint_records),
         "storage": {
@@ -1866,9 +2281,7 @@ def _build_summary(
             "candidate_subset_path": _repo_rel(source_paths["candidate_subset"]),
             "offering_audit_source_path": _repo_rel(source_paths["offering_audit_source"]),
             "analyst_grade_actions_path": _repo_rel(source_paths["analyst_grade_actions"]),
-            "yfinance_grade_actions_path": (
-                _repo_rel(yfinance_grade_actions_path) if yfinance_grade_actions_path is not None else None
-            ),
+            "active_analyst_source": analyst_source,
             "analyst_grade_actions_consumed_from": (
                 "yfinance_grade_actions" if analyst_source == "yfinance" else "fmp_analyst_grade_actions"
             ),
@@ -1907,6 +2320,8 @@ def _build_summary(
         "prohibited_claims": {
             "provider_selected": False,
             "full_market_download_performed": False,
+            "full_market_event_window_fetch_performed": True,
+            "full_market_security_universe_download_performed": False,
             "yfinance_used": analyst_source == "yfinance",
             "paid_access_used": False,
             "datahub_consumed": False,
@@ -1920,7 +2335,7 @@ def _build_summary(
         },
         "limitations": [
             "This source-packet run is narrowed to the reviewed Pass2 target universe, not full-market coverage evidence and not the full Pass1-eligible set.",
-            "Split/dividend endpoints are captured as raw provider evidence only; this runner does not reconcile corporate actions or calculate returns.",
+            "Massive news/split/dividend evidence is fetched by bounded date-window pages; this runner does not reconcile corporate actions or calculate returns.",
             "Raw payloads stay under gitignored provider_samples; tracked summary excludes request URLs, raw rows, and secrets.",
             "No provider selection, DataHub, production storage, broker/order execution, live-normalized, or ship-gate evidence is claimed.",
         ],
@@ -2009,6 +2424,30 @@ def _validate_summary_against_schema(summary: dict[str, Any]) -> None:
         raise FullCandidateLiveSourcePacketError("summary physical HTTP attempts do not equal logical calls plus retries")
     if budget["actual_total_http_attempts"] > budget["max_total_http_attempts"]:
         raise FullCandidateLiveSourcePacketError("summary physical HTTP-attempt budget exceeded")
+    coverage = summary.get("massive_batch_coverage")
+    if not isinstance(coverage, dict) or set(coverage) != set(_MASSIVE_BATCH_FAMILIES):
+        raise FullCandidateLiveSourcePacketError("summary Massive batch coverage is incomplete")
+    coverage_page_counts = 0
+    for family in _MASSIVE_BATCH_FAMILIES:
+        family_coverage = coverage.get(family)
+        if not isinstance(family_coverage, dict):
+            raise FullCandidateLiveSourcePacketError("summary Massive batch coverage shape is invalid")
+        page_count = family_coverage.get("page_count")
+        if type(page_count) is not int or page_count < 0:
+            raise FullCandidateLiveSourcePacketError("summary Massive batch page count is invalid")
+        coverage_page_counts += page_count
+        if family_coverage.get("status") == "complete" and family_coverage.get("pagination_exhausted") is not True:
+            raise FullCandidateLiveSourcePacketError("complete Massive batch coverage must be pagination-exhausted")
+        if family_coverage.get("status") == "incomplete" and not family_coverage.get("failure_reason"):
+            raise FullCandidateLiveSourcePacketError("incomplete Massive batch coverage lacks a failure reason")
+    if coverage_page_counts > MASSIVE_BATCH_LOGICAL_CALL_CAP:
+        raise FullCandidateLiveSourcePacketError("summary Massive batch page cap exceeded")
+    if coverage_page_counts != (
+        budget["massive_reference_news_calls"]
+        + budget["massive_stock_split_calls"]
+        + budget["massive_dividend_calls"]
+    ):
+        raise FullCandidateLiveSourcePacketError("summary Massive batch coverage page counts drift from endpoint counts")
     expected_retry_wait = (
         MASSIVE_429_RETRY_WAIT_SECONDS if budget["retry_count_allowed"] else 0.0
     )
@@ -2016,9 +2455,11 @@ def _validate_summary_against_schema(summary: dict[str, Any]) -> None:
         raise FullCandidateLiveSourcePacketError("summary Massive 429 retry wait is not canonical")
     manifest = summary["raw_capture_manifest"]
     rows = manifest["endpoint_wrapper_sha256"]
-    manifest_identities = {(row["provider_id"], row["endpoint_family"], row["symbol"]) for row in rows}
+    manifest_identities = {
+        (row["provider_id"], row["endpoint_family"], row["raw_sample_ref"]) for row in rows
+    }
     endpoint_identities = {
-        (row["provider_id"], row["endpoint_family"], row["symbol"])
+        (row["provider_id"], row["endpoint_family"], row["raw_sample_ref"])
         for row in summary["endpoint_results"]
     }
     if len(rows) != len(manifest_identities) or manifest_identities != endpoint_identities:
@@ -2052,6 +2493,7 @@ def _validate_analyst_source_semantics(summary: dict[str, Any]) -> None:
         environment = summary["environment"]
         source_artifacts = summary["source_artifacts"]
         budget = summary["endpoint_call_budget"]
+        active_source = source_artifacts["active_analyst_source"]
         consumed_from = source_artifacts["analyst_grade_actions_consumed_from"]
         yfinance_consumed = scope["yfinance_consumption_performed"]
         fmp_key_present = environment["fmp_api_key_present"]
@@ -2060,7 +2502,7 @@ def _validate_analyst_source_semantics(summary: dict[str, Any]) -> None:
         exclusion = source_artifacts["analyst_grade_actions_exclusion"]
     except (KeyError, TypeError) as exc:
         raise FullCandidateLiveSourcePacketError("summary analyst-source semantic fields are incomplete") from exc
-    if consumed_from == "yfinance_grade_actions":
+    if active_source == "yfinance" and consumed_from == "yfinance_grade_actions":
         if not (
             yfinance_consumed is True
             and fmp_key_present is False
@@ -2071,7 +2513,7 @@ def _validate_analyst_source_semantics(summary: dict[str, Any]) -> None:
             raise FullCandidateLiveSourcePacketError(
                 "yfinance analyst-source summary is inconsistent with FMP credential/call/exclusion facts"
             )
-    elif consumed_from == "fmp_analyst_grade_actions":
+    elif active_source == "fmp" and consumed_from == "fmp_analyst_grade_actions":
         if not (
             yfinance_consumed is False
             and fmp_key_present is True
@@ -2165,6 +2607,7 @@ def _rederive_and_verify_pass2_targets(
     forced_holding_tickers: list[str] | tuple[str, ...] | None,
     catalyst_recall_tickers: list[str] | tuple[str, ...] | None,
     reviewed_target_symbols: list[str],
+    active_analyst_source: str,
     preflight_within_cap: Any,
     momentum_top_k: int,
     expected_momentum_sha256: str,
@@ -2259,10 +2702,12 @@ def _rederive_and_verify_pass2_targets(
         raise FullCandidateLiveSourcePacketError(
             "preflight target_symbols do not match the re-derived momentum/theme/recall/holdings funnel"
         )
-    within_cap = len(expected) <= FMP_FREE_DAILY_GRADE_CALL_CAP
+    if active_analyst_source not in ACTIVE_ANALYST_SOURCES:
+        raise FullCandidateLiveSourcePacketError("active_analyst_source must be yfinance or fmp")
+    within_cap = active_analyst_source == "yfinance" or len(expected) <= FMP_FREE_DAILY_GRADE_CALL_CAP
     if not within_cap or preflight_within_cap is not True:
         raise FullCandidateLiveSourcePacketError(
-            "re-derived Pass2 target exceeds the FMP free daily grade-call cap or disagrees with the preflight within-cap flag"
+            "re-derived Pass2 target exceeds the active analyst-source constraint or disagrees with the preflight within-cap flag"
         )
     targets = expected_list  # already sorted by select_pass2_targets
     return {
@@ -2278,6 +2723,7 @@ def _rederive_and_verify_pass2_targets(
         "eligible_unscored_not_selected_count": len(partition["eligible_unscored_not_selected"]),
         "eligible_partition_conserved": True,
         "fmp_grade_call_cap": FMP_FREE_DAILY_GRADE_CALL_CAP,
+        "active_analyst_source": active_analyst_source,
         "fmp_grade_calls_within_free_daily_cap": within_cap,
         "neutral_fill_tickers_excluded_from_expensive_pass2": True,
         "_candidate_target_symbols": sorted(expected & eligible),
@@ -2460,11 +2906,6 @@ def run_full_candidate_live_source_packet(
         if ohlcv_series_packet_path is not None
         else None
     )
-    yfinance_actions_path = (
-        _existing_state_json(yfinance_grade_actions_path, field="yfinance_grade_actions_path")
-        if yfinance_grade_actions_path is not None
-        else None
-    )
     output_path = _validate_state_json_path(output_data_context_path, field="output_data_context_path")
     components_path = (
         _validate_state_json_path(context_components_output_path, field="context_components_output_path")
@@ -2484,6 +2925,27 @@ def run_full_candidate_live_source_packet(
         expected_decision_date=expected_decision_date,
     )
 
+    analyst_source = preflight["active_analyst_source"]
+    if analyst_source == "yfinance":
+        if yfinance_grade_actions_path is None:
+            raise FullCandidateLiveSourcePacketError(
+                "yfinance active analyst source requires the explicit yfinance resolved-actions artifact"
+            )
+        yfinance_actions_path = _existing_state_json(
+            yfinance_grade_actions_path, field="yfinance_grade_actions_path"
+        )
+        active_analyst_actions = _read_json(yfinance_actions_path)
+        if not isinstance(active_analyst_actions, dict):
+            raise FullCandidateLiveSourcePacketError("yfinance resolved analyst actions must be an object")
+        paths["analyst_grade_actions"] = yfinance_actions_path
+    else:
+        if yfinance_grade_actions_path is not None:
+            raise FullCandidateLiveSourcePacketError(
+                "explicit FMP analyst source must not carry a yfinance analyst artifact"
+            )
+        yfinance_actions_path = None
+        active_analyst_actions = None
+
     eligibility_governance = load_eligibility_governance(ELIGIBILITY_GOVERNANCE_PATH)
     load_catalyst_governance()
     validated_full_overextension = _validate_full_overextension_before_funnel(
@@ -2501,6 +2963,7 @@ def run_full_candidate_live_source_packet(
         forced_holding_tickers=forced_holding_tickers,
         catalyst_recall_tickers=catalyst_recall_tickers,
         reviewed_target_symbols=reviewed_target_symbols,
+        active_analyst_source=analyst_source,
         preflight_within_cap=preflight_targets.get("fmp_grade_calls_within_free_daily_cap"),
         momentum_top_k=authorized_momentum_top_k,
         expected_momentum_sha256=preflight["local_input_coverage"]["momentum_projection"]["artifact_sha256"],
@@ -2514,7 +2977,12 @@ def run_full_candidate_live_source_packet(
     # re-derived Pass2 target count, so a forged preflight that widens momentum_top_k / target_count is rejected
     # BEFORE any provider call unless the operator independently authorized the matching wider budget. Closes the
     # circular-K seam where the re-derivation otherwise consumes K from the very summary it distrusts.
-    rederived_call_forecast = _SEC_TICKER_MAPPING_CALLS + verified_targets["target_count"] * _PASS2_ENDPOINT_CALLS_PER_TARGET
+    rederived_call_forecast = (
+        _SEC_TICKER_MAPPING_CALLS
+        + verified_targets["target_count"] * _SEC_SUBMISSIONS_CALLS_PER_TARGET
+        + (verified_targets["target_count"] if analyst_source == "fmp" else 0)
+        + MASSIVE_BATCH_LOGICAL_CALL_CAP
+    )
     if rederived_call_forecast != expected_total_call_budget:
         raise FullCandidateLiveSourcePacketError(
             "expected call budget must match the forecast recomputed from the re-derived Pass2 target count: "
@@ -2540,7 +3008,6 @@ def run_full_candidate_live_source_packet(
         raise FullCandidateLiveSourcePacketError("candidate target symbols drifted from the re-derived funnel")
     fetch_symbols = list(reviewed_target_symbols)
 
-    analyst_source = "yfinance" if yfinance_actions_path is not None else "fmp"
     fetch_fmp_grades = analyst_source == "fmp"
     fmp_env = sample_validation.read_required_env("FMP_API_KEY") if fetch_fmp_grades else None
     sec_env = sample_validation.read_required_env("SEC_USER_AGENT")
@@ -2557,8 +3024,10 @@ def run_full_candidate_live_source_packet(
     }
 
     client = client or sample_validation.JsonHttpClient()
-    records, cik_by_symbol, retry_count_used, actual_total_http_attempts = _fetch_live_records(
+    records, cik_by_symbol, retry_count_used, actual_total_http_attempts, massive_batch_coverage = _fetch_live_records(
         selected_symbols=fetch_symbols,
+        source_as_of=source_as_of,
+        observed_at=observed_at,
         raw_root=raw_root_resolved,
         client=client,
         fmp_env=fmp_env,
@@ -2603,6 +3072,9 @@ def run_full_candidate_live_source_packet(
         source_as_of=source_as_of,
         observed_at=observed_at,
         records=records,
+        analyst_source=analyst_source,
+        active_analyst_actions=active_analyst_actions,
+        massive_batch_coverage=massive_batch_coverage,
     )
     corporate_action_capture = _build_corporate_action_capture(
         generated_at=generated_at,
@@ -2611,6 +3083,7 @@ def run_full_candidate_live_source_packet(
         observed_at=observed_at,
         selected_symbols=selected_symbols,
         records=records,
+        massive_batch_coverage=massive_batch_coverage,
     )
     target_momentum_projection = _target_scoped_projection(
         projection_path=momentum_path,
@@ -2650,7 +3123,8 @@ def run_full_candidate_live_source_packet(
 
     _write_json_atomic(candidate_subset, paths["candidate_subset"])
     _write_json_atomic(resolved_sources["offering_audit_source"], paths["offering_audit_source"])
-    _write_json_atomic(resolved_sources["analyst_grade_actions"], paths["analyst_grade_actions"])
+    if analyst_source == "fmp":
+        _write_json_atomic(resolved_sources["analyst_grade_actions"], paths["analyst_grade_actions"])
     _write_json_atomic(resolved_sources["massive_news_events"], paths["massive_news_events"])
     _write_json_atomic(corporate_action_capture, paths["corporate_action_capture"])
     _write_json_atomic(target_momentum_projection, paths["momentum_projection"])
@@ -2666,7 +3140,7 @@ def run_full_candidate_live_source_packet(
         overextension_projection_path=overextension_path,
         overextension_candidate_artifact_path=candidate_path if overextension_path is not None else None,
         ohlcv_series_packet_path=ohlcv_path,
-        yfinance_grade_actions_path=yfinance_actions_path,
+        active_analyst_source=analyst_source,
         output_data_context_path=output_path,
         context_components_output_path=components_path,
         holdings=holding_rows,
@@ -2713,6 +3187,7 @@ def run_full_candidate_live_source_packet(
         bankruptcy_screening=bankruptcy_screening,
         pass2_target_universe=verified_targets,
         endpoint_records=records,
+        massive_batch_coverage=massive_batch_coverage,
         retry_count_allowed=max_retries_per_call,
         retry_count_used=retry_count_used,
         massive_429_retry_wait_seconds=(
@@ -2731,7 +3206,6 @@ def run_full_candidate_live_source_packet(
         run_data_context=run_data_context,
         context_components_output_path=components_path,
         analyst_source=analyst_source,
-        yfinance_grade_actions_path=yfinance_actions_path,
     )
     _write_summary_validated(
         summary,

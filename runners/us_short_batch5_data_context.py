@@ -80,7 +80,6 @@ SOURCE_REF_PATH_KEYS = (
 OPTIONAL_SOURCE_REF_PATH_KEYS = (
     "overextension_projection_path",
     "overextension_candidate_artifact_path",
-    "yfinance_grade_actions_path",
 )
 _SOURCE_REF_ROLE_BY_PATH_KEY = {
     key: key[:-5] if key.endswith("_path") else key
@@ -178,11 +177,6 @@ def _validated_source_ref_paths(value: Any) -> dict[str, str]:
 
 def _source_refs_for_family(source_refs_by_role: dict[str, str], family: str) -> list[dict[str, str]]:
     roles = list(_FAMILY_SOURCE_REF_ROLES[family])
-    if family in {"selection_inputs", "per_ticker_analysis"} and "yfinance_grade_actions" in source_refs_by_role:
-        roles = [
-            "yfinance_grade_actions" if role == "analyst_grade_actions" else role
-            for role in roles
-        ]
     if family in {"selection_inputs", "per_ticker_analysis"} and "overextension_projection" in source_refs_by_role:
         roles.append("overextension_projection")
         roles.append("overextension_candidate_artifact")

@@ -241,7 +241,8 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             self.paths["packet"],
             {
                 "schema_name": "us_short_batch5_data_context_source_packet",
-                "schema_version": "1.3.0",
+                "schema_version": "1.4.0",
+                "active_analyst_source": "fmp",
                 "generated_at": "2026-06-15T08:05:00-04:00",
                 "scope": {
                     "market": "US",

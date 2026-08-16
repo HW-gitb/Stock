@@ -5041,3 +5041,49 @@ Claude Code：独立审查问题4当前 diff，确认 Required 与 `O-P4-1` 均�
 ## 2026-08-15 追加：问题7 Required 复修的独立审查（Claude Code reviewer/committer；**复审 PASS，已提交并合入 master**）
 
 指针条目：`report_context.price_clock` 的 object 检查已加进 bridge owner 的同一个 `load_batch4_action_template`；上一轮四种 t=0 放行的形状加上 `price_clock=null` 共五形现全部在 t=0 拒绝，两条对照组与合法模板正控不变。两条 Optional 亦被接受：weekly wrapper 直接拒绝 `-ExtraArgs`（与胶囊入口对齐），universe summary 的 `run_datetime_et` 改用实际观察钟。证据与边界见 `docs/system_risk_register.md` 同日 PASS 小节。
+
+## 2026-08-16 追加：桌面 1us_testrun0815 问题3 → 问题6 连续两刀（Codex executor/fixer，dc41，OPEN-NOT-VERIFIED）
+
+### 执行顺序与问题3
+
+- 严格按桌面方案顺序执行：问题2路径接口 → 问题3活动 analyst/预算 → 问题6 Massive 批量化；问题3结束后立即进入问题6。两刀均为最小修复，不改桌面方案，不碰主树。
+- 问题3 Required A/B/C 全部落地，Optional 无。默认周 capstone 显式使用 `yfinance`；显式 FMP fallback 才使用 `fmp`。新增闭集 `active_analyst_source`，共享 source packet/data-context 的通用 `analyst_grade_actions_path` 指向活动来源，保留既有 SHA；默认 yfinance 不再写 FMP 假故障 analyst artifact，replay/health/summary 均按活动来源绑定。
+- 问题3在问题6批量化后的预算口径为：yfinance `1 + target + 30`，显式 FMP `1 + target + target + 30`；200 目标为 231/431。preflight、approval、live runner 使用同一公式，未恢复已删除的 FMP 空预算。
+
+### 问题6
+
+- Required 建议1/建议2全部落地，Optional 无：Massive window capacity=5；news/splits/dividends 改为现有 Pass2 runner 内的三族日期窗口批量分页，共享逻辑页上限 30；首请求不带 ticker；安全 `next_url`、查询窗口、重复行、坏 payload、页数超限均 fail-closed。
+- 现有 raw wrapper/manifest/SHA、429-only 最多 2 次重试、65 秒退避、pacing、注入 sleep 和 `physical=logical+retries` 保留；replay 按 family/page 顺序消费同一页面；per-ticker news/corporate-action 下游接口保持不变；完整性继续进入现有 provider-health。
+
+### 验证、交接和未验证边界
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 串行运行问题3→问题6相关既有测试：`459 tests OK`；生产 `py_compile=9`；`git diff --check=PASS`。全程 fake/offline/临时私有根，无真实 provider/network/live/account/real-key/生产周跑。
+- 本轮未提交、未 merge；当前结论为 `OPEN-NOT-VERIFIED`。此证据不等于独立审查、provider/live、production、ship-gate 或 full-size 放行。
+- 下一步：Claude Code 独立审查本工作树的问题3与问题6当前 diff；PASS 后按当前 reviewer/committer 流程提交，merge 仍由用户决定。桌面文档和 `docs/CURRENT.md` 不在本轮修改范围。
+
+## 2026-08-16 追加：问题6 P1 与 Optional 复修（Codex executor/fixer，dc41，OPEN-NOT-VERIFIED）
+
+### 修复范围
+
+- `R-USSHORT-MASSIVE-BATCH-CONTINUATION-CONTRACT-CONTRADICTS-THE-SHIPPED-SIBLING`：批量 Massive 与既有 forward-policy runner 共用同一 continuation sanitizer；接受 cursor-only，回显日期时校验窗口漂移，正确保留字面 `+`，并继续移除返回 URL 中的 key、注入当前 key。补 cursor-only、字面 `+`、跨页累积、页上限和多页 raw replay 测试。
+- `O-P6-1`：三族各自最多 10 页，总共享上限仍为 30，避免一个大族耗尽其他族页预算。
+- `O-P6-4`：删除批量化后无生产调用方的三个逐票 Massive URL 常量，replay 反向控制改为当前批量 endpoint 形状。
+- `O-P6-2` 与 `O-P6-3` 未改：经桌面问题6方案核对，30 页是授权硬上限、实际调用另行记录；拆股/分红的 `as_of−7d…as_of` 是明确 PIT 窗口。两条是方案取舍，不是应反向修改的缺陷。
+
+### 验证与边界
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 运行相关离线回归 `61 tests OK`；5 个生产/测试 Python 文件 `py_compile` 通过；`git diff --check` 通过。
+- 仅 fake/offline/临时私有根；未联网、未调用真实 provider、未读真实 key、未跑真实周实盘。未提交、未 merge，当前仍 `OPEN-NOT-VERIFIED`。
+- `docs/SESSION_LOG.md` 与 `docs/system_risk_register.md` 已落本轮状态；未修改桌面文档、主树或 `docs/CURRENT.md`。
+
+### 下一步
+
+Claude Code：独立审查问题6当前 diff；PASS 后按项目流程提交，merge 仍由用户决定。
+
+## 2026-08-16 Claude Code 独立审查：问题6 复修轮 — PASS
+
+上轮 P1（批量分页的续传契约与本仓已在跑的同接口分页器互相矛盾）已按"收敛成一处共用实现"闭合：`_continuation_url_for_endpoint` 成为两条 Massive 路径唯一的 continuation sanitizer，日期窗口改为 bind-if-present，故 cursor-only 续传在两侧同时合法。放松类改动的强制反向控制 51/51 通过（细目见 `docs/system_risk_register.md` 同日节），补偿控制 `_validate_massive_batch_rows` 对窗口外行 fail-closed。上轮点名的翻页零覆盖已补上真实两页端到端用例。`O-P6-1`/`O-P6-4` 已闭；`O-P6-2`/`O-P6-3` 的不采纳理由成立。新增不阻断 `O-P6-5`（批量页落盘未做密钥脱敏，落地区已整目录 gitignored）。
+
+### 下一步
+
+Claude Code：本轮 PASS，按项目流程提交并 merge 进 master。

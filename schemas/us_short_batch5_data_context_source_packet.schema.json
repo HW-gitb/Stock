@@ -8,6 +8,7 @@
     "schema_name",
     "schema_version",
     "generated_at",
+    "active_analyst_source",
     "scope",
     "decision_clock",
     "source_artifact_sha256",
@@ -21,7 +22,10 @@
       "const": "us_short_batch5_data_context_source_packet"
     },
     "schema_version": {
-      "const": "1.3.0"
+      "const": "1.4.0"
+    },
+    "active_analyst_source": {
+      "enum": ["yfinance", "fmp"]
     },
     "generated_at": {
       "type": "string",
@@ -127,10 +131,6 @@
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         },
-        "yfinance_grade_actions_path": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
-        },
         "ohlcv_series_packet_path": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
@@ -174,10 +174,6 @@
           "minLength": 1
         },
         "overextension_candidate_artifact_path": {
-          "type": "string",
-          "minLength": 1
-        },
-        "yfinance_grade_actions_path": {
           "type": "string",
           "minLength": 1
         },

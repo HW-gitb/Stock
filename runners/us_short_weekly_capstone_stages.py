@@ -400,6 +400,7 @@ def run_pass2_preflight(ctx) -> dict[str, Any]:
         catalyst_recall_tickers=list(ctx.catalyst_recall_tickers),
         momentum_top_k=ctx.authorized_momentum_top_k,
         authorized_total_call_budget=ctx.authorized_pass2_call_budget,
+        active_analyst_source="yfinance",
         confirm_user_authorization=ctx.confirm_user_authorization,
         generated_at=ctx.generated_at,
     )
@@ -1272,7 +1273,8 @@ def _fmp_analyst_grades_health(summary: Mapping[str, Any]) -> tuple[str, str]:
     source_artifacts = summary.get("source_artifacts") if isinstance(summary, Mapping) else None
     if parsed is None or not isinstance(budget, Mapping) or not isinstance(source_artifacts, Mapping):
         return "analyst_grades", "missing"
-    if source_artifacts.get("analyst_grade_actions_consumed_from") != "fmp_analyst_grade_actions":
+    if source_artifacts.get("active_analyst_source") != "fmp" \
+            or source_artifacts.get("analyst_grade_actions_consumed_from") != "fmp_analyst_grade_actions":
         return "analyst_grades", "down"
     rows, _ = parsed
     grade_rows = [row for row in rows
@@ -1298,6 +1300,7 @@ def _yfinance_analyst_grades_health(
     _, targets = parsed
     source_artifacts = pass2_summary.get("source_artifacts")
     if not isinstance(source_artifacts, Mapping) \
+            or source_artifacts.get("active_analyst_source") != "yfinance" \
             or source_artifacts.get("analyst_grade_actions_consumed_from") != "yfinance_grade_actions":
         return "analyst_grades", "down"
     scope = summary.get("scope")
@@ -1376,9 +1379,15 @@ def _yfinance_analyst_grades_health(
 def _analyst_grades_health(
     pass2_summary: Mapping[str, Any], yfinance_summary: Mapping[str, Any] | None,
 ) -> tuple[str, str]:
-    if yfinance_summary is not None:
+    source_artifacts = pass2_summary.get("source_artifacts") if isinstance(pass2_summary, Mapping) else None
+    active_source = source_artifacts.get("active_analyst_source") if isinstance(source_artifacts, Mapping) else None
+    if active_source == "yfinance":
+        if yfinance_summary is None:
+            return "analyst_grades", "down"
         return _yfinance_analyst_grades_health(yfinance_summary, pass2_summary)
-    return _fmp_analyst_grades_health(pass2_summary)
+    if active_source == "fmp":
+        return _fmp_analyst_grades_health(pass2_summary)
+    return "analyst_grades", "down"
 
 
 def _sec_offering_health(summary: Mapping[str, Any]) -> tuple[str, str]:
@@ -1403,33 +1412,41 @@ def _sec_offering_health(summary: Mapping[str, Any]) -> tuple[str, str]:
 
 
 def _massive_events_health(summary: Mapping[str, Any]) -> tuple[str, str]:
-    parsed = _pass2_rows(summary)
-    if parsed is None:
+    if not isinstance(summary, Mapping):
         return "massive_events", "missing"
-    rows, targets = parsed
-    expected = {(family, symbol) for family in _EVENT_FAMILIES for symbol in targets}
-    seen: dict[tuple[str, str], str] = {}
-    malformed = False
-    for row in rows:
-        if row.get("provider_id") != "massive" or row.get("endpoint_family") not in _EVENT_FAMILIES:
+    coverage = summary.get("massive_batch_coverage")
+    if not isinstance(coverage, Mapping) or set(coverage) != set(_EVENT_FAMILIES):
+        return "massive_events", "missing"
+    complete = 0
+    for family in _EVENT_FAMILIES:
+        item = coverage.get(family)
+        if not isinstance(item, Mapping):
+            return "massive_events", "down"
+        page_count = item.get("page_count")
+        result_count = item.get("result_count")
+        query_window = item.get("query_window")
+        if (
+            type(page_count) is not int
+            or page_count < 0
+            or type(result_count) is not int
+            or result_count < 0
+            or not isinstance(query_window, Mapping)
+            or not query_window.get("date_field")
+            or not query_window.get("date_from")
+            or not query_window.get("date_to")
+        ):
+            return "massive_events", "down"
+        status = item.get("status")
+        exhausted = item.get("pagination_exhausted")
+        if status == "complete" and exhausted is True:
+            complete += 1
+        elif status == "incomplete" and isinstance(item.get("failure_reason"), str) and item["failure_reason"]:
             continue
-        symbol = row.get("symbol")
-        if type(symbol) is not str:            # same guard as _sec_offering_health: never hash an unchecked value
-            malformed = True
-            continue
-        key = (row.get("endpoint_family"), symbol)
-        if key not in expected or key in seen:
-            malformed = True
-            continue
-        seen[key] = row.get("status")
-    if malformed:
-        return "massive_events", "down"
-    if not seen:
-        return "massive_events", "down"
-    successes = sum(1 for status in seen.values() if status == "success")
-    if len(seen) == len(expected) and successes == len(expected):
+        else:
+            return "massive_events", "down"
+    if complete == len(_EVENT_FAMILIES):
         return "massive_events", "ok"
-    if successes == 0:
+    if complete == 0:
         return "massive_events", "down"
     return "massive_events", "degraded"
 

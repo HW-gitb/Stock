@@ -102,7 +102,7 @@ class ReplayClientTest(unittest.TestCase):
     OWN (payload, http_status, ok, error_type) -- including replaying a rate-limited (ok=False) call as ok=False so
     the runner's graceful-degradation path is exercised exactly as during the real fetch."""
 
-    def _seed(self, root: Path) -> None:
+    def _seed(self, root: Path, *, multi_page: bool = False) -> None:
         # SEC ticker->CIK mapping (symbol=None -> _market bucket) + two per-ticker submissions with a `cik`.
         sv.write_json_atomic(_wrapper("sec_edgar", "company_tickers_mapping", None, {"0": {"cik_str": 320193, "ticker": "AAPL"}}),
                              sv.raw_sample_ref(root, "sec_edgar", "company_tickers_mapping", None))
@@ -110,14 +110,65 @@ class ReplayClientTest(unittest.TestCase):
                              sv.raw_sample_ref(root, "sec_edgar", "submissions", "AAPL"))
         sv.write_json_atomic(_wrapper("financial_modeling_prep", "grades", "AAPL", None, http_status=429, ok=False, error_type="http_error"),
                              sv.raw_sample_ref(root, "financial_modeling_prep", "grades", "AAPL"))
-        sv.write_json_atomic(_wrapper("massive", "reference_news", "AAPL", {"results": [{"id": "n1"}]}),
-                             sv.raw_sample_ref(root, "massive", "reference_news", "AAPL"))
-        sv.write_json_atomic(_wrapper("massive", "stock_splits", "AAPL", {"results": []}),
-                             sv.raw_sample_ref(root, "massive", "stock_splits", "AAPL"))
-        sv.write_json_atomic(_wrapper("massive", "dividends", "AAPL", {"results": []}),
-                             sv.raw_sample_ref(root, "massive", "dividends", "AAPL"))
+        batch_windows = {
+            "reference_news": {
+                "date_field": "published_utc", "date_from": "2026-06-01T00:00:00Z",
+                "date_to": "2026-07-08T08:00:00-04:00", "limit": 5000,
+                "sort": "published_utc", "order": "asc",
+            },
+            "stock_splits": {
+                "date_field": "execution_date", "date_from": "2026-06-01",
+                "date_to": "2026-07-08", "limit": 5000,
+                "sort": "execution_date", "order": "asc",
+            },
+            "dividends": {
+                "date_field": "ex_dividend_date", "date_from": "2026-06-01",
+                "date_to": "2026-07-08", "limit": 5000,
+                "sort": "ex_dividend_date", "order": "asc",
+            },
+        }
+        batch_payloads = {
+            "reference_news": {
+                "results": [{"id": "n1"}],
+                **({"next_url": "https://api.massive.com/v2/reference/news?cursor=page-2"} if multi_page else {}),
+            },
+            "stock_splits": {"results": []},
+            "dividends": {"results": []},
+        }
+        for family in ("reference_news", "stock_splits", "dividends"):
+            sv.write_json_atomic(
+                {
+                    **_wrapper("massive", family, None, batch_payloads[family]),
+                    "page_number": 1,
+                    "query_window": batch_windows[family],
+                },
+                root / "massive" / "_market" / f"{family}_page_0001.json",
+            )
+        if multi_page:
+            sv.write_json_atomic(
+                {
+                    **_wrapper("massive", "reference_news", None, {"results": [{"id": "n2"}]}),
+                    "page_number": 2,
+                    "query_window": batch_windows["reference_news"],
+                },
+                root / "massive" / "_market" / "reference_news_page_0002.json",
+            )
 
     def _bound_summary(self, root: Path, summary_path: Path) -> dict:
+        analyst_path = summary_path.with_name("analyst_grade_actions.json")
+        analyst_path.write_text(json.dumps({"records": [], "provenance": {}}), encoding="utf-8")
+        source_packet_path = summary_path.with_name("source_packet.json")
+        analyst_ref = sv.as_repo_relative(analyst_path)
+        source_packet_path.write_text(
+            json.dumps({
+                "active_analyst_source": "fmp",
+                "paths": {"analyst_grade_actions_path": analyst_ref},
+                "source_artifact_sha256": {
+                    "analyst_grade_actions_path": hashlib.sha256(analyst_path.read_bytes()).hexdigest(),
+                },
+            }),
+            encoding="utf-8",
+        )
         endpoint_results = []
         manifest_rows = []
         for wrapper_path in root.rglob("*.json"):
@@ -147,7 +198,21 @@ class ReplayClientTest(unittest.TestCase):
                 "tracked_summary_path": sv.as_repo_relative(summary_path),
             },
             "endpoint_call_budget": {"max_total_endpoint_calls": 6, "actual_total_endpoint_calls": 6},
+            "source_packet": {"path": sv.as_repo_relative(source_packet_path)},
+            "source_artifacts": {
+                "active_analyst_source": "fmp",
+                "analyst_grade_actions_path": analyst_ref,
+            },
             "endpoint_results": endpoint_results,
+            "massive_batch_coverage": {
+                family: {
+                    "page_count": 1,
+                    "status": "complete",
+                    "pagination_exhausted": True,
+                    "result_count": 1 if family == "reference_news" else 0,
+                }
+                for family in ("reference_news", "stock_splits", "dividends")
+            },
             "raw_capture_manifest": {
                 "endpoint_wrapper_sha256": manifest_rows,
                 "manifest_sha256": hashlib.sha256(
@@ -179,11 +244,36 @@ class ReplayClientTest(unittest.TestCase):
             self.assertFalse(ok)
             self.assertEqual(status, 429)
 
-            # Massive news / splits / dividends resolve by ticker + path family.
-            payload, status, ok, err = client.get_json(live.MASSIVE_NEWS_URL.format(ticker="AAPL", key="IGNORED"))
+            # Massive news / splits / dividends resolve through one market-level page per family.
+            query_windows = {
+                "reference_news": {
+                    "date_field": "published_utc", "date_from": "2026-06-01T00:00:00Z",
+                    "date_to": "2026-07-08T08:00:00-04:00", "limit": 5000,
+                    "sort": "published_utc", "order": "asc",
+                },
+                "stock_splits": {
+                    "date_field": "execution_date", "date_from": "2026-06-01",
+                    "date_to": "2026-07-08", "limit": 5000,
+                    "sort": "execution_date", "order": "asc",
+                },
+                "dividends": {
+                    "date_field": "ex_dividend_date", "date_from": "2026-06-01",
+                    "date_to": "2026-07-08", "limit": 5000,
+                    "sort": "ex_dividend_date", "order": "asc",
+                },
+            }
+            payload, status, ok, err = client.get_json(
+                live._massive_batch_first_url(
+                    family="reference_news", query_window=query_windows["reference_news"], api_key="IGNORED"
+                )
+            )
             self.assertEqual(payload["results"][0]["id"], "n1")
-            for url_tpl in (live.MASSIVE_SPLITS_URL, live.MASSIVE_DIVIDENDS_URL):
-                payload, status, ok, err = client.get_json(url_tpl.format(ticker="AAPL", key="IGNORED"))
+            for family in ("stock_splits", "dividends"):
+                payload, status, ok, err = client.get_json(
+                    live._massive_batch_first_url(
+                        family=family, query_window=query_windows[family], api_key="IGNORED"
+                    )
+                )
                 self.assertTrue(ok)
                 self.assertEqual(payload["results"], [])
 
@@ -193,7 +283,25 @@ class ReplayClientTest(unittest.TestCase):
             self._seed(root)
             client = replay.ReplayClient(root)
             with self.assertRaises(replay.ReplayError):
-                client.get_json(live.MASSIVE_NEWS_URL.format(ticker="ZZZZ", key="IGNORED"))
+                client.get_json(
+                    "https://api.massive.com/v2/reference/news?ticker=ZZZZ&limit=10&apiKey=IGNORED"
+                )
+
+    def test_multi_page_raw_replay_consumes_the_same_family_pages(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._seed(root, multi_page=True)
+            client = replay.ReplayClient(root)
+            client.get_json(sv.sec_url("company_tickers_mapping"))
+            client.get_json(sv.sec_url("submissions", "0000320193"))
+            client.get_json(live._fmp_stable_url("grades", "AAPL", "IGNORED_KEY"))
+            first, *_ = client.get_json("https://api.massive.com/v2/reference/news")
+            second, *_ = client.get_json("https://api.massive.com/v2/reference/news?cursor=page-2")
+            client.get_json("https://api.massive.com/stocks/v1/splits")
+            client.get_json("https://api.massive.com/stocks/v1/dividends")
+            client.assert_all_loaded_consumed()
+            self.assertEqual(first["results"], [{"id": "n1"}])
+            self.assertEqual(second["results"], [{"id": "n2"}])
 
     def test_duplicate_or_extra_raw_wrapper_fails_closed(self):
         with tempfile.TemporaryDirectory() as d:
@@ -249,7 +357,10 @@ class ReplayClientTest(unittest.TestCase):
                         mock.patch.object(
                             replay.live_source_packet,
                             "_load_ready_preflight",
-                            return_value={"decision_clock": {"expected_decision_date": "20260708"}},
+                            return_value={
+                                "decision_clock": {"expected_decision_date": "20260708"},
+                                "active_analyst_source": "fmp",
+                            },
                         ):
                     replay.run_replay(
                         source_raw_root=root,
@@ -278,7 +389,7 @@ class ReplayClientTest(unittest.TestCase):
             summary_path = Path(summary_dir) / "capture_summary.json"
             self._seed(root)
             self._bound_summary(root, summary_path)
-            mutated = sv.raw_sample_ref(root, "massive", "reference_news", "AAPL")
+            mutated = root / "massive" / "_market" / "reference_news_page_0001.json"
             wrapper = json.loads(mutated.read_text(encoding="utf-8"))
             wrapper["payload"] = {"results": [{"id": "mutated"}]}
             sv.write_json_atomic(wrapper, mutated)
@@ -330,7 +441,11 @@ class ReplayClientTest(unittest.TestCase):
             expected = {}
             for wrapper_path in root.rglob("*.json"):
                 wrapper = json.loads(wrapper_path.read_text(encoding="utf-8"))
-                key = (wrapper["provider_id"], wrapper["endpoint_family"], wrapper["symbol"])
+                key = (
+                    (wrapper["provider_id"], wrapper["endpoint_family"], "page", wrapper["page_number"])
+                    if "page_number" in wrapper
+                    else (wrapper["provider_id"], wrapper["endpoint_family"], wrapper["symbol"])
+                )
                 expected[key] = (wrapper_path.resolve(), hashlib.sha256(wrapper_path.read_bytes()).hexdigest())
             capture = {
                 "source_observed_at": "2026-07-08T08:00:00-04:00",

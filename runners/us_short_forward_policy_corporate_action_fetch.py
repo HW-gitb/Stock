@@ -156,26 +156,57 @@ def _first_url(*, family: str, date_from: str, date_to: str, api_key: str) -> st
     return f"https://api.massive.com{endpoint}?{query}"
 
 
-def _continuation_url(value: object, *, family: str, api_key: str) -> str | None:
+def _continuation_query_pairs(query: str) -> list[tuple[str, str]]:
+    """Decode query escapes without treating a literal ``+`` as a space."""
+    pairs: list[tuple[str, str]] = []
+    for field in query.split("&"):
+        if not field:
+            continue
+        key, separator, raw_value = field.partition("=")
+        pairs.append((urllib.parse.unquote(key), urllib.parse.unquote(raw_value) if separator else ""))
+    return pairs
+
+
+def _continuation_url_for_endpoint(
+    value: object,
+    *,
+    endpoint: str,
+    api_key: str,
+    expected_query: dict[str, str] | None = None,
+) -> str | None:
+    """Sanitize a Massive continuation for one endpoint.
+
+    Massive may return a cursor-only URL.  If it echoes a query-window field, an expected value binds that field
+    without requiring the field to be present; this keeps the cursor contract compatible with both shipped paths.
+    """
     if value in (None, ""):
         return None
     if not isinstance(value, str):
         raise ForwardPolicyCorporateActionFetchError("unsafe continuation")
     parsed = urllib.parse.urlsplit(value)
-    endpoint, _ = _ENDPOINTS[family]
     try:
         port = parsed.port
     except ValueError:  # malformed / out-of-range port in a hostile continuation URL
         raise ForwardPolicyCorporateActionFetchError("unsafe continuation")
     if parsed.scheme != "https" or parsed.hostname != "api.massive.com" or parsed.path != endpoint \
-            or parsed.username is not None or parsed.password is not None or port not in (None, 443):
+            or parsed.username is not None or parsed.password is not None or port not in (None, 443) \
+            or parsed.fragment:
         raise ForwardPolicyCorporateActionFetchError("unsafe continuation")
-    query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    query = _continuation_query_pairs(parsed.query)
     if any(key.lower() in {"ticker", "tickers"} for key, _ in query):
         raise ForwardPolicyCorporateActionFetchError("unsafe continuation")
+    for required_key, expected in (expected_query or {}).items():
+        values = [value for key, value in query if key == required_key]
+        if values and values != [expected]:
+            raise ForwardPolicyCorporateActionFetchError("continuation changed its date window")
     query = [(key, val) for key, val in query if key.lower() != "apikey"]
     query.append(("apiKey", api_key))
     return urllib.parse.urlunsplit(("https", "api.massive.com", endpoint, urllib.parse.urlencode(query), ""))
+
+
+def _continuation_url(value: object, *, family: str, api_key: str) -> str | None:
+    endpoint, _ = _ENDPOINTS[family]
+    return _continuation_url_for_endpoint(value, endpoint=endpoint, api_key=api_key)
 
 
 def _normalized_events(

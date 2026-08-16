@@ -73,7 +73,6 @@ SOURCE_PATH_FIELDS = (
 OPTIONAL_SOURCE_PATH_FIELDS = (
     "overextension_projection_path",
     "overextension_candidate_artifact_path",
-    "yfinance_grade_actions_path",
     "ohlcv_series_packet_path",
 )
 SOFT_BOOST_INPUT_PATH_FIELDS = (
@@ -437,8 +436,6 @@ def _validated_provider_envelope_digests(packet: dict[str, Any], paths: dict[str
     if type(digests) is not dict:
         raise SourcePacketError("source_artifact_sha256 must be an exact dict")
     expected_fields = set(PROVIDER_ENVELOPE_DIGEST_PATH_FIELDS)
-    if "yfinance_grade_actions_path" in paths:
-        expected_fields.add("yfinance_grade_actions_path")
     if "ohlcv_series_packet_path" in paths:
         expected_fields.add("ohlcv_series_packet_path")
     if set(digests) != expected_fields:
@@ -475,6 +472,8 @@ def _load_and_validate_packet(packet_path: Path | str) -> tuple[dict[str, Any], 
     _validate_schema(packet)
     if type(packet) is not dict:
         raise SourcePacketError("source packet root must be an object")
+    if packet.get("active_analyst_source") not in {"yfinance", "fmp"}:
+        raise SourcePacketError("active_analyst_source must be exactly yfinance or fmp")
 
     scope = packet["scope"]
     for field in SCOPE_FALSE_FIELDS:
@@ -755,28 +754,25 @@ def _validate_resolved_analyst_grade_envelope(
 
 
 def _resolve_active_analyst_source(
-    source_payloads: dict[str, Any], *, as_of: str,
-) -> tuple[dict[str, Any], str, str]:
+    source_payloads: dict[str, Any], *, as_of: str, active_analyst_source: str,
+) -> tuple[dict[str, Any], str]:
     """Validate and select the one analyst envelope consumed by all local consumers."""
-    fmp_path_field = "analyst_grade_actions_path"
-    _validate_resolved_analyst_grade_envelope(
-        source_payloads[fmp_path_field],
-        as_of=as_of,
-        provider_id="fmp",
-        endpoint="grades",
-        direction_map={"upgrade": "up", "downgrade": "down"},
+    if active_analyst_source not in {"yfinance", "fmp"}:
+        raise SourcePacketError("active_analyst_source must be exactly yfinance or fmp")
+    path_field = "analyst_grade_actions_path"
+    provider_id, endpoint, direction_map = (
+        ("yfinance", "upgrades_downgrades", {"up": "up", "down": "down"})
+        if active_analyst_source == "yfinance"
+        else ("fmp", "grades", {"upgrade": "up", "downgrade": "down"})
     )
-    yfinance_path_field = "yfinance_grade_actions_path"
-    if yfinance_path_field in source_payloads:
-        _validate_resolved_analyst_grade_envelope(
-            source_payloads[yfinance_path_field],
-            as_of=as_of,
-            provider_id="yfinance",
-            endpoint="upgrades_downgrades",
-            direction_map={"up": "up", "down": "down"},
-        )
-        return source_payloads[yfinance_path_field], "yfinance", yfinance_path_field
-    return source_payloads[fmp_path_field], "fmp", fmp_path_field
+    _validate_resolved_analyst_grade_envelope(
+        source_payloads[path_field],
+        as_of=as_of,
+        provider_id=provider_id,
+        endpoint=endpoint,
+        direction_map=direction_map,
+    )
+    return source_payloads[path_field], provider_id
 
 
 def _validate_resolved_offering_envelope(result: Any, *, as_of: str) -> None:
@@ -838,7 +834,7 @@ def run_preflight(
     packet, paths = _load_and_validate_packet(packet_path)
     return {
         "schema_name": "us_short_batch5_data_context_source_packet_preflight_result",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "generated_at": generated_at or iso_now(),
         "packet_ref": _repo_rel(paths["packet_path"]),
         "scope": {
@@ -918,12 +914,6 @@ def run_packet(
                 paths["overextension_candidate_artifact_path"],
                 field="overextension_candidate_artifact_path",
             )
-        if "yfinance_grade_actions_path" in paths:
-            source_payloads["yfinance_grade_actions_path"] = _source_json(
-                paths["yfinance_grade_actions_path"],
-                field="yfinance_grade_actions_path",
-                expected_sha256=provider_envelope_digests["yfinance_grade_actions_path"],
-            )
         if "ohlcv_series_packet_path" in paths:
             source_payloads["ohlcv_series_packet_path"] = _source_json(
                 paths["ohlcv_series_packet_path"], field="ohlcv_series_packet_path",
@@ -933,9 +923,10 @@ def run_packet(
         _validate_resolved_offering_envelope(
             source_payloads["offering_audit_source_path"], as_of=provider_envelope_as_of
         )
-        active_analyst_payload, active_analyst_provider, active_analyst_path_field = _resolve_active_analyst_source(
+        active_analyst_payload, active_analyst_provider = _resolve_active_analyst_source(
             source_payloads,
             as_of=provider_envelope_as_of,
+            active_analyst_source=packet["active_analyst_source"],
         )
         try:
             validate_resolved_news_events(
@@ -944,12 +935,7 @@ def run_packet(
             )
         except Exception as exc:
             raise SourcePacketError(f"provider envelope Massive news rejected: {exc}") from exc
-        # The provider/path identity is resolved once at the packet boundary. All
-        # downstream consumers (score/coverage/Cut4) receive this same payload;
-        # the canonical FMP-compatible shell remains provenance-only when
-        # yfinance is selected.
         active_source_payloads = dict(source_payloads)
-        active_source_payloads["analyst_grade_actions_path"] = source_payloads[active_analyst_path_field]
         analyst_grade_actions = active_analyst_payload
         candidate = source_payloads["candidate_artifact_path"]
         try:
@@ -1237,6 +1223,7 @@ def run_packet(
         "schema_name": "us_short_batch5_data_context_source_packet_run_result",
         "schema_version": "1.0.0",
         "generated_at": generated_at or iso_now(),
+        "active_analyst_source": packet["active_analyst_source"],
         "packet_ref": _repo_rel(paths["packet_path"]),
         "scope": {
             "market": "US",
