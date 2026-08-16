@@ -3088,6 +3088,9 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 
 对应 `R-USSHORT-LANE-PACK-IS-GREEN-ONLY-BY-4-SECONDS-AND-81-PERCENT-OF-IT-IS-SERIAL`。**本节只是方案，未动任何代码。**
 
+- **执行者与工作树**：Codex，在 `D:\cnhea\Codex\worktrees\8d8c\Stock` 这棵树里做。本方案与它的 register 条目**尚未合入 master**（用户已宣布周跑期间暂停合并），换任何别的树都读不到本节。
+- **周跑期间的验收顺序**：实现、`serial_tail_modules` 重新派生、focused 包，现在就可以做；**验收第 2 条那次 lane 全量必须等用户宣布周跑结束再跑**——此刻跑会与主树的真实周跑抢 CPU，而该包只剩 4.4 秒余量，几乎必然被挤成 TIMEOUT，得到的红没有诊断价值。
+
 ### 为什么只有这一个方向有效
 
 20260816 绿跑：`elapsed=855.6s / deadline=860s`，余量 `4.4s`。`serial_tail=67` 个模块合计 **697.0s = 墙钟的 81%**，其余 251 个模块合计 446.8s 摊到 8 个 worker ≈ 56s。**串行那段加 worker 一秒都省不下来**，所以除了让模块离开串行尾巴，其它调度手段都是无效功。日志里 `WALL_CLOCK_FLOOR ... 170.0s (19.9%)` 是单模块**下界**，不是当前墙钟的成因，照它优化会走错方向。
