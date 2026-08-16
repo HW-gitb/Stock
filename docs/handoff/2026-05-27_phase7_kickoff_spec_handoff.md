@@ -5084,6 +5084,19 @@ Claude Code：独立审查问题6当前 diff；PASS 后按项目流程提交，m
 
 上轮 P1（批量分页的续传契约与本仓已在跑的同接口分页器互相矛盾）已按"收敛成一处共用实现"闭合：`_continuation_url_for_endpoint` 成为两条 Massive 路径唯一的 continuation sanitizer，日期窗口改为 bind-if-present，故 cursor-only 续传在两侧同时合法。放松类改动的强制反向控制 51/51 通过（细目见 `docs/system_risk_register.md` 同日节），补偿控制 `_validate_massive_batch_rows` 对窗口外行 fail-closed。上轮点名的翻页零覆盖已补上真实两页端到端用例。`O-P6-1`/`O-P6-4` 已闭；`O-P6-2`/`O-P6-3` 的不采纳理由成立。新增不阻断 `O-P6-5`（批量页落盘未做密钥脱敏，落地区已整目录 gitignored）。
 
+**已提交并合入**：`e2ead1dd` → merge `69037fef`。合并结果上焦点超集 460 tests OK（`receipt:31d0f3dea8a9236be5a2f4a5`）。
+
+## 2026-08-16 用户裁决：问题6 的 Optional 全部结案，不再改代码
+
+用户复核后确认 `O-P6-2` / `O-P6-3` 均不作为修复项，与执行方的不采纳理由、reviewer 采纳的口径一致：
+
+- **`O-P6-2` — 结案，不修**：30 页是桌面方案明确给出的**授权硬上限**，语义就是 fail-closed 的授权天花板；实际发生的调用数由 `actual_total_endpoint_calls` 如实记录（本轮实测字段存在）。故它与问题3 消灭的 FMP 幽灵额度不同类——那边是永不发生却仍占预算且无人披露，这边有上限、有实测披露。
+- **`O-P6-3` — 结案，不修**：桌面方案明确要求拆股/分红使用 `as_of−7d…as_of` 的 PIT 窗口。announced-but-future 的除息日不属于当前决策时点可见信息，扩回旧的「不限日期」语义会直接违反方案的 PIT 口径。reviewer 已撤回原 Optional。
+- `O-P6-1`、`O-P6-4` 此前已修复并复核闭合（每 family 10 页上限；转换后文件内已无逐票 Massive URL 常量）。
+- `O-P6-5` 保持**仅记录、不修**：批量页落盘未做密钥脱敏，但落地区 `provider_samples/` 在 `.gitignore:115` 整目录忽略，不入库、不进提交。
+
+至此桌面 `1us_testrun0815.md` 的问题 1 / 2 / 3 / 6 四条全部收口，问题6 无遗留代码工作。
+
 ### 下一步
 
-Claude Code：本轮 PASS，按项目流程提交并 merge 进 master。
+用户：决定是否重跑一次周实盘，用真实厂商响应验证多页续传（本轮翻页正确性由离线两页端到端用例与 51 条反向控制覆盖，真实 `next_url` 形状仍属 NOT_VERIFIED）。
