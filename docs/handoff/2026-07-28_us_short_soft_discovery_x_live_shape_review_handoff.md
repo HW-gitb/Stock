@@ -2988,3 +2988,11 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_s
 - **保留**：成功 chunk 的 raw response、失败索引和原有诊断记录不删除；只阻断它们进入 merge、weekly 和 active boost。没有改 receipt schema、预算、槽、Stage-1 或 X lane。
 - **证据**：K4-02 `1 OK`；生产形状 `18 OK`；Web orchestration `10 OK`；周报 capstone `57 OK`。未联网、未调用 provider/付费、未建槽、未接 4diii。
 - **状态**：`repaired / OPEN-NOT-VERIFIED`。第四刀完整 K4-02..K4-14 尚未重跑；下一步是 Claude Code 独立审查第一刀修复，随后重跑第四刀完整矩阵。
+
+## 2026-08-16 追加：Codex 独立完成第四刀，纠正 premature PASS（8d8c）
+
+- Claude Code 的第四刀 PASS 是未审完就提交的旧记录；本节以 Codex 重新执行的结果为准，不把旧记录当作独立闭合证据。
+- K4-02 修复后的完整矩阵已重跑：K4-01..K4-14 和 A-D 四个反向控制均通过。K4-02 的生产修复就是 HEAD 已有的 merge 入口 fail-closed，本轮没有再改生产代码。
+- 两处 full-lane 首红已按最小范围修正：查询质量旧夹具补 `semantic_assertions`；Batch5 夹具同步 4 个 boostable ticker、zero→valid 半升级前置状态和 Web-only MSFT `52.0` 分。IO inventory 用现有 generator 登记 5 个 class-4 测试夹具 key。
+- 验证：focused `481/481 OK`，`receipt:d0cf00b4a4e12967a2dc7773`；官方 full lane `5925/5925 PASS`、`318/318`、`equal=True`、`590.6s/860s`；static `diff-check=PASS`、`py_compile=2`；IO inventory `20/20 OK`。
+- 边界：无 provider/network/paid/slot/4d-iii；本轮 3 个测试/快照文件未提交，待用户决定后续提交或第五刀设计。

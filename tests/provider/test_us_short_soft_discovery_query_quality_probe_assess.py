@@ -1875,6 +1875,21 @@ class ProductionQueryQualityProbeSeamTest(unittest.TestCase):
                     {"ticker": "CEG", "source_ref_ids": [source_id]},
                     {"ticker": "VST", "source_ref_ids": [source_id]},
                 ],
+                "semantic_assertions": [{
+                    "basis": "shared_commercial_driver",
+                    "basis_explanation": "Power demand reaches all three linked issuers.",
+                    "common_driver": {
+                        "driver_statement": "Power demand is increasing.",
+                        "transmission_mechanism": "Load growth drives generation and infrastructure spending.",
+                        "source_ref_ids": [source_id],
+                    },
+                    "member_links": [{
+                        "ticker": ticker,
+                        "role": "beneficiary",
+                        "link_statement": "The issuer is linked to the common power-demand transmission.",
+                        "source_ref_ids": [source_id],
+                    } for ticker in ("AAPL", "CEG", "VST")],
+                }],
             }],
         })
 
@@ -1893,6 +1908,21 @@ class ProductionQueryQualityProbeSeamTest(unittest.TestCase):
                     {"ticker": "CEG", "source_urls": [source_url]},
                     {"ticker": "VST", "source_urls": [source_url]},
                 ],
+                "semantic_assertions": [{
+                    "basis": "shared_commercial_driver",
+                    "basis_explanation": "Power demand reaches all three linked issuers.",
+                    "common_driver": {
+                        "driver_statement": "Power demand is increasing.",
+                        "transmission_mechanism": "Load growth drives generation and infrastructure spending.",
+                        "source_urls": [source_url],
+                    },
+                    "member_links": [{
+                        "ticker": ticker,
+                        "role": "beneficiary",
+                        "link_statement": "The issuer is linked to the common power-demand transmission.",
+                        "source_urls": [source_url],
+                    } for ticker in ("AAPL", "CEG", "VST")],
+                }],
             }],
         })
 
