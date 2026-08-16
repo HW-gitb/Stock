@@ -238,10 +238,11 @@ class PlanBoundOfflineClosureTests(unittest.TestCase):
                 candidate_path = state_dir / f"candidate_{DECISION_DATE}.json"
                 classification_path = state_dir / f"classification_{DECISION_DATE}.json"
                 candidate_artifact = _context_candidate_artifact(SCORE_TICKERS)
-                _write_json(candidate_path, candidate_artifact)
-                _write_json(classification_path, _classification_packet({
+                classification_artifact = _classification_packet({
                     "AAPL": "10", "MSFT": "10", "GOOG": "10", "JPM": "20", "AMZN": "20",
-                }))
+                })
+                _write_json(candidate_path, candidate_artifact)
+                _write_json(classification_path, classification_artifact)
                 self.assertEqual(validate.main([
                     "--discovery-path", str(ingest.default_output_path(DECISION_DATE)),
                     "--candidate-path", str(candidate_path),
@@ -267,7 +268,8 @@ class PlanBoundOfflineClosureTests(unittest.TestCase):
             for key in ("discovery_artifact_sha256", "candidate_artifact_sha256", "classification_packet_sha256")
         }
 
-        def compose(*, enabled: bool, target_tickers: list[str], projections=None):
+        def compose(*, enabled: bool, target_tickers: list[str], projections=None,
+                    validation_artifact=None):
             projections = projections or (
                 momentum_projection, theme_projection, catalyst_projection,
             )
@@ -278,7 +280,9 @@ class PlanBoundOfflineClosureTests(unittest.TestCase):
                 catalyst_projection=projections[2],
                 risk_downgrade_by_ticker={ticker: risk_map.get(ticker, risk_downgrade()) for ticker in target_tickers},
                 theme_opportunity_state="strong",
-                provisional_theme_validation=validation if enabled else None,
+                provisional_theme_validation=(
+                    validation if validation_artifact is None else validation_artifact
+                ) if enabled else None,
                 theme_soft_boost_enabled=enabled,
                 provisional_theme_expected_decision_date=DECISION_DATE if enabled else None,
                 provisional_theme_input_digests=input_digests if enabled else None,
@@ -303,6 +307,38 @@ class PlanBoundOfflineClosureTests(unittest.TestCase):
             - baseline["selection_inputs"]["per_ticker"]["GOOG"]["core_score"],
             2.0,
         )
+
+        semantic_negative_discovery = copy.deepcopy(ingest_input)
+        for theme in semantic_negative_discovery["themes"]:
+            for assertion in theme.get("semantic_assertions", []):
+                assertion["basis"] = "shared_event_bucket"
+        semantic_negative_validation = validate.build_artifact(
+            {
+                "discovery": semantic_negative_discovery,
+                "eligible": set(SCORE_TICKERS),
+                "universe": set(SCORE_TICKERS),
+                "sectors": {"AAPL": "10", "MSFT": "10", "GOOG": "10", "JPM": "20", "AMZN": "20"},
+                "candidate": candidate_artifact,
+                "classification": classification_artifact,
+                "hashes": {
+                    "discovery": input_digests["discovery_artifact_sha256"],
+                    "candidate": input_digests["candidate_artifact_sha256"],
+                    "classification": input_digests["classification_packet_sha256"],
+                },
+            },
+            generated_at=GENERATED_AT,
+        )
+        self.assertEqual(semantic_negative_validation["themes"], [])
+        semantic_negative_score = compose(
+            enabled=True,
+            target_tickers=score_tickers,
+            validation_artifact=semantic_negative_validation,
+        )
+        for ticker in score_tickers:
+            self.assertEqual(
+                semantic_negative_score["selection_inputs"]["per_ticker"][ticker]["core_score"],
+                baseline["selection_inputs"]["per_ticker"][ticker]["core_score"],
+            )
 
         analyst_grade_actions = resolve_analyst_grade_actions(
             as_of="2026-06-15",

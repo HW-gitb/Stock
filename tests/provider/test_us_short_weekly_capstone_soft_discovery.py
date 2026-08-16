@@ -537,6 +537,24 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
                 self.assertEqual(invalid["status"], "invalid_evidence")
                 self.assertNotEqual(invalid["status"], "valid_empty")
 
+    def test_k4_14_invalid_upstream_is_zero_effect_and_core_weekly_reaches_terminal(self):
+        """An incomplete soft lane must not stop the ordinary weekly bridge."""
+        ctx = self._ctx(enabled=True)
+        self._write_supporting_inputs(ctx)
+        _write_json(ctx.soft_discovery_merge_path, {"bad": "merge"})
+        _write_json(ctx.soft_discovery_merge_manifest_path, {"bad": "manifest"})
+
+        summary = self._run_terminal_pipeline(stages.run_soft_discovery)
+
+        self.assertTrue(summary["emitted"])
+        result = summary["stages"][0]["result"]
+        self.assertEqual(result["status"], "invalid_evidence")
+        self.assertNotEqual(result["status"], "valid_empty")
+        self.assertTrue(all(value is False for value in result["effects"].values()))
+        self.assertTrue(
+            (self.state_dir / "private" / "weekly_private" / DECISION_DATE / "weekly_report.md").is_file()
+        )
+
     def test_valid_retry_is_byte_equivalent_and_receipt_binds_all_artifacts(self):
         ctx = self._ctx(enabled=True)
         self._write_supporting_inputs(ctx)
