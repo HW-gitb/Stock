@@ -87,7 +87,8 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
         self.theme_summary = (
             self.case_root
             / "provider_samples"
-            / "us_short_batch5_full_universe_theme_20260707"
+            / "us_short_batch5_full_universe_theme"
+            / _DECISION_DATE
             / "summary.json"
         )
         self.snapshot_root = self.state_dir / "sec_sic_classification_snapshots"
