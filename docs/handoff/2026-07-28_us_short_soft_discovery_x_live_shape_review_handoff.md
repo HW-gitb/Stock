@@ -2973,3 +2973,18 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_s
 5. §6a agent 另提四项未经 reviewer 复核、需执行方自行核实：混合 `1.0.0`/`2.0.0` lane 产物令整周 merge 抛错而非逐主题降级；schema 允许 `basis=shared_commercial_driver` 而 `common_driver=null`；`role`/`link_statement`/`driver_statement` 等自由文本落盘但无任何门读取；`_input_sha256` 未对断言内部 `member_links`/`source_ref_ids` 排序。
 
 **不要做**：任何 provider / 付费调用；改 Stage-1 模板（病因重判点未到）；改 0809/0815 冻结产物；接 4d-iii；实现第五刀诊断槽。
+
+## 2026-08-16 第四刀执行结果：K4-02 发现真实漏洞，停刀回交第一刀
+
+- **状态**：第四刀 `STOPPED / FAIL`，不是 PASS。第三刀的独立 PASS 不受影响。
+- **复现**：`tests/provider/test_us_short_offline_production_entry_guard.py:308` 用两个 Web regroup chunk 做跨层反控；其中一个 chunk 失败，但成功 chunk 仍进入真实 merge、第三刀验证器和 soft-boost consumer，AAPL 最终得到 `theme_soft_boost=5.0`。正确结果应为整条 Web 不可消费、active boost 为 `0.0`。
+- **归属**：这是第一刀的 raw/chunk completeness 问题。第一刀需要做最小 fail-closed 修复：成功 chunk 保留诊断，但 partial Web regroup 不得继续作为有效输入进入 merge/weekly/boost，也不得变成 `valid_empty`。
+- **本轮边界**：只改离线测试和交接记录；未改生产代码、未联网、未调用 provider/付费、未建槽、未接 4diii。第四刀完整 K4-02..K4-14 矩阵未完成，因此不报第四刀 PASS。
+- **下一步**：Knife 1 修复 → Claude Code 独立审查 PASS → 重新执行第四刀完整矩阵。
+
+## 2026-08-16 第一刀修复结果：K4-02 最小 fail-closed 修复（待独立审查）
+
+- **修复**：在 `runners/us_short_llm_theme_discovery_merge.py` 的 Web receipt 校验入口读取已有 `fetch_contract.regroup_chunk_counts.failed`；失败 chunk 大于 0 时拒绝整个 Web merge。
+- **保留**：成功 chunk 的 raw response、失败索引和原有诊断记录不删除；只阻断它们进入 merge、weekly 和 active boost。没有改 receipt schema、预算、槽、Stage-1 或 X lane。
+- **证据**：K4-02 `1 OK`；生产形状 `18 OK`；Web orchestration `10 OK`；周报 capstone `57 OK`。未联网、未调用 provider/付费、未建槽、未接 4diii。
+- **状态**：`repaired / OPEN-NOT-VERIFIED`。第四刀完整 K4-02..K4-14 尚未重跑；下一步是 Claude Code 独立审查第一刀修复，随后重跑第四刀完整矩阵。

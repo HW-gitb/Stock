@@ -5,13 +5,17 @@ to prevent the K3-R62/R64/R67 class from being hidden by builder-only fixtures.
 """
 from __future__ import annotations
 
+import copy
 import json
 import uuid
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from engine import us_short_provisional_theme_boost as boost
+from engine import us_short_llm_theme_discovery_paid_gateway as paid_gateway
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
 from runners import us_short_llm_theme_discovery_merge as merge
@@ -107,26 +111,35 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
     def tearDown(self):
         self._raw_tempdir.__exit__(None, None, None)
 
-    def _packets(self, *, cat_aapl=False):
+    def _packets(self, *, cat_aapl=False, x_tickers=None, web_source_count=1,
+                 unknown_member_ref=False):
         token = uuid.uuid4().hex
-        packet_tickers = TICKERS + ("NVDA",) if cat_aapl else TICKERS
+        packet_tickers = tuple(x_tickers or (TICKERS + ("NVDA",) if cat_aapl else TICKERS))
         web_url = f"https://web.example/k3-permanent-{token}"
+        web_urls = [
+            web_url if index == 0 else f"https://web.example/k3-permanent-{token}-extra-{index}"
+            for index in range(web_source_count)
+        ]
         x_urls = [f"https://x.example/k3-permanent-{token}-{ticker.lower()}" for ticker in packet_tickers]
         web_rows = [{
-            "url": web_url, "title": "Power demand", "content": "AAPL MSFT JPM power demand",
+            "url": url, "title": "Power demand", "content": "AAPL MSFT JPM power demand",
             "published_date": "2026-07-24T10:00:00Z",
-        }]
+        } for url in web_urls]
         x_rows = [{
             "url": x_urls[index], "title": ("X post" if cat_aapl and index == 0 else ticker), "text": (
                 "totally unrelated cat photo" if cat_aapl and index == 0
                 else f"{ticker} power demand"
             ), "created_at": "2026-07-24T10:00:00Z",
         } for index, ticker in enumerate(packet_tickers)]
-        web_payload = _theme_payload(source_urls=[web_url], source_type="web")
+        web_payload = json.loads(_theme_payload(source_urls=web_urls, source_type="web"))
+        if unknown_member_ref:
+            web_payload["themes"][0]["members"][0]["source_ref_ids"].append(
+                "web:" + "f" * 64
+            )
         x_payload = _theme_payload(source_urls=x_urls, source_type="x", tickers=packet_tickers)
         web_artifact, web_receipt, web_summary = web.run_web_fetch(
             queries=["power"], expected_decision_date=DATE, generated_at=GENERATED,
-            search_client=_FakeSearch(web_rows), deepseek_client=_FakeDeepSeek(web_payload),
+            search_client=_FakeSearch(web_rows), deepseek_client=_FakeDeepSeek(json.dumps(web_payload)),
             raw_root=self._raw_root / "web",
         )
         x_artifact, x_receipt, x_summary = xfetch.run_x_fetch(
@@ -135,6 +148,98 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
         )
         return (web_artifact, web_receipt, web_summary,
                 x_artifact, x_receipt, x_summary)
+
+    def _validation_and_boost(self, packets, *, discovery_mutator=None):
+        web_artifact, web_receipt, _, x_artifact, x_receipt, _ = packets
+        merged, manifest = merge.merge_web_x_discovery(
+            web_artifact=web_artifact, web_receipt=web_receipt,
+            x_artifact=x_artifact, x_receipt=x_receipt,
+            expected_decision_date=DATE, generated_at=GENERATED,
+        )
+        discovery = merge._ingest_input(merged)
+        if discovery_mutator is not None:
+            discovery_mutator(discovery)
+        eligible = {
+            member["ticker"]
+            for theme in x_artifact["themes"]
+            for member in theme["members"]
+        }
+        sectors = {
+            "AAPL": "10", "MSFT": "20", "JPM": "30", "NVDA": "10",
+        }
+        artifact = knife2.build_artifact(
+            {
+                "discovery": discovery,
+                "eligible": eligible,
+                "universe": eligible,
+                "sectors": sectors,
+                "candidate": {
+                    "decision_date": DATE,
+                    "price_basis_date": "20260724",
+                    "used_date": "2026-07-24",
+                },
+                "classification": {"decision_clock": {"source_as_of": "2026-07-24"}},
+                "hashes": {
+                    "discovery": "a" * 64,
+                    "candidate": "b" * 64,
+                    "classification": "c" * 64,
+                },
+            },
+            generated_at=GENERATED,
+        )
+        digests = {
+            "discovery_artifact_sha256": artifact["input_artifacts"]["discovery_artifact_sha256"],
+            "candidate_artifact_sha256": artifact["input_artifacts"]["candidate_artifact_sha256"],
+            "classification_packet_sha256": artifact["input_artifacts"]["classification_packet_sha256"],
+        }
+        boost_map = boost.build_provisional_theme_boost_map(
+            artifact,
+            target_tickers=sorted(eligible),
+            expected_decision_date=DATE,
+            expected_input_digests=digests,
+        )
+        return merged, manifest, artifact, boost_map
+
+    @staticmethod
+    def _event_basis(discovery):
+        for theme in discovery["themes"]:
+            for assertion in theme.get("semantic_assertions", []):
+                assertion["basis"] = "shared_event_bucket"
+
+    @staticmethod
+    def _three_one_member_assertions(discovery):
+        for theme in discovery["themes"]:
+            assertions = theme.get("semantic_assertions", [])
+            if not assertions:
+                continue
+            template = copy.deepcopy(assertions[0])
+            members_by_ticker = {
+                member["ticker"]: member for member in theme["members"]
+            }
+            theme["semantic_assertions"] = []
+            for ticker in TICKERS:
+                assertion = copy.deepcopy(template)
+                assertion["member_links"] = [{
+                    "ticker": ticker,
+                    "role": "beneficiary",
+                    "link_statement": "The issuer is linked to the common demand.",
+                    "source_ref_ids": list(members_by_ticker[ticker]["source_ref_ids"]),
+                }]
+                theme["semantic_assertions"].append(assertion)
+            return
+
+    @staticmethod
+    def _member_link_borrows_source(discovery):
+        theme = discovery["themes"][0]
+        web_refs = [ref for ref in theme["source_ref_ids"] if ref.startswith("web:")]
+        if len(web_refs) < 2:
+            raise AssertionError("the cross-source fixture must contain two Web refs")
+        aapl = next(member for member in theme["members"] if member["ticker"] == "AAPL")
+        aapl["source_ref_ids"] = [web_refs[0]]
+        for assertion in theme.get("semantic_assertions", []):
+            for link in assertion.get("member_links", []):
+                if link.get("ticker") == "AAPL":
+                    link["source_ref_ids"] = [web_refs[1]]
 
     def _merge_and_knife2(self, packets):
         web_artifact, web_receipt, _, x_artifact, x_receipt, _ = packets
@@ -173,13 +278,253 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
         self.assertEqual(cat_members["JPM"]["evidence_tier"], "both")
         self.assertGreater(cat_manifest["summary"]["member_evidence_demotion_count"], 0)
 
+    def test_k4_01_real_entries_reach_semantic_validation_and_boost(self):
+        _merged, _manifest, artifact, boost_map = self._validation_and_boost(self._packets())
+        self.assertEqual(artifact["schema_version"], "1.2.0")
+        self.assertEqual(len(artifact["themes"]), 1)
+        self.assertEqual(
+            {ticker: boost_map[ticker]["theme_soft_boost"] for ticker in TICKERS},
+            {ticker: 5.0 for ticker in TICKERS},
+        )
+        single_artifact = self._validation_and_boost(self._packets(cat_aapl=True))[2:]
+        single_map = single_artifact[1]
+        self.assertEqual(single_map["AAPL"]["theme_soft_boost"], 2.0)
+        self.assertEqual(max(row["theme_soft_boost"] for row in single_map.values()), 5.0)
+
+    def test_k4_04_unknown_member_source_cannot_be_recovered_by_other_lane(self):
+        packets = self._packets(unknown_member_ref=True)
+        web_receipt = packets[1]
+        unknown_row = next(
+            row for row in web_receipt["member_binding_ledger"]
+            if row["canonical_ticker"] == "AAPL"
+        )
+        self.assertEqual(unknown_row["binding_status"], "rejected")
+        self.assertEqual(unknown_row["binding_reason"], "member_source_ref_not_in_chunk_sources")
+        _merged, _manifest, artifact, boost_map = self._validation_and_boost(packets)
+        self.assertEqual(len(artifact["themes"]), 1)
+        self.assertEqual(boost_map["AAPL"]["theme_soft_boost"], 2.0)
+        self.assertNotEqual(boost_map["AAPL"]["evidence_tier"], "both")
+
+    def test_k4_02_partial_web_regroup_cannot_reach_active_boost(self):
+        """A successful Web sibling is still incomplete when another chunk is truncated."""
+        clock = datetime(2026, 7, 24, 12, tzinfo=timezone.utc)
+        with temporary_provider_directory(web.ROOT) as private_root:
+            private_root = Path(private_root)
+            raw_root = private_root / "partial_web_raw"
+            search_results = [{
+                "url": f"https://web.example/k4-partial-{index}",
+                "title": "Power demand",
+                "content": "AAPL MSFT JPM power demand",
+                "published_date": "2026-07-24T10:00:00Z",
+            } for index in range(20)]
+            _refs, prompt_rows, _drops = web._normalize_search_results(
+                search_results, expected_decision_date=DATE, fetched_at=clock,
+                raw_root=None, persist_raw=False,
+            )
+            chunks = web._chunk_regroup_rows(prompt_rows)
+            first_chunk_refs = [row["source_id"] for row in chunks[0]]
+            theme = {
+                "theme_id": "power_demand",
+                "display_name": "Partial power demand",
+                "summary": "Power demand",
+                "observed_at": "2026-07-24T10:00:00Z",
+                "source_ref_ids": first_chunk_refs,
+                "members": [
+                    {"ticker": ticker, "source_ref_ids": [first_chunk_refs[0]]}
+                    for ticker in TICKERS
+                ],
+                "semantic_assertions": [{
+                    "basis": "shared_commercial_driver",
+                    "basis_explanation": "Power demand reaches the linked issuers.",
+                    "common_driver": {
+                        "driver_statement": "Power demand is increasing.",
+                        "transmission_mechanism": "Load growth drives infrastructure spending.",
+                        "source_ref_ids": first_chunk_refs,
+                    },
+                    "member_links": [
+                        {
+                            "ticker": ticker,
+                            "role": "beneficiary",
+                            "link_statement": "The issuer is linked to the common demand.",
+                            "source_ref_ids": [first_chunk_refs[0]],
+                        }
+                        for ticker in TICKERS
+                    ],
+                }],
+            }
+            response = _FakeDeepSeek._response(json.dumps({"themes": [theme]}))
+            transport = paid_gateway.new_transport("tavily", "deepseek")
+            transport._record_completed_response("tavily")
+            transport._record_completed_response("deepseek")
+            provider_ref = web._persist_deepseek_response(
+                response, raw_root=raw_root, expected_decision_date=DATE,
+                chunk_index=0, fetched_at=clock,
+            )
+            web_artifact, web_receipt, _ = web.build_web_fetch_packet(
+                queries=["power"], search_results=search_results,
+                llm_response=json.dumps({"themes": [theme]}),
+                expected_decision_date=DATE, generated_at=clock.isoformat(),
+                fetched_at=clock.isoformat(), raw_root=raw_root, persist_raw=True,
+                execution_mode="live_authorized", network_access_performed=True,
+                provider_calls_performed=True, _live_transport=transport,
+                _live_ticket=paid_gateway.issue_ticket(),
+                regroup_model_identity=web._regroup_model_identity(
+                    served_model="deepseek-test",
+                ),
+                regroup_failed=True, regroup_attempted=True,
+                regroup_chunk_counts={
+                    "attempted": 2, "successful": 1, "failed": 1,
+                    "failed_indexes": [1],
+                },
+                provider_response_refs=[provider_ref],
+                regroup_chunks=[{
+                    "chunk_index": 0, "themes": [theme],
+                    "input_source_ids": first_chunk_refs,
+                }],
+                extra_drop_ledger=[
+                    {
+                        "stage": "llm", "reason": "provider_item_exception_dropped",
+                        "detail": "chunk[1]:typed_rejection",
+                    },
+                    {
+                        "stage": "llm", "reason": "regroup_chunk_dropped",
+                        "detail": "chunk[1]:_ProviderItemRejected",
+                    },
+                ],
+            )
+            x_urls = [
+                f"https://x.example/k4-partial-{ticker.lower()}" for ticker in TICKERS
+            ]
+            x_rows = [{
+                "url": url, "title": ticker,
+                "text": f"{ticker} power demand",
+                "created_at": "2026-07-24T10:00:00Z",
+            } for ticker, url in zip(TICKERS, x_urls)]
+            x_artifact, x_receipt, _ = xfetch.build_x_fetch_packet(
+                queries=list(TICKERS), results=x_rows,
+                grok_response=_theme_payload(source_urls=x_urls, source_type="x"),
+                expected_decision_date=DATE, generated_at=clock.isoformat(),
+                raw_root=raw_root / "x", persist_raw=True,
+            )
+            with self.assertRaises(merge.ThemeDiscoveryMergeError):
+                merge.merge_web_x_discovery(
+                    web_artifact=web_artifact,
+                    web_receipt=web_receipt,
+                    x_artifact=x_artifact,
+                    x_receipt=x_receipt,
+                    expected_decision_date=DATE,
+                    generated_at=GENERATED,
+                )
+        self.assertEqual(web_receipt["fetch_contract"]["regroup_chunk_counts"]["failed"], 1)
+
+    def test_k4_06_semantic_member_link_cannot_borrow_another_bound_source(self):
+        _merged, _manifest, artifact, boost_map = self._validation_and_boost(
+            self._packets(web_source_count=2),
+            discovery_mutator=self._member_link_borrows_source,
+        )
+        self.assertEqual(artifact["themes"], [])
+        self.assertTrue(all(row["theme_soft_boost"] == 0.0 for row in boost_map.values()))
+
+    def test_k4_07_merge_pruned_member_invalidates_the_only_x_assertion(self):
+        _merged, manifest, artifact, boost_map = self._validation_and_boost(
+            self._packets(cat_aapl=True, x_tickers=TICKERS),
+        )
+        self.assertEqual(len(artifact["themes"]), 1)
+        self.assertTrue(all(row["theme_soft_boost"] == 2.0 for row in boost_map.values()))
+        self.assertEqual(manifest["summary"]["both_member_count"], 2)
+
+    def test_k4_08_three_one_member_assertions_cannot_be_aggregated_to_three(self):
+        _merged, _manifest, artifact, boost_map = self._validation_and_boost(
+            self._packets(), discovery_mutator=self._three_one_member_assertions,
+        )
+        self.assertEqual(artifact["themes"], [])
+        self.assertTrue(all(row["theme_soft_boost"] == 0.0 for row in boost_map.values()))
+
+    def test_k4_09_event_bucket_is_valid_empty_not_a_boostable_theme(self):
+        _merged, _manifest, artifact, boost_map = self._validation_and_boost(
+            self._packets(), discovery_mutator=self._event_basis,
+        )
+        self.assertEqual(artifact["themes"], [])
+        self.assertTrue(any(
+            row["reason"] == "semantic_basis_not_shared_commercial_driver"
+            for row in artifact["drop_ledger"]
+        ))
+        self.assertTrue(all(row["theme_soft_boost"] == 0.0 for row in boost_map.values()))
+
+    def test_k4_10_web_passing_and_x_semantic_failure_is_single_not_both(self):
+        _merged, _manifest, _artifact, boost_map = self._validation_and_boost(
+            self._packets(cat_aapl=True),
+        )
+        self.assertEqual(boost_map["AAPL"]["evidence_tier"], "single")
+        self.assertEqual(boost_map["AAPL"]["theme_soft_boost"], 2.0)
+        self.assertEqual(boost_map["MSFT"]["evidence_tier"], "both")
+        self.assertEqual(boost_map["MSFT"]["theme_soft_boost"], 5.0)
+
+    def test_k4_11_legacy_or_missing_semantic_artifact_cannot_activate_boost(self):
+        _merged, _manifest, artifact, _boost_map = self._validation_and_boost(self._packets())
+        legacy = copy.deepcopy(artifact)
+        legacy["schema_version"] = "1.1.0"
+        for theme in legacy["themes"]:
+            theme.pop("semantic_validation", None)
+        legacy_map = boost.build_provisional_theme_boost_map(
+            legacy, target_tickers=list(TICKERS), expected_decision_date=DATE,
+            expected_input_digests={
+                "discovery_artifact_sha256": "a" * 64,
+                "candidate_artifact_sha256": "b" * 64,
+                "classification_packet_sha256": "c" * 64,
+            },
+        )
+        self.assertTrue(all(row["theme_soft_boost"] == 0.0 for row in legacy_map.values()))
+
+        missing = copy.deepcopy(artifact)
+        missing["themes"][0].pop("semantic_validation", None)
+        with self.assertRaises(boost.ProvisionalThemeBoostError):
+            boost.build_provisional_theme_boost_map(
+                missing, target_tickers=list(TICKERS), expected_decision_date=DATE,
+                expected_input_digests={
+                    "discovery_artifact_sha256": "a" * 64,
+                    "candidate_artifact_sha256": "b" * 64,
+                    "classification_packet_sha256": "c" * 64,
+                },
+            )
+
+    def test_k4_12_unused_accepted_source_does_not_change_validation_or_boost(self):
+        _merged, _manifest, artifact, baseline = self._validation_and_boost(self._packets())
+        with_unused = copy.deepcopy(artifact)
+        unused = "web:" + "e" * 64
+        with_unused["source_ref_types"][unused] = "web"
+        with_unused["themes"][0]["source_ref_ids"].append(unused)
+        actual = boost.build_provisional_theme_boost_map(
+            with_unused, target_tickers=list(TICKERS), expected_decision_date=DATE,
+            expected_input_digests={
+                "discovery_artifact_sha256": "a" * 64,
+                "candidate_artifact_sha256": "b" * 64,
+                "classification_packet_sha256": "c" * 64,
+            },
+        )
+        self.assertEqual(actual, baseline)
+
+    def test_k4_13_bare_pass_with_inconsistent_member_set_is_rejected_by_boost_consumer(self):
+        _merged, _manifest, artifact, _boost_map = self._validation_and_boost(self._packets())
+        forged = copy.deepcopy(artifact)
+        forged["themes"][0]["semantic_validation"]["final_member_tickers"] = ["JPM", "MSFT"]
+        with self.assertRaises(boost.ProvisionalThemeBoostError):
+            boost.build_provisional_theme_boost_map(
+                forged, target_tickers=list(TICKERS), expected_decision_date=DATE,
+                expected_input_digests={
+                    "discovery_artifact_sha256": "a" * 64,
+                    "candidate_artifact_sha256": "b" * 64,
+                    "classification_packet_sha256": "c" * 64,
+                },
+            )
+
     # Three separately named controls, one per gate.  They deliberately assert the OBSERVABLE
     # outcome of hollowing a gate rather than wrapping their own assertions in `assertRaises`:
     # a control that asserts its own inline assertions fail cannot show that the real test above
     # would die, and it passes just as happily when something unrelated raises.
 
     def test_production_default_entry_turns_red_when_persistence_gate_is_removed(self):
-        """Without the frozen raw receipts the merge cannot verify evidence and must refuse."""
+        """K4-03: without frozen raw receipts the merge cannot verify evidence and must refuse."""
         packets = self._packets()
         for receipt in (packets[1], packets[4]):
             for ref in receipt["source_refs"]:
@@ -188,7 +533,7 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
             self._merge_and_knife2(packets)
 
     def test_production_default_entry_turns_red_when_raw_digest_gate_is_removed(self):
-        """A frozen raw receipt edited after the fact must not pass its content digest."""
+        """K4-03: a frozen raw receipt edited after the fact must not pass its content digest."""
         packets = self._packets()
         web_receipt = packets[1]
         raw_ref = next(ref["raw_receipt_ref"] for ref in web_receipt["source_refs"])
@@ -200,20 +545,86 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
             self._merge_and_knife2(packets)
 
     def test_production_default_entry_turns_red_when_ticker_binding_gate_is_removed(self):
-        """Hollowing the ticker check must flip the cat-photo control's own outcome."""
+        """K4 control B: hollowing the ticker check must flip the final boost outcome."""
         cat = self._packets(cat_aapl=True)
         armed_manifest, armed_validated, _ = self._merge_and_knife2(cat)
         armed = {member["ticker"]: member for theme in armed_validated for member in theme["members"]}
         self.assertNotEqual(armed["AAPL"]["evidence_tier"], "both")
         self.assertGreater(armed_manifest["summary"]["member_evidence_demotion_count"], 0)
+        _merged, _manifest, _artifact, armed_boost = self._validation_and_boost(cat)
+        self.assertEqual(armed_boost["AAPL"]["theme_soft_boost"], 2.0)
 
         hollowed = self._packets(cat_aapl=True)
         with mock.patch.object(merge, "_raw_payload_mentions_ticker", return_value=True):
             manifest, validated, _ = self._merge_and_knife2(hollowed)
-        members = {member["ticker"]: member for theme in validated for member in theme["members"]}
-        self.assertEqual(members["AAPL"]["evidence_tier"], "both",
-                         "with the gate hollowed the unrelated X post must corroborate again")
-        self.assertEqual(manifest["summary"]["member_evidence_demotion_count"], 0)
+            members = {member["ticker"]: member for theme in validated for member in theme["members"]}
+            self.assertEqual(members["AAPL"]["evidence_tier"], "both",
+                             "with the gate hollowed the unrelated X post must corroborate again")
+            self.assertEqual(manifest["summary"]["member_evidence_demotion_count"], 0)
+            _merged, _manifest, _artifact, hollowed_boost = self._validation_and_boost(hollowed)
+        self.assertEqual(hollowed_boost["AAPL"]["theme_soft_boost"], 5.0)
+
+    def test_k4_control_A_hollowed_raw_gate_allows_unfrozen_evidence_to_boost(self):
+        packets = self._packets()
+        for ref in packets[1]["source_refs"]:
+            (web.ROOT / ref["raw_receipt_ref"]).unlink()
+        with self.assertRaises(merge.ThemeDiscoveryMergeError):
+            self._validation_and_boost(packets)
+
+        original_verify = merge._verify_receipt
+
+        def hollowed_verify(artifact, receipt, source_type, expected_decision_date):
+            if source_type != "web":
+                return original_verify(artifact, receipt, source_type, expected_decision_date)
+            actual_types = {
+                ref["source_id"]: source_type for ref in receipt["source_refs"]
+            }
+            raw_payloads = {
+                ref["source_id"]: {
+                    "source_id": ref["source_id"], "source_type": "web",
+                    "canonical_locator": ref["canonical_locator"],
+                    "published_at": ref["observed_at"],
+                    "title": "Power demand",
+                    "content": "AAPL MSFT JPM power demand",
+                }
+                for ref in receipt["source_refs"]
+            }
+            return actual_types, raw_payloads
+
+        with mock.patch.object(merge, "_verify_receipt", side_effect=hollowed_verify):
+            _merged, _manifest, _artifact, hollowed_boost = self._validation_and_boost(packets)
+        self.assertEqual(hollowed_boost["AAPL"]["theme_soft_boost"], 5.0)
+
+    def test_k4_control_C_hollowed_basis_gate_lets_event_evidence_boost(self):
+        original = knife2.validate_provisional_themes
+
+        def permissive_validator(discovery, *args, **kwargs):
+            mutated = copy.deepcopy(discovery)
+            for theme in mutated["themes"]:
+                for assertion in theme.get("semantic_assertions", []):
+                    if assertion.get("basis") == "shared_event_bucket":
+                        assertion["basis"] = "shared_commercial_driver"
+            return original(mutated, *args, **kwargs)
+
+        with mock.patch.object(knife2, "validate_provisional_themes", side_effect=permissive_validator):
+            _merged, _manifest, artifact, boost_map = self._validation_and_boost(
+                self._packets(), discovery_mutator=self._event_basis,
+            )
+        self.assertEqual(artifact["schema_version"], "1.2.0")
+        self.assertEqual(boost_map["AAPL"]["theme_soft_boost"], 5.0)
+
+    def test_k4_control_D_hollowed_tier_effect_guard_turns_single_into_five(self):
+        packets = self._packets(cat_aapl=True)
+        _merged, _manifest, _artifact, normal = self._validation_and_boost(packets)
+        self.assertEqual(normal["AAPL"]["theme_soft_boost"], 2.0)
+        with (
+            mock.patch.object(boost, "TIER_POINTS", {"both": 5.0, "single": 5.0}),
+            mock.patch.object(boost, "validate_provisional_theme_boost_record", return_value=None),
+        ):
+            _merged, _manifest, _artifact, hollowed = self._validation_and_boost(
+                self._packets(cat_aapl=True),
+            )
+        self.assertEqual(hollowed["AAPL"]["theme_soft_boost"], 5.0)
 
 
 if __name__ == "__main__":

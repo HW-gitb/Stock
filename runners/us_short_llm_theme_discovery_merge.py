@@ -360,6 +360,15 @@ def _verify_receipt(
         raise ThemeDiscoveryMergeError(f"{source_type} artifact decision date does not match merge clock")
     contract = receipt.get("fetch_contract", {})
     mode = contract.get("execution_mode")
+    if source_type == "web":
+        regroup_chunk_counts = contract.get("regroup_chunk_counts")
+        if (
+            isinstance(regroup_chunk_counts, dict)
+            and regroup_chunk_counts.get("failed", 0) > 0
+        ):
+            raise ThemeDiscoveryMergeError(
+                "web receipt has incomplete regroup chunks"
+            )
     expected_live = mode == "live_authorized"
     if contract.get("network_access_performed") is not expected_live or contract.get("provider_calls_performed") is not expected_live:
         raise ThemeDiscoveryMergeError(f"{source_type} receipt execution evidence is inconsistent with execution_mode")

@@ -594,6 +594,7 @@ class WebFetchTests(unittest.TestCase):
         self.assertEqual(rejected["binding_status"], "rejected")
 
     def test_member_binding_cannot_borrow_source_from_another_chunk(self):
+        """K4-05: a chunk-local member cannot borrow a globally valid source from chunk 1."""
         refs, prompt_rows, _ = fetch._normalize_search_results(
             ROWS[:2], expected_decision_date="20260725",
             fetched_at=datetime(2026, 7, 25, 8, tzinfo=timezone.utc),
@@ -1784,7 +1785,7 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
         self.assertEqual(json.loads(outcome["llm_response"]), {"themes": []})
 
     def test_one_failing_chunk_keeps_the_other_chunks(self):
-        """Covers the K3-R58 shape: a chunk-level failure must not discard its siblings."""
+        """K4-02: a failed chunk stays an explicit incomplete run, not valid_empty."""
         rows = [dict(self.ROWS[0], url=f"https://news.example/{index}") for index in range(20)]
         outcome, _ = self._run(
             [rows], [self._response([self._theme("kept")]), RuntimeError("boom")],
@@ -1801,6 +1802,28 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
             outcome["regroup_chunk_counts"],
             {"attempted": 2, "successful": 1, "failed": 1, "failed_indexes": [1]},
         )
+        self.assertNotEqual(outcome["regroup_chunk_counts"]["failed"], 0)
+        self.assertNotEqual(json.loads(outcome["llm_response"]), {"themes": []})
+
+    def test_k4_control_A_hollowed_chunk_failure_guard_makes_partial_run_look_complete(self):
+        rows = [dict(self.ROWS[0], url=f"https://news.example/hollow-{index}") for index in range(20)]
+        valid = self._response([self._theme("kept")])
+        truncated = self._response([self._theme("should_not_pass")], finish="length")
+        normal, _ = self._run([rows], [valid, truncated])
+        self.assertEqual(normal["regroup_chunk_counts"]["failed"], 1)
+
+        with mock.patch.object(
+            fetch,
+            "_consume_regroup_response",
+            return_value=("deepseek-v4-flash", "fp_x", [self._theme("should_not_pass")]),
+        ):
+            hollowed, _ = self._run([rows], [valid, truncated])
+        self.assertEqual(
+            hollowed["regroup_chunk_counts"],
+            {"attempted": 2, "successful": 2, "failed": 0, "failed_indexes": []},
+        )
+        self.assertFalse(hollowed["regroup_failed"])
+        self.assertEqual(len(json.loads(hollowed["llm_response"])["themes"]), 2)
 
     def test_every_chunk_failing_is_an_explicit_failure_not_a_quiet_empty(self):
         outcome, _ = self._run([self.ROWS], [RuntimeError("boom")])
