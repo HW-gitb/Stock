@@ -1,5 +1,45 @@
 # US-short soft-discovery X live response-shape re-review — 2026-07-28
 
+## 2026-08-15 Codex executor/fixer handoff — K1/K2 conformance minimal repair (review pending)
+
+### Current boundary
+
+- The only remaining Required was `R-USSHORT-K1K2-CONFORMANCE-RED-WAS-MISSED-BY-THE-REVIEWER`. The 25 findings were Web 1.2 ledger/regroup fail-closed integrity checks inside item loops.
+- The minimal repair declares those exact Web messages in the existing per-file `DECLARED_BATCH_RAISES` contract. Production behavior is unchanged; they still raise and fail closed.
+- No commit, merge, provider/network/paid/live action, slot creation, or 4diii wiring.
+
+### Evidence and handoff door
+
+- `tests.test_us_short_discovery_conformance`: `Ran 31 / OK`.
+- Third-knife offline superset: `Ran 397 / OK`.
+- Claude Code: independently review the allowlist classification and the unchanged fail-closed production path. If PASS, Claude Code commits the reviewed slice. Do not start knife four, knife five, provider/paid smoke, or 4diii before that review.
+
+### Pre-Codex self-review
+
+`matrix=K1K2 conformance declared batch-integrity exceptions complete; register=updated; handoff=updated; focused=397 OK; full-lane=not_triggered; independent-review=not_used`
+
+## 2026-08-15 Codex executor/fixer handoff — third-knife minimal repair (review pending)
+
+### Current boundary
+
+- Worktree: `D:\\cnhea\\Codex\\worktrees\\8d8c\\Stock`. Codex is executor/fixer; Claude Code is independent reviewer/committer. No commit, merge, provider/network/paid/live action, slot creation, or 4diii wiring.
+- The repair is `OPEN/NOT_VERIFIED`; focused green tests do not close the Required items.
+
+### Repair completed
+
+- Carried `semantic_assertions` through Web/X, canonical merge, provisional validation, and soft-boost consumption. Pre-semantic artifacts remain readable but do not activate boost; live missing assertions are invalid evidence, while old artifacts are upstream-unavailable.
+- Restored X response-origin provenance and evidence prompt rendering. Mixed payloads drop only themes without assertions; a bad member link is pruned without destroying its sibling assertion. Restored the `both` evidence-tier control and the narrow merge exception control.
+- Added named reverse controls for semantic validation branches, including a wide source-origin negative case.
+
+### Evidence and handoff door
+
+- Fixed Python offline third-knife superset: `Ran 366 / OK`; route/doc governance: `Ran 55 / OK`; `py_compile` and `git diff --check` are required closeout checks. The known second-knife conformance test still has 25 `fetch_web` offenders and is excluded from the third-knife green count; it was not changed.
+- Claude Code: independently review the four Required IDs above and the mixed-payload/sibling decisions. If PASS, Claude Code commits the reviewed slice. Do not start knife four, knife five, provider/paid smoke, or 4diii before that review.
+
+### Pre-Codex self-review
+
+`matrix=consumer-chain + X-origin/prompt + mixed-payload + sibling/control + scoring reverse-control complete; register=updated; handoff=updated; focused=366 OK; full-lane=not_triggered; independent-review=not_used`
+
 ## 2026-08-04 Codex executor/fixer final handoff — class-H repair and final full evidence (review pending)
 
 ### Current boundary
@@ -2907,3 +2947,29 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_us_short_s
 - 按闭合判据只补一个既有 Web 测试：两个来源 A/B，chunk 1 的成员借用 A 必须以 `member_source_ref_not_in_chunk_sources` 拒绝；同一 payload 放回 chunk 0 的正向控制必须接受。
 - 结果：正常代码 Web `81 OK`；临时挖空过滤后点名测试 `1 FAILED`；还原后生产文件 SHA-256 回到 `F8494BE7A22CE7B6D61B98E44297885A3081904BE3913EB8C5C92D570E25D396`。
 - 本轮只改测试和交接记录；未改生产逻辑、未联网、未调用 provider、未付费、未建槽、未提交。仍待 Claude Code 复审；通过前不开始下一刀。
+
+## 2026-08-15 第三刀执行结果（Codex；repaired / OPEN-NOT-VERIFIED）
+
+- 已严格按桌面 `C:\Users\cnhea\Desktop\usshort_软通道收尾.md` 第三刀执行。本刀只补生产同形主题门和行为型语义门：不改 Stage-1、旧 ratio、0809/0815 冻结件、预算、槽、provider 调用、状态、4diii 或 2/5 分值。
+- Web/X 原有生成入口现在要求并解析 `semantic_assertions`；canonical discovery 保存共同商业驱动、传导机制、逐成员关系、来源绑定和系统注入的 lane/scope 身份。X 多 response 断言全部保留，不 first-wins。
+- merge 在成员/来源裁剪后逐断言重验；断言失效写结构化 drop reason，全部失效的主题不进入 merged discovery。provisional validator 先做原有生产成员资格/3成员/2 SIC 门，再要求同一份 shared-driver assertion 自己满足 3/2；旁观成员剔除，tier 和 top-8 只按 passing assertions 重算。
+- validation artifact 升为 `1.2.0`；`us_short_provisional_theme_boost` 只接受带 semantic pass 的新 artifact，旧版仍可读但 active boost 为零；single/both 仍为 2/5。没有关键词表，也不需要人工周审。
+- 固定 Python 第三刀焦点包 `273 tests / OK`；`py_compile_and_json_ok`、`git diff --check` 通过。额外 seam/schema 回归的语义样例已升级；第二刀既有 receipt-ledger 静态 raise 规则冲突仍单列在 register，未在本刀掩盖或扩大修复。
+- 当前只表示本刀实现完成，仍待 Claude Code 独立审查；审查通过前不开始第四刀、第五刀或 4diii，不运行真实 provider/付费，不建槽，不提交。
+
+
+## 2026-08-15 追加：第三刀 FAIL —— 交 Codex 修复（三条语义决策已由用户裁定）
+
+**状态**：第三刀经独立审查 FAIL，未提交、未合并，工作树 `D:\cnhea\Codex\worktrees\8d8c\Stock`。
+
+**要做什么**：修复 `docs/system_risk_register.md` 顶部第三刀节下的四条 Required，并按同节「用户裁决」小节实施三条语义决策（①未交断言落 `invalid_evidence`、前语义产物走 `upstream_unavailable`；②混合 payload 丢无断言主题、保留其余、消除 `any`/`all` 不一致；③剪成员不毁断言、回退两处被改弱的控制）。**裁决是用户级决定，不得以任何理由改判或绕过。**
+
+**必须一并满足**：
+
+1. 打分缝 `engine/us_short_provisional_theme_boost.py` 新增的每一条 raise 至少一条点名测试；档位放松腿配双向对照（语义 origins 窄于实际绑定 → 可通过并降档；宽于实际绑定 → 精确抛 `semantic source origin lacks member evidence`）。
+2. X 侧 `origin_scope_index` 必须从真实响应序号派生（现全仓无写入点、恒为 0），并配挖空即红的点名测试；`runners/us_short_llm_theme_discovery_fetch_x.py:505` 恢复 f-string 并断言渲染结果含真实 post 文本、不含字面 `{evidence}`。
+3. 本刀验收超集**必须包含**：`tests.provider.test_us_short_llm_theme_discovery_offline_invariants`、`tests.test_us_short_soft_boost_consumption`、`tests.test_us_short_soft_discovery_weekly_report`、`tests.test_us_short_discovery_conformance`。前两个模块直接消费被改的 `build_provisional_theme_boost_map`，本轮 66 条红全出在它们身上。
+4. 顺带修掉 master 上既有的 `test_no_undeclared_batch_level_raise_inside_an_item_loop`（25 条 offender 全是第二刀的账本校验 raise，落在 item 循环内未按约定声明）。该条属 reviewer 上一轮超集漏洞，一并收口。
+5. §6a agent 另提四项未经 reviewer 复核、需执行方自行核实：混合 `1.0.0`/`2.0.0` lane 产物令整周 merge 抛错而非逐主题降级；schema 允许 `basis=shared_commercial_driver` 而 `common_driver=null`；`role`/`link_statement`/`driver_statement` 等自由文本落盘但无任何门读取；`_input_sha256` 未对断言内部 `member_links`/`source_ref_ids` 排序。
+
+**不要做**：任何 provider / 付费调用；改 Stage-1 模板（病因重判点未到）；改 0809/0815 冻结产物；接 4d-iii；实现第五刀诊断槽。

@@ -440,6 +440,21 @@ def run_offline_stage(ctx) -> dict[str, Any]:
             expected_decision_date=ctx.decision_date,
             generated_at=merged["generated_at"],
         )
+        if ingest_artifact.get("schema_version") != ingest.SEMANTIC_DISCOVERY_SCHEMA_VERSION:
+            missing_semantic = any(
+                isinstance(row, dict) and row.get("reason") == "missing_semantic_assertions"
+                for receipt_key in ("web_receipt", "x_receipt")
+                for row in upstream_payloads[receipt_key].get("drop_ledger", [])
+            )
+            if missing_semantic or ingest_artifact.get("themes"):
+                raise SoftDiscoveryEvidenceError(
+                    "provider omitted semantic assertions"
+                    if missing_semantic else "semantic discovery artifact is pre-semantic",
+                    reason_code=(
+                        "SOFT_DISCOVERY_EVIDENCE_INVALID"
+                        if missing_semantic else "CANDIDATE_INPUT_UNAVAILABLE"
+                    ),
+                )
         ingest_payload_sha256 = _serialized_sha256(ingest_artifact)
         if not ctx.candidate_path.is_file() or not ctx.classification_packet_path.is_file():
             raise SoftDiscoveryEvidenceError(
@@ -494,7 +509,7 @@ def run_offline_stage(ctx) -> dict[str, Any]:
             paths,
             status=(
                 "upstream_unavailable"
-                if reason_code == "CANDIDATE_INPUT_UNAVAILABLE"
+                if reason_code in {"CANDIDATE_INPUT_UNAVAILABLE"}
                 else "invalid_evidence"
             ),
             reason_code=reason_code,

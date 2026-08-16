@@ -56,6 +56,20 @@ def _theme_payload(refs: list[str], *, theme_id: str = "good_theme") -> dict[str
             {"ticker": "MSFT", "source_ref_ids": refs},
             {"ticker": "JPM", "source_ref_ids": refs},
         ],
+        "semantic_assertions": [{
+            "basis": "shared_commercial_driver",
+            "basis_explanation": "Power demand reaches the linked issuers.",
+            "common_driver": {
+                "driver_statement": "Power demand is increasing.",
+                "transmission_mechanism": "Load growth drives infrastructure spending.",
+                "source_ref_ids": refs,
+            },
+            "member_links": [{
+                "ticker": ticker, "role": "beneficiary",
+                "link_statement": "The issuer is linked to the common demand.",
+                "source_ref_ids": refs,
+            } for ticker in ("AAPL", "MSFT", "JPM")],
+        }],
     }
 
 

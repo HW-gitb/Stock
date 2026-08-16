@@ -66,6 +66,33 @@ DECLARED_BATCH_RAISES = {
      "receipt carries a credential-bearing locator; refusing to persist"),
     ("runners/us_short_llm_theme_discovery_fetch_web.py", "raw receipt path must be gitignored before writing"),
     ("runners/us_short_llm_theme_discovery_fetch_web.py", "live source is missing a gitignored raw receipt"),
+    # Web 1.2 ledger and regroup-identity checks are fail-closed batch-integrity
+    # validation, not per-item provider rejection.  Keep them declared here rather
+    # than weakening the production checks into _ProviderItemRejected.
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member binding ledger row shape is invalid"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member binding row has an unparsed chunk"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member binding theme index is invalid"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member binding member index is invalid"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member binding theme ID is invalid"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member binding raw ticker is invalid"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member binding canonical ticker is invalid"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member binding source list is invalid"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member binding malformed ref count is invalid"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member binding source sets are inconsistent"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member ticker observation status is invalid"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member ticker observation refs are unbound"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member observed ticker has no source"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member not_observed ticker has source refs"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member ticker observation is unexpectedly unchecked"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member binding decision is invalid"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "accepted Web member binding is not structurally valid"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "rejected Web member binding has an accepted reason"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member parent theme status is invalid"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member parent theme reason is inconsistent"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web member parent theme reason is invalid"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "Web discovery member is not covered by its binding ledger"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "regroup chunk identity is malformed"),
+    ("runners/us_short_llm_theme_discovery_fetch_web.py", "regroup chunk identity is inconsistent with prompt rows"),
     ("runners/us_short_llm_theme_discovery_fetch_x.py", "query is empty or secret-like"),
     ("runners/us_short_llm_theme_discovery_fetch_x.py", "raw receipt path must be gitignored before writing"),
 }
@@ -602,7 +629,12 @@ class LaneIdentityConformance(unittest.TestCase):
                         "theme_id": "ai_boom", "display_name": "AI", "summary": "AI boom",
                         "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [ref],
                         "members": [{"ticker": t, "source_ref_ids": [ref]}
-                                    for t in ("AAPL", "MSFT", lookalike)]}]})
+                                    for t in ("AAPL", "MSFT", lookalike)],
+                        "semantic_assertions": [{
+                            "basis": "insufficient_evidence",
+                            "basis_explanation": "This identity fixture does not make a shared-driver claim.",
+                            "common_driver": None, "member_links": [],
+                        }]}]})
                     payload = dict(rows)
                     payload["llm_response" if lane == "web" else "grok_response"] = reply
                     artifact, receipt, _ = builder(

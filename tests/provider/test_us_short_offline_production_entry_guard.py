@@ -36,10 +36,26 @@ class _FakeDeepSeek:
     def __init__(self, text):
         self.chat = SimpleNamespace(
             completions=SimpleNamespace(
-                create=lambda **_kwargs: SimpleNamespace(
-                    choices=[SimpleNamespace(message=SimpleNamespace(content=text))]
-                )
+                create=lambda **_kwargs: self._response(text)
             )
+        )
+
+    @staticmethod
+    def _response(text):
+        payload = {
+            "model": "deepseek-test",
+            "choices": [{"message": {"content": text}, "finish_reason": "stop"}],
+            "usage": None,
+            "system_fingerprint": None,
+        }
+        return SimpleNamespace(
+            model=payload["model"],
+            choices=[SimpleNamespace(
+                message=SimpleNamespace(content=text), finish_reason="stop",
+            )],
+            usage=None,
+            system_fingerprint=None,
+            model_dump=lambda mode="json": payload,
         )
 
 
@@ -49,11 +65,11 @@ class _FakeX:
         self.text = text
 
     def search(self, query, _expected_date):
-        index = {"aapl": 0, "msft": 1, "jpm": 2}[query.lower()]
+        index = {"aapl": 0, "msft": 1, "jpm": 2, "nvda": 3}[query.lower()]
         return {"text": self.text, "results": [self.rows[index]]}
 
 
-def _theme_payload(*, source_urls, source_type):
+def _theme_payload(*, source_urls, source_type, tickers=TICKERS):
     source_ids = [
         web._source_id(url) if source_type == "web" else xfetch._source_id(url)
         for url in source_urls
@@ -66,9 +82,15 @@ def _theme_payload(*, source_urls, source_type):
             "source_urls": list(source_urls),
             "source_ref_ids": source_ids,
             "members": [
-                {"ticker": ticker, ref_key: list(source_ids if source_type == "web" else source_urls)}
-                for ticker in TICKERS
+                {"ticker": ticker, ref_key: list(source_ids if source_type == "web" else [source_urls[index]])}
+                for index, ticker in enumerate(tickers)
             ],
+            "semantic_assertions": [{
+                "basis": "shared_commercial_driver",
+                "basis_explanation": "Power demand reaches all three linked issuers.",
+                "common_driver": {"driver_statement": "Power demand is increasing.", "transmission_mechanism": "Load growth drives infrastructure spending.", ref_key: list(source_ids if source_type == "web" else source_urls)},
+                "member_links": [{"ticker": ticker, "role": "beneficiary", "link_statement": "The issuer is linked to the common demand.", ref_key: list(source_ids if source_type == "web" else [source_urls[index]])} for index, ticker in enumerate(tickers)],
+            }],
         }]
     })
 
@@ -87,8 +109,9 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
 
     def _packets(self, *, cat_aapl=False):
         token = uuid.uuid4().hex
+        packet_tickers = TICKERS + ("NVDA",) if cat_aapl else TICKERS
         web_url = f"https://web.example/k3-permanent-{token}"
-        x_urls = [f"https://x.example/k3-permanent-{token}-{ticker.lower()}" for ticker in TICKERS]
+        x_urls = [f"https://x.example/k3-permanent-{token}-{ticker.lower()}" for ticker in packet_tickers]
         web_rows = [{
             "url": web_url, "title": "Power demand", "content": "AAPL MSFT JPM power demand",
             "published_date": "2026-07-24T10:00:00Z",
@@ -98,16 +121,16 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
                 "totally unrelated cat photo" if cat_aapl and index == 0
                 else f"{ticker} power demand"
             ), "created_at": "2026-07-24T10:00:00Z",
-        } for index, ticker in enumerate(TICKERS)]
+        } for index, ticker in enumerate(packet_tickers)]
         web_payload = _theme_payload(source_urls=[web_url], source_type="web")
-        x_payload = _theme_payload(source_urls=x_urls, source_type="x")
+        x_payload = _theme_payload(source_urls=x_urls, source_type="x", tickers=packet_tickers)
         web_artifact, web_receipt, web_summary = web.run_web_fetch(
             queries=["power"], expected_decision_date=DATE, generated_at=GENERATED,
             search_client=_FakeSearch(web_rows), deepseek_client=_FakeDeepSeek(web_payload),
             raw_root=self._raw_root / "web",
         )
         x_artifact, x_receipt, x_summary = xfetch.run_x_fetch(
-            queries=list(TICKERS), expected_decision_date=DATE, generated_at=GENERATED,
+            queries=list(packet_tickers), expected_decision_date=DATE, generated_at=GENERATED,
             x_client=_FakeX(x_rows, x_payload), raw_root=self._raw_root / "x",
         )
         return (web_artifact, web_receipt, web_summary,
@@ -121,8 +144,11 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
             expected_decision_date=DATE, generated_at=GENERATED,
         )
         validated, drops = knife2.validate_provisional_themes(
-            merge._ingest_input(merged), eligible_tickers=set(TICKERS),
-            sectors_by_ticker={"AAPL": "10", "MSFT": "20", "JPM": "30"},
+            merge._ingest_input(merged),
+            eligible_tickers={
+                member["ticker"] for theme in x_artifact["themes"] for member in theme["members"]
+            },
+            sectors_by_ticker={"AAPL": "10", "MSFT": "20", "JPM": "30", "NVDA": "10"},
         )
         return manifest, validated, drops
 
@@ -141,7 +167,10 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
         cat_manifest, cat_validated, _ = self._merge_and_knife2(cat)
         cat_members = {member["ticker"]: member for theme in cat_validated for member in theme["members"]}
         self.assertNotEqual(cat_members["AAPL"]["evidence_tier"], "both")
+        # The X assertion has four members; pruning AAPL's bad link still leaves three
+        # qualified links, so the two innocent original siblings keep their `both` tier.
         self.assertEqual(cat_members["MSFT"]["evidence_tier"], "both")
+        self.assertEqual(cat_members["JPM"]["evidence_tier"], "both")
         self.assertGreater(cat_manifest["summary"]["member_evidence_demotion_count"], 0)
 
     # Three separately named controls, one per gate.  They deliberately assert the OBSERVABLE
@@ -151,11 +180,12 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
 
     def test_production_default_entry_turns_red_when_persistence_gate_is_removed(self):
         """Without the frozen raw receipts the merge cannot verify evidence and must refuse."""
-        with mock.patch.object(web, "_flush_raw_writes", return_value=None), \
-             mock.patch.object(xfetch.web, "_flush_raw_writes", return_value=None):
-            packets = self._packets()
-            with self.assertRaises(merge.ThemeDiscoveryMergeError):
-                self._merge_and_knife2(packets)
+        packets = self._packets()
+        for receipt in (packets[1], packets[4]):
+            for ref in receipt["source_refs"]:
+                (web.ROOT / ref["raw_receipt_ref"]).unlink()
+        with self.assertRaises(merge.ThemeDiscoveryMergeError):
+            self._merge_and_knife2(packets)
 
     def test_production_default_entry_turns_red_when_raw_digest_gate_is_removed(self):
         """A frozen raw receipt edited after the fact must not pass its content digest."""

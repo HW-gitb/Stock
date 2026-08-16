@@ -318,11 +318,11 @@ class ProvisionalThemeValidationTests(unittest.TestCase):
         """Producer<->consumer round trip (closes the defect CLASS behind R1/R5, not one shape).
 
         ANY artifact this validator emits must be consumable by the boost mapper: a member shape the
-        producer accepts must never abort the whole week one layer down. Each shape independently
-        re-derives the expected points from the emitted `evidence_tier`s, so a consumer that silently
-        drops or inflates a member fails here too.
+        producer accepts must never abort the whole week one layer down. These fixtures are legacy
+        discovery inputs without semantic assertions, so the third-knife consumer must read them
+        but return zero active boost rather than infer points from the old structural tier.
         """
-        from engine.us_short_provisional_theme_boost import TIER_POINTS, build_provisional_theme_boost_map
+        from engine.us_short_provisional_theme_boost import build_provisional_theme_boost_map
 
         base_sectors = {"AAPL": "10", "MSFT": "10", "GOOG": "10", "JPM": "20", "AMZN": "20"}
 
@@ -384,11 +384,8 @@ class ProvisionalThemeValidationTests(unittest.TestCase):
                     ),
                     generated_at="2026-06-15T11:00:00Z",
                 )
+                self.assertEqual(artifact["schema_version"], "1.1.0")
                 expected = {ticker: 0.0 for ticker in _ALL_ELIGIBLE}
-                for theme in artifact["themes"]:
-                    for member in theme["members"]:
-                        expected[member["ticker"]] = max(
-                            expected[member["ticker"]], TIER_POINTS[member["evidence_tier"]])
                 boosts = build_provisional_theme_boost_map(
                     artifact, target_tickers=list(_ALL_ELIGIBLE),
                     expected_decision_date=artifact["decision_clock"]["expected_decision_date"],

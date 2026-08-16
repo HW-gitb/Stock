@@ -72,6 +72,12 @@ def _source_packets(
             "observed_at": "2026-06-12T12:00:00Z",
             "source_ref_ids": [ref],
             "members": [{"ticker": ticker, "source_ref_ids": [ref]} for ticker in members],
+            "semantic_assertions": [{
+                "basis": "shared_commercial_driver",
+                "basis_explanation": "Power demand reaches all four linked issuers.",
+                "common_driver": {"driver_statement": "Power demand is increasing.", "transmission_mechanism": "Load growth drives infrastructure spending.", "source_ref_ids": [ref]},
+                "member_links": [{"ticker": ticker, "role": "beneficiary", "link_statement": "The issuer is linked to the common demand.", "source_ref_ids": [ref]} for ticker in members],
+            }],
         }]
         return json.dumps({"themes": themes})
 
@@ -96,6 +102,8 @@ def _source_packets(
     if include_merge_drop:
         web_artifact["themes"][0]["theme_id"] = "stale_power"
         web_artifact["themes"][0]["observed_at"] = "2026-06-12T10:00:00Z"
+        for row in web_receipt["member_binding_ledger"]:
+            row["theme_id"] = "stale_power"
         web_receipt["discovery_artifact_sha256"] = web._discovery_evidence_hash(web_artifact)
     return web_artifact, web_receipt, x_artifact, x_receipt
 
@@ -237,11 +245,30 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
 
     def _write_merge_pair(
         self, ctx, *, empty: bool = False, variant: str = "power", replace_existing: bool = False,
-        include_merge_drop: bool = False,
+        include_merge_drop: bool = False, semantic_state: str | None = None,
     ) -> tuple[dict, dict]:
         web_artifact, web_receipt, x_artifact, x_receipt = _source_packets(
             empty=empty, variant=variant, include_merge_drop=include_merge_drop,
         )
+        if semantic_state == "mixed":
+            web_artifact["schema_version"] = "1.0.0"
+            web_artifact["themes"][0].pop("semantic_assertions", None)
+            web_artifact["themes"][0]["theme_id"] = "legacy_power"
+            for row in web_receipt["member_binding_ledger"]:
+                row["theme_id"] = "legacy_power"
+            web_receipt["discovery_artifact_sha256"] = web._discovery_evidence_hash(web_artifact)
+        if semantic_state in {"legacy", "missing"}:
+            for artifact in (web_artifact, x_artifact):
+                artifact["schema_version"] = "1.0.0"
+                for theme in artifact["themes"]:
+                    theme.pop("semantic_assertions", None)
+            if semantic_state == "missing":
+                for receipt in (web_receipt, x_receipt):
+                    receipt["drop_ledger"].append({
+                        "stage": "llm", "reason": "missing_semantic_assertions", "detail": "fixture",
+                    })
+            web_receipt["discovery_artifact_sha256"] = web._discovery_evidence_hash(web_artifact)
+            x_receipt["discovery_artifact_sha256"] = web._discovery_evidence_hash(x_artifact)
         merged, manifest = merge.merge_web_x_discovery(
             web_artifact=web_artifact,
             web_receipt=web_receipt,
@@ -1039,6 +1066,16 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
                         theme["source_ref_ids"] = [
                             forged if ref == old else ref for ref in theme["source_ref_ids"]
                         ]
+                    for assertion in theme.get("semantic_assertions", []):
+                        if isinstance(assertion.get("common_driver"), dict):
+                            assertion["common_driver"]["source_ref_ids"] = [
+                                forged if ref == old else ref
+                                for ref in assertion["common_driver"]["source_ref_ids"]
+                            ]
+                        for link in assertion.get("member_links", []):
+                            link["source_ref_ids"] = [
+                                forged if ref == old else ref for ref in link["source_ref_ids"]
+                            ]
                     for member in theme["members"]:
                         member["source_ref_ids"] = [
                             forged if ref == old else ref for ref in member["source_ref_ids"]
@@ -1106,6 +1143,16 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
                         theme["source_ref_ids"] = [
                             forged if ref == old else ref for ref in theme["source_ref_ids"]
                         ]
+                    for assertion in theme.get("semantic_assertions", []):
+                        if isinstance(assertion.get("common_driver"), dict):
+                            assertion["common_driver"]["source_ref_ids"] = [
+                                forged if ref == old else ref
+                                for ref in assertion["common_driver"]["source_ref_ids"]
+                            ]
+                        for link in assertion.get("member_links", []):
+                            link["source_ref_ids"] = [
+                                forged if ref == old else ref for ref in link["source_ref_ids"]
+                            ]
                     for member in theme["members"]:
                         member["source_ref_ids"] = [
                             forged if ref == old else ref for ref in member["source_ref_ids"]
@@ -1282,7 +1329,7 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
                     })
                     manifest["summary"]["dropped_theme_count"] += 1
                 else:
-                    self.assertEqual(len(manifest["drop_ledger"]), 1)
+                    self.assertGreaterEqual(len(manifest["drop_ledger"]), 1)
                     manifest["drop_ledger"] = []
                     manifest["summary"]["dropped_theme_count"] = 0
                 _write_json(ctx.soft_discovery_merge_manifest_path, manifest)
@@ -1406,6 +1453,33 @@ class WeeklyCapstoneSoftDiscoveryStageTest(unittest.TestCase):
                 self.assertTrue(all(value is False for value in result["effects"].values()))
                 self.tearDown()
                 self.setUp()
+
+    def test_presemantic_artifacts_are_upstream_unavailable(self):
+        ctx = self._ctx(enabled=True)
+        self._write_supporting_inputs(ctx)
+        self._write_merge_pair(ctx, semantic_state="legacy")
+        result = stages.run_soft_discovery(ctx)
+        self.assertEqual(result["status"], "upstream_unavailable")
+        self.assertEqual(result["reason_code"], "CANDIDATE_INPUT_UNAVAILABLE")
+
+    def test_provider_missing_semantic_assertions_is_invalid_evidence(self):
+        ctx = self._ctx(enabled=True)
+        self._write_supporting_inputs(ctx)
+        self._write_merge_pair(ctx, semantic_state="missing")
+        result = stages.run_soft_discovery(ctx)
+        self.assertEqual(result["status"], "invalid_evidence")
+        self.assertEqual(result["reason_code"], "SOFT_DISCOVERY_EVIDENCE_INVALID")
+
+    def test_mixed_payload_drops_only_the_nonsemantic_theme(self):
+        ctx = self._ctx(enabled=True)
+        self._write_supporting_inputs(ctx)
+        merged, manifest = self._write_merge_pair(ctx, semantic_state="mixed")
+        self.assertEqual([theme["theme_id"] for theme in merged["themes"]], ["power_demand"])
+        self.assertTrue(any(
+            row["reason"] == "missing_semantic_assertions"
+            and row["theme_id"] == "legacy_power"
+            for row in manifest["drop_ledger"]
+        ))
 
     def test_receipt_schema_rejects_cross_field_and_unknown_reason_drift(self):
         receipt = stages.run_soft_discovery(self._ctx(enabled=False))

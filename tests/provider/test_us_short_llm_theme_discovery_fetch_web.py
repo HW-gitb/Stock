@@ -244,7 +244,7 @@ class WebFetchTests(unittest.TestCase):
 
     def _llm(self):
         refs = [fetch._source_id("https://example.com/a"), fetch._source_id("https://example.com/b")]
-        return json.dumps({"themes": [{"theme_id": "power_demand", "display_name": "Power demand", "summary": "Cross-industry power demand.", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}, {"ticker": "CEG", "source_ref_ids": refs}]}]})
+        return json.dumps({"themes": [{"theme_id": "power_demand", "display_name": "Power demand", "summary": "Cross-industry power demand.", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}, {"ticker": "CEG", "source_ref_ids": refs}], "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This two-member fixture is a source-shape control, not a shared-driver claim.", "common_driver": None, "member_links": []}]}]})
 
     def test_offline_fake_clients_keep_good_drop_bad_and_never_network(self):
         search = _Search(ROWS)
@@ -607,6 +607,12 @@ class WebFetchTests(unittest.TestCase):
             "summary": "Cross chunk control",
             "source_ref_ids": source_ids,
             "members": [{"ticker": "AAPL", "source_ref_ids": [source_ids[0]]}],
+            "semantic_assertions": [{
+                "basis": "insufficient_evidence",
+                "basis_explanation": "This one-member fixture exercises source binding, not a shared-driver claim.",
+                "common_driver": None,
+                "member_links": [],
+            }],
         }]}
         source_rows = {row["source_id"]: row for row in prompt_rows}
 
@@ -941,8 +947,8 @@ class WebFetchTests(unittest.TestCase):
     def test_model_theme_clock_is_diagnostic_and_does_not_drop_source_bound_theme(self):
         refs = [fetch._source_id("https://example.com/a"), fetch._source_id("https://example.com/b")]
         llm = {"themes": [
-            {"theme_id": "good_theme", "display_name": "Good", "summary": "good", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}]},
-            {"theme_id": "bad_theme", "display_name": "Bad", "summary": "bad", "observed_at": "2026-07-26T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": "CEG", "source_ref_ids": refs}]},
+            {"theme_id": "good_theme", "display_name": "Good", "summary": "good", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}], "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture exercises the clock, not a shared-driver claim.", "common_driver": None, "member_links": []}]},
+            {"theme_id": "bad_theme", "display_name": "Bad", "summary": "bad", "observed_at": "2026-07-26T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": "CEG", "source_ref_ids": refs}], "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture exercises the clock, not a shared-driver claim.", "common_driver": None, "member_links": []}]},
         ]}
         packet, receipt, _ = fetch.build_web_fetch_packet(
             queries=["x"], search_results=ROWS[:2], llm_response=json.dumps(llm),
@@ -980,6 +986,7 @@ class WebFetchTests(unittest.TestCase):
                 "observed_at": generated,
                 "source_ref_ids": refs,
                 "members": [{"ticker": "AAPL", "source_ref_ids": refs}],
+                "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture exercises the source clock, not a shared-driver claim.", "common_driver": None, "member_links": []}],
             },
             {
                 "theme_id": "recorded_future",
@@ -988,6 +995,7 @@ class WebFetchTests(unittest.TestCase):
                 "observed_at": "2026-08-02T00:00:00Z",
                 "source_ref_ids": refs,
                 "members": [{"ticker": "VST", "source_ref_ids": refs}],
+                "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture exercises the source clock, not a shared-driver claim.", "common_driver": None, "member_links": []}],
             },
         ]}
         packet, receipt, _ = fetch.build_web_fetch_packet(

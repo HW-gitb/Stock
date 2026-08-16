@@ -593,7 +593,8 @@ def merge_web_x_discovery(
                 merged[key] = {
                     "theme_id": theme["theme_id"], "display_name": theme["display_name"], "summary": theme["summary"],
                     "status": "provisional_discovered", "observed_at": theme["observed_at"],
-                    "source_ref_ids": [], "members": {}, "cross_industry_validation_status": "not_run", "market_confirmation_status": "not_run",
+                    "source_ref_ids": [], "members": {}, "semantic_assertions": [],
+                    "cross_industry_validation_status": "not_run", "market_confirmation_status": "not_run",
                 }
             target = merged[key]
             target["source_ref_ids"] = sorted(set(target["source_ref_ids"]) | set(theme["source_ref_ids"]))
@@ -603,6 +604,10 @@ def merge_web_x_discovery(
                 target["observed_at"], theme["observed_at"],
                 key=lambda value: web._parse_dt(value, field="theme.observed_at"),
             )
+            if isinstance(theme.get("semantic_assertions"), list):
+                target["semantic_assertions"].extend(
+                    json.loads(json.dumps(theme["semantic_assertions"], ensure_ascii=False))
+                )
             for member in theme["members"]:
                 ticker = member["ticker"]
                 row = target["members"].setdefault(ticker, {"ticker": ticker, "membership_status": "provisional_unvalidated", "source_ref_ids": []})
@@ -670,6 +675,94 @@ def merge_web_x_discovery(
             })
         for ticker in unbound_tickers:
             theme["members"].pop(ticker, None)
+    # Member/source pruning can invalidate a semantic assertion even when the remaining
+    # discovery members are still usable.  Re-check each assertion at this boundary so an
+    # invalid lane assertion is recorded and removed, never silently left as a passing claim.
+    ref_types = {source_id: ref["source_type"] for source_id, ref in refs_by_id.items()}
+    ref_times = {
+        source_id: _instant(ref["observed_at"], f"source_refs[{source_id}].observed_at")
+        for source_id, ref in refs_by_id.items()
+    }
+    for theme in merged.values():
+        assertions = theme.get("semantic_assertions")
+        if not isinstance(assertions, list) or not assertions:
+            continue
+        valid_assertions: list[dict[str, Any]] = []
+        member_ref_ids = {
+            member["ticker"]: set(member["source_ref_ids"])
+            for member in theme["members"].values()
+        }
+        for assertion_index, assertion in enumerate(assertions):
+            try:
+                assertion_for_validation = assertion
+                links = assertion.get("member_links") if isinstance(assertion, dict) else None
+                if isinstance(links, list):
+                    retained_links = []
+                    pruned_tickers = []
+                    for link in links:
+                        if (
+                            isinstance(link, dict)
+                            and isinstance(link.get("ticker"), str)
+                            and isinstance(link.get("source_ref_ids"), list)
+                            and (
+                                link["ticker"] not in member_ref_ids
+                                or not set(link["source_ref_ids"]).issubset(
+                                    member_ref_ids[link["ticker"]]
+                                )
+                            )
+                        ):
+                            pruned_tickers.append(link["ticker"])
+                            continue
+                        retained_links.append(link)
+                    if pruned_tickers:
+                        assertion_for_validation = dict(assertion)
+                        assertion_for_validation["member_links"] = retained_links
+                        merge_drops.append({
+                            "stage": "theme", "theme_id": theme["theme_id"],
+                            "reason": "semantic_assertion_member_link_pruned",
+                            "detail": (
+                                f"assertion[{assertion_index}]:"
+                                f"{','.join(sorted(set(pruned_tickers)))}"
+                            ),
+                        })
+                valid_assertions.extend(ingest.normalize_semantic_assertions(
+                    [assertion_for_validation],
+                    theme_ref_ids=set(theme["source_ref_ids"]),
+                    member_ref_ids=member_ref_ids,
+                    ref_types=ref_types,
+                    ref_times=ref_times,
+                    theme_observed_at=_instant(theme["observed_at"], "theme.observed_at"),
+                    field=f"theme[{theme['theme_id']}].semantic_assertions[{assertion_index}]",
+                ))
+            except Exception as exc:
+                merge_drops.append({
+                    "stage": "theme", "theme_id": theme["theme_id"],
+                    "reason": "semantic_assertion_invalid_after_merge_prune",
+                    "detail": f"assertion[{assertion_index}]:{type(exc).__name__}",
+                })
+        theme["semantic_assertions"] = valid_assertions
+        if not valid_assertions:
+            merge_drops.append({
+                "stage": "theme", "theme_id": theme["theme_id"],
+                "reason": "theme_has_no_valid_semantic_assertion",
+                "detail": "all_assertions_invalid_after_merge_prune",
+            })
+            theme["_drop_after_semantic_prune"] = True
+    semantic_mode = any(
+        isinstance(theme.get("semantic_assertions"), list)
+        and bool(theme["semantic_assertions"])
+        for theme in merged.values()
+    )
+    if semantic_mode:
+        for theme in merged.values():
+            if theme.get("_drop_after_semantic_prune") or theme.get("semantic_assertions"):
+                continue
+            merge_drops.append({
+                "stage": "theme", "theme_id": theme["theme_id"],
+                "reason": "missing_semantic_assertions",
+                "detail": "theme omitted by mixed semantic/non-semantic merge",
+            })
+            theme["_drop_after_semantic_prune"] = True
     # Attestation is merge-manifest metadata, not a Knife-1 discovery input field.  Letting it
     # reach the normalizer changes `input_sha256`, while the consumer correctly reconstructs
     # only Knife-1's three source fields; keep those two representations deliberately separate.
@@ -678,8 +771,13 @@ def merge_web_x_discovery(
         "themes": [],
     }
     for theme in merged.values():
+        if theme.get("_drop_after_semantic_prune"):
+            continue
         theme = dict(theme)
+        theme.pop("_drop_after_semantic_prune", None)
         theme["members"] = list(theme["members"].values())
+        if not theme["semantic_assertions"]:
+            theme.pop("semantic_assertions")
         discovery_input["themes"].append(theme)
     from runners.us_short_llm_theme_discovery import normalize_discovery_payload
     # §五 red-line #4 extends past the fetch layer: one theme the ingest cannot normalize must be
@@ -724,14 +822,25 @@ def merge_web_x_discovery(
                    "model_transcribed_x_evidence": model_transcribed_x_evidence}
             member_rows.append({"theme_id": theme["theme_id"], **row})
             theme_member_rows.append(row)
-        theme_rows.append({"theme_id": theme["theme_id"], "discovery_sources": theme_sources, "members": theme_member_rows})
+        theme_rows.append({
+            "theme_id": theme["theme_id"], "discovery_sources": theme_sources,
+            "semantic_assertion_origins": [
+                {
+                    "origin_source_type": assertion["origin_source_type"],
+                    "origin_scope_type": assertion["origin_scope_type"],
+                    "origin_scope_index": assertion["origin_scope_index"],
+                }
+                for assertion in theme.get("semantic_assertions", [])
+            ],
+            "members": theme_member_rows,
+        })
     manifest = {
         "schema_name": "us_short_llm_theme_discovery_merge", "schema_version": "1.0.0", "generated_at": generated_at,
         "decision_clock": {"expected_decision_date": expected_decision_date, "cutoff_policy": "before_decision_open_et", "pit_enforced": True},
         "merge_contract": {"producer_kind": "web_x_discovery_merge", "execution_mode": "offline_local_receipts", "scoring_eligible": False, "top15_effect_enabled": False, "operation_advice_effect_enabled": False, "dynamic_seats_enabled": False, "theme_probe_enabled": False, "lifecycle_actions_enabled": False},
         "input_artifact_sha256": {"web": web._discovery_evidence_hash(web_artifact), "x": web._discovery_evidence_hash(x_artifact)}, "source_refs": [dict(receipt_refs_by_id[source_id], evidence_attestation=receipt_refs_by_id[source_id].get("evidence_attestation", "provider_attested")) for source_id in sorted(receipt_refs_by_id)], "themes": theme_rows,
         "drop_ledger": _sorted_merge_drops(merge_drops),
-        "summary": {"web_theme_count": len(web_artifact["themes"]), "x_theme_count": len(x_artifact["themes"]), "merged_theme_count": len(theme_rows), "dropped_theme_count": sum(row["reason"] == "theme_rejected_by_ingest" for row in merge_drops), "member_evidence_demotion_count": sum(row["reason"] == "member_evidence_demoted_unbound_ticker" for row in merge_drops), "both_member_count": sum(row["evidence_tier"] == "both" for row in member_rows), "single_member_count": sum(row["evidence_tier"] == "single" for row in member_rows), "zero_member_count": sum(row["evidence_tier"] is None for row in member_rows), "redundant_member_count": sum(bool(row["redundant_source_ref_ids"]) for row in member_rows), "model_transcribed_x_member_count": sum(row["model_transcribed_x_evidence"] for row in member_rows)},
+        "summary": {"web_theme_count": len(web_artifact["themes"]), "x_theme_count": len(x_artifact["themes"]), "merged_theme_count": len(theme_rows), "dropped_theme_count": sum(row["reason"] in {"theme_rejected_by_ingest", "theme_has_no_valid_semantic_assertion"} for row in merge_drops), "member_evidence_demotion_count": sum(row["reason"] == "member_evidence_demoted_unbound_ticker" for row in merge_drops), "both_member_count": sum(row["evidence_tier"] == "both" for row in member_rows), "single_member_count": sum(row["evidence_tier"] == "single" for row in member_rows), "zero_member_count": sum(row["evidence_tier"] is None for row in member_rows), "redundant_member_count": sum(bool(row["redundant_source_ref_ids"]) for row in member_rows), "model_transcribed_x_member_count": sum(row["model_transcribed_x_evidence"] for row in member_rows)},
     }
     _schema_validate(SCHEMA_PATH, manifest)
     return merged_artifact, manifest
@@ -749,6 +858,8 @@ def _ingest_input(artifact: dict[str, Any]) -> dict[str, Any]:
                 "status": theme["status"],
                 "observed_at": theme["observed_at"],
                 "source_ref_ids": list(theme["source_ref_ids"]),
+                **({"semantic_assertions": json.loads(json.dumps(theme["semantic_assertions"], ensure_ascii=False))}
+                   if isinstance(theme.get("semantic_assertions"), list) else {}),
                 "members": [
                     {
                         "ticker": member["ticker"],
@@ -870,6 +981,16 @@ def validate_merged_packet(
         theme_refs = [manifest_refs[ref_id] for ref_id in artifact_theme["source_ref_ids"]]
         if manifest_theme["discovery_sources"] != _corroboration(theme_refs)[0]:
             raise ThemeDiscoveryMergeError("merge manifest theme source tier does not match its evidence")
+        expected_origins = [
+            {
+                "origin_source_type": assertion["origin_source_type"],
+                "origin_scope_type": assertion["origin_scope_type"],
+                "origin_scope_index": assertion["origin_scope_index"],
+            }
+            for assertion in artifact_theme.get("semantic_assertions", [])
+        ]
+        if manifest_theme.get("semantic_assertion_origins", []) != expected_origins:
+            raise ThemeDiscoveryMergeError("merge manifest semantic assertion origins do not bind the artifact")
         artifact_members = _guard_unique_manifest_rows(
             artifact_theme["members"], key="ticker", label="artifact member identity",
         )
@@ -904,7 +1025,8 @@ def validate_merged_packet(
         # ordinary member demotion (a tweet naming a company without its ticker) publish a manifest
         # this validator then refused forever, zeroing the week's soft boost on the immutable slot.
         "dropped_theme_count": sum(
-            row.get("reason") == "theme_rejected_by_ingest" for row in manifest["drop_ledger"]
+            row.get("reason") in {"theme_rejected_by_ingest", "theme_has_no_valid_semantic_assertion"}
+            for row in manifest["drop_ledger"]
         ),
         "both_member_count": sum(member["evidence_tier"] == "both" for member in members),
         "single_member_count": sum(member["evidence_tier"] == "single" for member in members),

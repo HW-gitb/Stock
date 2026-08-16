@@ -88,7 +88,8 @@ class XFetchAndMergeTests(unittest.TestCase):
 
     def _x_response(self):
         refs = [xfetch._source_id(row["url"]) for row in X_ROWS]
-        return json.dumps({"themes": [{"theme_id": "power_demand", "display_name": "Power demand", "summary": "Power demand", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}, {"ticker": "CEG", "source_ref_ids": refs}, {"ticker": "VST", "source_ref_ids": refs}]}]})
+        member_refs = {"AAPL": [refs[0]], "CEG": [refs[0]], "VST": [refs[1]]}
+        return json.dumps({"themes": [{"theme_id": "power_demand", "display_name": "Power demand", "summary": "Power demand", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs, "members": [{"ticker": ticker, "source_ref_ids": member_refs[ticker]} for ticker in ("AAPL", "CEG", "VST")], "semantic_assertions": [{"basis": "shared_commercial_driver", "basis_explanation": "Power demand reaches all three linked issuers through generation and load growth.", "common_driver": {"driver_statement": "Data-center power demand is increasing.", "transmission_mechanism": "Load growth drives generation and infrastructure spending.", "source_ref_ids": refs}, "member_links": [{"ticker": ticker, "role": "beneficiary", "link_statement": "The issuer is linked to the common power-demand transmission.", "source_ref_ids": member_refs[ticker]} for ticker in ("AAPL", "CEG", "VST")] }]}]})
 
     def _assert_direct_script_help_is_self_bootstrapping(self, script_name):
         """K3-R108: execute the real file path, rather than importing its module in this test process."""
@@ -210,6 +211,29 @@ class XFetchAndMergeTests(unittest.TestCase):
         self.assertFalse(receipt["fetch_contract"]["network_access_performed"])
         self.assertEqual(len(discovery["themes"]), 1)
         self.assertEqual(summary["accepted_source_count"], 2)
+
+    def test_x_prompt_renders_post_text_instead_of_placeholder(self):
+        prompt = xfetch._prompt(
+            "20260725",
+            [{"source_id": "x:test", "title": "Real post", "text": "REAL_POST_TEXT"}],
+        )
+        self.assertIn("REAL_POST_TEXT", prompt)
+        self.assertNotIn("{evidence}", prompt)
+
+    def test_x_combined_responses_preserve_each_assertion_origin_index(self):
+        first = self._x_response()
+        second = self._x_response()
+        combined, _ = xfetch._combine_grok_responses([first, second])
+        discovery, _, _ = xfetch.build_x_fetch_packet(
+            queries=["power"], results=X_ROWS, grok_response=combined,
+            expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
+        )
+        scopes = {
+            assertion["origin_scope_index"]
+            for theme in discovery["themes"]
+            for assertion in theme["semantic_assertions"]
+        }
+        self.assertEqual(scopes, {0, 1})
 
     def test_x_credential_rejects_whitespace_and_concatenated_markers(self):
         valid = "xai-" + "a" * 32
@@ -540,7 +564,7 @@ class XFetchAndMergeTests(unittest.TestCase):
     def test_grok_sources_are_receipted_and_url_refs_are_coerced(self):
         response = json.dumps({
             "sources": [{"url": X_ROWS[0]["url"], "title": X_ROWS[0]["title"], "text": X_ROWS[0]["text"], "created_at": X_ROWS[0]["created_at"]}],
-            "themes": [{"theme_id": "power_demand", "display_name": "Power demand", "summary": "Power demand", "observed_at": "2026-07-24T12:00:00Z", "source_urls": [X_ROWS[0]["url"]], "members": [{"ticker": "AAPL", "source_urls": [X_ROWS[0]["url"]]}]}],
+            "themes": [{"theme_id": "power_demand", "display_name": "Power demand", "summary": "Power demand", "observed_at": "2026-07-24T12:00:00Z", "source_urls": [X_ROWS[0]["url"]], "members": [{"ticker": "AAPL", "source_urls": [X_ROWS[0]["url"]]}], "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture is a source-coercion control, not a shared-driver claim.", "common_driver": None, "member_links": []}]}],
         })
         discovery, receipt, _ = xfetch.build_x_fetch_packet(
             queries=["power"], results=X_ROWS[:1], grok_response=response,
@@ -565,7 +589,8 @@ class XFetchAndMergeTests(unittest.TestCase):
     def test_web_x_merge_emits_both_and_single_tiers(self):
         web_rows = [{"url": "https://web.example/a", "title": "A", "content": "AAPL CEG", "published_date": "2026-07-24T10:00:00Z"}, {"url": "https://web.example/b", "title": "B", "content": "CEG", "published_date": "2026-07-23T10:00:00Z"}]
         web_refs = [web._source_id(row["url"]) for row in web_rows]
-        web_text = json.dumps({"themes": [{"theme_id": "power_demand", "display_name": "Power", "summary": "Power", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": web_refs, "members": [{"ticker": "AAPL", "source_ref_ids": web_refs}, {"ticker": "CEG", "source_ref_ids": web_refs}]}]})
+        web_member_refs = {"AAPL": [web_refs[0]], "CEG": web_refs, "VST": web_refs}
+        web_text = json.dumps({"themes": [{"theme_id": "power_demand", "display_name": "Power", "summary": "Power", "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": web_refs, "members": [{"ticker": ticker, "source_ref_ids": web_member_refs[ticker]} for ticker in ("AAPL", "CEG", "VST")], "semantic_assertions": [{"basis": "shared_commercial_driver", "basis_explanation": "Power demand reaches all three linked issuers.", "common_driver": {"driver_statement": "Power demand is increasing.", "transmission_mechanism": "Load growth drives infrastructure spending.", "source_ref_ids": web_refs}, "member_links": [{"ticker": ticker, "role": "beneficiary", "link_statement": "The issuer is linked to the common demand.", "source_ref_ids": web_member_refs[ticker]} for ticker in ("AAPL", "CEG", "VST")] }]}]})
         with temporary_provider_directory(web.ROOT) as td:
             wa, wr, _ = web.build_web_fetch_packet(queries=["power"], search_results=web_rows, llm_response=web_text, expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=Path(td) / "web", persist_raw=True)
             xa, xr, _ = xfetch.build_x_fetch_packet(queries=["power"], results=X_ROWS, grok_response=self._x_response(), expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z", raw_root=Path(td) / "x", persist_raw=True)
@@ -587,7 +612,8 @@ class XFetchAndMergeTests(unittest.TestCase):
         x_ref = [xfetch._source_id(x_rows[0]["url"])]
         def theme(refs, observed):
             return {"theme_id": "power_demand", "display_name": "P", "summary": "S", "observed_at": observed,
-                    "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}]}
+                    "source_ref_ids": refs, "members": [{"ticker": "AAPL", "source_ref_ids": refs}],
+                    "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture exercises timestamp handling, not a shared-driver claim.", "common_driver": None, "member_links": []}]}
         with temporary_provider_directory(web.ROOT) as td:
             wa, wr, _ = web.build_web_fetch_packet(
                 queries=["power"], search_results=w_rows,
@@ -629,6 +655,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                 "observed_at": generated,
                 "source_ref_ids": refs,
                 "members": [{"ticker": "AAPL", "source_ref_ids": refs}],
+                "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture exercises the source clock, not a shared-driver claim.", "common_driver": None, "member_links": []}],
             },
             {
                 "theme_id": "recorded_future",
@@ -637,6 +664,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                 "observed_at": "2026-08-02T00:00:00Z",
                 "source_ref_ids": refs,
                 "members": [{"ticker": "VST", "source_ref_ids": refs}],
+                "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture exercises the source clock, not a shared-driver claim.", "common_driver": None, "member_links": []}],
             },
         ]}
         packet, receipt, _ = xfetch.build_x_fetch_packet(
@@ -660,6 +688,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                 "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
                 "observed_at": model_observed_at, "source_ref_ids": refs,
                 "members": [{"ticker": "AAPL", "source_ref_ids": refs}],
+                "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture exercises digest stability, not a shared-driver claim.", "common_driver": None, "member_links": []}],
             }]}
             packet, receipt, _ = xfetch.build_x_fetch_packet(
                 queries=["power"], results=rows, grok_response=json.dumps(response),
@@ -684,7 +713,8 @@ class XFetchAndMergeTests(unittest.TestCase):
             def theme(refs):
                 return {"theme_id": "power_demand", "display_name": "T", "summary": "S",
                         "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs,
-                        "members": [{"ticker": "CEG", "source_ref_ids": refs}]}
+                        "members": [{"ticker": "CEG", "source_ref_ids": refs}],
+                        "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture exercises document corroboration, not a shared-driver claim.", "common_driver": None, "member_links": []}]}
             with temporary_provider_directory(web.ROOT) as td:
                 wa, wrc, _ = web.build_web_fetch_packet(
                     queries=["q"], search_results=w_rows, llm_response=json.dumps({"themes": [theme(wr)]}),
@@ -833,15 +863,38 @@ class XFetchAndMergeTests(unittest.TestCase):
 
     def _merge_lanes(self, web_urls, x_urls, web_members, x_members):
         wrows = [{"url": u, "title": "T", "content": "AAPL MSFT JPM power", "published_date": "2026-07-24T10:00:00Z"} for u in web_urls]
-        xrows = [{"url": u, "title": "P", "text": "AAPL power", "created_at": "2026-07-24T10:00:00Z"} for u in x_urls]
+        xrows = [{"url": u, "title": "P", "text": "AAPL MSFT JPM power", "created_at": "2026-07-24T10:00:00Z"} for u in x_urls]
         wid = {u: web._source_id(web._canonical_locator(u)) for u in web_urls}
         xid = {u: xfetch._source_id(web._canonical_locator(u)) for u in x_urls}
 
         def payload(members, refs):
+            if len(members) >= 3:
+                semantic_assertions = [{
+                    "basis": "shared_commercial_driver",
+                    "basis_explanation": "Power demand reaches the linked issuers.",
+                    "common_driver": {
+                        "driver_statement": "Power demand is increasing.",
+                        "transmission_mechanism": "Load growth drives infrastructure spending.",
+                        "source_ref_ids": refs,
+                    },
+                    "member_links": [{
+                        "ticker": ticker, "role": "beneficiary",
+                        "link_statement": "The issuer is linked to the common demand.",
+                        "source_ref_ids": member_refs,
+                    } for ticker, member_refs in members.items()],
+                }]
+            else:
+                semantic_assertions = [{
+                    "basis": "insufficient_evidence",
+                    "basis_explanation": "This lane has fewer than three linked members.",
+                    "common_driver": None, "member_links": [],
+                }]
             return json.dumps({"themes": [{
                 "theme_id": "power_demand", "display_name": "Power", "summary": "Power demand story",
                 "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": refs,
-                "members": [{"ticker": t, "source_ref_ids": r} for t, r in members.items()]}]})
+                "members": [{"ticker": t, "source_ref_ids": r} for t, r in members.items()],
+                "semantic_assertions": semantic_assertions,
+            }]})
 
         with temporary_provider_directory(web.ROOT) as td:
             wa, wr, _ = web.build_web_fetch_packet(
@@ -860,20 +913,32 @@ class XFetchAndMergeTests(unittest.TestCase):
         w_rows = [{"url": "https://web.example/power", "title": "Power", "content": "AAPL MSFT JPM power", "published_date": "2026-07-24T10:00:00Z"}]
         x_rows = [{"url": "https://x.example/photo", "title": "Photo", "text": "MSFT JPM power\nhttps://images.example/AAPL\nDisclaimer: AAPL is not evidence", "created_at": "2026-07-24T10:00:00Z"}]
         w_ref, x_ref = web._source_id(w_rows[0]["url"]), xfetch._source_id(x_rows[0]["url"])
-        def lane_payload(source_ref):
+        def lane_payload(source_ref, *, shared):
+            assertion = {
+                "basis": "shared_commercial_driver",
+                "basis_explanation": "Power demand reaches the three linked issuers.",
+                "common_driver": {"driver_statement": "Power demand is increasing.", "transmission_mechanism": "Load growth drives infrastructure spending.", "source_ref_ids": [source_ref]},
+                "member_links": [{"ticker": ticker, "role": "beneficiary", "link_statement": "The issuer is linked to the common demand.", "source_ref_ids": [source_ref]} for ticker in ("AAPL", "MSFT", "JPM")],
+            } if shared else {
+                "basis": "insufficient_evidence",
+                "basis_explanation": "The X text does not support three linked members.",
+                "common_driver": None,
+                "member_links": [],
+            }
             return json.dumps({"themes": [{
                 "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
                 "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [source_ref],
                 "members": [{"ticker": ticker, "source_ref_ids": [source_ref]} for ticker in ("AAPL", "MSFT", "JPM")],
+                "semantic_assertions": [assertion],
             }]})
         with temporary_provider_directory(web.ROOT) as td:
             wa, wr, _ = web.build_web_fetch_packet(
-                queries=["power"], search_results=w_rows, llm_response=lane_payload(w_ref),
+                queries=["power"], search_results=w_rows, llm_response=lane_payload(w_ref, shared=True),
                 expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
                 raw_root=Path(td) / "web", persist_raw=True,
             )
             xa, xr, _ = xfetch.build_x_fetch_packet(
-                queries=["power"], results=x_rows, grok_response=lane_payload(x_ref),
+                queries=["power"], results=x_rows, grok_response=lane_payload(x_ref, shared=False),
                 expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
                 raw_root=Path(td) / "x", persist_raw=True,
             )
@@ -953,6 +1018,7 @@ class XFetchAndMergeTests(unittest.TestCase):
             "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [w_ref],
             "members": [{"ticker": ticker, "source_ref_ids": [w_ref]}
                         for ticker in ("AAPL", "MSFT", "JPM", "NVDA")],
+            "semantic_assertions": [{"basis": "shared_commercial_driver", "basis_explanation": "Power demand reaches the three named issuers.", "common_driver": {"driver_statement": "Power demand is increasing.", "transmission_mechanism": "Load growth drives infrastructure spending.", "source_ref_ids": [w_ref]}, "member_links": [{"ticker": ticker, "role": "beneficiary", "link_statement": "The issuer is linked to the common demand.", "source_ref_ids": [w_ref]} for ticker in ("AAPL", "MSFT", "JPM")] }],
         }]})
         with temporary_provider_directory(web.ROOT) as td:
             wa, wr, _ = web.build_web_fetch_packet(
@@ -1026,6 +1092,7 @@ class XFetchAndMergeTests(unittest.TestCase):
             "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [source_ref],
             "members": [{"ticker": ticker, "source_ref_ids": [source_ref]}
                         for ticker in ("AAPL", "MSFT", "JPM", "NVDA")],
+            "semantic_assertions": [{"basis": "shared_commercial_driver", "basis_explanation": "Power demand reaches the three observable issuers.", "common_driver": {"driver_statement": "Power demand is increasing.", "transmission_mechanism": "Load growth drives infrastructure spending.", "source_ref_ids": [source_ref]}, "member_links": [{"ticker": ticker, "role": "beneficiary", "link_statement": "The issuer is linked to the common demand.", "source_ref_ids": [source_ref]} for ticker in ("AAPL", "MSFT", "JPM")] }],
         }]})
         with temporary_provider_directory(web.ROOT) as td:
             wa, wr, _ = web.build_web_fetch_packet(
@@ -1074,6 +1141,7 @@ class XFetchAndMergeTests(unittest.TestCase):
             "observed_at": "2026-07-24T12:00:00Z", "source_ref_ids": [source_ref],
             "members": [{"ticker": ticker, "source_ref_ids": [source_ref]}
                         for ticker in ("AAPL", "MSFT", "JPM")],
+            "semantic_assertions": [{"basis": "shared_commercial_driver", "basis_explanation": "Power demand reaches all three linked issuers.", "common_driver": {"driver_statement": "Power demand is increasing.", "transmission_mechanism": "Load growth drives infrastructure spending.", "source_ref_ids": [source_ref]}, "member_links": [{"ticker": ticker, "role": "beneficiary", "link_statement": "The issuer is linked to the common demand.", "source_ref_ids": [source_ref]} for ticker in ("AAPL", "MSFT", "JPM")] }],
         }]})
         with temporary_provider_directory(web.ROOT) as td:
             web_artifact, web_receipt, _ = web.build_web_fetch_packet(
@@ -1108,7 +1176,7 @@ class XFetchAndMergeTests(unittest.TestCase):
     def test_model_transcribed_x_source_requires_provider_annotation_url(self):
         """K3-R66: model text is evidence only after provider URL attestation."""
         url = "https://x.com/ceg/status/1937910118252712411"
-        grok = json.dumps({"sources": [{"url": url, "title": "CEG", "text": "CEG demand rises", "created_at": "2026-07-24T10:00:00Z"}], "themes": [{"theme_id": "power_demand", "display_name": "Power", "summary": "Power", "observed_at": "2026-07-24T12:00:00Z", "source_urls": [url], "members": [{"ticker": "CEG", "source_urls": [url]}]}]})
+        grok = json.dumps({"sources": [{"url": url, "title": "CEG", "text": "CEG demand rises", "created_at": "2026-07-24T10:00:00Z"}], "themes": [{"theme_id": "power_demand", "display_name": "Power", "summary": "Power", "observed_at": "2026-07-24T12:00:00Z", "source_urls": [url], "members": [{"ticker": "CEG", "source_urls": [url]}], "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture is a source-annotation control, not a shared-driver claim.", "common_driver": None, "member_links": []}]}]})
         _, rejected, _ = xfetch.build_x_fetch_packet(
             queries=["power"], results=[], grok_response=grok,
             expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
@@ -1573,6 +1641,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                     "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
                     "observed_at": "2026-07-24T12:00:00Z", "source_urls": [sources[0]["url"]],
                     "members": [{"ticker": "CEG", "source_urls": [sources[0]["url"]]}],
+                    "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture exercises annotation identity, not a shared-driver claim.", "common_driver": None, "member_links": []}],
                 }],
             }),
             expected_decision_date="20260725", generated_at="2026-07-25T08:00:00Z",
@@ -1747,6 +1816,7 @@ class XFetchAndMergeTests(unittest.TestCase):
                 "theme_id": "power_demand", "display_name": "Power", "summary": "Power",
                 "observed_at": "2026-07-24T12:00:00Z", "source_urls": [url],
                 "members": [{"ticker": "CEG", "source_urls": [url]}],
+                "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture exercises annotation binding, not a shared-driver claim.", "common_driver": None, "member_links": []}],
             }],
         })
         response = SimpleNamespace(
@@ -1806,7 +1876,7 @@ class XFetchAndMergeTests(unittest.TestCase):
         def packet(created_at):
             response = json.dumps({
                 "sources": [{"url": url, "title": "CEG", "text": "CEG demand rises", "created_at": created_at}],
-                "themes": [{"theme_id": "power_demand", "display_name": "Power", "summary": "Power", "observed_at": created_at, "source_urls": [url], "members": [{"ticker": "CEG", "source_urls": [url]}]}],
+                "themes": [{"theme_id": "power_demand", "display_name": "Power", "summary": "Power", "observed_at": created_at, "source_urls": [url], "members": [{"ticker": "CEG", "source_urls": [url]}], "semantic_assertions": [{"basis": "insufficient_evidence", "basis_explanation": "This one-member fixture is a source-window control, not a shared-driver claim.", "common_driver": None, "member_links": []}]}],
             })
             return xfetch.build_x_fetch_packet(
                 queries=["power"], results=[], grok_response=response,
@@ -2033,7 +2103,7 @@ class XFetchAndMergeTests(unittest.TestCase):
             ("one document, dot segment", ["https://web.example/sector/./story"], ["https://web.example/sector/story"],
              {"AAPL": ["https://web.example/sector/./story"], "MSFT": ["https://web.example/sector/./story"], "JPM": ["https://web.example/sector/./story"]},
              {"AAPL": ["https://web.example/sector/story"]}, "single", 2.0),
-            ("distinct documents", [a], [x_only], {"AAPL": [a], "MSFT": [a], "JPM": [a]}, {"AAPL": [x_only]}, "both", 5.0),
+            ("distinct documents", [a], [x_only], {"AAPL": [a], "MSFT": [a], "JPM": [a]}, {"AAPL": [x_only], "MSFT": [x_only], "JPM": [x_only]}, "both", 5.0),
         ]
         for label, web_urls, x_urls, web_members, x_members, tier, points in cases:
             with self.subTest(shape=label):
