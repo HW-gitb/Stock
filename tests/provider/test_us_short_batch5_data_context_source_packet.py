@@ -488,7 +488,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             },
             "immutable_conflict": None,
             "validated_theme_count": 1,
-            "boostable_ticker_count": 3,
+            "boostable_ticker_count": 4,
             "drop_summary": {"merge_dropped_theme_count": 0, "validation_drop_count": 0},
             "error_summary": None,
             "effects": {
@@ -633,6 +633,12 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             state_dir=self.soft_state_dir, decision_date=_DECISION_DATE,
         ))
         try:
+            # Model the only recoverable zero-to-valid state: the shadow and ledger
+            # were published, but the final consumption receipt still contains the
+            # earlier typed zero.
+            typed_zero_consumption.unlink()
+            run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+            typed_zero_consumption.write_bytes(frozen_zero_bytes)
             result = run_packet(
                 self.packet, generated_at="2026-07-04T00:00:02Z", decision_lock=lock,
             )
@@ -641,7 +647,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
 
         written = json.loads(self.paths["output"].read_text(encoding="utf-8"))
         self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["AAPL"]["core_score"], 48.5)
-        self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["MSFT"]["core_score"], 55.0)
+        self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["MSFT"]["core_score"], 52.0)
         components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
         self.assertEqual(
             components["score_composition"]["analysis_by_ticker"]["AAPL"][

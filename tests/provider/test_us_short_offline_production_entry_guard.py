@@ -305,6 +305,128 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
         self.assertEqual(boost_map["AAPL"]["theme_soft_boost"], 2.0)
         self.assertNotEqual(boost_map["AAPL"]["evidence_tier"], "both")
 
+    def test_k4_05_cross_chunk_member_cannot_reach_merged_validation_or_boost(self):
+        """A globally known source is still invalid when it belongs to another Web chunk."""
+        x_packet = self._packets()[3:]
+        clock = datetime(2026, 7, 24, 12, tzinfo=timezone.utc)
+
+        def build_web_packet(*, borrowed: bool):
+            token = uuid.uuid4().hex
+            search_results = [{
+                "url": f"https://web.example/k4-cross-chunk-{token}-{index}",
+                "title": "Power demand",
+                "content": "AAPL MSFT JPM power demand",
+                "published_date": "2026-07-24T10:00:00Z",
+            } for index in range(20)]
+            _refs, prompt_rows, _drops = web._normalize_search_results(
+                search_results, expected_decision_date=DATE, fetched_at=clock,
+                raw_root=None, persist_raw=False,
+            )
+            chunks = web._chunk_regroup_rows(prompt_rows)
+            self.assertEqual(len(chunks), 2)
+            chunk_source_ids = [
+                [row["source_id"] for row in chunk] for chunk in chunks
+            ]
+            first_ids, second_ids = chunk_source_ids
+            member_refs = {
+                "AAPL": [second_ids[0] if borrowed else first_ids[0]],
+                "MSFT": [first_ids[1]],
+                "JPM": [first_ids[2]],
+            }
+            member_links = [{
+                "ticker": ticker,
+                "role": "beneficiary",
+                "link_statement": "The issuer is linked to the common demand.",
+                "source_ref_ids": refs,
+            } for ticker, refs in member_refs.items() if not borrowed or ticker != "AAPL"]
+            theme = {
+                "theme_id": "power_demand",
+                "display_name": "Power demand",
+                "summary": "Power demand",
+                "observed_at": "2026-07-24T10:00:00Z",
+                "source_ref_ids": first_ids,
+                "members": [
+                    {"ticker": ticker, "source_ref_ids": refs}
+                    for ticker, refs in member_refs.items()
+                ],
+                "semantic_assertions": [{
+                    "basis": "shared_commercial_driver",
+                    "basis_explanation": "Power demand reaches the linked issuers.",
+                    "common_driver": {
+                        "driver_statement": "Power demand is increasing.",
+                        "transmission_mechanism": "Load growth drives infrastructure spending.",
+                        "source_ref_ids": first_ids,
+                    },
+                    "member_links": member_links,
+                }],
+            }
+            response = _FakeDeepSeek._response(json.dumps({"themes": [theme]}))
+            raw_root = self._raw_root / ("k4-cross-chunk-borrowed" if borrowed else "k4-cross-chunk-valid")
+            transport = paid_gateway.new_transport("tavily", "deepseek")
+            transport._record_completed_response("tavily")
+            transport._record_completed_response("deepseek")
+            transport._record_completed_response("deepseek")
+            provider_response_refs = [
+                web._persist_deepseek_response(
+                    response, raw_root=raw_root, expected_decision_date=DATE,
+                    chunk_index=index, fetched_at=clock,
+                )
+                for index in range(2)
+            ]
+            ticket = paid_gateway.issue_ticket()
+            try:
+                packet = web.build_web_fetch_packet(
+                    queries=["power"], search_results=search_results,
+                    llm_response=json.dumps({"themes": []}),
+                    expected_decision_date=DATE, generated_at=clock.isoformat(),
+                    fetched_at=clock.isoformat(), raw_root=raw_root, persist_raw=True,
+                    execution_mode="live_authorized", network_access_performed=True,
+                    provider_calls_performed=True, _live_transport=transport,
+                    _live_ticket=ticket,
+                    regroup_model_identity=web._regroup_model_identity(
+                        served_model="deepseek-test",
+                    ),
+                    regroup_attempted=True, regroup_chunk_counts={
+                        "attempted": 2, "successful": 2, "failed": 0,
+                        "failed_indexes": [],
+                    },
+                    provider_response_refs=provider_response_refs,
+                    regroup_chunks=[
+                        {
+                            "chunk_index": 0, "themes": [theme],
+                            "input_source_ids": chunk_source_ids[0],
+                        },
+                        {
+                            "chunk_index": 1, "themes": [],
+                            "input_source_ids": chunk_source_ids[1],
+                        },
+                    ],
+                )
+            finally:
+                paid_gateway.revoke_ticket(ticket)
+            return packet
+
+        valid = build_web_packet(borrowed=False)
+        _merged, _manifest, _artifact, valid_boost = self._validation_and_boost(
+            (*valid, *x_packet),
+        )
+        self.assertEqual(valid_boost["AAPL"]["theme_soft_boost"], 5.0)
+
+        borrowed = build_web_packet(borrowed=True)
+        aapl_row = next(
+            row for row in borrowed[1]["member_binding_ledger"]
+            if row["canonical_ticker"] == "AAPL"
+        )
+        self.assertEqual(aapl_row["binding_status"], "rejected")
+        self.assertEqual(
+            aapl_row["binding_reason"], "member_source_ref_not_in_chunk_sources",
+        )
+        _merged, _manifest, _artifact, borrowed_boost = self._validation_and_boost(
+            (*borrowed, *x_packet),
+        )
+        self.assertNotEqual(borrowed_boost["AAPL"]["evidence_tier"], "both")
+        self.assertLess(borrowed_boost["AAPL"]["theme_soft_boost"], 5.0)
+
     def test_k4_02_partial_web_regroup_cannot_reach_active_boost(self):
         """A successful Web sibling is still incomplete when another chunk is truncated."""
         clock = datetime(2026, 7, 24, 12, tzinfo=timezone.utc)
@@ -544,8 +666,8 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
         with self.assertRaises(merge.ThemeDiscoveryMergeError):
             self._merge_and_knife2(packets)
 
-    def test_production_default_entry_turns_red_when_ticker_binding_gate_is_removed(self):
-        """K4 control B: hollowing the ticker check must flip the final boost outcome."""
+    def test_k4_control_B_hollowed_ticker_gate_exposes_forbidden_member_and_boost(self):
+        """Control B is red only when the final member/boost becomes wrong."""
         cat = self._packets(cat_aapl=True)
         armed_manifest, armed_validated, _ = self._merge_and_knife2(cat)
         armed = {member["ticker"]: member for theme in armed_validated for member in theme["members"]}
