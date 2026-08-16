@@ -5142,3 +5142,20 @@ Claude Code：独立审查本工作树的 P2 Required 与 `O-THEME-LEGACY-1` 收
 ### 下一步
 
 用户：决定是否重跑周实盘（真实 `next_url` 形状仍为 NOT_VERIFIED）。
+
+## 2026-08-16 追加：SEC SIC → theme 真实失败腿 fixture 迁移（Codex executor/fixer，dc41，OPEN-NOT-VERIFIED）
+
+### 修复
+
+- 上轮 legacy 开关本身正确，但漏了外部正式调用腿：SEC SIC classification 的端到端测试直接调用 `theme.run_packet`，其 `theme_summary` fixture 仍在迁移前的 `us_short_batch5_full_universe_theme_20260707` 根，因正式写路径默认拒绝 legacy 而失败。
+- 本轮只把这一个 fixture 改到 `provider_samples/us_short_batch5_full_universe_theme/<_DECISION_DATE>/summary.json`。没有给 `run_packet` 或调用方传 `allow_legacy_summary_read=True`，生产契约保持“legacy 只读、正式写入拒绝”。
+- `projection_inputs` 的同形 legacy 腿记为 `O-USSHORT-PROJECTION-INPUTS-LEGACY-ROOT-UNREACHABLE`：历史目录虽有文件，但全仓无调用方传入，当前不可达，本轮不做防御性改动。
+
+### 证据与边界
+
+- 固定 Python：原失败 SEC SIC 模块 `18/18 OK`；theme producer + SEC SIC 外部调用腿 `34/34 OK`；目标测试文件 `py_compile`、`git diff --check` 通过。
+- 未跑 full lane；更早 fail-fast 仍会阻止软发现派发，所以这些结果不是四刀 lane 级证据。无 provider/network/live、桌面文档、主树、提交或 merge。
+
+### 下一步
+
+Claude Code：独立审查这一处 fixture 迁移，并确认正式 `theme.run_packet` 的 legacy 拒绝未被放宽。
