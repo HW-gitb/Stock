@@ -3083,3 +3083,49 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **验证命令与结果**：验收超集（两个被修模块 + 契约 owner 模块）`Ran 38 tests in 12.364s / OK`、`receipt:301c1be90b9390ee575f2554`。**reviewer 自打的反向腿**：把 `:499-502` 的 `budget_ready` 挖成恒 `True`，三模块合跑 → owner 模块精确转红两条（`test_budget_preview_derives_exact_forecast_but_does_not_authorize_execution`、`test_mismatched_independent_budget_blocks_ready_gate`），两个消费方夹具仍绿；`git checkout --` 还原后 runner diff 为空。
 - **失效的旧结论**：方案里 closure ③ 写的「把预算改回 16 应重新抛同一个错」这条反向控制**不够**——它只证明夹具口径变了。真正该打的是**挖门**那一枪（证明门的证明力还在 owner 手里）。后续同类「把断言从 A 模块挪到 B 模块」的刀，按挖门这条做。
 - **下一步注意**：本刀只保证它自己这一层过了。lane 全量上一轮 fail-fast 停在 `ran=5567 / discovered=5958`，`43` 个模块当轮没派发到，下一次全量大概率还会撞出新的一层，按归属分派即可，不要记在本刀账上。
+
+## 2026-08-16 追加：把不必要的模块请出串行尾巴（方案，交 Codex）
+
+对应 `R-USSHORT-LANE-PACK-IS-GREEN-ONLY-BY-4-SECONDS-AND-81-PERCENT-OF-IT-IS-SERIAL`。**本节只是方案，未动任何代码。**
+
+### 为什么只有这一个方向有效
+
+20260816 绿跑：`elapsed=855.6s / deadline=860s`，余量 `4.4s`。`serial_tail=67` 个模块合计 **697.0s = 墙钟的 81%**，其余 251 个模块合计 446.8s 摊到 8 个 worker ≈ 56s。**串行那段加 worker 一秒都省不下来**，所以除了让模块离开串行尾巴，其它调度手段都是无效功。日志里 `WALL_CLOCK_FLOOR ... 170.0s (19.9%)` 是单模块**下界**，不是当前墙钟的成因，照它优化会走错方向。
+
+### 串行是怎么判定的（读码确认，别按"哪个用例真碰锁"去想）
+
+- `.tools/parallel_lane_runner.py:265 serial_tail_modules()`：模块**或其静态导入闭包里任何一个文件**的源码文本命中 `_CROSS_PROCESS_LOCK = re.compile(r"msvcrt\.locking|fcntl\.(?:flock|lockf)")`（`:58`），该模块整体串行。
+- `_imported_names()`（`:250`）扫的是**整棵 AST** 的 `Import` / `ImportFrom` → **把 import 挪进函数体没有任何用**。`_module_path()`（`:237`）只解析树内文件，stdlib / 第三方一律判 False。
+- 所以这是**按导入图的静态判定**：只有当导入边被真正切断时，模块才会离开尾巴。
+
+### 成因分布（reviewer 用该 runner 自己的函数实跑派生 + 与绿跑日志 join，非推断）
+
+| 最近的持锁文件 | 模块数 | 在 20260816 绿跑里的合计耗时 |
+|---|---|---|
+| `tests/provider/us_short_private_test_root.py`（**测试夹具**） | 50 | **468.1s** |
+| `runners/us_short_weekly_capstone.py`（生产决策锁） | 17 | 228.9s |
+
+58/67 是**一跳直接导入**，其余 9 个两跳。全仓只有三个文件含该锁字面量，第三个是 `tests/test_parallel_lane_runner.py`（守卫自身的测试，不在本 lane 的 discovery pattern 内）。**即：墙钟的 55%（468.1s / 855.6s）是被一个测试夹具的跨进程锁拖成串行的，与生产代码无关。**
+
+### 方向（按风险从低到高；执行方自行判定后再动手）
+
+1. **拆夹具，而不是删锁**：把 `us_short_private_test_root.py` 拆成 (a) 只建私有临时根、源码里**不含**任何锁字面量的轻模块，与 (b) 真正需要"同一固定父目录下互斥"的那部分。50 个模块里只用 (a) 的改导入 (a)，立刻退出串行尾巴。这是本方案推荐的路径。
+2. 若 (b) 之所以存在是因为多进程共用**同一个固定父目录**，可评估把父目录做成**每进程唯一**，使争用在结构上不可能发生、锁随之可删——但必须先回答下面的安全问题，**不许直接删锁**。
+3. 那 17 个碰生产 `us_short_weekly_capstone` 的**保持串行不动**：它们碰的是真实决策锁，本来就该互斥。因此改完后串行尾巴的合理终点是 ~17 个模块 / ~229s，不是 0。
+
+### 动手前必须回答的安全问题（答不出就别改）
+
+- **这把锁现在保护什么**：`test_us_short_discovery_conformance.py` 的 D 轴用例里有一段线程测试，断言同根助手**必须被串行化**（`same-root test helpers were not serialized`），并断言重叠使用时**不得删掉别人的私有父目录**（`one overlapping test removed another test's private parent`）。任何拆分都必须让这两条继续成立——要么靠锁，要么靠结构上不共享父目录。
+- **明令禁止**：为绕开 `_CROSS_PROCESS_LOCK` 那条正则而把 `msvcrt.locking` 改写成 `getattr(msvcrt, "locking")` 之类。那不是优化，是骗过探测器，代价是并发下偶发红且没人查得出原因。
+- **同样禁止**：删掉或放宽 D 轴那两条断言来让改动通过。
+
+### 验收（缺一不算完）
+
+1. 改完重新派生 `serial_tail_modules`，串行模块数由 `67` 降到接近 `17`；仍留下的逐个说明理由。
+2. lane 全量 `elapsed` 相对 860s 余量 ≥15%（即 ≤731s），且 `COUNT_GATE discovered==ran`。
+3. **反向控制**：把拆出去的轻模块**故意改回**导入持锁模块，重新派生应立刻把它算回串行尾巴——证明这条判定还在起作用，不是被绕过去了。
+4. 并发安全那两条断言仍绿。
+
+### 估算（供排期，不是承诺）
+
+若 50 个模块全部转入并行，468.1s 由串行变成 8 worker 摊分（约 60-70s），总墙钟大致落到 450s 上下，余量从 0.5% 回到 ~48%。这个数字只用于判断值不值得做，不作为验收口径——验收看上面第 2 条的实测。
