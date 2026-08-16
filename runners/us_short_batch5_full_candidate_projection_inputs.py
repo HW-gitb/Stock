@@ -35,7 +35,8 @@ from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 
 SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_candidate_projection_inputs_summary.schema.json"
 SUMMARY_PATH = ROOT / "docs" / "us_short_batch5_full_candidate_projection_inputs_summary_20260706.json"
-SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_candidate_projection_inputs_20260706")
+SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_candidate_projection_inputs")
+LEGACY_SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_candidate_projection_inputs_20260706")
 STATE_US_SHORT_DIR = ROOT / "state" / "us_short"
 ELIGIBILITY_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 DEFAULT_CANDIDATE_ARTIFACT_PATH = STATE_US_SHORT_DIR / "candidate_universe_20260706.json"
@@ -135,18 +136,28 @@ def _state_json_path(path: Path | str, *, field: str) -> Path:
     return resolved
 
 
-def _validate_summary_path(path: Path | str) -> Path:
+def _validate_summary_path(path: Path | str, *, expected_decision_date: str | None = None) -> Path:
     resolved = _resolve_repo_path(path, field="summary_path")
     if resolved.suffix != ".json":
         raise FullCandidateProjectionInputsError("summary_path must be a .json file")
     if resolved == SUMMARY_PATH.resolve():
         return resolved
     try:
-        resolved.relative_to((ROOT / SAMPLE_REL_ROOT).resolve())
+        relative = resolved.relative_to((ROOT / SAMPLE_REL_ROOT).resolve())
     except ValueError as exc:
         raise FullCandidateProjectionInputsError(
             "summary_path must be the canonical tracked summary or under this runner's provider_samples folder"
         ) from exc
+    if len(relative.parts) < 2 or len(relative.parts[0]) != 8 or not relative.parts[0].isdigit():
+        raise FullCandidateProjectionInputsError(
+            "summary_path must include a decision-date directory under the projection-inputs provider_samples root"
+        )
+    try:
+        datetime.strptime(relative.parts[0], "%Y%m%d")
+    except ValueError as exc:
+        raise FullCandidateProjectionInputsError("summary_path decision-date directory must be a real date") from exc
+    if expected_decision_date is not None and relative.parts[0] != expected_decision_date:
+        raise FullCandidateProjectionInputsError("summary_path decision-date directory must match expected_decision_date")
     if not _git_ignored(resolved):
         raise FullCandidateProjectionInputsError("non-canonical summary_path must be gitignored")
     return resolved
@@ -549,7 +560,7 @@ def run_packet(
     source_theme_path = _existing_state_json(source_theme_projection_path, field="source_theme_projection_path")
     output_momentum_path = _state_json_path(output_momentum_projection_path, field="output_momentum_projection_path")
     output_theme_path = _state_json_path(output_theme_projection_path, field="output_theme_projection_path")
-    summary_resolved = _validate_summary_path(summary_path)
+    summary_resolved = _validate_summary_path(summary_path, expected_decision_date=expected_decision_date)
     if len({candidate_path, source_momentum_path, source_theme_path, output_momentum_path, output_theme_path}) != 5:
         raise FullCandidateProjectionInputsError("input and output projection paths must be distinct")
 

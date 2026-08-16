@@ -44,9 +44,9 @@ from tests.provider.us_short_private_test_root import (  # noqa: E402
 
 
 STATE_DIR = ROOT / "state" / "us_short"
-SAMPLE_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_live_source_packet_20260706"
-PREFLIGHT_SAMPLE_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_pass2_preflight_20260706"
-YFINANCE_SAMPLE_DIR = ROOT / "provider_samples" / "us_short_yfinance_grades_fetch_20260710"
+SAMPLE_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_live_source_packet" / _DECISION_DATE
+PREFLIGHT_SAMPLE_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_pass2_preflight" / _DECISION_DATE
+YFINANCE_SAMPLE_DIR = ROOT / "provider_samples" / "us_short_yfinance_grades_fetch" / _DECISION_DATE
 
 
 def _write_json(path: Path, payload) -> Path:
@@ -81,22 +81,22 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         self.state_root = Path(self._state_root_context.__enter__())
         self.addCleanup(self._state_root_context.__exit__, None, None, None)
         self._sample_root_context = temporary_us_short_directory(
-            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_live_source_packet_20260706"
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_live_source_packet" / _DECISION_DATE
         )
         self.sample_root = Path(self._sample_root_context.__enter__())
         self.addCleanup(self._sample_root_context.__exit__, None, None, None)
         self._preflight_root_context = temporary_us_short_directory(
-            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_pass2_preflight" / _DECISION_DATE
         )
         self.preflight_root = Path(self._preflight_root_context.__enter__())
         self.addCleanup(self._preflight_root_context.__exit__, None, None, None)
         self._yfinance_root_context = temporary_us_short_directory(
-            ROOT, Path("provider_samples") / "us_short_yfinance_grades_fetch_20260710"
+            ROOT, Path("provider_samples") / "us_short_yfinance_grades_fetch" / _DECISION_DATE
         )
         self.yfinance_root = Path(self._yfinance_root_context.__enter__())
         self.addCleanup(self._yfinance_root_context.__exit__, None, None, None)
         self.slug = f"capstone_e2e_{os.getpid()}_{abs(hash(self._testMethodName)) % 100000}"
-        self.raw_root = self.sample_root / "full_candidate_live_source_packet_20260706" / self.slug / "raw"
+        self.raw_root = self.sample_root / self.slug / "raw"
         self.paths = {
             "candidate": self.state_root / f"{self.slug}_candidate.json",
             "momentum": self.state_root / f"{self.slug}_momentum.json",
@@ -105,7 +105,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             "yfinance": self.state_root / f"{self.slug}_yfinance_grade_actions.json",
             "yfinance_source": self.state_root / f"{self.slug}_yfinance_grade_source.json",
             "preflight": self.preflight_root / self.slug / "preflight.json",
-            "summary": self.sample_root / "full_candidate_live_source_packet_20260706" / self.slug / "summary.json",
+            "summary": self.sample_root / self.slug / "summary.json",
             "yfinance_summary": self.yfinance_root / self.slug / "summary.json",
             "prefix": self.state_root / self.slug,
             "output": self.state_root / f"{self.slug}_data_context.json",

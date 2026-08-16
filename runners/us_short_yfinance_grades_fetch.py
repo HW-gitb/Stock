@@ -38,14 +38,16 @@ from engine.us_short_yfinance_analyst_grades import (  # noqa: E402
     YFinanceGradesError,
     resolve_yfinance_grade_actions,
 )
+from runners import us_short_batch5_full_candidate_pass2_preflight as pass2_preflight  # noqa: E402
 
 
 AUTHORIZATION_REF = "user_chat_20260710_us_short_yfinance_grades_fetch"
 SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "us_short_yfinance_grades_fetch_summary.schema.json"
 PREFLIGHT_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_candidate_pass2_preflight_summary.schema.json"
 PREFLIGHT_SUMMARY_PATH = ROOT / "docs" / "us_short_batch5_full_candidate_pass2_preflight_summary_20260706.json"
-RAW_REL_ROOT = Path("provider_samples/us_short_yfinance_grades_fetch_20260710")
-RAW_ROOT = ROOT / RAW_REL_ROOT / "raw"
+RAW_REL_ROOT = Path("provider_samples/us_short_yfinance_grades_fetch")
+LEGACY_RAW_REL_ROOT = Path("provider_samples/us_short_yfinance_grades_fetch_20260710")
+RAW_ROOT = ROOT / RAW_REL_ROOT
 STATE_US_SHORT_DIR = ROOT / "state" / "us_short"
 SOURCE_PACKAGE_PATH = STATE_US_SHORT_DIR / "us_short_yfinance_grades_fetch_20260710_source_package.json"
 RESOLVED_ACTIONS_PATH = STATE_US_SHORT_DIR / "us_short_yfinance_grades_fetch_20260710_analyst_grade_actions.json"
@@ -129,43 +131,109 @@ def _validate_state_json_path(path: Path | str, *, field: str) -> Path:
     return resolved
 
 
-def _validate_raw_root(raw_root: Path | str) -> Path:
-    resolved = _resolve_repo_path(raw_root, field="raw_root")
-    approved = (ROOT / RAW_REL_ROOT).resolve()
+def _provider_sample_date(
+    path: Path,
+    root: Path,
+    *,
+    field: str,
+    expected_decision_date: str | None = None,
+) -> str:
     try:
-        resolved.relative_to(approved)
+        relative = path.relative_to((ROOT / root).resolve())
     except ValueError as exc:
-        raise YFinanceGradesFetchError("raw_root must stay under provider_samples/us_short_yfinance_grades_fetch_20260710/") from exc
+        raise YFinanceGradesFetchError(
+            f"{field} must stay under {root.as_posix()}/<decision_date>/"
+        ) from exc
+    if len(relative.parts) < 2:
+        raise YFinanceGradesFetchError(
+            f"{field} must include a decision-date directory under {root.as_posix()}/"
+        )
+    decision_date = relative.parts[0]
+    _date8_to_ymd(decision_date)
+    if expected_decision_date is not None:
+        _date8_to_ymd(expected_decision_date)
+    if expected_decision_date is not None and decision_date != expected_decision_date:
+        raise YFinanceGradesFetchError(
+            f"{field} decision-date directory must match the preflight decision date"
+        )
+    return decision_date
+
+
+def _default_raw_root(decision_date: str) -> Path:
+    return ROOT / RAW_REL_ROOT / decision_date / "raw"
+
+
+def _default_summary_path(decision_date: str) -> Path:
+    return ROOT / RAW_REL_ROOT / decision_date / f"us_short_batch5_capstone_{decision_date}_yfinance_grades_fetch_summary.json"
+
+
+def _validate_raw_root(raw_root: Path | str, *, expected_decision_date: str | None = None) -> Path:
+    resolved = _resolve_repo_path(raw_root, field="raw_root")
+    _provider_sample_date(
+        resolved,
+        RAW_REL_ROOT,
+        field="raw_root",
+        expected_decision_date=expected_decision_date,
+    )
+    relative = resolved.relative_to((ROOT / RAW_REL_ROOT).resolve())
+    if len(relative.parts) < 2:
+        raise YFinanceGradesFetchError(
+            "raw_root must be inside provider_samples/us_short_yfinance_grades_fetch/<decision_date>/"
+        )
     if not _git_ignored(resolved):
         raise YFinanceGradesFetchError("raw_root must be gitignored")
     return resolved
 
 
-def _validate_summary_path(summary_path: Path | str) -> Path:
+def _validate_summary_path(
+    summary_path: Path | str,
+    *,
+    expected_decision_date: str | None = None,
+) -> Path:
     resolved = _resolve_repo_path(summary_path, field="summary_path")
     if resolved.suffix != ".json":
         raise YFinanceGradesFetchError("summary_path must be a .json file")
     if resolved == SUMMARY_PATH.resolve():
         return resolved
-    try:
-        resolved.relative_to((ROOT / RAW_REL_ROOT).resolve())
-    except ValueError as exc:
-        raise YFinanceGradesFetchError("summary_path must be the canonical tracked summary or under this runner's provider_samples folder") from exc
+    _provider_sample_date(
+        resolved,
+        RAW_REL_ROOT,
+        field="summary_path",
+        expected_decision_date=expected_decision_date,
+    )
     if not _git_ignored(resolved):
         raise YFinanceGradesFetchError("non-canonical summary_path must be gitignored")
     return resolved
 
 
-def _validate_preflight_path(preflight_summary_path: Path | str) -> Path:
+def _validate_preflight_path(
+    preflight_summary_path: Path | str,
+    *,
+    expected_decision_date: str | None = None,
+) -> Path:
     resolved = _resolve_repo_path(preflight_summary_path, field="preflight_summary_path")
     if not resolved.exists() or not resolved.is_file():
         raise YFinanceGradesFetchError("preflight_summary_path must be an existing file")
     if resolved == PREFLIGHT_SUMMARY_PATH.resolve():
         return resolved
     try:
-        resolved.relative_to((ROOT / "provider_samples/us_short_batch5_full_candidate_pass2_preflight_20260706").resolve())
+        resolved.relative_to((ROOT / pass2_preflight.PROVIDER_SAMPLE_REL_ROOT).resolve())
     except ValueError as exc:
-        raise YFinanceGradesFetchError("preflight_summary_path must be canonical or under the preflight provider_samples root") from exc
+        try:
+            resolved.relative_to((ROOT / pass2_preflight.LEGACY_PROVIDER_SAMPLE_REL_ROOT).resolve())
+        except ValueError:
+            raise YFinanceGradesFetchError("preflight_summary_path must be canonical or under the preflight provider_samples root") from exc
+        if expected_decision_date is not None and expected_decision_date != "20260706":
+            raise YFinanceGradesFetchError(
+                "preflight_summary_path legacy root does not match the preflight decision date"
+            )
+    else:
+        _provider_sample_date(
+            resolved,
+            pass2_preflight.PROVIDER_SAMPLE_REL_ROOT,
+            field="preflight_summary_path",
+            expected_decision_date=expected_decision_date,
+        )
     if not _git_ignored(resolved):
         raise YFinanceGradesFetchError("non-canonical preflight_summary_path must be gitignored")
     return resolved
@@ -789,8 +857,8 @@ def run_yfinance_grades_fetch(
     preflight_summary_path: Path = PREFLIGHT_SUMMARY_PATH,
     output_source_package_path: Path = SOURCE_PACKAGE_PATH,
     output_resolved_actions_path: Path = RESOLVED_ACTIONS_PATH,
-    summary_path: Path = SUMMARY_PATH,
-    raw_root: Path = RAW_ROOT,
+    summary_path: Path | None = None,
+    raw_root: Path | None = None,
     budget_approval: Any = None,
     client: Any = None,
     importer=importlib.import_module,
@@ -809,10 +877,17 @@ def run_yfinance_grades_fetch(
         raise YFinanceGradesFetchError("generated_at and observed_at must be timezone-aware RFC3339 instants")
     preflight_path = _validate_preflight_path(preflight_summary_path)
     _, decision_date, source_as_of, target_symbols = _load_ready_preflight(preflight_path, budget_approval)
+    _validate_preflight_path(preflight_path, expected_decision_date=decision_date)
     source_package_path = _validate_state_json_path(output_source_package_path, field="output_source_package_path")
     resolved_actions_path = _validate_state_json_path(output_resolved_actions_path, field="output_resolved_actions_path")
-    raw_root_resolved = _validate_raw_root(raw_root)
-    summary_resolved = _validate_summary_path(summary_path)
+    raw_root_resolved = _validate_raw_root(
+        raw_root if raw_root is not None else _default_raw_root(decision_date),
+        expected_decision_date=decision_date,
+    )
+    summary_resolved = _validate_summary_path(
+        summary_path if summary_path is not None else _default_summary_path(decision_date),
+        expected_decision_date=decision_date,
+    )
 
     attempts: list[dict[str, Any]] = []
     try:
@@ -880,8 +955,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--preflight-summary-path", type=Path, default=PREFLIGHT_SUMMARY_PATH)
     parser.add_argument("--output-source-package-path", type=Path, default=SOURCE_PACKAGE_PATH)
     parser.add_argument("--output-resolved-actions-path", type=Path, default=RESOLVED_ACTIONS_PATH)
-    parser.add_argument("--summary-path", type=Path, default=SUMMARY_PATH)
-    parser.add_argument("--raw-root", type=Path, default=RAW_ROOT)
+    parser.add_argument("--summary-path", type=Path)
+    parser.add_argument("--raw-root", type=Path)
     parser.add_argument("--generated-at")
     parser.add_argument("--observed-at")
     parser.add_argument("--pace-seconds", type=float, default=DEFAULT_PACE_SECONDS)

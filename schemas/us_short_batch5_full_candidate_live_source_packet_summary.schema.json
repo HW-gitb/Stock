@@ -153,7 +153,7 @@
       "properties": {
         "preflight_summary_path": {
           "type": "string",
-          "pattern": "^(docs/us_short_batch5_full_candidate_pass2_preflight_summary_20260706\\.json|provider_samples/us_short_batch5_full_candidate_pass2_preflight_20260706/.+\\.json)$",
+          "pattern": "^(docs/us_short_batch5_full_candidate_pass2_preflight_summary_20260706\\.json|provider_samples/us_short_batch5_full_candidate_pass2_preflight/[0-9]{8}/.+\\.json|provider_samples/us_short_batch5_full_candidate_pass2_preflight_20260706/.+\\.json)$",
           "not": { "pattern": "\\.\\." }
         },
         "preflight_status": { "const": "ready_for_reviewed_live_execution" },
@@ -324,12 +324,12 @@
       "properties": {
         "raw_payload_root": {
           "type": "string",
-          "pattern": "^provider_samples/us_short_batch5_full_candidate_live_source_packet_20260706/"
+          "pattern": "^(provider_samples/us_short_batch5_full_candidate_live_source_packet/[0-9]{8}/.+|provider_samples/us_short_batch5_full_candidate_live_source_packet_20260706/)"
         },
         "raw_payload_root_gitignored": { "const": true },
         "tracked_summary_path": {
           "type": "string",
-          "pattern": "^(docs/us_short_batch5_full_candidate_live_source_packet_summary_20260706\\.json|provider_samples/us_short_batch5_full_candidate_live_source_packet_20260706/.+\\.json)$",
+          "pattern": "^(docs/us_short_batch5_full_candidate_live_source_packet_summary_20260706\\.json|provider_samples/us_short_batch5_full_candidate_live_source_packet/[0-9]{8}/.+\\.json|provider_samples/us_short_batch5_full_candidate_live_source_packet_20260706/.+\\.json)$",
           "not": { "pattern": "\\.\\." }
         },
         "tracked_summary_contains_raw_rows": { "const": false },
@@ -613,7 +613,7 @@
         },
         "raw_sample_ref": {
           "type": "string",
-          "pattern": "^provider_samples/us_short_batch5_full_candidate_live_source_packet_20260706/.+\\.json$",
+          "pattern": "^(provider_samples/us_short_batch5_full_candidate_live_source_packet/[0-9]{8}/.+\\.json|provider_samples/us_short_batch5_full_candidate_live_source_packet_20260706/.+\\.json)$",
           "not": { "pattern": "\\.\\." }
         },
         "raw_sample_ref_gitignored": { "const": true },

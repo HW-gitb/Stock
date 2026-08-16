@@ -58,7 +58,8 @@ from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_universe_ohlcv_series_packet.schema.json"
 SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_universe_overextension_summary.schema.json"
 SUMMARY_PATH = ROOT / "docs" / "us_short_batch5_full_universe_overextension_summary_20260709.json"
-SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_universe_overextension_20260709")
+SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_universe_overextension")
+LEGACY_SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_universe_overextension_20260709")
 STATE_US_SHORT_DIR = ROOT / "state" / "us_short"
 ELIGIBILITY_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 DEFAULT_CANDIDATE_ARTIFACT_PATH = STATE_US_SHORT_DIR / "candidate_universe_20260709.json"
@@ -161,18 +162,25 @@ def _validate_state_json_file(path: Path | str, *, field: str, must_exist: bool)
     return resolved
 
 
-def _validate_summary_path(path: Path | str) -> Path:
+def _validate_summary_path(path: Path | str, *, expected_decision_date: str | None = None) -> Path:
     resolved = _resolve_repo_path(path, field="summary_path")
     if resolved.suffix != ".json":
         raise FullUniverseOverextensionProducerError("summary_path must be a .json path")
     if resolved == SUMMARY_PATH.resolve():
         return resolved
     try:
-        resolved.relative_to((ROOT / SAMPLE_REL_ROOT).resolve())
+        relative = resolved.relative_to((ROOT / SAMPLE_REL_ROOT).resolve())
     except ValueError as exc:
         raise FullUniverseOverextensionProducerError(
             "summary_path must be the canonical tracked summary or under this runner's provider_samples folder"
         ) from exc
+    if len(relative.parts) < 2:
+        raise FullUniverseOverextensionProducerError(
+            "summary_path must include a decision-date directory under the overextension provider_samples root"
+        )
+    _compact_to_ymd(relative.parts[0], field="summary_path decision-date directory")
+    if expected_decision_date is not None and relative.parts[0] != expected_decision_date:
+        raise FullUniverseOverextensionProducerError("summary_path decision-date directory must match expected_decision_date")
     if not _git_ignored(resolved):
         raise FullUniverseOverextensionProducerError("non-canonical summary_path must be gitignored")
     return resolved
@@ -275,6 +283,7 @@ def _load_context(
         candidate_artifact_path=candidate_artifact_path,
         expected_decision_date=clock["expected_decision_date"],
     )
+    _validate_summary_path(summary_path, expected_decision_date=clock["expected_decision_date"])
     if _compact_to_ymd(artifact["price_basis_date"], field="candidate.price_basis_date") != price_basis_date:
         raise FullUniverseOverextensionProducerError(
             "candidate artifact price_basis_date must match the packet price_basis_date"

@@ -31,8 +31,8 @@ from tests.provider.us_short_private_test_root import (  # noqa: E402
 
 
 STATE_DIR = ROOT / "state" / "us_short"
-SUMMARY_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_projection_inputs_20260706"
-PREFLIGHT_SUMMARY_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+SUMMARY_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_projection_inputs" / _DECISION_DATE
+PREFLIGHT_SUMMARY_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_pass2_preflight" / _DECISION_DATE
 MODULE = "runners.us_short_batch5_full_candidate_projection_inputs"
 
 
@@ -78,12 +78,12 @@ class FullCandidateProjectionInputsTest(unittest.TestCase):
         self.state_dir = Path(self._state_root_context.__enter__())
         self.addCleanup(self._state_root_context.__exit__, None, None, None)
         self._summary_root_context = temporary_us_short_directory(
-            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_projection_inputs_20260706"
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_projection_inputs" / _DECISION_DATE
         )
         self.summary_root = Path(self._summary_root_context.__enter__())
         self.addCleanup(self._summary_root_context.__exit__, None, None, None)
         self._preflight_root_context = temporary_us_short_directory(
-            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_pass2_preflight" / _DECISION_DATE
         )
         self.preflight_root = Path(self._preflight_root_context.__enter__())
         self.addCleanup(self._preflight_root_context.__exit__, None, None, None)

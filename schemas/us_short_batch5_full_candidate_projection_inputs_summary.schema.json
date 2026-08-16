@@ -166,7 +166,7 @@
         "output_theme_projection_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
         "summary_path": {
           "type": "string",
-          "pattern": "^(docs/us_short_batch5_full_candidate_projection_inputs_summary_20260706\\.json|provider_samples/us_short_batch5_full_candidate_projection_inputs_20260706/.+\\.json)$",
+          "pattern": "^(docs/us_short_batch5_full_candidate_projection_inputs_summary_20260706\\.json|provider_samples/us_short_batch5_full_candidate_projection_inputs/[0-9]{8}/.+\\.json|provider_samples/us_short_batch5_full_candidate_projection_inputs_20260706/.+\\.json)$",
           "not": { "pattern": "\\.\\." }
         }
       }

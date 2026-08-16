@@ -79,18 +79,22 @@ def _stage_summary_targets(ctx) -> dict[str, Path]:
     route their per-run summaries into that gitignored folder (a `state/us_short/…` summary is rejected by every one).
     `sample_root` is the repo root the runners resolve provider_samples against (tests inject a tempdir). The
     preflight summary is NOT here — it is `ctx.preflight_summary_path` (also stage-8's INPUT, so it lives where BOTH
-    runners accept it)."""
-    def _p(rel_root: Path, name: str) -> Path:
-        return ctx.sample_root / rel_root / f"us_short_batch5_capstone_{ctx.decision_date}_{name}_summary.json"
+    runners accept it). The seven migrated paths are partitioned by `ctx.decision_date`; momentum-fetch and SIC keep
+    their existing semantic roots."""
+    def _p(rel_root: Path, name: str, *, dated: bool = False) -> Path:
+        base = ctx.sample_root / rel_root
+        if dated:
+            base = base / ctx.decision_date
+        return base / f"us_short_batch5_capstone_{ctx.decision_date}_{name}_summary.json"
     return {
         "momentum_fetch": _p(_mom_fetch.SUMMARY_SAMPLE_REL_ROOT, "momentum_fetch"),
-        "momentum_producer": _p(_mom_prod.SAMPLE_REL_ROOT, "momentum_producer"),
-        "overextension_producer": _p(_overextension.SAMPLE_REL_ROOT, "overextension_producer"),
+        "momentum_producer": _p(_mom_prod.SAMPLE_REL_ROOT, "momentum_producer", dated=True),
+        "overextension_producer": _p(_overextension.SAMPLE_REL_ROOT, "overextension_producer", dated=True),
         "sic_classification": _p(_sic.SUMMARY_SAMPLE_REL_ROOT, "sic_classification"),
-        "theme_producer": _p(_theme.SAMPLE_REL_ROOT, "theme_producer"),
-        "projection_inputs": _p(_proj.SAMPLE_REL_ROOT, "projection_inputs"),
-        "yfinance_grades_fetch": _p(_yfinance_grades.RAW_REL_ROOT, "yfinance_grades_fetch"),
-        "pass2": _p(_pass2.RAW_SAMPLE_REL_ROOT, "pass2"),
+        "theme_producer": _p(_theme.SAMPLE_REL_ROOT, "theme_producer", dated=True),
+        "projection_inputs": _p(_proj.SAMPLE_REL_ROOT, "projection_inputs", dated=True),
+        "yfinance_grades_fetch": _p(_yfinance_grades.RAW_REL_ROOT, "yfinance_grades_fetch", dated=True),
+        "pass2": _p(_pass2.RAW_SAMPLE_REL_ROOT, "pass2", dated=True),
     }
 
 
@@ -216,6 +220,7 @@ def run_pass2_fetch(ctx) -> dict[str, Any]:
         ohlcv_series_packet_path=ctx.ohlcv_series_packet_path,
         sector_classification_packet_path=ctx.classification_packet_path,
         yfinance_grade_actions_path=ctx.yfinance_grade_actions_path,
+        raw_root=ctx.sample_root / _pass2.RAW_SAMPLE_REL_ROOT / ctx.decision_date / "raw",
         summary_path=_stage_summary_targets(ctx)["pass2"],
         confirm_user_authorization=ctx.confirm_user_authorization,
         run_data_context=True,
@@ -281,7 +286,7 @@ def run_yfinance_grades_fetch(ctx) -> dict[str, Any]:
         output_source_package_path=ctx.yfinance_grade_source_package_path,
         output_resolved_actions_path=ctx.yfinance_grade_actions_path,
         summary_path=_stage_summary_targets(ctx)["yfinance_grades_fetch"],
-        raw_root=ctx.sample_root / _yfinance_grades.RAW_REL_ROOT / f"us_short_batch5_capstone_{ctx.decision_date}_raw",
+        raw_root=ctx.sample_root / _yfinance_grades.RAW_REL_ROOT / ctx.decision_date / "raw",
         confirm_user_authorization=ctx.confirm_user_authorization,
         generated_at=ctx.generated_at,
         observed_at=ctx.observed_at,

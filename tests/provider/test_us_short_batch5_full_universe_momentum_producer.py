@@ -34,8 +34,8 @@ from tests.provider.us_short_private_test_root import (  # noqa: E402
 
 
 STATE_DIR = ROOT / "state" / "us_short"
-SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_momentum_20260707"
-PROJECTION_INPUTS_SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_candidate_projection_inputs_20260706"
+SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_momentum" / _DECISION_DATE
+PROJECTION_INPUTS_SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_candidate_projection_inputs" / _DECISION_DATE
 RUNNER_MODULE = "runners.us_short_batch5_full_universe_momentum_producer"
 _GOV_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 _PRICE_BASIS_YMD = _USED_DATE  # "2026-06-12"
@@ -180,12 +180,12 @@ class FullUniverseMomentumProducerTest(unittest.TestCase):
         self.state_root = Path(self._state_root_context.__enter__())
         self.addCleanup(self._state_root_context.__exit__, None, None, None)
         self._sample_root_context = temporary_us_short_directory(
-            ROOT, Path("provider_samples") / "us_short_batch5_full_universe_momentum_20260707"
+            ROOT, Path("provider_samples") / "us_short_batch5_full_universe_momentum" / _DECISION_DATE
         )
         self.sample_root = Path(self._sample_root_context.__enter__())
         self.addCleanup(self._sample_root_context.__exit__, None, None, None)
         self._projection_sample_root_context = temporary_us_short_directory(
-            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_projection_inputs_20260706"
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_projection_inputs" / _DECISION_DATE
         )
         self.projection_sample_root = Path(self._projection_sample_root_context.__enter__())
         self.addCleanup(self._projection_sample_root_context.__exit__, None, None, None)
