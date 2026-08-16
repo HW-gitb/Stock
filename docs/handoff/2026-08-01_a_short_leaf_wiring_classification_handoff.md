@@ -8771,3 +8771,17 @@ a-short full-pack：fingerprint=a9d5bb199dfc；discovered=3138；ran=3138；equa
 **未覆盖维度**：未重跑真实周实盘；launcher 真实失败轮未端到端构造；未起独立对抗 agent。
 
 **下一步**：桌面 `1a_testrun0816.md` 两条真漏洞至此全部闭合，可以准备下一次周实盘。
+
+## 2026-08-16 追加：桌面 2a_testrun0816 问题 6 的定性调查（非审查轮；Claude Code；D:\cnhea\Codex\worktrees\8c7a\Stock）
+
+**这轮做了什么**：用户问「问题 6 是不是有意设计、为什么本周前三次实盘没发觉、影响是什么」。逐份读本周四次运行的原始产物比对定性，**零代码改动、未跑测试、未起 agent**。三条结论正文只在 `docs/system_risk_register.md`（`R-ASHORT-0816-DATA-APPROVED-DAILY-CACHE-UNAVAILABLE` 判 not-a-defect、`R-ASHORT-0816-FOURTH-WEEKLY-RUN-RAN-ON-A-COLD-EVIDENCE-ROOT`、`R-ASHORT-0816-COMPARISON-TRACK-SETTLEMENT-FIXES-NEVER-CONFIRMED-ON-A-WARM-ROOT`），本节不复述。
+
+**方法学教训一：诊断一条轨之前，先确认那份产物是哪棵树写的。** 我一开始按桌面文档的现象直接去读代码找缺陷，走了半程才发现四次运行的同名文件写的根本不是一回事。**下次先做这三步廉价识别**：① `state/a_short/factor_comparison_private/v2/` 下有没有 `daily_cache.json`（冷根没有）；② `revision_manifest.json` 的 `structural_completeness.expected_role_count`（主树 12 / 该次 9）；③ 产物落在 `state/a_short/weekly_private/weeks/<as_of>/revisions/` 还是 `research/results/a_short/<as_of>/revisions/`。三步都不用读代码，几秒钟就能把「代码缺陷」和「跑错根」分开。`candidate_digest` 相同只证明候选集同源，**不**证明证据根相同——这一格最容易骗人。
+
+**方法学教训二：冷根第一次运行的失败是时序，不是故障。** 「先冻结窗口 → 后续运行取那些窗口的日线 → 再结算」这类轨，在任何新根上第一次跑都必然空转一轮：缓存构建器在管线各 capture 之前执行，那时还没有任何冻结窗口。把这种空转读成「provider 没取到数」会导致往 provider / 限流方向白查。判据是 `provider_calls=0` 且 `production_unchanged=true` —— 真取数失败不会是 0 次调用。
+
+**方法学教训三（本轮最值钱的一条）：修复的真实效果只能由下一次真实周跑证伪，单测绿不等于周跑绿。** 实证：margin 结算轨第 2 次跑报 `KeyError: 'reminder'`，修掉之后第 3 次跑报 `ValueError: 公共摘要形状非法`——同一条轨、同一个位置、失败下移了一层。08-15 那条修复的 register 条目自己写着「未跑真实周实盘…由读码 + 单元用例推得」，下一次真实周跑立刻把这个推断推翻了。**所以「未跑真实周实盘」这类 NOT_VERIFIED 不能因为单测全绿就默认闭合**；当前 `b651570e` 的闭合依据同样只有单测，欠的那次暖根验证已按 register 立条挂账。
+
+**约束（对后续所有人有效）**：真实周跑只在主树 `D:\cnhea\Stock` 的暖根执行；换树跑出的产物不得用作比较轨结论，也不得据以判定某条轨「修好了 / 没修好」。桌面文档只读对照，不回写、不作为审查对象。
+
+**下一步**：下一次主树真实周跑之后，按 register 里那四条逐行核对 `sidecar_health.json`；四条任一不成立即立新条目。桌面 `2a_testrun0816.md` 的问题 3 / 问题 5 与本节无关，按各自条目推进。
