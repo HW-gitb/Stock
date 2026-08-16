@@ -488,6 +488,8 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             },
             "immutable_conflict": None,
             "validated_theme_count": 1,
+            # The semantic fixture has four validated members; MSFT is Web-only
+            # (`single`), so its 50.0 base receives 2.0, not the both-tier 5.0.
             "boostable_ticker_count": 4,
             "drop_summary": {"merge_dropped_theme_count": 0, "validation_drop_count": 0},
             "error_summary": None,
