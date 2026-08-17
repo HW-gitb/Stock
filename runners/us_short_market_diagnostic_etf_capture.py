@@ -28,6 +28,7 @@ if _PYTHON_LIBS.exists() and str(_PYTHON_LIBS) not in sys.path:
     sys.path.insert(0, str(_PYTHON_LIBS))
 
 from runners import us_egs_sample_validation as sample_validation  # noqa: E402
+from runners.us_short_forward_policy_corporate_action_fetch import _redact_secret  # noqa: E402
 
 
 PACKET_PATH = ROOT / "docs" / "us_short_market_diagnostic_etf_capture_packet_20260805.json"
@@ -311,6 +312,7 @@ def _capture_page(
     attempt_index: int,
     observed_at: str,
     headers: dict[str, str],
+    api_key: str,
 ) -> dict[str, Any]:
     payload, status, ok, error_type = client.get_json(url, headers=headers)
     # Raw pages are write-once by request identity.  The run-local observation
@@ -326,7 +328,7 @@ def _capture_page(
         "http_status": status,
         "ok": ok,
         "error_type": error_type,
-        "payload": payload,
+        "payload": _redact_secret(payload, api_key),
     }
     path = _raw_page_path(
         raw_root,
@@ -564,6 +566,7 @@ def run_capture(
                         attempt_index=attempt_index,
                         observed_at=observed_page_at,
                         headers=headers,
+                        api_key=api_key.value,
                     )
                     physical_attempts += 1
                     # A retry is another physical attempt for the same logical page.  Keep every

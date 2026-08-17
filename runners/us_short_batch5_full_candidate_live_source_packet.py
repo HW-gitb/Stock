@@ -62,6 +62,7 @@ from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 from runners.us_short_forward_policy_corporate_action_fetch import (  # noqa: E402
     ForwardPolicyCorporateActionFetchError,
     _continuation_url_for_endpoint,
+    _redact_secret,
 )
 from runners.us_short_batch5_data_context_source_packet import (  # noqa: E402
     FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
@@ -932,6 +933,7 @@ def _fetch_massive_batch_page(
     raw_root: Path,
     client: sample_validation.JsonHttpClient,
     headers: dict[str, str],
+    massive_api_key: str,
     max_retries: int,
     retry_stats: dict[str, int],
     attempt_budget: HttpAttemptBudget,
@@ -953,7 +955,7 @@ def _fetch_massive_batch_page(
                 "http_status": http_status,
                 "ok": bool(ok),
                 "error_type": error_type,
-                "payload": payload,
+                "payload": _redact_secret(payload, massive_api_key),
                 "page_number": page_number,
                 "query_window": query_window,
             },
@@ -1092,6 +1094,7 @@ def _fetch_massive_batch_family(
             raw_root=raw_root,
             client=client,
             headers=massive_headers,
+            massive_api_key=massive_api_key,
             max_retries=max_retries,
             retry_stats=retry_stats,
             attempt_budget=attempt_budget,
