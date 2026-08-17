@@ -20,8 +20,12 @@ def temporary_provider_directory(
     parent.relative_to(root)
     parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=parent) as tempdir:
-        Path(tempdir, ".gitignore").write_text("*\n", encoding="utf-8")
+        # The marker goes first so the root is never observably ours-but-unmarked.
+        # A concurrent snapshot that skips marked subtrees would otherwise count
+        # the .gitignore below as somebody's real write for the two calls it takes
+        # to get here.
         Path(tempdir, _TEMP_ROOT_MARKER).touch()
+        Path(tempdir, ".gitignore").write_text("*\n", encoding="utf-8")
         yield tempdir
 
 
