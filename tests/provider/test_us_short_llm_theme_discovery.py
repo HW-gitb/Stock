@@ -295,6 +295,16 @@ class OfflineLLMThemeDiscoveryTests(unittest.TestCase):
             mutable.read_bytes(),
             (json.dumps(mutable_payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
         )
+        private = self.test_state_dir / "runs_private" / "replay.json"
+        private_payload = {"diagnostic": "摘要可重跑"}
+        policy._write_mutable_private_json(
+            private_payload, private, root=ROOT, state_dir=self.test_state_dir,
+            gitignored=lambda path: True,
+        )
+        self.assertEqual(
+            private.read_bytes(),
+            (json.dumps(private_payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+        )
 
     def test_publish_policy_refuses_a_target_outside_this_lane_state_dir(self):
         """The containment term has its own control: the slot pin alone would also refuse, so this

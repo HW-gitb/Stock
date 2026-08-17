@@ -21,6 +21,7 @@ from runners.us_short_market_diagnostic_rehearsal import (
     rehearsal_root,
     run_rehearsal,
 )
+from tests.provider.us_short_private_test_root import hold_test_root_lock
 
 ROOT = Path(__file__).resolve().parents[1]
 FIRST_MONDAY = "20260803"
@@ -184,12 +185,13 @@ class RehearsalChainTest(unittest.TestCase):
         another process is doing — a red that belongs to somebody else.
         """
 
-        before = {relative: _files_under(relative) for relative in PROTECTED}
-        with tempfile.TemporaryDirectory(prefix="rehearsal_containment_") as temp:
-            run_rehearsal(root=Path(temp) / "run", first_decision_date=FIRST_MONDAY, weeks=2)
-        for relative in PROTECTED:
-            with self.subTest(protected=relative):
-                self.assertEqual(before[relative], _files_under(relative))
+        with hold_test_root_lock(ROOT):
+            before = {relative: _files_under(relative) for relative in PROTECTED}
+            with tempfile.TemporaryDirectory(prefix="rehearsal_containment_") as temp:
+                run_rehearsal(root=Path(temp) / "run", first_decision_date=FIRST_MONDAY, weeks=2)
+            for relative in PROTECTED:
+                with self.subTest(protected=relative):
+                    self.assertEqual(before[relative], _files_under(relative))
 
 
 def _diagnostic_record(summary: dict, decision_date: str) -> dict:

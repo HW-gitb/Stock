@@ -1700,6 +1700,73 @@ def _member_binding_summary(
     }
 
 
+def _normalize_discovery_with_binding_ledger(
+    discovery_input: Mapping[str, Any],
+    theme_ledger_groups: list[tuple[dict[str, Any], list[int]]],
+    member_binding_ledger: list[dict[str, Any]],
+    *, expected_decision_date: str, generated: datetime,
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    """Normalize themes while keeping parent status in the member ledger."""
+    # Import lazily so the producer remains a pure offline helper in minimal environments.
+    from runners.us_short_llm_theme_discovery import normalize_discovery_payload
+
+    accepted_themes: list[dict[str, Any]] = []
+    normalized_drops: list[dict[str, str]] = []
+    seen_theme_ids: set[str] = set()
+    discarded_theme_groups: set[int] = set()
+
+    def set_parent_rows(rows: list[int], status: str, reason: str | None) -> None:
+        for row_index in rows:
+            member_binding_ledger[row_index]["parent_theme_status"] = status
+            member_binding_ledger[row_index]["parent_theme_reason"] = reason
+
+    for theme in discovery_input["themes"]:
+        theme_id = theme.get("theme_id") if isinstance(theme, dict) else "unknown"
+        if theme_id in seen_theme_ids:
+            normalized_drops.append({"stage": "llm", "reason": "duplicate_theme_dropped", "detail": str(theme_id)})
+            for grouped_theme, row_indexes in theme_ledger_groups:
+                if grouped_theme is theme:
+                    discarded_theme_groups.add(id(theme))
+                    set_parent_rows(row_indexes, "rejected", "duplicate_theme_dropped")
+                    break
+            continue
+        try:
+            one = normalize_discovery_payload(
+                {"source_refs": discovery_input["source_refs"], "themes": [theme]},
+                expected_decision_date=expected_decision_date, generated_at=generated.isoformat(),
+            )
+            accepted_themes.extend(one["themes"])
+            seen_theme_ids.add(theme_id)
+        except Exception as exc:
+            normalized_drops.append({"stage": "llm", "reason": "invalid_theme_dropped", "detail": str(theme.get("theme_id", type(exc).__name__))})
+            for grouped_theme, row_indexes in theme_ledger_groups:
+                if grouped_theme is theme:
+                    discarded_theme_groups.add(id(theme))
+                    set_parent_rows(row_indexes, "rejected", "invalid_theme_dropped")
+                    break
+    try:
+        discovery_artifact = normalize_discovery_payload(
+            {"source_refs": discovery_input["source_refs"], "themes": accepted_themes},
+            expected_decision_date=expected_decision_date, generated_at=generated.isoformat(),
+        )
+    except Exception as exc:
+        discovery_artifact = normalize_discovery_payload(
+            {"source_refs": [], "themes": []},
+            expected_decision_date=expected_decision_date, generated_at=generated.isoformat(),
+        )
+        normalized_drops.append({"stage": "llm", "reason": "discovery_normalization_rejected", "detail": type(exc).__name__})
+    final_theme_ids = {theme["theme_id"] for theme in discovery_artifact["themes"]}
+    for grouped_theme, row_indexes in theme_ledger_groups:
+        theme_id = grouped_theme.get("theme_id")
+        if id(grouped_theme) in discarded_theme_groups:
+            continue
+        if theme_id in final_theme_ids:
+            set_parent_rows(row_indexes, "accepted", None)
+        else:
+            set_parent_rows(row_indexes, "rejected", "invalid_theme_dropped")
+    return discovery_artifact, normalized_drops
+
+
 def _validate_member_binding_ledger(
     receipt: dict[str, Any], discovery: dict[str, Any] | None = None,
 ) -> None:
@@ -2071,64 +2138,10 @@ def build_web_fetch_packet(
         ],
         "themes": all_themes,
     }
-    # Import lazily so the producer remains a pure offline helper in minimal environments.
-    from runners.us_short_llm_theme_discovery import normalize_discovery_payload
-    # Validate themes independently so one malformed LLM theme is dropped without killing
-    # otherwise usable themes (the knife-3 no-whole-batch rule).
-    accepted_themes: list[dict[str, Any]] = []
-    normalized_drops: list[dict[str, str]] = []
-    seen_theme_ids: set[str] = set()
-    discarded_theme_groups: set[int] = set()
-
-    def set_parent_rows(rows: list[int], status: str, reason: str | None) -> None:
-        for row_index in rows:
-            member_binding_ledger[row_index]["parent_theme_status"] = status
-            member_binding_ledger[row_index]["parent_theme_reason"] = reason
-
-    for theme in discovery_input["themes"]:
-        theme_id = theme.get("theme_id") if isinstance(theme, dict) else "unknown"
-        if theme_id in seen_theme_ids:
-            normalized_drops.append({"stage": "llm", "reason": "duplicate_theme_dropped", "detail": str(theme_id)})
-            for grouped_theme, row_indexes in theme_ledger_groups:
-                if grouped_theme is theme:
-                    discarded_theme_groups.add(id(theme))
-                    set_parent_rows(row_indexes, "rejected", "duplicate_theme_dropped")
-                    break
-            continue
-        try:
-            one = normalize_discovery_payload(
-                {"source_refs": discovery_input["source_refs"], "themes": [theme]},
-                expected_decision_date=expected_decision_date, generated_at=generated.isoformat(),
-            )
-            accepted_themes.extend(one["themes"])
-            seen_theme_ids.add(theme_id)
-        except Exception as exc:
-            normalized_drops.append({"stage": "llm", "reason": "invalid_theme_dropped", "detail": str(theme.get("theme_id", type(exc).__name__))})
-            for grouped_theme, row_indexes in theme_ledger_groups:
-                if grouped_theme is theme:
-                    discarded_theme_groups.add(id(theme))
-                    set_parent_rows(row_indexes, "rejected", "invalid_theme_dropped")
-                    break
-    try:
-        discovery_artifact = normalize_discovery_payload(
-            {"source_refs": discovery_input["source_refs"], "themes": accepted_themes},
-            expected_decision_date=expected_decision_date, generated_at=generated.isoformat(),
-        )
-    except Exception as exc:
-        discovery_artifact = normalize_discovery_payload(
-            {"source_refs": [], "themes": []},
-            expected_decision_date=expected_decision_date, generated_at=generated.isoformat(),
-        )
-        normalized_drops.append({"stage": "llm", "reason": "discovery_normalization_rejected", "detail": type(exc).__name__})
-    final_theme_ids = {theme["theme_id"] for theme in discovery_artifact["themes"]}
-    for grouped_theme, row_indexes in theme_ledger_groups:
-        theme_id = grouped_theme.get("theme_id")
-        if id(grouped_theme) in discarded_theme_groups:
-            continue
-        if theme_id in final_theme_ids:
-            set_parent_rows(row_indexes, "accepted", None)
-        else:
-            set_parent_rows(row_indexes, "rejected", "invalid_theme_dropped")
+    discovery_artifact, normalized_drops = _normalize_discovery_with_binding_ledger(
+        discovery_input, theme_ledger_groups, member_binding_ledger,
+        expected_decision_date=expected_decision_date, generated=generated,
+    )
     member_binding_summary = _member_binding_summary(
         member_binding_ledger,
         parsed_chunk_indexes=parsed_chunk_indexes,

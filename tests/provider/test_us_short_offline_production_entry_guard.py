@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import json
+import tempfile
 import uuid
 import unittest
 from datetime import datetime, timezone
@@ -18,8 +19,11 @@ from engine import us_short_provisional_theme_boost as boost
 from engine import us_short_llm_theme_discovery_paid_gateway as paid_gateway
 from runners import us_short_llm_theme_discovery_fetch_web as web
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
+from runners import us_short_llm_theme_discovery as discovery_writer
 from runners import us_short_llm_theme_discovery_merge as merge
 from runners import us_short_provisional_theme_validate as knife2
+from runners import us_short_batch5_full_universe_sec_sic_classification_fetch as sic_fetch
+from runners import us_short_llm_theme_discovery_web_regroup_replay as replay
 from tests.provider.us_short_private_test_root_light import temporary_provider_directory
 
 
@@ -747,6 +751,318 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
                 self._packets(cat_aapl=True),
             )
         self.assertEqual(hollowed["AAPL"]["theme_soft_boost"], 5.0)
+
+
+class WebRegroupReplayTests(unittest.TestCase):
+    @staticmethod
+    def _fixture(
+        *, include_positive=True, include_negative=True, binding_dead=False,
+        duplicate_theme=False, served_model="deepseek-chat",
+    ):
+        source_ids = ["web:" + format(index, "064x") for index in range(10)]
+        refs = [{
+            "source_id": source_id, "source_type": "web",
+            "observed_at": "2026-08-10T10:00:00+00:00",
+        } for source_id in source_ids]
+        rows = [{
+            "source_id": source_id, "title": "Evidence title",
+            "content": f"{ticker} evidence for the frozen source",
+        } for source_id, ticker in zip(source_ids, ("AAPL", "MSFT", "JPM") * 3 + ("AAPL",))]
+        tickers = ("AAPL", "MSFT", "JPM")
+
+        def theme(theme_id, basis):
+            theme_refs = source_ids[:3]
+            members = [
+                {"ticker": ticker, "source_ref_ids": [theme_refs[index]]}
+                for index, ticker in enumerate(tickers)
+            ]
+            if basis == "shared_commercial_driver":
+                assertion = {
+                    "basis": basis,
+                    "basis_explanation": "The same demand mechanism reaches all linked issuers.",
+                    "common_driver": {
+                        "driver_statement": "A common demand is increasing.",
+                        "transmission_mechanism": "Demand growth reaches each issuer.",
+                        "source_ref_ids": theme_refs,
+                    },
+                    "member_links": [
+                        {
+                            "ticker": ticker, "role": "beneficiary",
+                            "link_statement": "The issuer is linked to the common demand.",
+                            "source_ref_ids": [theme_refs[index]],
+                        }
+                        for index, ticker in enumerate(tickers)
+                    ],
+                }
+            else:
+                assertion = {
+                    "basis": basis,
+                    "basis_explanation": "The claims describe a shared event collection, not a driver.",
+                    "common_driver": None,
+                    "member_links": [],
+                }
+            return {
+                "theme_id": theme_id, "display_name": theme_id,
+                "summary": "Frozen replay fixture", "observed_at": "2026-08-10T12:00:00+00:00",
+                "source_ref_ids": theme_refs, "members": members,
+                "semantic_assertions": [assertion],
+            }
+
+        themes = []
+        if include_positive:
+            themes.append(theme("positive_demand", "shared_commercial_driver"))
+        if include_negative:
+            themes.append(theme("event_collection", "shared_event_bucket"))
+        if binding_dead:
+            for raw_theme in themes:
+                for member in raw_theme["members"]:
+                    member["source_ref_ids"] = ["web:" + "f" * 64]
+        if duplicate_theme and len(themes) > 1:
+            themes[1]["theme_id"] = themes[0]["theme_id"]
+        packet = {
+            "packet_id": "us_short_web_regroup_engineering_smoke_20260815_chunk1_v1",
+            "source_decision_date": "20260815",
+            "input": {
+                "target_chunk_index": 1,
+                "target_source_ids": source_ids,
+                "target_source_refs": refs,
+            },
+        }
+        response = {
+            "model": served_model,
+            "choices": [{
+                "message": {"content": json.dumps({"themes": themes})},
+                "finish_reason": "stop",
+            }],
+        }
+        transport_summary = {
+            "packet_id": packet["packet_id"], "source_decision_date": "20260815",
+            "transport_verdict": "PASS",
+            "status": "live_authorized_engineering_smoke_response_captured",
+            "provider_call_count": 1, "deepseek_call_count": 1,
+            "tavily_call_count": 0, "xai_call_count": 0, "retry_count": 0,
+            "raw_persisted_before_parse": True, "raw_hash_reread": True,
+            "strict_parse_status": "passed", "formal_decision_slots_occupied": False,
+            "raw_provider_response_ref": "provider_samples/us_short_llm_theme_discovery_engineering_smoke/raw.json",
+            "raw_provider_response_sha256": "a" * 64,
+            "requested_model": "deepseek-chat", "served_model": served_model,
+        }
+        snapshot = {"source_as_of": "2026-08-10", "snapshot_id": "d" * 64}
+        sectors = {"AAPL": "10", "MSFT": "20", "JPM": "30"}
+        return packet, rows, refs, response, transport_summary, snapshot, sectors
+
+    def _run_fixture(self, **fixture_kwargs):
+        packet, rows, refs, response, transport_summary, snapshot, sectors = self._fixture(**fixture_kwargs)
+        with tempfile.TemporaryDirectory(prefix="us_short_5b_replay_") as temp_root:
+            test_root = Path(temp_root)
+            summary_path = test_root / "state" / "us_short" / "runs_private" / "replay.json"
+            patches = (
+                mock.patch.object(replay, "ROOT", test_root),
+                mock.patch.object(replay, "SIC_SNAPSHOT_PATH", test_root / "frozen_sic_snapshot.json"),
+                mock.patch.object(replay, "REPLAY_SUMMARY_PATH", summary_path),
+                mock.patch.object(replay, "_validate_packet", return_value=packet),
+                mock.patch.object(replay, "_validate_transport_summary", return_value=transport_summary),
+                mock.patch.object(replay, "_load_target_inputs", return_value=(rows, refs, datetime(2026, 8, 15, tzinfo=timezone.utc))),
+                mock.patch.object(replay, "_load_transport_response", return_value=(response, datetime(2026, 8, 15, tzinfo=timezone.utc))),
+                mock.patch.object(replay, "_load_frozen_sic", return_value=(snapshot, sectors)),
+                mock.patch.object(web, "_gitignored", return_value=True),
+                mock.patch.object(web, "publish_decision_pair", side_effect=AssertionError("formal publisher reached")),
+            )
+            with mock.patch.object(replay, "EXPECTED_SIC_SNAPSHOT_ID", "d" * 64):
+                with mock.patch.object(replay, "EXPECTED_SIC_SOURCE_AS_OF", "2026-08-10"):
+                    with (
+                        patches[0], patches[1], patches[2], patches[3], patches[4],
+                        patches[5], patches[6], patches[7], patches[8], patches[9],
+                    ):
+                        result = replay.run_replay()
+            saved = json.loads(summary_path.read_text(encoding="utf-8"))
+        return result, saved
+
+    def test_5b_replay_uses_real_parser_binding_normalizer_validator_and_keeps_zero_effects(self):
+        result, saved = self._run_fixture()
+        by_theme = {row["theme_id"]: row for row in result["semantic_results"]}
+        self.assertEqual(result["status"], "offline_replay_completed")
+        self.assertEqual(result["parsed_theme_count"], 2)
+        self.assertEqual(result["member_ledger_summary"]["member_claim_count"], 6)
+        self.assertEqual(result["member_ledger_summary"]["accepted_binding_count"], 6)
+        self.assertEqual(len(result["member_binding_ledger"]), 6)
+        self.assertEqual(by_theme["positive_demand"]["machine_result"], "accepted")
+        self.assertEqual(by_theme["event_collection"]["machine_result"], "rejected")
+        self.assertIn("semantic_basis_not_shared_commercial_driver", by_theme["event_collection"]["drop_reasons"])
+        self.assertEqual(result["provider_call_count"], 0)
+        self.assertTrue(result["sic_snapshot"]["calibration_only"])
+        self.assertIsNone(result["readiness"])
+        self.assertFalse(result["formal_decision_slots_occupied"])
+        self.assertFalse(result["merge_published"])
+        self.assertFalse(result["validation_published"])
+        self.assertFalse(result["boost_published"])
+        self.assertFalse(result["score_effect"])
+        self.assertEqual(saved, result)
+
+    def test_5b_duplicate_theme_rejects_its_member_rows(self):
+        result, _saved = self._run_fixture(duplicate_theme=True)
+        duplicate_rows = [
+            row for row in result["member_binding_ledger"]
+            if row["theme_index_in_chunk"] == 1
+        ]
+        self.assertEqual(len(duplicate_rows), 3)
+        self.assertTrue(all(row["parent_theme_status"] == "rejected" for row in duplicate_rows))
+        self.assertTrue(all(
+            row["parent_theme_reason"] == "duplicate_theme_dropped"
+            for row in duplicate_rows
+        ))
+        self.assertEqual(
+            result["member_ledger_summary"]["rejected_parent_theme_member_count"], 3,
+        )
+
+    def test_5b_whole_normalization_failure_falls_back_to_empty_discovery(self):
+        calls = []
+
+        def normalize(payload, **_kwargs):
+            calls.append(payload)
+            if payload["themes"]:
+                if len(calls) <= 2:
+                    return {"themes": payload["themes"]}
+                raise ValueError("whole normalization failed")
+            return {"source_refs": [], "themes": []}
+
+        with mock.patch.object(discovery_writer, "normalize_discovery_payload", side_effect=normalize):
+            result, _saved = self._run_fixture()
+        self.assertEqual(result["normalization_drop_reason_counts"], {
+            "discovery_normalization_rejected": 1,
+        })
+        self.assertTrue(all(
+            row["machine_result"] == "not_reached_semantic_gate"
+            for row in result["semantic_results"]
+        ))
+
+    def test_5b_served_model_is_checked_against_requested_model(self):
+        with self.assertRaisesRegex(ValueError, "regroup_model_identity_changed"):
+            self._run_fixture(served_model="deepseek-v4-flash")
+
+    def test_5b_partial_semantic_coverage_does_not_issue_readiness(self):
+        positive, _saved = self._run_fixture(include_negative=False)
+        negative, _saved = self._run_fixture(include_positive=False)
+        self.assertEqual(positive["parsed_theme_count"], 1)
+        self.assertEqual(negative["parsed_theme_count"], 1)
+        self.assertIsNone(positive["readiness"])
+        self.assertIsNone(negative["readiness"])
+
+    def test_5b_binding_dead_themes_remain_in_the_machine_case_list(self):
+        result, _saved = self._run_fixture(binding_dead=True)
+        self.assertEqual(len(result["semantic_results"]), 2)
+        self.assertTrue(all(
+            row["machine_result"] == "not_reached_semantic_gate"
+            for row in result["semantic_results"]
+        ))
+        self.assertTrue(all(
+            "member_source_ref_not_in_chunk_sources" in row["drop_reasons"]
+            for row in result["semantic_results"]
+        ))
+
+    def test_5b_fixed_sic_identity_is_checked_before_use(self):
+        snapshot = {
+            "schema_name": "us_short_batch5_sec_sic_classification_snapshot",
+            "schema_version": "1.0.0",
+            "classification_source": "sec_sic_major_group",
+            "parser_version": "1.0.0",
+            "observed_at": "2026-08-10T12:00:00+00:00",
+            "source_as_of": "2026-08-10",
+            "entries": {
+                "1": {"cik": 1, "tickers": ["AAPL"], "sector": "10"},
+            },
+        }
+        snapshot["snapshot_id"] = sic_fetch._snapshot_digest(snapshot)
+        with (
+            mock.patch.object(replay, "_read_json", return_value=snapshot),
+            mock.patch.object(replay, "_schema_validate"),
+            mock.patch.object(replay, "SIC_SNAPSHOT_PATH", Path("frozen.json")),
+            mock.patch.object(replay, "EXPECTED_SIC_SNAPSHOT_ID", snapshot["snapshot_id"]),
+        ):
+            loaded, sectors = replay._load_frozen_sic()
+        self.assertEqual(loaded["snapshot_id"], snapshot["snapshot_id"])
+        self.assertEqual(sectors, {"AAPL": "10"})
+
+    def test_5b_target_chunk_comes_from_production_order_not_receipt_storage_order(self):
+        with temporary_provider_directory(replay.ROOT) as private_root:
+            root = Path(private_root)
+            raw_dir = root / "provider_samples" / "us_short_llm_theme_discovery_fetch_web" / "raw" / "20260815"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            rows = []
+            raw_by_id = {}
+            for index in range(34):
+                url = f"https://example.test/5b-source-{index:02d}"
+                source_id = web._source_id(url)
+                row = {
+                    "url": url, "title": f"Title {index}", "content": f"Content {index}",
+                    "published_date": "2026-08-10T10:00:00Z",
+                }
+                rows.append(row)
+                raw_by_id[source_id] = {
+                    "source_id": source_id, "canonical_locator": url,
+                    "title": row["title"], "content": row["content"],
+                    "published_at": row["published_date"],
+                }
+            fetched_at = datetime(2026, 8, 15, 4, 30, tzinfo=timezone.utc)
+            normalized_refs, prompt_rows, drops = web._normalize_search_results(
+                rows, expected_decision_date="20260815", fetched_at=fetched_at,
+                raw_root=None, persist_raw=False,
+            )
+            self.assertFalse(drops)
+            chunks = web._chunk_regroup_rows(prompt_rows)
+            self.assertEqual([len(chunk) for chunk in chunks], [10, 10, 10, 4])
+            ref_by_id = {}
+            for ref in normalized_refs:
+                raw = raw_by_id[ref["source_id"]]
+                raw_path = raw_dir / f"{ref['source_id'].split(':', 1)[1]}.json"
+                raw_path.write_text(json.dumps(raw), encoding="utf-8")
+                ref_by_id[ref["source_id"]] = {
+                    **ref,
+                    "fetched_at": fetched_at.isoformat(),
+                    "raw_receipt_ref": raw_path.relative_to(root).as_posix(),
+                    "raw_receipt_gitignored": True,
+                }
+            receipt_refs = list(reversed([ref_by_id[ref["source_id"]] for ref in normalized_refs]))
+            receipt_path = root / "state" / "us_short" / "us_short_llm_theme_discovery_web_20260815_receipt.json"
+            receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            receipt_path.write_text(json.dumps({
+                "decision_clock": {"expected_decision_date": "20260815"},
+                "source_refs": receipt_refs,
+            }), encoding="utf-8")
+            target = chunks[1]
+            packet = {
+                "input": {
+                    "receipt_ref": receipt_path.relative_to(root).as_posix(),
+                    "accepted_source_count": 34,
+                    "target_chunk_index": 1,
+                    "target_source_ids": [row["source_id"] for row in target],
+                    "target_source_refs": [ref_by_id[row["source_id"]] for row in target],
+                },
+            }
+            with mock.patch.object(replay, "ROOT", root):
+                actual_rows, actual_refs, _actual_fetched_at = replay._load_target_inputs(packet)
+            self.assertEqual([row["source_id"] for row in actual_rows], packet["input"]["target_source_ids"])
+            self.assertEqual(actual_refs, packet["input"]["target_source_refs"])
+
+    def test_5b_has_no_free_input_or_paid_entrypoint(self):
+        source = Path(replay.__file__).read_text(encoding="utf-8")
+        for forbidden in (
+            "PaidDispatchGateway", "DeepSeekClient", "reserve_plan_budget",
+            "run_web_fetch", "run_x_fetch", "publish_decision_pair",
+        ):
+            self.assertNotIn(forbidden, source)
+        with mock.patch.object(replay, "run_replay", side_effect=AssertionError("runner reached")) as run:
+            with mock.patch.object(replay.sys, "argv", ["replay.py", "--raw", "free.json"]):
+                self.assertEqual(replay.main(), 2)
+        run.assert_not_called()
+
+    def test_5b_validator_call_is_load_bearing(self):
+        with mock.patch.object(
+            replay.provisional_validate, "validate_provisional_themes",
+            side_effect=AssertionError("validator bypassed"),
+        ):
+            with self.assertRaisesRegex(AssertionError, "validator bypassed"):
+                self._run_fixture()
 
 
 if __name__ == "__main__":
