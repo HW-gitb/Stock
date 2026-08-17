@@ -83,8 +83,10 @@ def temporary_provider_directory(
                     # perform a real ``git check-ignore``.  The state wrapper used to add this
                     # boundary itself, leaving provider roots dependent on the repository's
                     # parent ignore rules and leaking evidence on a clean checkout.
-                    Path(tempdir, ".gitignore").write_text("*\n", encoding="utf-8")
+                    # Marker before .gitignore, same reason as the light helper: never leave
+                    # a window where the root holds a file but not its ownership mark.
                     Path(tempdir, _TEMP_ROOT_MARKER).touch()
+                    Path(tempdir, ".gitignore").write_text("*\n", encoding="utf-8")
                     yield tempdir
             finally:
                 cursor = parent
