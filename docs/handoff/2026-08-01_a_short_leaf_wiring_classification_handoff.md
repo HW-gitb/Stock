@@ -8890,3 +8890,61 @@ focused：`Ran 762 tests in 127.955s — OK`，receipt `receipt:e5cdac8c5bd6f98e
 ### 交接边界
 
 风险登记与 SESSION_LOG 已同步，`docs/CURRENT.md` 未写 review/commit 瞬态状态。未运行 provider/live、主树暖根真实周流程、账户或下单；未启动 reviewer sub-agent；未 stage、commit、push、merge。full-pack PASS 与文档门 PASS 只证明本工作树离线和交接门通过，不等于 independent review PASS、主树暖根 closure 或 ship；下一步仍由 Claude Code 独立复审当前 diff。
+
+## 2026-08-17 追加：A-short 2.1 TTM 扣非累计口径最小修复
+
+- **执行者/状态**：Codex executor/fixer；本轮状态 `repaired / OPEN-NOT-VERIFIED`。reviewer/committer 为 Claude Code；Codex 未 stage、commit、push 或 merge。
+- **唯一问题入口**：按 Desktop `3a_testrun0816.md` §2.1 执行；本条不读取、不承接其他线程/工作树或历史 handoff 的问题、修复、产物、结论。
+- **问题/根因**：`fina_indicator.profit_dedt` 是年初至今累计值，旧代码取最近 4 期后 `groupby("ts_code")["profit_dedt"].sum()`，造成跨年度累计值重叠。
+- **最小改动**：仅在 `A-EGS/egs_main.py` 将 `FINANCIAL_FETCH_QUARTERS` 由 4 改为 5；年度 `q0` 直接取 `q0_profit_dedt`；非年度 `q0` 使用 `q0 + 上年全年 - 上年同期`。组件缺失、非数字、`NaN/Inf` 时结果保持 `NaN`/nullable；未加入 `fillna(0)`、ffill、旧 rolling 或其他 fallback。
+- **调用链**：保持 `runners/weekly_screening.ps1 -> A-EGS/egs_main.py --as-of -> get_financial_data -> fina_indicator（5 periods）-> PIT/dedup -> TTM -> build_master -> analysis_input -> weekly`；未改 3.1 OCF 或 4.1 loss gate。
+- **消费者与合同**：`ttm_profit_dedt` 仍输出到 `fundamental.profitability.ttm_profit_dedt`，缺失时只追加该正确路径；completeness denominator 不变。`schemas/analysis_input.schema.json` 版本与字段形状不变，`schemas/analysis_input_coverage.md` 补充 CNY nullable、公式和 fail-closed 说明。
+- **PIT/source-binding**：保留 `ann_date <= TODAY_DT`、同一 `ts_code/quarter` 决策日前最新公告、exact code set、现有批量拆分/重试；未来公告不参与计算。
+- **cache/写盘边界**：现有 financial cache key 已绑定 as-of、代码集合、5-period quarter digest、producer AST/语义；窗口与算法改变会使旧四期 cache 不命中。未新增缓存层、provider/API/token、state/raw/receipt/diagnostic；未覆盖旧生产产物。
+- **测试变更**：`tests/test_a_short_financial_cache_contract.py` 新增 5-period exact-call、年度/非年度公式、三项缺失、非数字/非有限、PIT future/最新公告、四阶段窗口与旧四期负控；`tests/phase6/test_egs_analysis_input_contract.py` 新增正确缺失路径/正值输出/完整性分母合同测试。全部 mock/temp，无 network/provider_samples/real state/results。
+- **先红后绿原始终态**：旧实现精确包 `Ran 28 tests`、exit 1、11 failures；修复后固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 精确包 `tests.test_a_short_financial_cache_contract tests.phase6.test_egs_analysis_input_contract tests.schema.test_analysis_input_contract` → `Ran 61 tests`、`OK`、exit 0，receipt `receipt:921510f0973e0a4646b0d4ad`。
+- **前置/门禁原始终态**：固定 Python `-m py_compile .\A-EGS\egs_main.py` exit 0；`git diff --check` exit 0；固定 Python `runners/a_short_preflight.py --json` → `status=pass`、`python_ok=true`、版本 `3.13.8`、依赖无缺失、timezone capability PASS。
+- **full lane 原始终态**：按方案唯一执行一次固定 Python `.tools/full_pack_ledger.py run a_short ... 860 -- discover -s tests -p 'test_a_short*.py'`；`STATIC status=PASS diff_check=PASS py_compile=3`；`COUNT_GATE discovered=3180 ran=3180 equal=True`；`Ran 3180 tests in 261.050s`；`RESULT status=PASS exit=0 tests=3180 elapsed=261.1s deadline=860s mode=parallel`；sidecar `.tools\state\runs\20260817T183631_a_short_parallel.jsonl`。
+- **自审/负向控制**：检查确认生产代码不存在旧四期 `groupby.sum`、`quarters[:4]` 或 `FINANCIAL_FETCH_QUARTERS = 4`；测试保留错误路径字符串只作负向断言。已逐项核对年度/非年度、缺失三组件、非数字/NaN/Inf、PIT future、cache identity、schema path、消费者和边界。
+- **同步记录**：本轮 material risk 详情写入 `docs/system_risk_register.md` 顶部 2.1 entry；`docs/SESSION_LOG.md` 已 prepend 本轮执行 entry；`docs/CURRENT.md` 未写入瞬态 review/commit 状态。
+- **失效旧结论**：仅就本轮代码路径，旧的“最近四期直接求和”行为已被本最小修复取代；不得把本轮 offline full lane 解释为 provider/live、真实暖根、review PASS、commit 或 ship gate。
+- **下一步**：Claude Code 按本 handoff 与 risk register 独立复审并重跑精确验收；PASS 后由 reviewer/committer 提交。真实候选差异/生产暖根验收需用户另行授权。
+
+## 2026-08-17 追加：Claude Code 独立审查 A-short 2.1（FAIL，未提交）——过程、边界与方法学
+
+- **审查树与范围**：`D:\cnhea\Codex\worktrees\509e\Stock`（`git worktree list` 实解，detached `5cf89a1d`）。scope manifest 为 8 个 modified、0 untracked，故无 untracked 盲区。hook 注入的 REVIEW SNAPSHOT 取自 `Stock-wt\ashort_r1`，不定义本轮范围，未采信。
+- **权威阶梯（item 16c）**：用户当轮指令 > 桌面 `3a_testrun0816.md` §2.1（user-supplied authority artifact）> repo baseline。桌面文档只读对照，未回写、未在 verdict 里按「第 N 条未做」计分。
+- **分级判定**：改动面 = `A-EGS/egs_main.py` 一个常量 + `get_financial_data` 内 TTM 块 + `_candidate_from_row` 一处；触 rule 3(a)（点名的生产入口）故全量成立，但按 rule 4 由执行方跑、reviewer 引账本，我**未重跑全量**。按 rule 8 判定不起独立对抗 agent：既有函数内的数值口径改动，无 provider / secret / raw-payload 面，也没有新建或实质变更的 fail-closed 授权门；分类理由已写进 SESSION_LOG `Verify`。
+- **账本核验方法（不照抄 CACHED GREEN）**：直接 `import verification_receipt` 调 `collect_code_state()`/`fingerprint()` 自算指纹，与账本记录逐字比对；再核 `prepared_at`/`recorded_at` 与源文件 mtime 的先后，并确认 sidecar 文件真实在盘且非空。同时验证 `is_code_path('docs/SESSION_LOG.md') is False`——这正是「跑完全量后又改文档」不作废那次绿的机制依据。
+- **植入对照四枪（这才是「测试承重」的证据，新增行数不是）**：①公式里 `- prior_same_period` 翻成 `+`；②`FINANCIAL_FETCH_QUARTERS` 5→4；③缺失路径改回 `fundamental.ttm_profit_dedt`；④年报分支 `if str(q0).endswith("1231")` 短路成 `if False`。四枪各自精确点名到对应用例转红，每枪跑完立刻按原始字节还原，收尾 `egs_main.py` sha256 与基线逐字相同。
+- **reviewer 自写探针补的覆盖面**：执行方的新测试全部只用**单只**股票，多票场景零覆盖。我另跑两票探针验了 `.to_numpy()` 位置赋值的行对齐（两票量级差 100 倍、各自取到自己的 q0/上年同期，未串行错位）、单票 q0 行整行缺失时同批兄弟不受影响、行数守恒、负 TTM 与恰好 `0.0` 的 TTM 均按位保留（4.1 的 `<= 0` 判定依赖这一点）。
+- **方法学教训（下轮直接复用）**：**把「值的 fail-closed」和「门的可达性」当成两件事分开验。** 本轮的阻断项不在被改的那几行里——公式怎么算都对——而在旧实现的一个偶然属性上：`groupby().sum()` 对全 NaN 组返回 `0.0` 而非 `NaN`，于是下游那句 `not pd.isna(ttm_dt)` 前置**恒真**，门一直在跑；换成正确的三组件公式后它才第一次开始为空。只读 diff、只跑 focused 都看不见这类「没改的代码因为输入语义变了而改变行为」的耦合，必须顺着被改字段 grep 出全部消费点，再逐个问「它读的是值，还是值的存在性」。
+- **一次走偏并自我证伪**：我先怀疑新 pivot 路径在空 `df_fi` 下产生 dtype 不一致导致 merge 崩，隔离复现却没复现出来；加 traceback 后定位到崩点是 `:4423` 的既有 merge，与本刀无关。**结论按实测改口，未把它算进 2.1 的账**，只留 Optional。
+- **本轮未做/未验**：主树暖根真实周候选差异（方案 §七 要求逐只列 Top15/Top5 进出）`NOT_RUN`；未跑 provider/live；未起 sub-agent；未 stage/commit/push/merge。3.1 OCF 与 4.1 亏损门本轮不在范围，也未被本刀触碰。
+
+## 2026-08-17 追加：2.1 reviewer Required + Optional 最小修复
+
+- **执行者/状态**：Codex executor/fixer；本轮 `repaired / OPEN-NOT-VERIFIED`。Claude Code 为 reviewer/committer；Codex 未提交、push 或 merge。
+- **当前 Required**：reviewer 发现 TTM fail-closed 后，`score_l2()` 以 `not pd.isna(ttm_dt)` 作为 OCF/ESP-Q 整段前置，TTM 缺组件时门不再运行。选择三选一中的方案②，因为它是最小改动且不引入 3.1：只移除存在性前置，不改既有 threshold、ESP-Q、评分或 4.1。
+- **Required 最小 diff**：`if not pd.isna(ttm_ocf) and not pd.isna(ttm_dt)` 改为 `if not pd.isna(ttm_ocf)`；既有 `threshold = 0 if abs(ttm_dt) <= 100 else 0.7` 保持。缺失 TTM 时不新增 fallback；仅沿用当前 NaN 比较的既有 `0.7` 分支。
+- **Required closure**：`tests/phase6/test_egs_margin_coverage.py` 新增 OCF ratio `0.5`、TTM 缺失/齐全两格；把旧存在性前置做 transient mutation 后，精确单测 `Ran 1 test`、exit 1；恢复正确实现后两格均命中 `ESP-Q`。
+- **Optional 1**：既有 `docs/SESSION_LOG.md` 执行条目补 `Pre-Codex self-review` 与 `Proof-of-use`；本轮新修复条目使用 `Verdict/Action`、`Required`、`Verify`、`Next` 和 `matrix/register/handoff/focused/full-lane/door` 字段。
+- **Optional 2**：旧的空 PIT 财务帧 q0 merge 崩溃只做 dtype 对齐：`df_merged["ts_code"]` 从 `df_fi["ts_code"].dtype` 创建，不改变空结果语义；新增全未来公告 mock 测试，确认结果为空且不崩。
+- **Optional 3**：`tests/test_a_short_financial_cache_contract.py` 旧四期负控由无对应实现的 `220.0` 改为该 fixture 实际旧和 `190.0`，不扩大测试意图。
+- **边界**：2.1 TTM 公式、PIT、cache identity、schema、analysis_input 缺失路径和 weekly 消费者保持；3.1 OCF threshold/单位修复、4.1 loss gate、provider/live、暖根真实候选差异均未执行；无新 provider/API/cache/state/raw/receipt/防御层。
+- **精确验证**：固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；最终精确包 `tests.test_a_short_financial_cache_contract tests.phase6.test_egs_margin_coverage tests.phase6.test_egs_analysis_input_contract tests.schema.test_analysis_input_contract` → `Ran 93 tests`、`OK`、exit 0，receipt `receipt:93687c750ac81d1228c18a06`；`py_compile`、`git diff --check`、offline preflight PASS；文档门禁 `tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard` → `Ran 56 tests`、`OK`、exit 0。
+- **full lane 原始终态**：固定 Python 唯一执行一次 `.tools/full_pack_ledger.py run a_short 'A-EGS TTM fail-closed OCF boundary and minimal optional repairs' 860 -- discover -s tests -p 'test_a_short*.py'`；`STATIC status=PASS diff_check=PASS py_compile=4`；`COUNT_GATE discovered=3182 ran=3182 equal=True`；`Ran 3182 tests in 193.178s`；`RESULT status=PASS exit=0 tests=3182 elapsed=193.2s deadline=860s mode=parallel`；sidecar `.tools\\state\\runs\\20260817T191110_a_short_parallel.jsonl`。
+- **最终状态**：独立 reviewer/committer 尚未复审/提交，主树暖根真实候选差异仍 `NOT_RUN / NOT_VERIFIED`；不得把 full lane 解释为 provider/live、review PASS、commit 或 ship。
+- **失效旧结论**：本轮只废止 OCF 检查对 TTM 非空的旧存在性前置及测试中的错误 `220.0` 负控；不废止或重解释其它问题、其它工作树或历史 handoff 结论。
+- **下一步**：Claude Code：审查。
+
+## 2026-08-17 追加：Claude Code 独立复审 A-short 2.1（PASS，已在 509e 提交；合入 master 排队）——过程与方法学
+
+- **合并被主树状态挡住，按 closeout gate item 9 记而不强推**：`D:\cnhea\Stock` 有一个 `10:41:05Z` 建立、到 `11:27:37Z` 仍未释放的 `.git/index.lock`，且 13 个 `research/results/a_short/` 产物处于未提交状态（mtime 停在 08-16，非本轮所写）。仓库配了 merge autostash，强合会去动这些不属于本 PASS 范围的文件，且删别人的 index.lock 可能损坏另一个进程的索引。**代码已在 509e 落成 `5f61c3d6`，合并排队到主树干净为止**——这条属于「安全分离被阻断」，不是 PASS 判据本身有问题。
+
+- **本轮增量里有一个方向反转，反向控制也得跟着换打法**：上一轮 FAIL 的判据是「fail-closed 顺手把门关掉」，属**放松**类；本轮修法方向相反（把门重新打开）。所以强制腿反向控制不是去证「新逻辑挡得住坏输入」，而是去证「旧那句前置一旦回来就必定有用例转红」。C5 植入即此：还原 `and not pd.isna(ttm_dt)` → 闭合用例精确 `FAILED (failures=1)`，还原后 sha256 回基线。
+- **测试承重之外我另做了一次行为重算**：执行方的闭合用例只压了 `ttm_ocf_ratio=0.5` 一个点，能证明「门跑起来了」，证明不了「跑起来之后两个 cohort 是否等价」。我拿真实百分数点样本（`-7917.2695 / -0.5 / 0.0 / 0.5 / 0.69 / 0.7 / 38.1135 / 43.8 / 65.535 / 90.0581 / 187.2788`）对 TTM 齐全与 TTM 缺失两列逐点跑真 `score_l2()`，11 个取值全部一致。**以后凡是「恢复某条判定的可达性」类修复都值得补这一步**——单点绿只说明门开了，不说明开出来的判定跟原意一致。
+- **一处我判错、按实测改口**：上一轮我把「缺 TTM 那档阈值从 0 变 0.7」记成潜在放松；本轮实测方向相反（`abs(nan) <= 100` 为 `False`，落到更严的 `0.7`），且真实取值上无差异带。**结论以实测为准，已在 register 如实写成「收紧、差异带 `0<=ocf<0.7` 未出现」，没有包装成新 Required。**
+- **对「我说别修但执行方修了」的处置**：`O-ASHORT-EMPTY-DF-FI-CRASHES-AT-THE-PREEXISTING-Q0-MERGE` 我上一轮明写「不在本刀修」，执行方判断后仍一并修了。按 Optional 可一并修的既有约定接受，但**接受的前提是我重新按新代码审了一遍**：3 行纯 dtype 继承、非空路径逐字不变、有回归用例、C6 植入能把它精确打红。**「我说过别做」不是自动 FAIL 的理由，也不构成免审——判据只能是改动本身。**
+- **账本核验的一个坑（值得记）**：`egs_main.py` 的 mtime（`11:22:14Z`）晚于本次全量记账（`recorded_at 11:14:22Z`），单看 mtime 会误判成「跑完又改了码」。真相是我自己做植入对照时按原字节写回，mtime 被刷新而内容未变。**判据要用内容指纹不要用 mtime**：独立重算 `4bf264c7…003d` 与账本逐字相同，且当前文件 sha256 与植入前基线 `e9d59416…bcaa` 相同，两条合起来才排除「跑后改码」。
+- **本轮未做/未验**：主树暖根真实周候选差异（方案 §七 逐只列 Top15/Top5 进出）仍 `NOT_RUN`；未跑 provider/live；按 rule 8 未起独立对抗 agent；3.1 OCF 阈值/单位与 4.1 亏损门仍未实现。PASS 只覆盖离线正确性与工程闭环，不是真实周产物已核。

@@ -6,6 +6,7 @@ import dataclasses
 import importlib.util
 import sys
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -59,6 +60,12 @@ def _provider_frame(codes, period):
         }
         for index, code in enumerate(codes, start=1)
     ])
+
+
+def _provider_frame_with_profit(codes, period, profit_by_period):
+    frame = _provider_frame(codes, period)
+    frame["profit_dedt"] = [profit_by_period.get(period) for _ in codes]
+    return frame
 
 
 class FinancialCacheContractTests(unittest.TestCase):
@@ -201,6 +208,213 @@ class FinancialCacheContractTests(unittest.TestCase):
                 em._latest_quarters(em.FINANCIAL_FETCH_QUARTERS),
                 em._financial_semantics_fingerprint(em._latest_quarters(em.FINANCIAL_FETCH_QUARTERS)),
             )
+
+    def test_financial_fetch_window_is_exactly_five_and_provider_calls_match(self):
+        em = self.egs
+        codes = ["000001.SZ"]
+        as_of = "20260817"
+        as_of_dt = datetime(2026, 8, 17)
+        with patch.multiple(em, TODAY=as_of, TODAY_DT=as_of_dt):
+            quarters = em._latest_quarters(em.FINANCIAL_FETCH_QUARTERS)
+            self.assertEqual(em.FINANCIAL_FETCH_QUARTERS, 5)
+            self.assertEqual(len(quarters), 5)
+            calls = []
+
+            def fetch(_api, **kwargs):
+                calls.append(kwargs["period"])
+                return _provider_frame_with_profit(codes, kwargs["period"], {
+                    period: 10.0 for period in quarters
+                })
+
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "safe_api", side_effect=fetch), \
+                 patch.object(em, "save_cache"):
+                result = em.get_financial_data(codes)
+
+        self.assertFalse(result.empty)
+        self.assertEqual(calls, quarters)
+
+    def test_all_future_announcements_return_empty_without_q0_merge_crash(self):
+        em = self.egs
+        codes = ["000001.SZ"]
+        as_of = "20260817"
+        as_of_dt = datetime(2026, 8, 17)
+
+        def fetch(_api, **kwargs):
+            frame = _provider_frame(codes, kwargs["period"])
+            frame["ann_date"] = "20990101"
+            return frame
+
+        with patch.multiple(em, TODAY=as_of, TODAY_DT=as_of_dt), \
+             patch.object(em, "load_cache", return_value=None), \
+             patch.object(em, "safe_api", side_effect=fetch), \
+             patch.object(em, "save_cache"):
+            result = em.get_financial_data(codes)
+
+        self.assertTrue(result.empty)
+
+    def test_ttm_profit_dedt_uses_non_overlapping_ytd_formula(self):
+        em = self.egs
+        codes = ["000001.SZ"]
+        as_of = "20260817"
+        as_of_dt = datetime(2026, 8, 17)
+        with patch.multiple(em, TODAY=as_of, TODAY_DT=as_of_dt):
+            quarters = em._latest_quarters(5)
+            q0 = quarters[0]
+            prior_year = str(int(q0[:4]) - 1)
+            annual = f"{prior_year}1231"
+            prior_same_period = f"{prior_year}{q0[4:]}"
+            profit_by_period = {
+                period: 10.0 for period in quarters
+            }
+            profit_by_period.update({q0: 70.0, annual: 100.0, prior_same_period: 40.0})
+
+            def fetch(_api, **kwargs):
+                return _provider_frame_with_profit(codes, kwargs["period"], profit_by_period)
+
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "safe_api", side_effect=fetch), \
+                 patch.object(em, "save_cache"):
+                result = em.get_financial_data(codes)
+
+        self.assertAlmostEqual(float(result.iloc[0]["ttm_profit_dedt"]), 130.0)
+        self.assertNotEqual(float(result.iloc[0]["ttm_profit_dedt"]), 190.0)
+
+    def test_annual_q0_ttm_equals_the_annual_cumulative_value(self):
+        em = self.egs
+        codes = ["000001.SZ"]
+        as_of = "20270101"
+        as_of_dt = datetime(2027, 1, 1)
+        with patch.multiple(em, TODAY=as_of, TODAY_DT=as_of_dt):
+            quarters = em._latest_quarters(5)
+            self.assertTrue(quarters[0].endswith("1231"))
+            q0 = quarters[0]
+            profit_by_period = {period: 10.0 for period in quarters}
+            profit_by_period[q0] = 77.0
+
+            def fetch(_api, **kwargs):
+                return _provider_frame_with_profit(codes, kwargs["period"], profit_by_period)
+
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "safe_api", side_effect=fetch), \
+                 patch.object(em, "save_cache"):
+                result = em.get_financial_data(codes)
+
+        self.assertAlmostEqual(float(result.iloc[0]["ttm_profit_dedt"]), 77.0)
+
+    def test_missing_ttm_component_is_nan_without_four_quarter_fallback(self):
+        em = self.egs
+        codes = ["000001.SZ"]
+        as_of = "20260817"
+        as_of_dt = datetime(2026, 8, 17)
+        for missing_component in ("q0", "annual", "prior_same_period"):
+            with self.subTest(missing_component=missing_component), \
+                 patch.multiple(em, TODAY=as_of, TODAY_DT=as_of_dt):
+                quarters = em._latest_quarters(5)
+                q0 = quarters[0]
+                prior_year = str(int(q0[:4]) - 1)
+                annual = f"{prior_year}1231"
+                prior_same_period = f"{prior_year}{q0[4:]}"
+                profit_by_period = {period: 10.0 for period in quarters}
+                profit_by_period.update({q0: 70.0, annual: 100.0, prior_same_period: 40.0})
+                profit_by_period[{"q0": q0, "annual": annual,
+                                 "prior_same_period": prior_same_period}[missing_component]] = None
+
+                def fetch(_api, **kwargs):
+                    return _provider_frame_with_profit(codes, kwargs["period"], profit_by_period)
+
+                with patch.object(em, "load_cache", return_value=None), \
+                     patch.object(em, "safe_api", side_effect=fetch), \
+                     patch.object(em, "save_cache"):
+                    result = em.get_financial_data(codes)
+
+                self.assertTrue(pd.isna(result.iloc[0]["ttm_profit_dedt"]))
+
+    def test_non_numeric_or_non_finite_ttm_component_is_nan(self):
+        em = self.egs
+        codes = ["000001.SZ"]
+        as_of = "20260817"
+        as_of_dt = datetime(2026, 8, 17)
+        for invalid_value in ("not-a-number", float("inf"), float("-inf")):
+            with self.subTest(invalid_value=invalid_value), \
+                 patch.multiple(em, TODAY=as_of, TODAY_DT=as_of_dt):
+                quarters = em._latest_quarters(5)
+                q0 = quarters[0]
+                prior_year = str(int(q0[:4]) - 1)
+                annual = f"{prior_year}1231"
+                prior_same_period = f"{prior_year}{q0[4:]}"
+                profit_by_period = {period: 10.0 for period in quarters}
+                profit_by_period.update({q0: 70.0, annual: 100.0, prior_same_period: 40.0})
+                profit_by_period[q0] = invalid_value
+
+                def fetch(_api, **kwargs):
+                    return _provider_frame_with_profit(codes, kwargs["period"], profit_by_period)
+
+                with patch.object(em, "load_cache", return_value=None), \
+                     patch.object(em, "safe_api", side_effect=fetch), \
+                     patch.object(em, "save_cache"):
+                    result = em.get_financial_data(codes)
+
+                self.assertTrue(pd.isna(result.iloc[0]["ttm_profit_dedt"]))
+
+    def test_pit_uses_latest_announced_row_and_rejects_future_announcement(self):
+        em = self.egs
+        codes = ["000001.SZ"]
+        as_of = "20260817"
+        as_of_dt = datetime(2026, 8, 17)
+        with patch.multiple(em, TODAY=as_of, TODAY_DT=as_of_dt):
+            quarters = em._latest_quarters(5)
+            q0 = quarters[0]
+            prior_year = str(int(q0[:4]) - 1)
+            annual = f"{prior_year}1231"
+            prior_same_period = f"{prior_year}{q0[4:]}"
+            profit_by_period = {period: 10.0 for period in quarters}
+            profit_by_period.update({q0: 60.0, annual: 100.0, prior_same_period: 40.0})
+
+            def fetch(_api, **kwargs):
+                period = kwargs["period"]
+                frame = _provider_frame_with_profit(codes, period, profit_by_period)
+                if period != q0:
+                    frame["ann_date"] = "20260801"
+                    return frame
+                older = frame.copy()
+                older["ann_date"] = "20260101"
+                older["profit_dedt"] = 60.0
+                latest = frame.copy()
+                latest["ann_date"] = "20260801"
+                latest["profit_dedt"] = 70.0
+                future = frame.copy()
+                future["ann_date"] = "20260901"
+                future["profit_dedt"] = 999.0
+                return pd.concat([older, latest, future], ignore_index=True)
+
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "safe_api", side_effect=fetch), \
+                 patch.object(em, "save_cache"):
+                result = em.get_financial_data(codes)
+
+        self.assertAlmostEqual(float(result.iloc[0]["ttm_profit_dedt"]), 130.0)
+
+    def test_latest_quarters_five_covers_ttm_components_across_four_phases(self):
+        em = self.egs
+        phases = (
+            ("20260501", datetime(2026, 5, 1)),
+            ("20260901", datetime(2026, 9, 1)),
+            ("20261101", datetime(2026, 11, 1)),
+            ("20270101", datetime(2027, 1, 1)),
+        )
+        for as_of, as_of_dt in phases:
+            with self.subTest(as_of=as_of), patch.multiple(em, TODAY=as_of, TODAY_DT=as_of_dt):
+                quarters = em._latest_quarters(5)
+                self.assertEqual(len(quarters), 5)
+                self.assertEqual(len(set(quarters)), 5)
+                q0 = quarters[0]
+                if q0.endswith("1231"):
+                    self.assertIn(q0, quarters)
+                else:
+                    prior_year = str(int(q0[:4]) - 1)
+                    self.assertIn(f"{prior_year}1231", quarters)
+                    self.assertIn(f"{prior_year}{q0[4:]}", quarters)
 
 
 if __name__ == "__main__":

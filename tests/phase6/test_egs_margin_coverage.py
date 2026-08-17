@@ -333,6 +333,27 @@ class MarginCoverageTests(unittest.TestCase):
         self.assertTrue(output.empty)
         self.assertEqual(reasons[code], "l2_margin_growth_veto")
 
+    def test_l2_ocf_quality_check_runs_when_ttm_profit_is_missing(self):
+        em = self.egs
+        base = {
+            "ts_code": "600000.SH", "l2_name": "test", "q0_dt_yoy": 1.0,
+            "q1_dt_yoy": 1.0, "pe": 1.0, "pb": 1.0, "roe": 1.0,
+            "pct_20d_n": 0.0, "reduce_deduct": 0.0,
+            "avg_amount_5d": 1.0, "avg_amount_20d": 1.0,
+            "q0_dt_profit_ratio": 100.0, "ttm_ocf_ratio": 0.5,
+        }
+
+        def flags(ttm_profit_dedt):
+            row = dict(base, ttm_profit_dedt=ttm_profit_dedt)
+            output = em.score_l2(
+                pd.DataFrame([row]), pd.DataFrame(), [], {"test": 1.0},
+                margin_observation=None,
+            )
+            return output.iloc[0]["l2_flags"]
+
+        self.assertIn("ESP-Q", flags(None))
+        self.assertIn("ESP-Q", flags(1000000.0))
+
     def test_margin_schema_rejects_inconsistent_complete_status_on_all_surfaces(self):
         invalid = {
             "reference_date": "20260714", "effective_ref_date": None,
