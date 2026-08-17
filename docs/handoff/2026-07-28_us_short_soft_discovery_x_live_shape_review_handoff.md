@@ -3272,3 +3272,19 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **加锁不是关守卫（我核过的依据）**：`before/after` + `assertEqual` 原样；`_files_under` 我单独验过确实能看见杂散文件；锁只把并发写方挡在快照窗口外，而该用例 docstring 自己就写着它不想吃「a red that belongs to somebody else」。
 - **一处 NOT_VERIFIED，如实记**：我想打一枪植入对照证明加锁后断言仍承重——monkeypatch `run_rehearsal` 在窗口内落一个杂散目录、再试一个杂散文件，两次都 `failures=0`，没能复现出红；随后单独验证探测器可见该文件。所以更可能是我的 patch 没作用到真实调用点，但我**没有**证明它承重，这一腿判 NOT_VERIFIED，PASS 不建立在这枪上。下次谁再动这道检查，请把这枪补上。
 - **下一步注意（新开 Optional，不属本刀）**：rehearsal 加锁后只对自己负责，跨模块泄漏改由 pack 级网兜；但实读 `.tools/full_pack_ledger.py`，`find_marked_private_test_roots` 只认带 marker 的目录、`cleanup_new_private_test_roots` 只清 `tmp*` 形状，**一个不带 marker 又不叫 `tmp*` 的普通新目录两张网都不覆盖**。要收紧就让 pack 级快照对 protected root 下任何新目录报一次。
+
+## 2026-08-17 追加：Codex 最小修复 5b Optional（待 Claude 独立复审；8d8c）
+
+- **修复**：full-pack 在原有 marker/`tmp*` 清理完成后，比较 protected roots 的运行前后目录快照；本次新增的任何目录都拒绝 `us_short` 记绿。普通新目录不删除，只报告路径。
+- **反向用例**：新增普通目录残留用例；模拟 full-pack 返回 PASS 并留下普通目录时，`run_full_pack` 返回 `2`，普通目录仍在。
+- **验证**：`tests.test_full_pack_ledger` `31 OK`；官方全量 `status=PASS exit=0 tests=5989 elapsed=345.4s deadline=860s`、`COUNT_GATE 5989=5989`、`319 PASS / 0 FAIL / 0 SKIPPED`；`git diff --check` 和静态 `py_compile=2` 通过；全量后 `state/us_short/runs_private` 不存在。未联网、未调 provider、未用真实凭证。
+- **当前状态**：`repaired / OPEN-NOT-VERIFIED`。只改 `.tools/full_pack_ledger.py` 和其 owner 测试，等待 Claude 独立复审；不提交、不执行第五刀 provider。
+- **下一步**：Claude Code：独立复审 `O-K5B-PACK-LEVEL-RESIDUE-NET-DOES-NOT-COVER-PLAIN-NEW-DIRS`。
+
+## 2026-08-17 追加：Claude Code 复审 pack 级残留网补普通新目录 —— PASS（已提交并合入 master）
+
+- **改了什么 / 为什么**：`.tools/full_pack_ledger.py` 在既有清理之后再取一次 protected-root 目录快照并与跑前求差，差集非空即 `REFUSED ... return 2`。补的正是我上一轮记的那个 Optional：`find_marked_private_test_roots` 只认 marker、`cleanup_new_private_test_roots` 只清 `tmp*`，一个普通新目录两张网都不覆盖。作用域仍限 us_short，普通目录只报不删，拒发生在记绿之前。
+- **收紧腿要打的是「它真会响」**：删掉新增的 `if new_private_dirs:` 整块 → `test_us_short_green_is_rejected_when_plain_new_directory_survives_pack` 精确 `FAILED (failures=1)`；还原后 sha256 回基线 `6147ec4f…`、`tests.test_full_pack_ledger` `31 OK`。仓内那条用例构造也正确：造的是既无 marker 又不叫 `tmp*` 的 `ordinary-leak`，断言返回 2、消息命中、**目录仍在**（拒而非清）。
+- **误拒问题有实测答案**：账本 `5989 OK / recorded_at=21:28:00 / parallel workers=8 / elapsed=345.4s / deadline=860s`，我独立复算当前工作树指纹为同一个 `b17479570e…`，所以这条绿就是带着新拒绝腿跑出来的。
+- **一处自纠（值得记，省下次一轮）**：我一度以为「改了 `.tools/full_pack_ledger.py` 却还 CACHED GREEN」= 指纹不覆盖这个工具、是个洞。实读 `.tools/verification_receipt.py` 后作废——`fingerprint()` 只封 `@` 开头的键，而 `@CODE_CONTENT` 本就是全部代码内容的 sha；per-path 条目只决定 bundle 要求。命中缓存是因为执行方在 21:28 用这个状态真跑过。**下次看到「改了代码还命中缓存」，先算一遍当前指纹跟账本比，再下结论。**
+- **顺带补做**：上一轮 5b（`2ac052e6`）因主树 `.git/index.lock` 挂了 2.5 小时没能合并，本轮锁已释放，一并合入。

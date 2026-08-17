@@ -320,6 +320,7 @@ def run_full_pack(
     )
     private_dirs_before = snapshot_private_test_dirs(PRIVATE_TEST_ROOTS)
     leaked_marked_roots: tuple[Path, ...] = ()
+    new_private_dirs: tuple[Path, ...] = ()
     try:
         result, run_detail = _execute_full_pack(lane, unittest_args, timeout_seconds)
     finally:
@@ -334,6 +335,10 @@ def run_full_pack(
                 "new/helper-marked private roots",
                 flush=True,
             )
+        if lane == "us_short":
+            new_private_dirs = tuple(sorted(
+                snapshot_private_test_dirs(PRIVATE_TEST_ROOTS) - private_dirs_before
+            ))
     if result.output:
         output = result.output
         if os.environ.get(NESTED_RUN_MARKER) == "1":
@@ -355,6 +360,12 @@ def run_full_pack(
         print(
             f"[full-pack-ledger] REFUSED - marked private test roots remained after "
             f"us_short full pack: {', '.join(map(str, leaked_marked_roots))}"
+        )
+        return 2
+    if new_private_dirs:
+        print(
+            f"[full-pack-ledger] REFUSED - new private test directories remained after "
+            f"us_short full pack: {', '.join(map(str, new_private_dirs))}"
         )
         return 2
     final_state = state if state is not None else collect_code_state()
