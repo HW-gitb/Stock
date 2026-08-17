@@ -147,6 +147,45 @@ class EtfCaptureRunnerTest(unittest.TestCase):
         self.assertTrue(self.normalized.exists())
         self.assertEqual(len(list(self.raw.rglob("*.json"))), 32)
 
+    def test_raw_page_redacts_massive_key_and_preserves_payload_fields(self):
+        payload = {
+            "results": [{"ticker": "SPY", "value": 1}],
+            "next_url": (
+                "https://api.massive.com/v2/aggs/ticker/SPY/range/1/day/2020-01-01/2020-01-31?"
+                f"cursor=page2&apiKey={_FAKE_KEY}"
+            ),
+            "nested": {"echo": f"prefix {_FAKE_KEY} suffix", "items": [{"value": _FAKE_KEY}, "stable"]},
+        }
+
+        class _SecretPayloadClient:
+            def get_json(self, url, headers=None, timeout_seconds=30):
+                return payload, 200, True, None
+
+        result = capture._capture_page(
+            client=_SecretPayloadClient(),
+            url="https://api.massive.com/v2/aggs/ticker/SPY/range/1/day/2020-01-01/2020-01-31",
+            raw_root=self.raw,
+            symbol="SPY",
+            family="daily_adjusted",
+            page_index=1,
+            attempt_index=1,
+            observed_at="2026-08-05T00:00:00+00:00",
+            headers={"User-Agent": "unit-test"},
+            api_key=_FAKE_KEY,
+        )
+        raw_path = self.raw / "massive" / "SPY" / "daily_adjusted" / "page-001-attempt-001.json"
+        raw_text = raw_path.read_text(encoding="utf-8")
+        stored = json.loads(raw_text)
+        expected_payload = copy.deepcopy(payload)
+        expected_payload["next_url"] = expected_payload["next_url"].replace(_FAKE_KEY, "[REDACTED]")
+        expected_payload["nested"] = {
+            "echo": "prefix [REDACTED] suffix",
+            "items": [{"value": "[REDACTED]"}, "stable"],
+        }
+        self.assertEqual(stored["payload"], expected_payload)
+        self.assertEqual(result["payload"], payload)
+        self.assertNotIn(_FAKE_KEY, raw_text)
+
     def test_unsafe_continuation_is_honest_incomplete_and_never_followed(self):
         client = _FakeClient(continuation=True, wrong_continuation=True)
         summary = capture.run_capture(

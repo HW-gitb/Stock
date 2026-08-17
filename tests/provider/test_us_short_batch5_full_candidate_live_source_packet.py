@@ -2250,6 +2250,51 @@ class MassiveBatchPaginationContractTest(unittest.TestCase):
         self.assertIn("cursor=page-2", client.urls[1])
         self.assertIn("%2B00%3A00", client.urls[1])
 
+    def test_raw_page_redacts_massive_key_and_preserves_payload_fields(self):
+        secret = "UNIT_TEST_MASSIVE_SECRET"
+        first = {
+            "id": "news-1",
+            "published_utc": "2026-07-06T12:00:00Z",
+            "tickers": ["AAPL"],
+        }
+        second = {
+            "id": "news-2",
+            "published_utc": "2026-07-06T12:30:00Z",
+            "tickers": ["AAPL"],
+        }
+        first_payload = {
+            "results": [first],
+            "next_url": (
+                "https://api.massive.com/v2/reference/news?cursor=page-2&"
+                "published_utc.gte=2026-06-06T00:00:00Z&"
+                f"published_utc.lte=2026-07-06T13:00:00+00:00&apiKey={secret}"
+            ),
+            "nested": {"echo": f"prefix {secret} suffix", "keep": ["stable", 2]},
+        }
+        client = self._QueueClient([
+            (first_payload, 200, True, None),
+            ({"results": [second]}, 200, True, None),
+        ])
+        with temporary_us_short_directory(
+            ROOT, Path("provider_samples") / "us_short_batch5_full_candidate_live_source_packet" / "raw_redaction"
+        ) as temp:
+            records: list = []
+            coverage = self._fetch_family(
+                "reference_news", client, Path(temp) / "raw", [0], records
+            )
+            raw_path = Path(temp) / "raw" / "massive" / "_market" / "reference_news_page_0001.json"
+            raw_text = raw_path.read_text(encoding="utf-8")
+            stored = json.loads(raw_text)
+
+        expected_payload = {
+            "results": [first],
+            "next_url": first_payload["next_url"].replace(secret, "[REDACTED]"),
+            "nested": {"echo": "prefix [REDACTED] suffix", "keep": ["stable", 2]},
+        }
+        self.assertEqual(coverage["status"], "complete")
+        self.assertEqual(stored["payload"], expected_payload)
+        self.assertNotIn(secret, raw_text)
+
     def test_each_family_has_a_fair_page_cap_within_shared_cap(self):
         client = self._EndlessClient()
         records: list = []

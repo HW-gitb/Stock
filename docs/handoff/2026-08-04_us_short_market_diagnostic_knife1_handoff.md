@@ -1543,3 +1543,42 @@ un_unittest_with_repo_pythonpath.cmd --timeout-seconds 600 tests.test_bounded_un
 **下一步注意事项**：
 - **要在 decision_date 20260812 跑通，必须先重新生成账户产物**：`runners\us_short_account_state_from_manual_tables.py --as-of 20260812`。schema 那道门已闭，但 as_of 一致性门是**有意的人工门**——validator 的报错原文就要求「确认账户与持仓事实对该决策日仍然成立后」再重生成。任何人都不该替操作员改这个日期。
 - 本轮**未重跑胶囊**（用户指示）。0814 §7 的 live 收口仍未完成，Massive grouped daily HTTP 403 既未复现也未排除；失败的胶囊 `us_short_20260814T083817Z_18116` 已保留待查。
+
+## 2026-08-17 追加：Massive 分页 raw wrapper 密钥脱敏 Required（888d，repaired / OPEN-NOT-VERIFIED）
+
+**改了什么**：
+
+- `runners/us_short_batch5_full_candidate_live_source_packet.py` 与 `runners/us_short_market_diagnostic_etf_capture.py` 的 Massive 分页 raw wrapper 在既有写盘前复用 `_redact_secret`；ETF sidecar 只补传已有 `MASSIVE_API_KEY` 值到 capture 私有调用点。
+- 新增两条离线回归，分别检查 `next_url`、嵌套密钥和其余 payload 字段；没有改请求、分页、重试、预算、窗口、raw 路径、manifest 或下游原始 payload。
+
+**为什么**：
+
+同一类 Massive 分页响应的 `next_url` 可能回显 `apiKey`；此前两处 raw wrapper 与已有 corporate-action 分页器的脱敏行为不一致。
+
+**验证命令**：
+
+- 固定 Python313 focused 超集：`tests.provider.test_us_short_batch5_full_candidate_live_source_packet`、`tests.provider.test_us_short_market_diagnostic_etf_capture`、`tests.test_us_short_market_diagnostic_etf_sidecar`。
+- 两处写盘脱敏调用临时还原为原始 `payload` 的反向控制；恢复后复跑两条新增回归。
+- 固定 Python313 full lane：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe .tools\full_pack_ledger.py run us_short ... 860 -- discover -s tests -p test_us_short*.py`。
+
+**验证结果**：
+
+- focused 超集 `67 OK`；反向控制两条均 `FAIL`；恢复后新增回归 `2 OK`。无 provider/network/live/paper。
+- full lane 静态门 `diff_check=PASS`、`py_compile=5`；运行因既有 `test_us_short_market_diagnostic_rehearsal` 在并发 worker 下观察到 `state/us_short` 临时根快照变化而 `FAIL`（`discovered=5979`、`ran=4871`），该模块单独运行 `30 OK`。因此不把本轮写成 full-lane PASS。
+
+**失效旧结论**：两处分页 raw wrapper 原样落盘密钥的代码事实已失效；原 Required 的两条代码腿已修复。
+
+**下一步注意事项**：本轮不提交、不联网、不运行 provider/live；保持当前 5 文件 diff 供 Claude Code 独立审查，full-lane 失败的 rehearsal 并发问题不在本刀范围内。
+
+## 2026-08-17 追加：preflight no-write 断言共享临时父目录 Optional 修复（888d，repaired / OPEN-NOT-VERIFIED）
+
+- **修复**：`tests/provider/test_us_short_batch5_status_source_preflight.py` 的 no-write 前后快照改为只扫描本用例在 future raw 根下创建的独占临时子目录；未改 preflight runner、生产路径、并发调度或其他 Optional。
+- **验证**：固定 Python313 定向模块 `4 OK`；`git diff --check` 通过；full lane `not_triggered`（仅离线测试断言范围）；无 provider/network/live。
+- **状态**：`O-USSHORT-PREFLIGHT-NO-WRITE-ASSERTION-SCANS-THE-SHARED-TEMP-PARENT` 代码与定向测试腿已修，待 Claude Code 独立审查并提交；完整判据与 register 状态见 `docs/system_risk_register.md` 顶部。
+
+## 2026-08-17 追加：preflight no-write Required 恢复真实根快照（888d，repaired / OPEN-NOT-VERIFIED）
+
+- **修复**：恢复 `tests/provider/test_us_short_batch5_status_source_preflight.py` 对真实 future raw 根的快照；仅跳过带 `.us_short_test_temp_root_owned` 标记的并行 worker 子树。未改生产 preflight、输出参数、锁、重试、sleep 或并发调度。
+- **Closure**：反向控制让 preflight 在真实根写入植入文件时精确转红；marker 控制证明 worker 子树写入不误红。
+- **验证**：固定 Python313 focused `62 OK`（目标模块 `6 OK`）；full lane `PASS tests=5981`、`COUNT_GATE 5981=5981`、`321.9s/860s`；静态 `diff_check=PASS`、`py_compile=1`；无 provider/network/live。
+- **状态**：`R-USSHORT-PREFLIGHT-NO-WRITE-ASSERTION-WAS-REPAIRED-INTO-A-VACUOUS-ONE` 与原 Optional 已修，待 Claude Code 独立审查并提交；完整判据见 `docs/system_risk_register.md` 顶部。

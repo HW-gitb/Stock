@@ -253,6 +253,7 @@ def _capture_family(
                     attempt_index=attempt_index,
                     observed_at=observed_at,
                     headers={"User-Agent": "StockSystem/0.1 us-short-market-diagnostic-etf-sidecar"},
+                    api_key=api_key,
                 )
             except capture.EtfCaptureError:
                 # A write-once raw conflict may follow an interrupted attempt.

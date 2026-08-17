@@ -13,16 +13,30 @@ from runners import us_short_batch5_status_source_preflight as preflight
 
 ROOT = Path(".").resolve()
 PACKET_PATH = Path("docs/us_short_batch5_status_source_access_packet_20260630.json")
+TEMP_ROOT_MARKER = ".us_short_test_temp_root_owned"
+
+
+def raw_file_refs(root: Path) -> list[str]:
+    if not root.exists():
+        return []
+    refs: list[str] = []
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(root)
+        if any(
+            (root.joinpath(*relative.parts[:depth]) / TEMP_ROOT_MARKER).is_file()
+            for depth in range(1, len(relative.parts))
+        ):
+            continue
+        refs.append(relative.as_posix())
+    return sorted(refs)
 
 
 class UsShortBatch5StatusSourcePreflightTest(unittest.TestCase):
     def test_preflight_validates_packet_without_fetching_reading_env_or_writing(self) -> None:
         future_raw_root = ROOT / "provider_samples" / "us_short_batch5_status_source_20260630"
-        before_raw_refs = sorted(
-            path.relative_to(future_raw_root).as_posix()
-            for path in future_raw_root.rglob("*")
-            if path.is_file()
-        ) if future_raw_root.exists() else []
+        before_raw_refs = raw_file_refs(future_raw_root)
 
         with mock.patch.dict(
             os.environ,
@@ -64,11 +78,7 @@ class UsShortBatch5StatusSourcePreflightTest(unittest.TestCase):
         self.assertFalse(result["environment"]["environment_values_read"])
         self.assertFalse(result["environment"]["secrets_logged"])
 
-        after_raw_refs = sorted(
-            path.relative_to(future_raw_root).as_posix()
-            for path in future_raw_root.rglob("*")
-            if path.is_file()
-        ) if future_raw_root.exists() else []
+        after_raw_refs = raw_file_refs(future_raw_root)
         self.assertEqual(after_raw_refs, before_raw_refs)
 
         result_text = json.dumps(result, ensure_ascii=False)
@@ -76,6 +86,43 @@ class UsShortBatch5StatusSourcePreflightTest(unittest.TestCase):
         self.assertNotIn("UnitTest/0.1 contact:test@example.com", result_text)
         self.assertNotIn("apikey=", result_text.lower())
         self.assertNotIn("https://", result_text.lower())
+
+    def test_no_write_snapshot_rejects_preflight_write_in_real_root(self) -> None:
+        future_raw_root = ROOT / "provider_samples" / "us_short_batch5_status_source_20260630"
+        future_raw_root.mkdir(parents=True, exist_ok=True)
+        planted = future_raw_root / f"PLANTED_BY_TEST_{os.getpid()}.json"
+        self.addCleanup(planted.unlink, missing_ok=True)
+        original_run_preflight = preflight.run_preflight
+
+        def planted_run_preflight(**kwargs: object) -> dict:
+            result = original_run_preflight(**kwargs)
+            planted.write_text("planted", encoding="utf-8")
+            return result
+
+        before_raw_refs = raw_file_refs(future_raw_root)
+        with mock.patch.object(preflight, "run_preflight", side_effect=planted_run_preflight):
+            preflight.run_preflight(
+                packet_path=PACKET_PATH,
+                generated_at="2026-07-03T00:00:00+00:00",
+            )
+        after_raw_refs = raw_file_refs(future_raw_root)
+
+        with self.assertRaises(AssertionError):
+            self.assertEqual(after_raw_refs, before_raw_refs)
+
+    def test_no_write_snapshot_ignores_marked_worker_subtree(self) -> None:
+        future_raw_root = ROOT / "provider_samples" / "us_short_batch5_status_source_20260630"
+        future_raw_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="worker_", dir=future_raw_root) as worker_dir:
+            worker_root = Path(worker_dir)
+            (worker_root / TEMP_ROOT_MARKER).touch()
+            before_raw_refs = raw_file_refs(future_raw_root)
+            worker_file = worker_root / "nasdaq_trader" / "exchange_halt_feed.json"
+            worker_file.parent.mkdir(parents=True, exist_ok=True)
+            worker_file.write_text("worker", encoding="utf-8")
+            after_raw_refs = raw_file_refs(future_raw_root)
+
+        self.assertEqual(after_raw_refs, before_raw_refs)
 
     def test_packet_scope_creep_is_rejected_before_any_side_effect(self) -> None:
         packet = json.loads(PACKET_PATH.read_text(encoding="utf-8"))
