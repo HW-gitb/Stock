@@ -215,3 +215,27 @@ class DiscoveryPublishPolicyTransitionTests(unittest.TestCase):
             verifiers=(lambda value: self.assertEqual(value["body"]["evidence"], "frozen"),),
             evidence_projections=(projection,),
         )
+
+    def test_private_diagnostic_json_can_be_replaced(self):
+        state_dir = self.test_root / "state" / "us_short"
+        path = state_dir / "runs_private" / "replay.json"
+        ignored = lambda _path: True
+        policy._write_mutable_private_json(
+            {"attempt": 1}, path, root=self.test_root, state_dir=state_dir,
+            gitignored=ignored,
+        )
+        policy._write_mutable_private_json(
+            {"attempt": 2}, path, root=self.test_root, state_dir=state_dir,
+            gitignored=ignored,
+        )
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"attempt": 2})
+
+    def test_private_diagnostic_json_rejects_formal_decision_slot(self):
+        state_dir = self.test_root / "state" / "us_short"
+        formal_slot = state_dir / "us_short_soft_boost_consumption_receipt_20260615.json"
+        with self.assertRaisesRegex(policy.DiscoveryPublishPolicyError, "runs_private"):
+            policy._write_mutable_private_json(
+                {"attempt": 1}, formal_slot, root=self.test_root,
+                state_dir=state_dir, gitignored=lambda _path: True,
+            )
+        self.assertFalse(formal_slot.exists())

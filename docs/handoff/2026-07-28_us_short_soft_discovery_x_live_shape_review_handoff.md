@@ -3199,6 +3199,15 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **失效的旧结论**：Codex 交接里「Claude Code 需自行打 call-cap / raw-before-parse / status consumer / 正式槽不可达等反向控制」——方向反了。这四条按 §13.7 是**仓内必须常绿的 mutation control 测试**；reviewer 的一次性探针只能证明今天对，证不了明天不被改坏。它们属阶段 A 的交付物。
 - **下一步注意**：修完后除焦点包外，按 `AGENTS.md` rule 3(c)（provider / 凭证 / 授权 / live 数据面）由执行方跑一次 lane 全量并记账再交接；主树正在跑实盘，全量请从 `Stock-wt` 下的 test_capsule 树起跑，且本刀 PASS 后只提交、不 merge（用户已明令实盘跑完再统一合并）。
 
+## 2026-08-17 追加：Codex 最小修复 5b 阶段 A 第二轮（待 Claude 独立复审；8d8c）
+
+- **Required 修复**：5b `WebRegroupReplayTests` 不再使用真实 `state/us_short/runs_private` 作为临时父目录；fixture 改用系统临时根，并在任何回放路径计算前 patch replay 的 ROOT、SIC 路径和 summary 路径。清理空残留后单跑 5b owner，`state/us_short/runs_private` 未重现。
+- **全量并发修复**：市场诊断的仓库级全根快照测试复用现有 `hold_test_root_lock()`；它不创建仓库目录，并由 runner 识别为串行尾，避免与其它真实私有测试根 writer 互相污染。没有放宽 residue guard 或 D 轴并发断言。
+- **Optional 修复**：补 `test_private_diagnostic_json_rejects_formal_decision_slot`，正式决策槽不能由可变私有 writer 写入，且不留下文件；不扩六腿重复矩阵。
+- **验证**：固定 Python 聚焦 `65 OK`；官方全量 `status=PASS exit=0 tests=5989 elapsed=473.5s deadline=860s`、`COUNT_GATE 5989=5989`、`319 PASS / 0 FAIL / 0 SKIPPED`、`serial_tail=24`；静态 `py_compile=8`、`git diff --check` 通过；全量后 `state/us_short/runs_private` 不存在。未联网、未调 provider、未用真实凭证。
+- **当前状态**：`repaired / OPEN-NOT-VERIFIED`。Required 与 Optional 均待 Claude Code 独立复审；第五刀真实 provider 执行仍未授权、未发生。
+- **下一步**：Claude Code：独立复审 5b 阶段 A Required/Optional；PASS 后按既有流程提交，不由本轮执行方提交。
+
 ## 2026-08-16 追加：Codex 最小修复第五刀阶段 A Required（待 Claude 独立复审；8d8c）
 
 - **Required-2 已修**：`run_one_shot` 内部调用 `_validate_packet`，直调传入的 packet 必须与已验证 tracked packet 等值；篡改 `target_chunk_index` 的用例在预算 reservation 和 DeepSeek client 构造前拒绝。`main()` 改为走同一个入口。没有改正式 Web/X runner 的 `_ensure_live_decision_slots_absent` 位置。
@@ -3214,6 +3223,14 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **失效的旧结论**：我上一轮写的「§13.7 四条 mutation control 只剩一条源码字符串 grep」已作废——四条现在都是运行期反向用例，其中「正式 publisher 不可达」那条改成了把 `publish_decision_pair` patch 成爆炸函数后运行仍 PASS + 预置正式槽逐字节不变，正是要求的形态。
 - **下一步注意**：① 补齐那条 entry 的收口字段即可解开提交门；② 上一轮 closure 的第 ⑦ 腿仍欠——按 rule 3(c) 由执行方跑一次 lane 全量并记账，主树在跑实盘，全量请从 test_capsule 树起；③ 端到端夹具用的是 `_K5FakeBudget`，真额度只由 `test_K5_13_2_second_gateway_chunk_is_stopped_by_the_real_budget` 那条真预算用例证明，日后别把它当重复删掉。
 
+## 2026-08-17 追加：Codex 实施 5b 阶段 A（8d8c）
+
+- **实现**：新增零成本 `runners/us_short_llm_theme_discovery_web_regroup_replay.py`。它只读第五刀固定 packet、transport summary、raw、0815 Web source set 和冻结 SIC snapshot，复用生产 parser / binding / normalizer / provisional validator；只写私有 machine summary，不碰 provider、budget、retry、正式槽、正式发布、merge、boost 或 score，也不新增 packet/schema。
+- **测试**：`tests/provider/test_us_short_offline_production_entry_guard.py` 新增 fake 正负主题、部分覆盖、绑定失败、固定 SIC 身份、生产切块顺序、无自由输入/付费入口、正式 publisher 不可达和 validator 承重测试。
+- **证据**：固定 Python 核心 owner `171 OK receipt:84b825c0c3b480af42f529be`；conformance/schema `49 OK receipt:3a6ffe4bb97bbcb41541e34e`；IO inventory `21 OK receipt:612993dc380c3084b9d3b09c`；`py_compile`、`git diff --check` 通过。未联网、未调 provider、未用真实凭证、未写真实 state/provider raw。
+- **边界**：当前 8d8c 树缺第五刀真实 transport summary/raw 和冻结 SIC 快照，所以没有执行真实 replay、没有生成 readiness；当前状态 `implemented / OPEN-NOT-VERIFIED`，见 `docs/system_risk_register.md` 顶部 `R-USSHORT-K5B-STAGE-A-IMPLEMENTATION-NOT-INDEPENDENTLY-REVIEWED`。
+- **下一步**：Claude Code 独立审查 5b 阶段 A；真实 replay 和语义校准必须等真实第五刀 artifact 已存在并另有明确授权。
+
 ## 2026-08-16 追加：第五刀阶段 A 收口 —— Claude Code 复审 PASS，已提交并合入 master
 
 - **本轮执行方只改了一行**：给那条修复条目补 `Pre-Codex self-review`（六个字段齐）+ `Required` 指向 register。`git diff --numstat` 的 SESSION_LOG 由 `28 0` 变 `29 0`，其余五个文件计数逐字未变，新 runner 的 sha256 仍是我做植入对照时记的基线 `5b2d5394…` —— 所以代码没有重审，上一轮那两枪对照继续有效。这条「用 numstat + 文件哈希证明代码没动，从而合法地不重审」的做法，下次遇到纯文档轮可以照用。
@@ -3222,3 +3239,52 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **一个值得记住的工具行为**：`full_pack_ledger run` 少写 `--` 分隔符时会打印 `REFUSED - invalid run arguments`，但**退出码是 0**。我按 rule ⑥「无 `Ran N tests` 一律 UNKNOWN」当场判无效并重发，没把那次 exit 0 当绿。以后读这个工具的结果只认 `RESULT status=`，别看 exit code。
 - **这次全量的作用域边界**：8d8c 落后 master 九个提交，所以它证明的是本刀在 `a13006ab` 基线上绿，不是合并态绿；合并后另跑焦点超集作最小校验。
 - **下一步注意**：阶段 A 到此为止只是「枪和记录仪造好并在离线证明过」。阶段 B（真花一次钱）仍需用户对 packet `us_short_web_regroup_engineering_smoke_20260815_chunk1_v1` 的单独精确授权，且执行位置固定为主树 `D:\cnhea\Stock`；失败不补枪，要再打必须新 packet、新授权。
+
+## 2026-08-17 追加：Claude Code 独立审查 5b 阶段 A —— FAIL（未提交）
+
+- **通过的部分（不必返工）**：单一离线 runner，全文件无 provider / client / gateway / budget / slot / retry 导入；CLI 连参数都不收（多一个 argv 即 `STOP_INPUT_INVALID`）；输入三重硬绑（packet schema + receipt digest / transport summary 必须 PASS 且 1-1-0-0 零重试、raw-before-parse 与 hash-reread 均 True / raw 重新读盘复算 sha 并要求 gitignored）；目标块仍由生产 `_normalize_search_results` + `_chunk_regroup_rows` 重派生并逐 id 比对；SIC 快照按 §六 用代码常量 + `source_as_of` + 64 位 `snapshot_id` + `_snapshot_digest()` 自洽三重钉死；`readiness` 恒 `None` 正确——§八.1/§十 要求人工判卷。
+- **判 FAIL 的一条**（正文只在 register）：`R-USSHORT-K5B-REPLAY-FORKS-THE-PRODUCTION-THEME-ACCEPTANCE-POLICY`。`_normalize_bound_discovery` 抄了 `fetch_web.py:2075-2125` 那段主题接受策略而不是调它，抄本已分叉两处：重复 `theme_id` 的成员账本仍写 `(accepted, None)`（生产是 `rejected/duplicate_theme_dropped`）；整批 normalize 失败时生产降级空 discovery + `discovery_normalization_rejected`，5b 直接 STOP。
+- **验证命令与结果（reviewer 亲跑）**：焦点超集 `entry_guard + fetch_web + provisional_theme_validate + plan_budget + discovery_conformance + io_inventory` → `Ran 249 / 56.6s / PASS receipt:4695683642fa93f8dc06f7e2`。自写探针走**真实** `web._llm_to_discovery_input` 造 bound、再交 5b wrapper：单主题对照 `(accepted, None)`；重复 `theme_id` 一格 5b 记 `duplicate_theme_dropped` 但账本全行仍 `(accepted, None)`。
+- **一个过程教训（我的）**：第一版探针我按「LLM 原始主题」的形状手搓 bound，结果两条都被 normalizer 判 `invalid_theme_dropped`，什么都没证到——`_normalize_bound_discovery` 吃的是 `_llm_to_discovery_input` 的**输出**形状，不是 LLM 原文形状。手搓 bound 之前先想清楚这个 bound 是谁产的。
+- **下一步注意**：closure 是把生产那段抽成 `fetch_web` 内可导入的纯函数、两边共用，不是在 5b 里把两处分叉逐个补齐——补齐只是让今天一致，抽出来才不会明天再分。补完配一条重复 `theme_id` 的反向用例，并验证换回 5b 旧实现会转红。
+
+## 2026-08-17 追加：Codex 最小修复 5b 阶段 A Required/Optional（待 Claude 独立复审；8d8c）
+
+- **Required 修复**：把 `fetch_web.py` 的主题接纳、重复主题账本回填和整批归一化失败降级抽成 `_normalize_discovery_with_binding_ledger()`；生产和 5b 共用，5b 不再保留副本。摘要现在直接带完整 `member_binding_ledger`，供第一份真实账本审阅。
+- **Required 反向控制**：重复 `theme_id` 的重复主题成员行必须为 `rejected/duplicate_theme_dropped`；整批 normalize 失败必须落空 discovery + `discovery_normalization_rejected`，不能 STOP。把代码换回 5b 旧副本时，重复主题用例会转红。
+- **Optional 修复**：5b machine summary 通过共享写门的私有可替换 JSON writer 写入，路径限制在 `state/us_short/runs_private`；同一冻结 raw 的离线重放可以更新摘要，不改正式决策 artifact。served model 改为与 `transport_summary.requested_model` 比对，避免用响应自己的 `served_model` 自证。
+- **验证**：固定 Python；5b/写门焦点 `14 OK`；核心 owner `178 OK`；conformance/schema/doc `105 OK`；C 轴变异闭合 `1 OK`；IO inventory `21 OK`；`py_compile`、`git diff --check` 通过。IO inventory 的 7 条 undeclared real-root finding 是既有输出，本轮没有新增。
+- **边界与状态**：未联网、未调 provider、未用真实凭证、未写真实 state/provider raw；真实第五刀 artifact 不在本树时不跑 5b replay，不生成 readiness。当前 `repaired / OPEN-NOT-VERIFIED`，等待 Claude 独立复审；本轮不提交。
+
+## 2026-08-17 追加：Claude Code 复审 5b 阶段 A 修复轮 —— FAIL（未提交）
+
+- **上一轮三条都真闭了（不必返工）**：抽取是**逐语句相同**的纯搬迁——我机械比对旧内联块与新 `fetch_web._normalize_discovery_with_binding_ledger`，53 条语句对 53 条、mismatch=0，调用点传同一批对象、账本仍就地改；重复 `theme_id` 走真实 `_llm_to_discovery_input` + 真实共用函数复跑，账本已是 `('accepted', None)` + `('rejected', 'duplicate_theme_dropped')`；`served_model` 改比 `requested_model`；摘要改走可替换私有写门。5b 自己那份 `_normalize_bound_discovery` 已删（0 命中）。
+- **判 FAIL 的一条**（正文只在 register）：`R-USSHORT-K5B-TESTS-CREATE-THE-REAL-PROTECTED-STATE-ROOT`。本刀那 10 条 `WebRegroupReplayTests` 会在真实 `state/us_short/` 下创建 `runs_private/`（空目录），把 `test_us_short_market_diagnostic_rehearsal::test_the_rehearsal_wrote_nothing_into_the_repository (protected='state/us_short')` 打红。违反 5b §12.4。
+- **定位过程（按 rule (d)，值得照抄）**：全量红 → 唯一红模块 → **该模块单跑 30 OK**（排除它自己）→ 查 protected root 残留发现 `runs_private/` 空目录且 mtime 恰为本次全量 → 删掉后**只跑本刀那 10 条**，目录立刻重现。四步把「全量红」收敛成「这 10 条测试写了真实 root」，没有靠重复慢跑二分。
+- **验证命令与结果（reviewer 亲跑）**：焦点超集 8 模块 `Ran 275 / 48.4s / PASS receipt:1a3e44406742d2d1d8dd763b`；lane 全量 `FAIL exit=1 tests=1125`、`COUNT_GATE 5988≠1125`。植入对照：把共用函数重复分支的 `set_parent_rows(..., "rejected", "duplicate_theme_dropped")` 掏成 `pass` → `test_5b_duplicate_theme_rejects_its_member_rows` 精确 `FAILED(failures=1)`、兄弟用例仍绿、还原后 `fetch_web` sha256 回基线 `ef2373f7…`。新写门六腿反向控制全 held（正式决策槽 / 越出 state_dir / 非 json / 未 ignored / `..` 穿越 全被拒）。
+- **失效的旧结论**：执行方自评里的 `full-lane=NOT_REQUIRED: isolated offline 5b replay, no production wiring` 不成立——本轮改了生产 `fetch_web.py`(+71/-58) 和共享 `us_short_discovery_publish_policy.py`(+26)，测试又确实碰了真实 protected root。这是连续第二轮 `full-lane=` 字段判错（上一轮是 NOT_RUN），两次都由 reviewer 按 rule 6 escalate 补跑，而这一次补跑真的抓到了红。
+- **下一步注意**：① 修的是写入口径不是目录——手工 `rmdir` 不算；空目录说明是对模块级常量的父目录做了 `mkdir(parents=True)` 而补丁还没生效，把补丁提到 mkdir 之前。② 修完必须 lane 全量一次绿且 `discovered==ran`。③ `_write_mutable_private_json` 目前只有正向用例，下次谁再动它，"正式决策槽必须被拒"那条负向用例应升为 Required。
+
+## 2026-08-17 追加：Claude Code 复审 5b 阶段 A 第三轮 —— PASS（已提交并合入 master）
+
+- **改了什么 / 为什么**：上一轮我判 FAIL 的是「本刀测试往真实 `state/us_short` 写东西，把 rehearsal 的仓库级 containment 检查打红」。本轮修在两处：测试侧不再碰真实常量根；另外把 `tests/provider/us_short_private_test_root.py` 的锁获取抽成 `hold_test_root_lock`（`temporary_provider_directory` 函数体逐段原样保留，只是包进新 CM），并让 rehearsal 的 containment 检查持有同一把仓库级锁再做前后快照。**断言文本一个字没改。**
+- **验证命令与结果（reviewer 亲跑）**：closure① `state/us_short/runs_private` 跑前不存在 → 单跑本刀那 10 条 `WebRegroupReplayTests`（`10 OK receipt:17ea1aa10b650ea28ad6b3fc`）→ 仍不存在（上一轮同样操作会立刻重现）。closure② `full_pack_ledger run us_short` 命中 `CACHED GREEN 5989 OK`，ledger `fingerprint=2330812a…` 与 `prepared_fingerprint` 一致、`elapsed=473.5s/860s`、`recorded_at=21:02:08`，按 rule 4 reviewer 不重跑。
+- **加锁不是关守卫（我核过的依据）**：`before/after` + `assertEqual` 原样；`_files_under` 我单独验过确实能看见杂散文件；锁只把并发写方挡在快照窗口外，而该用例 docstring 自己就写着它不想吃「a red that belongs to somebody else」。
+- **一处 NOT_VERIFIED，如实记**：我想打一枪植入对照证明加锁后断言仍承重——monkeypatch `run_rehearsal` 在窗口内落一个杂散目录、再试一个杂散文件，两次都 `failures=0`，没能复现出红；随后单独验证探测器可见该文件。所以更可能是我的 patch 没作用到真实调用点，但我**没有**证明它承重，这一腿判 NOT_VERIFIED，PASS 不建立在这枪上。下次谁再动这道检查，请把这枪补上。
+- **下一步注意（新开 Optional，不属本刀）**：rehearsal 加锁后只对自己负责，跨模块泄漏改由 pack 级网兜；但实读 `.tools/full_pack_ledger.py`，`find_marked_private_test_roots` 只认带 marker 的目录、`cleanup_new_private_test_roots` 只清 `tmp*` 形状，**一个不带 marker 又不叫 `tmp*` 的普通新目录两张网都不覆盖**。要收紧就让 pack 级快照对 protected root 下任何新目录报一次。
+
+## 2026-08-17 追加：Codex 最小修复 5b Optional（待 Claude 独立复审；8d8c）
+
+- **修复**：full-pack 在原有 marker/`tmp*` 清理完成后，比较 protected roots 的运行前后目录快照；本次新增的任何目录都拒绝 `us_short` 记绿。普通新目录不删除，只报告路径。
+- **反向用例**：新增普通目录残留用例；模拟 full-pack 返回 PASS 并留下普通目录时，`run_full_pack` 返回 `2`，普通目录仍在。
+- **验证**：`tests.test_full_pack_ledger` `31 OK`；官方全量 `status=PASS exit=0 tests=5989 elapsed=345.4s deadline=860s`、`COUNT_GATE 5989=5989`、`319 PASS / 0 FAIL / 0 SKIPPED`；`git diff --check` 和静态 `py_compile=2` 通过；全量后 `state/us_short/runs_private` 不存在。未联网、未调 provider、未用真实凭证。
+- **当前状态**：`repaired / OPEN-NOT-VERIFIED`。只改 `.tools/full_pack_ledger.py` 和其 owner 测试，等待 Claude 独立复审；不提交、不执行第五刀 provider。
+- **下一步**：Claude Code：独立复审 `O-K5B-PACK-LEVEL-RESIDUE-NET-DOES-NOT-COVER-PLAIN-NEW-DIRS`。
+
+## 2026-08-17 追加：Claude Code 复审 pack 级残留网补普通新目录 —— PASS（已提交并合入 master）
+
+- **改了什么 / 为什么**：`.tools/full_pack_ledger.py` 在既有清理之后再取一次 protected-root 目录快照并与跑前求差，差集非空即 `REFUSED ... return 2`。补的正是我上一轮记的那个 Optional：`find_marked_private_test_roots` 只认 marker、`cleanup_new_private_test_roots` 只清 `tmp*`，一个普通新目录两张网都不覆盖。作用域仍限 us_short，普通目录只报不删，拒发生在记绿之前。
+- **收紧腿要打的是「它真会响」**：删掉新增的 `if new_private_dirs:` 整块 → `test_us_short_green_is_rejected_when_plain_new_directory_survives_pack` 精确 `FAILED (failures=1)`；还原后 sha256 回基线 `6147ec4f…`、`tests.test_full_pack_ledger` `31 OK`。仓内那条用例构造也正确：造的是既无 marker 又不叫 `tmp*` 的 `ordinary-leak`，断言返回 2、消息命中、**目录仍在**（拒而非清）。
+- **误拒问题有实测答案**：账本 `5989 OK / recorded_at=21:28:00 / parallel workers=8 / elapsed=345.4s / deadline=860s`，我独立复算当前工作树指纹为同一个 `b17479570e…`，所以这条绿就是带着新拒绝腿跑出来的。
+- **一处自纠（值得记，省下次一轮）**：我一度以为「改了 `.tools/full_pack_ledger.py` 却还 CACHED GREEN」= 指纹不覆盖这个工具、是个洞。实读 `.tools/verification_receipt.py` 后作废——`fingerprint()` 只封 `@` 开头的键，而 `@CODE_CONTENT` 本就是全部代码内容的 sha；per-path 条目只决定 bundle 要求。命中缓存是因为执行方在 21:28 用这个状态真跑过。**下次看到「改了代码还命中缓存」，先算一遍当前指纹跟账本比，再下结论。**
+- **顺带补做**：上一轮 5b（`2ac052e6`）因主树 `.git/index.lock` 挂了 2.5 小时没能合并，本轮锁已释放，一并合入。

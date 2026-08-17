@@ -51,11 +51,8 @@ def _release_process_lock(handle) -> None:
 
 
 @contextmanager
-def temporary_provider_directory(
-    repo_root: Path,
-    relative_parent: Path = Path("provider_samples"),
-) -> Iterator[str]:
-    """Create an isolated in-repo private root without assuming ignored parents exist."""
+def hold_test_root_lock(repo_root: Path) -> Iterator[None]:
+    """Hold the same repository-wide lock used by private test roots."""
     root = repo_root.resolve()
     lock = _root_lock(root)
     with lock:
@@ -67,45 +64,56 @@ def temporary_provider_directory(
         _THREAD_STATE.depths = depths
         _THREAD_STATE.handles = handles
         try:
-            parent = (root / relative_parent).resolve()
-            parent.relative_to(root)
-            missing_parents: list[Path] = []
-            cursor = parent
-            while cursor != root and not cursor.exists():
-                missing_parents.append(cursor)
-                cursor = cursor.parent
-            parent.mkdir(parents=True, exist_ok=True)
-            for created in missing_parents:
-                (created / _OWNERSHIP_MARKER).touch(exist_ok=True)
-            try:
-                with tempfile.TemporaryDirectory(dir=parent) as tempdir:
-                    # Keep every in-repo private test root fail-closed for subprocesses that
-                    # perform a real ``git check-ignore``.  The state wrapper used to add this
-                    # boundary itself, leaving provider roots dependent on the repository's
-                    # parent ignore rules and leaking evidence on a clean checkout.
-                    # Marker before .gitignore, same reason as the light helper: never leave
-                    # a window where the root holds a file but not its ownership mark.
-                    Path(tempdir, _TEMP_ROOT_MARKER).touch()
-                    Path(tempdir, ".gitignore").write_text("*\n", encoding="utf-8")
-                    yield tempdir
-            finally:
-                cursor = parent
-                while cursor != root:
-                    marker = cursor / _OWNERSHIP_MARKER
-                    if not marker.is_file():
-                        cursor = cursor.parent
-                        continue
-                    if any(path != marker for path in cursor.iterdir()):
-                        cursor = cursor.parent
-                        continue
-                    marker.unlink()
-                    cursor.rmdir()
-                    cursor = cursor.parent
+            yield
         finally:
             depths[root] -= 1
             if depths[root] == 0:
                 del depths[root]
                 _release_process_lock(handles.pop(root))
+
+
+@contextmanager
+def temporary_provider_directory(
+    repo_root: Path,
+    relative_parent: Path = Path("provider_samples"),
+) -> Iterator[str]:
+    """Create an isolated in-repo private root without assuming ignored parents exist."""
+    root = repo_root.resolve()
+    with hold_test_root_lock(root):
+        parent = (root / relative_parent).resolve()
+        parent.relative_to(root)
+        missing_parents: list[Path] = []
+        cursor = parent
+        while cursor != root and not cursor.exists():
+            missing_parents.append(cursor)
+            cursor = cursor.parent
+        parent.mkdir(parents=True, exist_ok=True)
+        for created in missing_parents:
+            (created / _OWNERSHIP_MARKER).touch(exist_ok=True)
+        try:
+            with tempfile.TemporaryDirectory(dir=parent) as tempdir:
+                # Keep every in-repo private test root fail-closed for subprocesses that
+                # perform a real ``git check-ignore``.  The state wrapper used to add this
+                # boundary itself, leaving provider roots dependent on the repository's
+                # parent ignore rules and leaking evidence on a clean checkout.
+                # Marker before .gitignore, same reason as the light helper: never leave
+                # a window where the root holds a file but not its ownership mark.
+                Path(tempdir, _TEMP_ROOT_MARKER).touch()
+                Path(tempdir, ".gitignore").write_text("*\n", encoding="utf-8")
+                yield tempdir
+        finally:
+            cursor = parent
+            while cursor != root:
+                marker = cursor / _OWNERSHIP_MARKER
+                if not marker.is_file():
+                    cursor = cursor.parent
+                    continue
+                if any(path != marker for path in cursor.iterdir()):
+                    cursor = cursor.parent
+                    continue
+                marker.unlink()
+                cursor.rmdir()
+                cursor = cursor.parent
 
 
 @contextmanager

@@ -471,6 +471,32 @@ def write_mutable_ledger(
         _discard([tmp] if tmp is not None else [])
 
 
+def _write_mutable_private_json(
+    payload: dict[str, Any], path: Path, *, root: Path, state_dir: Path,
+    gitignored: Callable[[Path], bool] | None = None,
+) -> None:
+    """Replace one private diagnostic JSON through the shared write door."""
+    resolved = validate_exact_decision_slot(
+        path, path, root=root, state_dir=state_dir, gitignored=gitignored,
+    )
+    try:
+        resolved.relative_to((state_dir / "runs_private").resolve())
+    except ValueError as exc:
+        raise DiscoveryPublishPolicyError(
+            "mutable private JSON must stay under state/us_short/runs_private"
+        ) from exc
+    serialized = _serialized_payload(payload)
+    tmp: Path | None = None
+    try:
+        tmp = _staged_temp(resolved, serialized)
+        os.replace(tmp, resolved)
+        tmp = None
+    except OSError as exc:
+        raise DiscoveryPublishPolicyError("cannot update private diagnostic JSON") from exc
+    finally:
+        _discard([tmp] if tmp is not None else [])
+
+
 def write_monotonic_mutable_ledger(
     payload: dict[str, Any], path: Path, *, root: Path, state_dir: Path,
     gitignored: Callable[[Path], bool] | None = None,
