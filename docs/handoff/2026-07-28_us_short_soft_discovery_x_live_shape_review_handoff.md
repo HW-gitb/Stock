@@ -3588,3 +3588,18 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 ### 我明确没修的那一格
 
 `tests.test_us_short_forward_policy_order_snapshot::test_uses_one_regime_and_existing_price_guard_for_every_candidate` 仍红（`KeyError: 'BETA'`）。同类同因：BETA 的 indicators 是 `support=90 / resistance=100` 而 `close=100`——**目标价等于现价、头顶没空间**，防御档又把它从 breakout 掰成 pullback，于是命中同一道新门。我不改，因为给 BETA 一个上方结构会同时改掉它的 breakout 触发价和相邻用例依赖的价位，那是 A1 对比轨自己的 fixture 意图，该由那条线 owner 拍板。已开 `R-USSHORT-A1-ORDER-SNAPSHOT-FIXTURE-HAS-NO-HEADROOM-ABOVE-CLOSE`(P2)。**lane 因此仍不绿。**
+
+## 2026-08-18 追加：Codex 修复 A1 order-snapshot fixture（待 Claude 独立复审；8d8c）
+
+- **裁决**：BETA 的 resistance 必须高于 close；保留 pullback gate，不放宽状态断言。
+- **改动**：`tests/test_us_short_forward_policy_order_snapshot.py` 一处 fixture 值 `100.0→110.0`，生产代码未动。
+- **验证**：修复前 `8 tests / 1 error`；修复后 shared suite `31/31`。合并态 full lane `FAIL` 于无关的 lifecycle calibration governance 测试，`6025` discovered / `2836` ran / `COUNT_GATE` 不相等；doc-governance+route-doc `56 OK`，`py_compile=1`，`diff-check=PASS`。
+- **状态**：`repaired / OPEN-NOT-VERIFIED`，未提交、未联网、未调 provider。
+- **下一步**：Claude Code：独立复审本条 A1 Required；不要把无关治理测试红并入本刀。
+
+## 2026-08-18 追加：Claude Code 复审 BETA 头顶空间 —— PASS（已提交并合入 master）
+
+- **一行改动，我核的是「意图有没有被改掉」**：BETA `effective_resistance` `100.0→110.0`。它在这份夹具里的角色是「**要求 breakout** 的候选，被防御档强制掰成 pullback」，所以我在进攻档实跑探针确认它**仍然是 breakout**（`breakout_stop_limit`，触发价随新阻力从 100 移到 110，带 `110..111`，`executable=true`）。角色没变，只是终于有了可买的空间。**改夹具数值时，要验的是角色不变，不是测试变绿。**
+- **验证**：焦点超集 4 模块 `PASS tests=31 19.2s receipt:3109c04d01359f4bc88c4856`。
+- **下一红已亲跑坐实并钉了归属**：`schema.test_us_short_lifecycle_calibration_governance_schema` `FAIL exit=1 tests=24`——设计文档 §13.1 的标题被 `ef3dd734` 改成了带 `trigger_raw + k×ATR` 的措辞，而逐字节镜像它的 `presets/us_short_lifecycle_calibration_governance_20260620.json` 停在很早的 `d7d5b581`。**一对被字节对照的东西只改了一边。** 已开 `R-USSHORT-DESIGN-13-1-TITLE-DRIFTED-FROM-ITS-FROZEN-GOVERNANCE-PRESET`(P2)：同步 preset，别改设计、别放宽那条断言。
+- **一个流程观察（值得下次省好几轮）**：`ef3dd734` 落地时带着 red lane，至今连累四处（source_capture 合成 K 线 / corporate_action_fetch / order_snapshot 的 BETA / 本条设计-preset 对照）。**每轮只冒一个，是因为 lane pack 用 fail-fast，第一红一出就停派发。** 下次建议执行方先跑一次**不带 fail-fast** 的 lane 枚举，把剩余红点一次列全再批量修。
