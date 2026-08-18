@@ -538,6 +538,8 @@ class SerenityQualityForwardTest(unittest.TestCase):
             (root / "vix.json").write_text("{}", encoding="utf-8")
             bridge_summary = {"batch4_run": {"output_paths": {"weekly_report_path": str(report_path)}}}
             with patch("runners.us_short_weekly_capstone_stages._write_provider_health"), \
+                 patch("runners.us_short_weekly_capstone_stages._build_market_axis_regimes",
+                       return_value={"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"}), \
                  patch("runners.us_short_weekly_capstone_stages._bridge.run_e2e", return_value=bridge_summary):
                 from runners.us_short_weekly_capstone_stages import run_weekly_bridge
 
@@ -551,6 +553,8 @@ class SerenityQualityForwardTest(unittest.TestCase):
 
             report_path.write_text("# malformed\n", encoding="utf-8")
             with patch("runners.us_short_weekly_capstone_stages._write_provider_health"), \
+                 patch("runners.us_short_weekly_capstone_stages._build_market_axis_regimes",
+                       return_value={"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"}), \
                  patch("runners.us_short_weekly_capstone_stages._bridge.run_e2e", return_value=bridge_summary):
                 run_weekly_bridge(ctx)
             self.assertEqual(report_path.read_text(encoding="utf-8"), "# malformed\n")

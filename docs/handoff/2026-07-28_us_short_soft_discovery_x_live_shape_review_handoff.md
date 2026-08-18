@@ -3619,3 +3619,25 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 ### 边界
 
 两文件各 `1 增 1 删`、CRLF 未翻、无代码无行为变化。这条只关掉「两边字面漂移」，**不证明 §13.1 #20 的措辞本身对**——那句 `trigger_raw + k×ATR` 是 `ef3dd734` 写进设计的，本轮按「设计是权威」照搬。设计文档一个字未动，byte-faithful 断言也一个字未动。
+
+## 2026-08-18 追加：Claude 自修自审 —— 关掉 fail-fast 枚举，三红同因，lane 终于记绿
+
+### 枚举怎么做的（连同它的一次白跑）
+
+`full_pack_ledger` 与 `parallel_lane_runner` 都是模块级 fail-fast，所以过去五轮每轮只看得见一个红。本轮把 runner 里**两处**「遇红停派发」临时置 False（deadline 那处保留），直接跑 runner（不经 ledger、不记账），跑完逐字节还原（`RESTORED_SHA_MATCH=True`）。
+
+**先浪费了一次 316s**：我的锚串 `halt_dispatch = True` 在文件里有两处（575=deadline halt、593=波次红 halt），补丁脚本按「必须恰 1 处」拒绝执行，而 PowerShell 没守 `$LASTEXITCODE` 就接着把 runner 跑完了。**教训：临时补丁要么按行号定位、要么调用方守退出码——别让「补丁没打上」静默变成一次白跑。**
+
+### 三个红是同一个根因
+
+`0600d281` 让 `run_weekly_bridge` **无条件**调用 `_build_market_axis_regimes(ctx)`，它要 `ctx.candidate_path` / `series_packet_path` 和可过 schema 的同钟制品；两份用 `SimpleNamespace` 造假上下文的测试没有 → `AttributeError` 被包成 `ValueError: ...schema validation`，`conformance_resources` 的 `(1,1) != (1,0)` 是连坐。
+
+**关键发现**：该刀自己已经给 `tests/provider/test_us_short_weekly_capstone.py` 的 **7 个** bridge 调用点加了 `mock.patch.object(st, "_build_market_axis_regimes", ...)`——**它只是漏了另外两份文件里的 4 个**。所以修法不用发明：`grep -rn "run_weekly_bridge(" tests/` 枚举出全部 11 个调用点，把缺的 4 处按同一形状补齐即可。**遇到「某刀改了必调路径」的连锁红，先看它自己改过的测试文件是怎么解的，那就是房内写法。**
+
+### 边界
+
+纯测试 `+6/+4`，生产零改动；打桩没有削弱任何生产门——市场轴那条契约由该刀自己新增的 `test_us_short_regime.py`(+105) 与 `test_us_short_weekly_capstone.py`(+18) 覆盖。三红模块合跑 `PASS tests=27 138.6s`；官方 lane `PASS 6038/6038 812.9s/860s`，**主线自此终于记上 us_short 的绿**。
+
+### 但余量只剩 5.5%
+
+`860 - 812.9 = 47.1s`，低于 `R-USSHORT-LANE-PACK-IS-GREEN-ONLY-BY-4-SECONDS...` 的 ≥15% closure 判据，该条仍 open。**口径提醒**：812.9s 不能跟历史 343.6s 比——那些是 fail-fast 早停、从没跑满 320 个模块；可比的是同为跑满的枚举跑 726.7s。
