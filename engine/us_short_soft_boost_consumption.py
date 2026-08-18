@@ -415,16 +415,6 @@ def _can_upgrade_zero_receipt(path: Path, payload: dict[str, Any]) -> bool:
     return existing.get("status") in _ZERO_SOFT_BOOST_STATUSES
 
 
-def read_frozen_zero_consumption_receipt(path: Path) -> dict[str, Any] | None:
-    """Return only a schema-valid frozen typed-zero receipt, never a guessed fallback."""
-    try:
-        existing, _ = _read_json_bytes(Path(path))
-        _validate(existing, CONSUMPTION_SCHEMA, label="frozen K4b consumption receipt")
-    except (OSError, UnicodeDecodeError, ValueError, SoftBoostConsumptionError):
-        return None
-    return existing if existing.get("status") in _ZERO_SOFT_BOOST_STATUSES else None
-
-
 def _declares_expected_path(value: Any, expected: Path) -> bool:
     if type(value) is not str or not value:
         return False

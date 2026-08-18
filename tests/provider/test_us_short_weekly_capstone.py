@@ -1061,6 +1061,139 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertIn("## 10.", weekly_report)
         self.assertNotIn("跨行业赛道发现+确认", weekly_report)  # offline_test keeps banner ⑦ absent
 
+    def test_same_day_second_pass_rejects_old_zero_receipt_through_private_writer(self):
+        """Run the typed-zero path twice through capstone, bridge, Batch4, and private write."""
+        fixture = e2e_fixture.Batch5ToBatch4E2ETest(
+            "test_local_source_packet_to_private_weekly_report_and_action_table")
+        fixture.setUp()
+        self.addCleanup(fixture.tearDown)
+        self.addCleanup(fixture._state_root_context.__exit__, None, None, None)
+
+        decision_date = "20260615"
+        account = e2e_fixture._write_json(self.private_root / "account.json", e2e_fixture._empty_account())
+        template = e2e_fixture._no_build_template(self.private_root / "batch4_template.json")
+        from engine.us_short_soft_boost_consumption import build_consumption_receipt
+
+        receipt = build_consumption_receipt(
+            resolved={
+                "decision_date": decision_date,
+                "requested_enabled": True,
+                "effective_enabled": False,
+                "status": "zero_upstream_unavailable",
+                "reason_code": "UPSTREAM_UNAVAILABLE",
+                "stage_receipt": {"path": None, "sha256": None},
+                "validation_artifact": {"path": None, "sha256": None},
+            },
+            generated_at="2026-06-15T08:00:00-04:00",
+            on_selection={"AAPL": 50.0},
+            off_selection={"AAPL": 50.0},
+            boost_records={"AAPL": {"theme_soft_boost": 0.0, "evidence_tier": None}},
+            on_top15=["AAPL"],
+            off_top15=["AAPL"],
+        )
+        receipt_bytes = json.dumps(receipt, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        pass2_runs = 0
+        seen_soft_paths: list[dict[str, object] | None] = []
+        real_run_e2e = e2e_fixture.e2e.run_e2e
+
+        def prepare_offline_health(ctx):
+            ctx.provider_health_path.parent.mkdir(parents=True, exist_ok=True)
+            ctx.provider_health_path.write_text(
+                json.dumps(e2e_fixture._provider_health()), encoding="utf-8")
+            ctx.vix_regime_summary_path.parent.mkdir(parents=True, exist_ok=True)
+            ctx.vix_regime_summary_path.write_text(
+                json.dumps({"vix_regime": "防御", "vix_regime_is_unknown": False}), encoding="utf-8")
+
+        def pass2_run(ctx):
+            nonlocal pass2_runs
+            pass2_runs += 1
+            result = {
+                "requested_enabled": True,
+                "status": "zero_upstream_unavailable" if pass2_runs == 1 else "zero_valid_empty",
+                "reason_code": "UPSTREAM_UNAVAILABLE" if pass2_runs == 1 else "VALID_EMPTY",
+                "effective_enabled": False,
+                "evidence_bundle_written": False,
+                "consumption_receipt_path": None,
+                "shadow_receipt_path": None,
+                "comparison_ledger_path": None,
+                "provider_calls_performed": False,
+            }
+            if pass2_runs == 1:
+                receipt_path = ctx.soft_boost_consumption_receipt_path
+                receipt_path.parent.mkdir(parents=True, exist_ok=True)
+                receipt_path.write_bytes(receipt_bytes)
+                result["consumption_receipt_path"] = str(receipt_path)
+            for path in (ctx.source_packet_path, ctx.context_components_path):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("{}", encoding="utf-8")
+            return {"stage": "pass2_fetch", "source_packet": {"soft_boost": result}}
+
+        def offline_bridge(**kwargs):
+            seen_soft_paths.append(kwargs["soft_discovery_receipt_paths"])
+            return real_run_e2e(
+                **{
+                    **kwargs,
+                    "source_packet_path": fixture.paths["packet"],
+                    "batch4_template_path": template,
+                    "account_state_path": account,
+                    "context_components_path": fixture.paths["components"],
+                    "run_mode": "offline_test",
+                    "_research_live_capability": None,
+                    "projection_binding_expectations": e2e_fixture.e2e.PROJECTION_INPUTS_BINDING,
+                }
+            )
+
+        def soft_discovery_run(_ctx):
+            return {"status": "disabled", "reason_code": "SOFT_DISCOVERY_DISABLED"}
+
+        stages = [
+            Stage("soft_discovery", False, lambda _c: [], lambda _c: [], soft_discovery_run),
+            Stage(
+                "pass2_fetch", False, lambda _c: [],
+                lambda c: [c.source_packet_path, c.context_components_path], pass2_run,
+            ),
+            Stage(
+                "weekly_bridge", False, lambda c: [c.source_packet_path],
+                capstone._official_output_paths, capstone_stages.run_weekly_bridge,
+            ),
+        ]
+        run_kwargs = dict(
+            now_et=datetime(2026, 6, 15, 8, 0, 0), private_root=self.private_root,
+            batch4_template_path=template, account_state_path=account, dry_run=False,
+            confirm_user_authorization=True, state_dir=self.state_dir, sample_root=self.state_dir,
+            stages=stages,
+        )
+        with mock.patch.object(capstone_stages, "_write_provider_health", side_effect=prepare_offline_health), \
+             mock.patch.object(capstone_stages, "_build_market_axis_regimes", return_value={
+                 "vix": "防御", "market_trend": "进攻", "breadth": "进攻",
+             }), \
+             mock.patch.object(capstone_stages._bridge, "run_e2e", side_effect=offline_bridge):
+            first = run_weekly_capstone(**run_kwargs)
+            receipt_path = self.state_dir / f"us_short_soft_boost_consumption_receipt_{decision_date}.json"
+            first_receipt_bytes = receipt_path.read_bytes()
+            second = run_weekly_capstone(**run_kwargs)
+
+        self.assertTrue(first["emitted"] and second["emitted"])
+        self.assertEqual(pass2_runs, 2)
+        self.assertEqual(first_receipt_bytes, receipt_bytes)
+        self.assertEqual(receipt_path.read_bytes(), first_receipt_bytes)
+        self.assertEqual(seen_soft_paths[1], {
+            "stage_receipt_path": None,
+            "consumption_receipt_path": None,
+            "shadow_receipt_path": None,
+            "comparison_ledger_path": None,
+            "adjudication_receipt_path": None,
+            "artifact_state": "invalid",
+        })
+        report_path = self.private_root / "weekly_private" / decision_date / "weekly_report.md"
+        machine_path = self.private_root / "runs_private" / decision_date / "machine_record.json"
+        report_text = report_path.read_text(encoding="utf-8")
+        machine_text = machine_path.read_text(encoding="utf-8")
+        self.assertIn("软发现证据无效 · 已拒绝消费 · 0 分", report_text)
+        self.assertIn("SOFT_BOOST_COMPARISON_ARTIFACT_INVALID", report_text)
+        self.assertNotIn(str(receipt_path), report_text)
+        self.assertNotIn(str(receipt_path), machine_text)
+
     def test_pass2_summary_soft_boost_result_reaches_later_stage_context(self):
         order: list[str] = []
         stages = self._fake_stages(order)
@@ -2374,11 +2507,19 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             soft_discovery_run_result={},
             soft_boost_run_result=zero_result,
         )
+        ctx.soft_boost_consumption_receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        ctx.soft_boost_consumption_receipt_path.write_text("{}", encoding="utf-8")
+        stale_result = {
+            **zero_result,
+            "status": "zero_valid_empty",
+            "reason_code": "VALID_EMPTY",
+            "consumption_receipt_path": None,
+        }
         invalid_ctx = replace(
             ctx,
             theme_soft_boost_enabled=True,
             soft_discovery_run_result={},
-            soft_boost_run_result={"requested_enabled": True},
+            soft_boost_run_result=stale_result,
         )
         not_requested_ctx = replace(
             ctx,

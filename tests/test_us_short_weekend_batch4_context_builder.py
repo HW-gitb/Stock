@@ -117,6 +117,33 @@ class ExamplesAndSchema(unittest.TestCase):
         with self.assertRaises(runner.Batch4RunnerError):
             runner._validate_packet_schema(bad)
 
+    def test_invalid_soft_discovery_shape_is_null_only(self):
+        import jsonschema
+
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        packet = json.loads(EMPTY_EXAMPLE.read_text(encoding="utf-8"))
+        path_keys = {
+            "stage_receipt_path", "consumption_receipt_path", "shadow_receipt_path",
+            "comparison_ledger_path", "adjudication_receipt_path",
+        }
+        normal = {key: None for key in path_keys}
+        packet["report_context"]["soft_discovery_receipt_paths"] = normal
+        jsonschema.validate(packet, schema)
+
+        invalid = {**normal, "artifact_state": "invalid"}
+        packet["report_context"]["soft_discovery_receipt_paths"] = invalid
+        jsonschema.validate(packet, schema)
+        for name, bad in {
+            "old_path": {**invalid, "consumption_receipt_path": "state/us_short/old.json"},
+            "other_state": {**invalid, "artifact_state": "other"},
+            "unknown_key": {**invalid, "EXTRA": None},
+        }.items():
+            with self.subTest(name=name):
+                candidate = copy.deepcopy(packet)
+                candidate["report_context"]["soft_discovery_receipt_paths"] = bad
+                with self.assertRaises(jsonschema.ValidationError):
+                    jsonschema.validate(candidate, schema)
+
 
 class BuilderRunnerEndToEnd(unittest.TestCase):
     def test_empty_run_consumes_committed_example_directly(self):

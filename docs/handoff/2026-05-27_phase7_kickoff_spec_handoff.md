@@ -5509,6 +5509,29 @@ Codex：类C 第二刀（§9 从真实 Pass1+Pass2+Top15 生成范围与数量�
 ### 下一步
 
 Claude Code：审查
+
+## 2026-08-18 Codex 严格按桌面 `2us_testrun0816.md:855-1024` 修复类D（问题7）（888d，OPEN-NOT-VERIFIED）
+
+### 逐行实施
+
+- **1.A 生产者**：已核实 `runners/us_short_batch5_data_context_source_packet.py::run_packet` 的 summary 只在 `soft_consumption_receipt_written=True` 时返回 `consumption_receipt_path`；删除冻结旧 zero receipt 的 import/helper。普通 typed-zero `write_consumption_receipt` 失败只 `pass`，保留本轮 `soft_resolution` 与 `soft_consumption_receipt_written=False`；没有新增 run-id、revision、receipt、hash、迁移或状态表。
+- **1.B 分类器**：未改生产 classifier 规则；既有本轮声明路径门在 path=None 时自然落 `SOFT_BOOST_COMPARISON_ARTIFACT_INVALID`，同名旧文件不再复活 `consumption_only`。既有成功 typed-zero、完整 nonempty bundle 和未请求路径保持原语义。
+- **1.C bridge/schema**：`runners/us_short_batch5_to_batch4_weekend_e2e.py::_patched_report_context` 与 `schemas/us_short_weekend_batch4_context_packet.schema.json` 只同步正常五路径 union 与 invalid 全 null + `artifact_state="invalid"` union；invalid 携旧路径、改状态、缺/多键 fail-closed。复用 `engine/us_short_weekend_report.py` 已有 invalid consumer。
+- **1.D 测试**：source-packet 回归锁住同日第二次的当前 status/reason、空路径和首次字节不变；classifier 回归锁住 path=None+旧文件=invalid；bridge/schema 回归锁住 invalid 通过和三类畸形拒绝；weekend-report 回归锁住 `invalid_evidence`、无旧 bindings 及“软发现证据无效 · 已拒绝消费 · 0 分”；capstone 增加一次正式同日双跑，不为 helper 复制同一用例。
+
+### 一个总验收门
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`：受影响 focused 超集 `251 tests / OK`；正式双跑门直接走 capstone→Pass2→weekly bridge→Batch4→private write，第二次官方周报显示拒绝消费/0分，旧路径不进入第二次 bridge 或官方输出；positive consumption-only / comparison-ready / not-requested 门保持通过。
+- 受影响 Python `py_compile` 通过；`git diff --check` 通过（仅 LF→CRLF 提示）。无 provider/network/live/full-lane；未碰类C §4/§9/§10、横幅⑦、private-writer source-fact 对账或类E best-effort；未碰主树、桌面文档、`docs/CURRENT.md`，未提交、未 merge。
+
+### Required / Optional、结论与下一步
+
+- `R-USSHORT-CLASS-D-SAME-DATE-SOFT-BOOST-RECEIPT-REUSE` 已修，Optional=无；当前为 `repaired / OPEN-NOT-VERIFIED`，待 Claude Code 独立审查，PASS 后按 reviewer/committer 流程提交，merge 由用户决定。
+- 结论边界：只说明新周报不再借用同日旧 soft-boost 证据；不证明 soft discovery alpha、比较轨成熟、策略胜率、provider 生产就绪或 ship-gate。
+
+### 下一步
+
+Claude Code：审查
 ## 2026-08-18 Claude Code 独立审查：类C 第二刀 — FAIL（一条 Required）
 
 §9 三阶段同源化本体全部正确并已逐项核对（2.A 互斥票数禁令兑现、2.B 双计守卫与守恒、2.C recall 单列、
@@ -5552,3 +5575,14 @@ Claude Code：审查
 ### 下一步
 
 Codex：类D（切断同日旧 soft-boost 证据回填）→ 类E（非阻断失败送达周报）。
+
+## 2026-08-18 Claude Code 独立审查：类D（问题7）— PASS
+
+借用链删干净（写失败改 `pass`，helper 删除且全仓零孤儿）；上轮方案审阅里标 NOT_VERIFIED 的
+「path 由 written 标志派生」已在 `:1014`/`:1266` 坐实。审查者亲验 22/22：本轮不声明路径而磁盘存同名旧收据时
+分类器必判 INVALID（旧文件不复活）；bridge 与 schema 对 invalid 形状逐例一致——带任一旧路径、
+`artifact_state` 取别值、多余键、缺键、非 dict、路径非串全部 fail-closed。超集 293 全绿。
+
+### 下一步
+
+Codex：类E（复用 stage_outcomes，以可选横幅⑨把 bridge 前非阻断失败送达正式周报；横幅自身失败回流 weekly_bridge）。

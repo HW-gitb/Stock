@@ -436,7 +436,15 @@ class FailClosed(unittest.TestCase):
             "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID",
             out["report_data"]["banner"]["soft_discovery_status"],
         )
-        self.assertEqual(out["report_data"]["soft_discovery_machine_record"]["state"], "invalid_evidence")
+        self.assertIn(
+            "软发现证据无效 · 已拒绝消费 · 0 分",
+            out["report_data"]["banner"]["soft_discovery_status"],
+        )
+        soft_record = out["report_data"]["soft_discovery_machine_record"]
+        self.assertEqual(soft_record["state"], "invalid_evidence")
+        for binding in soft_record["bindings"].values():
+            self.assertIsNone(binding["path"])
+            self.assertIsNone(binding["sha256"])
 
     def test_not_requested_soft_boost_is_absent_from_the_weekly_banner(self):
         out = _build_report(
