@@ -25,6 +25,7 @@ PUBLIC_WRITER_FUNCTIONS = frozenset({
     "engine/a_short_factor_comparison.py:_atomic_write",
     "engine/a_short_factor_comparison_v2.py:_atomic_write",
     "engine/a_short_industry_weight_comparison.py:_atomic_write",
+    "engine/a_short_loss_making_admission.py:merge_loss_making_exclusion_tracker",
     "engine/a_short_overlay_adjudication.py:_write",
     "engine/a_short_run_revision.py:write_revision_manifest",
     "engine/egs_industry_heat.py:write_weight_comparison",

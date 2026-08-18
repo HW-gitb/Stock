@@ -1200,6 +1200,10 @@ if ($SkipRegime) {
     $RegimeArgs = @('runners\a_short_regime_comparison_runner.py', '--as-of', $AsOf,
                     '--v14_2-regime', $EffectiveV142Regime,
                     '--sidecar-outcome-run-revision-id', $RunRevisionId)
+    $LossMakingRankCsv = Join-Path $PublicRevisionDir 'rank_universe_reconciliation.csv'
+    $LossMakingTrackerPath = Join-Path $ProjectRoot 'research\results\a_short\loss_making_exclusion_tracker.json'
+    $RegimeArgs += @('--loss-making-rank-csv', $LossMakingRankCsv,
+                     '--loss-making-tracker-path', $LossMakingTrackerPath)
     if ($M67InvocationState -eq 'complete' -and $DesignCompletionAuthorized) {
         try {
             $RawV142Regime = (Get-Content -Raw -Encoding UTF8 $SemAnalysisInput | ConvertFrom-Json).market_context.market_regime.status

@@ -162,8 +162,11 @@ def _official_inputs(as_of: str, run_revision_id: str | None = None) -> tuple[di
     if not required.issubset(recon.columns) or recon["ts_code"].duplicated().any():
         raise ValueError("invalid rank-universe reconciliation shape")
     ranked = set(recon.loc[recon["outcome"] == "ranked", "ts_code"].astype(str))
-    if ranked != set(full["ts_code"].astype(str)):
-        raise ValueError("reconciliation ranked codes do not equal egs_full codes")
+    full_ranked = set(recon.loc[
+        recon["terminal_stage"].isin(("l5_rank", "loss_making_admission")), "ts_code"
+    ].astype(str))
+    if full_ranked != set(full["ts_code"].astype(str)):
+        raise ValueError("reconciliation full-rank codes do not equal egs_full codes")
     return marker, recon, full
 
 

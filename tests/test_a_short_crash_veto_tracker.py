@@ -85,10 +85,13 @@ class CrashVetoTrackerTest(unittest.TestCase):
             recon = bundle / "rank_universe_reconciliation.csv"
             full = bundle / f"egs_full_{as_of}.csv"
             recon.write_text(
-                "ts_code,outcome,terminal_stage,reason\n000001.SZ,ranked,l5_rank,ranked\n",
+                "ts_code,outcome,terminal_stage,reason\n"
+                "000001.SZ,ranked,loss_making_admission,ranked\n"
+                "000002.SZ,excluded,loss_making_admission,"
+                "loss_making_ttm_profit_dedt_non_positive\n",
                 encoding="utf-8",
             )
-            full.write_text("ts_code\n000001.SZ\n", encoding="utf-8")
+            full.write_text("ts_code\n000001.SZ\n000002.SZ\n", encoding="utf-8")
             digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
             (bundle / "official_publish.json").write_text(json.dumps({
                 "stage_status": "complete", "trade_date": as_of,
@@ -105,7 +108,7 @@ class CrashVetoTrackerTest(unittest.TestCase):
             with mock.patch("runners.a_short_crash_veto_tracker.ROOT", root):
                 marker, recon_frame, full_frame = _official_inputs(as_of, revision)
                 self.assertEqual(marker["run_id"], "run-revision")
-                self.assertEqual(set(full_frame["ts_code"]), {"000001.SZ"})
+                self.assertEqual(set(full_frame["ts_code"]), {"000001.SZ", "000002.SZ"})
                 self.assertEqual(
                     latest_settled_trade_date_from_analysis_input(
                         official_analysis_input_path(root, as_of, revision), as_of

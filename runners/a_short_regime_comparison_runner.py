@@ -57,6 +57,7 @@ from engine.a_short_regime_action_comparison import (
     candidate_effect_policy, candidate_effect_policy_fingerprint,
     summarize_candidate_effect_records, validate_candidate_effect_summary,
 )
+from engine.a_short_loss_making_admission import update_loss_making_exclusion_tracker
 from engine.data.a_share_board_scope import is_a_share_main_board
 from engine.a_short_experiment_admission_registry import admission_snapshot
 from engine import a_short_evidence_epoch_mode as _epoch_mode
@@ -1080,9 +1081,15 @@ def main(argv=None) -> int:
                     help="V5 immutable weekly revision id; revision-scoped research outputs are required")
     ap.add_argument("--sidecar-outcome-run-revision-id", default=None,
                     help="weekly launcher revision id emitted only in sidecar outcome lines")
+    ap.add_argument("--loss-making-rank-csv", default=None,
+                    help="official revision-bound rank reconciliation for the exclusion tracker")
+    ap.add_argument("--loss-making-tracker-path", default=None,
+                    help="cumulative loss-making exclusion tracker artifact path")
     ap.add_argument("--confirm-fetch-authorized", action="store_true",
                     help="required to perform any real Tushare fetch")
     args = ap.parse_args(argv)
+    if bool(args.loss_making_rank_csv) != bool(args.loss_making_tracker_path):
+        raise SystemExit("--loss-making-rank-csv and --loss-making-tracker-path must be provided together")
     as_of = args.as_of
     if not is_canonical_date(as_of):
         raise SystemExit(f"--as-of must be a real canonical YYYYMMDD date, got {as_of!r}")
@@ -1101,6 +1108,8 @@ def main(argv=None) -> int:
         )
     except ValueError as exc:
         raise SystemExit(f"--sidecar-outcome-run-revision-id is invalid: {exc}") from exc
+    if args.loss_making_rank_csv and args.run_revision_id is None:
+        raise SystemExit("loss-making exclusion tracking requires --run-revision-id")
     paths = lane_paths(decision_as_of=as_of, run_revision_id=args.run_revision_id)
     ledger0 = load_ledger(paths["ledger"])
     has_ledger = bool(ledger0.get("rows"))
@@ -1156,6 +1165,17 @@ def main(argv=None) -> int:
                           m67_report_path=(args.m67_report if d2_persistence_enabled else None),
                           run_revision_id=args.run_revision_id,
                           **action_paths)
+    if args.loss_making_rank_csv:
+        tracker = update_loss_making_exclusion_tracker(
+            args.loss_making_tracker_path,
+            official_rank_csv_path=args.loss_making_rank_csv,
+            as_of=as_of,
+            run_revision_id=args.run_revision_id,
+            csi1000=csi1000,
+            as_of_now=effective_as_of,
+            project_root=ROOT,
+        )
+        print(f"[loss-making-tracker] updated records={len(tracker['records'])}, path={args.loss_making_tracker_path}")
     print(f"V14.3 regime comparison written (non-production): ledger n={out['ledger']['coverage']['n']}, "
           f"evidence={out['evidence']}, panel={paths['panel']}")
     action_comparison = out.get("action_comparison")
