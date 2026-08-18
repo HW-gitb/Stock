@@ -503,15 +503,6 @@ _MODE_DISCLOSURE_FACT = {
                      "data_origin=%s, operational_use=%s）；模板已收据绑定但并非本轮 provider 来源，不构成可执行的周度选股/建议"),
 }
 
-# the EDITORIAL (caller free-text) sections an offline report carries — §4 core_conclusion, §10
-# risk_downgrade_note. The report's OWN structured-authority vocabulary must not be reintroducible here, so the
-# §11/§13 forbidden marks are also rejected in these caller sections (a narrow, false-positive-free guard over
-# the two exact marks; the legitimate §2 portfolio_guard “结构化、权威” home is NOT an editorial section). Open-
-# ended operational prose (“可执行” …) is intentionally NOT keyword-policed — the always-visible §1 banner is the
-# dominant, robust disclosure; a free-text denylist would be whack-a-mole and would break legitimate narrative.
-_EDITORIAL_SECTIONS = (4, 10)
-
-
 class RunOriginError(ValueError):
     """The execution/data-origin fact is missing or not one immutable permitted fact (fail-closed)."""
 
@@ -601,14 +592,6 @@ def canonical_section_1(origin, run_status):
     return offline_disclosure_lines(origin) + [status_line]
 
 
-def _section_text(sections, n):
-    """Join one report_data section (keyed by int or str; content = str or list-of-str) into one string."""
-    content = sections.get(n, sections.get(str(n))) if isinstance(sections, dict) else None
-    if isinstance(content, (list, tuple)):
-        return "\n".join(str(x) for x in content)
-    return "" if content is None else str(content)
-
-
 def assert_offline_report_invariants(report_data, origin):
     """Fail-closed STRUCTURED validation of a weekly report_data's offline provenance (the private-write
     consumer boundary, R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP round-1 FAIL): report_data must
@@ -651,13 +634,6 @@ def assert_offline_report_invariants(report_data, origin):
     ]
     if actual_s13 != [*expected_s13, *expected_health_s13]:
         raise RunOriginError("§13 必须完全由 offline_honesty canonical 渲染（禁同义运营 clean 声明）")
-    # the report's own structured-authority marks must not reappear in the editorial caller sections (§4/§10),
-    # so an offline report cannot undercut its §1/§11/§13 disclosure with copied “结构化、权威” / “本周无不 clean” prose.
-    for n in _EDITORIAL_SECTIONS:
-        txt = _section_text(sections, n)
-        if PROVIDER_AUTHORITATIVE_CLEAN_MARK in txt or NO_UNCLEAN_CLAIM_MARK in txt:
-            raise RunOriginError(
-                "§%d 编辑段不得含结构化权威/无不clean 运营声明（与 §1 离线披露矛盾）" % n)
     return report_data
 
 

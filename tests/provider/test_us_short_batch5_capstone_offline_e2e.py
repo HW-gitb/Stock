@@ -671,6 +671,10 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             report_text = report_path.read_text(encoding="utf-8")
             self.assertIn(MIXED_SOURCE_DISCLOSURE_SENTINEL, report_text)
             self.assertIn("caller template", report_text)
+            self.assertIn("theme_producer_governance_reminder", report_text)
+            self.assertIn("跨行业赛道发现+确认只有在源绑定成员确认、独立市场验证和 forward shadow 完成并经用户决定后才可解锁", report_text)
+            self.assertNotIn("待建", report_text)
+            self.assertNotIn("缺免费", report_text)
             self.assertNotIn("OFFLINE_TEST", report_text)
             machine_record = json.loads(
                 (private_root / "runs_private" / _DECISION_DATE / "machine_record.json").read_text(encoding="utf-8"))

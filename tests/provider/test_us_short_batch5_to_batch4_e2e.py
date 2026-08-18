@@ -1057,6 +1057,15 @@ class Problem7Batch4TemplateShapeTest(unittest.TestCase):
                 ):
                     e2e.load_batch4_action_template(path)
 
+    def test_bridge_loader_rejects_deleted_report_context_keys(self) -> None:
+        for key in ("core_conclusion", "risk_downgrade_note"):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as td:
+                payload = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+                payload["report_context"][key] = "deleted template input"
+                path = _write_json(Path(td) / "bad.json", payload)
+                with self.assertRaisesRegex(e2e.Batch5ToBatch4E2EError, "report_context contains deleted"):
+                    e2e.load_batch4_action_template(path)
+
     def test_bridge_loader_preserves_valid_template_and_expected_sha_gate(self) -> None:
         loaded = e2e.load_batch4_action_template(TEMPLATE)
         self.assertEqual(set(loaded), e2e._TEMPLATE_KEYS)

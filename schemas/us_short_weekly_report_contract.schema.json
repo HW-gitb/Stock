@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "us_short_weekly_report_contract",
   "title": "US-short weekly_report.md output contract (design §11.2) — const-pins the section set/order + mandatory honest-banner + price_clock fields",
-  "description": "Batch-1 declarative shared contract for the human-readable weekly report. Pairs with us_short_action_table_contract (§11.3) to freeze the §11 output surface so the batch-3 renderer cannot drop/reorder/rename a section, drift a banner tag, weaken the lifecycle-count invariant, or omit a mandatory banner element. ALL governed identity is const-pinned here (the 13 sections incl. exact Chinese content+order, the 6 banner ids+tags+always_shown, price_clock fields+always_shown, the lifecycle-count invariant) — the schema is a self-sufficient validator, not shape-only. A test triangulates the sections const == preset == design §11.2 so the byte-exact Chinese never silently diverges. No report rendered, no data fetched.",
+  "description": "Batch-1 declarative shared contract for the human-readable weekly report. Pairs with us_short_action_table_contract (§11.3) to freeze the §11 output surface so the batch-3 renderer cannot drop/reorder/rename a section, drift a banner tag, weaken the lifecycle-count invariant, or omit a mandatory banner element. ALL governed identity is const-pinned here (the 13 sections incl. exact Chinese content+order, the 7 banner ids+tags+always_shown, price_clock fields+always_shown, the lifecycle-count invariant) — the schema is a self-sufficient validator, not shape-only. A test triangulates the sections const == preset == design §11.2 so the byte-exact Chinese never silently diverges. No report rendered, no data fetched.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_name", "schema_version", "as_of", "status", "sections", "price_clock", "mandatory_banner", "soft_discovery_banner", "lifecycle_reminder_count_consistency", "notes"],
@@ -50,7 +50,7 @@
             {"type": "object", "additionalProperties": false, "required": ["id", "tag", "always_shown", "ref"],
              "properties": {"id": {"const": "⑥"}, "tag": {"const": "forward_policy_comparison_reminder"}, "always_shown": {"const": false}, "ref": {"type": "string"}}},
             {"type": "object", "additionalProperties": false, "required": ["id", "tag", "always_shown", "ref"],
-             "properties": {"id": {"const": "⑦"}, "tag": {"const": "theme_producer_pending_reminder"}, "always_shown": {"const": false}, "ref": {"type": "string"}}}
+             "properties": {"id": {"const": "⑦"}, "tag": {"const": "theme_producer_governance_reminder"}, "always_shown": {"const": false}, "ref": {"type": "string"}}}
           ]
         }
       }

@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """US-short weekend-pipeline §11.2 weekly_report assembly — batch4 slice 4d-ii-m2 (report_data 装配 + render).
 
-Design authority: docs/us_short_system_design.md §11.2 (周报 13 节 + 诚实横幅①②③④⑤ + price_clock + lifecycle 数量对账)
+Design authority: docs/us_short_system_design.md §11.2 (周报 13 节 + 诚实横幅①②③④⑤⑦ + price_clock + lifecycle 数量对账)
 / §11.1 (周报从机器层渲染) / §13 (lifecycle 提醒) / §12 (ship-gate) / §18.2 batch4 slice 4d.
 
 The post-pass after 4d-ii-k (machine record) + 4d-ii-l (lifecycle eval) + 4d-ii-m1 (action_table projection). It
-ASSEMBLES the §11.2 `report_data` (the 13 sections + the honest banner ①②③④⑤ + the lifecycle-count reconcile)
+ASSEMBLES the §11.2 `report_data` (the 13 sections + the honest banner ①②③④⑤⑦ + the lifecycle-count reconcile)
 and renders it via the content-agnostic `us_short_weekly_report_renderer.render_weekly_report`. It DERIVES what the
 machine layer + lifecycle eval own, WIRES the batch-3 §11.2 formatters, and takes the genuinely non-derivable
-inputs (price_clock, the editorial sections, provider health, exclusion / hot-excluded / coverage raw inputs) from
+inputs (price_clock, provider health, exclusion / hot-excluded / coverage raw inputs) from
 an injected `report_context`, and the canonical resolver clock from `run_context` (batch4 offline fixture; batch5
 fills the same seams):
 
@@ -67,6 +67,7 @@ from engine.us_short_run_origin import (
 from engine.us_short_selection_exclusions import build_selection_exclusion_data
 from engine.us_short_ship_gate_sizing import ship_gate_sizing
 from engine.us_short_macro_cluster import render_macro_cluster_banner
+from engine.us_short_weekend_decision import OBSERVE_REASONS
 from engine.us_short_theme_probe import THEME_OPPORTUNITY_STATES
 from engine.us_short_theme_selection import THEME_SELECTION_MODES
 from engine.us_short_weekend_action_table import flatten_machine_record
@@ -75,45 +76,38 @@ from engine.us_short_soft_discovery_weekly_report import (
     build_weekly_record, invalid_evidence_record, render_weekly_banner,
 )
 
-# the genuinely non-machine / non-lifecycle inputs the §11.2 assembly needs (closed-world — an unknown / missing
-# key fails closed, so a section can never silently render blank from a forgotten input). batch4 = offline fixture.
-# Exclusion and ship-gate facts are intentionally absent: selection rejects and the batch4 paper-only gate are
-# their single sources, so detached prose/counts cannot contradict the run.
+# the genuinely non-machine / non-lifecycle input the §11.2 assembly needs (closed-world — an unknown / missing key
+# fails closed, so a section can never silently render blank from a forgotten input). batch4 = offline fixture.
+# Exclusion, ship-gate, §4, and §10 facts are intentionally absent: their machine/lifecycle/selection sources are the
+# single sources, so detached prose/counts cannot contradict the run.
 _REPORT_CONTEXT_KEYS = frozenset({
     "price_clock", "coverage_inputs",
-    "core_conclusion", "risk_downgrade_note",
 })
 _OPTIONAL_REPORT_CONTEXT_KEYS = frozenset({"forward_policy_comparison_reminder", "soft_discovery_receipt_paths"})
 # the STRUCTURED decision-stage status the §11.2 report BINDS to (no free-text status, R-USSHORT-BATCH4-OFFICIAL-
 # REPORT-SOURCE-BINDING-GAP): provider health from `classify_provider_health`, the account portfolio_guard, and
 # the theme opportunity state — the EXACT inputs/outputs the decision used, so the report can never contradict the
-# run. `account_risk_note` / `provider_health_note` remain in report_context as EDITORIAL commentary (rendered
-# AFTER the structured status), never the source of the status itself.
+# run. These values arrive through `stage_status`, not report_context.
 _STAGE_STATUS_KEYS = frozenset({"provider_health", "portfolio_guard_status", "theme_opportunity_state"})
 _RUN_CONTEXT_KEYS = frozenset({"decision_date", "price_basis_date", "run_date"})
 _HOLDING_SOURCES = frozenset({"holding_in_top15", "holding_pass2_only", "holding_account_only"})
 _SELECTED_SOURCES = frozenset({"top15_candidate", "holding_in_top15"})
 _OBSERVE, _BUILD = "观察", "建仓"
 
-# §13 standing pending-component reminder (honest-banner ⑦) — surfaced ONLY on LIVE/实盘 runs (the capstone runs
-# mixed_source; offline_test unit fixtures never surface it, so the offline report surface + its tests are
-# unchanged). The §4.3/§4.5 cross-industry theme discovery+confirmation producer is not built yet (no free US
-# theme data source, user 2026-07-18); this advisory nag rides every live weekly run until it is. It is
-# internally-derived (like banners ①③⑤), NOT a report_context input, and changes NO selection/sizing/price — it is
-# banner text only. The durable rule/pointer lives in docs/system_risk_register.md (§13 reminder single-source).
-THEME_PRODUCER_PENDING_REMINDER = (
-    "【待建·每周提醒】跨行业赛道'发现+确认'部件未建（缺免费美股主题数据源）；有主题 ETF 持仓/概念板块类美股"
-    "成员源后，按 L3 同法（现成成员+PIT 快照→验证器①证实）即可点亮 §4.5 强赛道进攻线。"
+# §13 governance reminder (honest-banner ⑦) — surfaced ONLY on LIVE/实盘 runs (the capstone runs mixed_source;
+# offline_test unit fixtures never surface it). This is a durable rule, not a claim about current component state;
+# it changes NO selection/sizing/price and is banner text only.
+THEME_PRODUCER_GOVERNANCE_REMINDER = (
+    "跨行业赛道发现+确认只有在源绑定成员确认、独立市场验证和 forward shadow 完成并经用户决定后才可解锁；"
+    "本提醒不改变 selection/sizing。"
 )
 _LIVE_RUN_MODES = frozenset({"research_live", "mixed_source"})   # 实盘/provider-backed capstone runs (not offline_test)
 
 
-def theme_producer_pending_reminder(run_origin):
-    """The §13 standing pending-component reminder text for honest-banner ⑦ — returns the fixed advisory string on
-    a LIVE/实盘 run (run_origin.run_mode ∈ {research_live, mixed_source}), else None so an offline_test fixture run
-    never surfaces it. Banner text only; it never changes selection / sizing / price / any action-table cell."""
+def theme_producer_governance_reminder(run_origin):
+    """Return the durable governance rule for banner ⑦ on LIVE/实盘 runs, else None for offline fixtures."""
     if isinstance(run_origin, dict) and run_origin.get("run_mode") in _LIVE_RUN_MODES:
-        return THEME_PRODUCER_PENDING_REMINDER
+        return THEME_PRODUCER_GOVERNANCE_REMINDER
     return None
 
 
@@ -132,6 +126,42 @@ def report_row_groups(rows):
         "holdings": [r for r in rows if isinstance(r, dict) and r.get("row_source") in _HOLDING_SOURCES],
         "selected": [r for r in rows if isinstance(r, dict) and r.get("row_source") in _SELECTED_SOURCES],
     }
+
+
+def _count_observe_reasons(rows):
+    counts = {reason: 0 for reason in OBSERVE_REASONS}
+    for row in report_row_groups(rows)["observes"]:
+        reason = row.get("observe_reason_type")
+        if reason not in counts:
+            raise WeekendReportError("观察行 observe_reason_type 不在冻结词表: %r" % (reason,))
+        counts[reason] += 1
+    return counts
+
+
+def _render_counts(counts, order):
+    return "、".join("%s=%d" % (key, counts[key]) for key in order if counts.get(key)) or "无"
+
+
+def canonical_core_conclusion(flat_rows):
+    """Render §4 solely from the final flattened machine rows."""
+    groups = report_row_groups(flat_rows)
+    return [
+        "本周候选 %d 只：建仓 %d / 观察 %d；当前持仓 %d 只。"
+        % (len(groups["selected"]), len(groups["builds"]), len(groups["observes"]), len(groups["holdings"])),
+        "观察原因：%s" % _render_counts(_count_observe_reasons(flat_rows), OBSERVE_REASONS),
+    ]
+
+
+def canonical_risk_downgrade_section(flat_rows):
+    """Render §10 from final observe reasons and validated per-row risk tags."""
+    tag_counts = {}
+    for row in flat_rows:
+        for tag in set(row.get("risk_tags") or []):
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+    return [
+        "逐票观察/降级原因：%s" % _render_counts(_count_observe_reasons(flat_rows), OBSERVE_REASONS),
+        "逐票风险标签：%s" % _render_counts(tag_counts, sorted(tag_counts)),
+    ]
 
 
 def canonical_lifecycle_section(readiness):
@@ -213,18 +243,6 @@ def reconcile_holding_coverage_from_rows(holdings):
                 raise WeekendReportError(f"machine holding {key} is not projected from source coverage")
         out.append({key: coverage[key] for key in ("row_source", "coverage_status", "coverage_gap_tags")})
     return out
-
-
-def _as_lines(value, where):
-    """An injected editorial section/banner value → a list of non-blank lines (or a non-blank str). Fail-closed:
-    a blank / non-str / list-with-blank value is refused so a §11.2 section can never render empty."""
-    if isinstance(value, str):
-        if not value.strip():
-            raise WeekendReportError(f"{where} 不得为空白")
-        return [value.strip()]
-    if isinstance(value, (list, tuple)) and value and all(isinstance(x, str) and x.strip() for x in value):
-        return [x.strip() for x in value]
-    raise WeekendReportError(f"{where} 须为非空白 str 或非空 str 列表: {value!r}")
 
 
 def _validate_report_context(rc):
@@ -400,8 +418,8 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
 
     machine_record = the 4d-ii-k `assemble_machine_record` output (flattened here via slice m1 for the §11.3 rows).
     lifecycle_result = the 4d-ii-l `run_lifecycle_eval_stage` output {decision_date, readiness, banner}.
-    report_context = the injected closed-world non-derivable inputs (price_clock + editorial sections +
-        coverage raw inputs); batch4 offline fixture, batch5 real. Exclusions are derived from ``selection``.
+    report_context = the injected closed-world non-derivable inputs (price_clock + coverage raw inputs); batch4
+        offline fixture, batch5 real. Exclusions and §4/§10 are derived from the final machine rows.
     run_context = the resolver/selection clock {decision_date, price_basis_date, run_date}; the visible
         price_clock must match it exactly at date granularity.
     stage_status = the STRUCTURED decision-stage status {provider_health (classify_provider_health result),
@@ -529,9 +547,9 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
                 soft_banner = render_weekly_banner(soft_record)
         if soft_banner is not None:
             banner["soft_discovery_status"] = soft_banner
-    theme_reminder = theme_producer_pending_reminder(run_origin)   # ⑦ live/实盘-only §13 standing pending-component nag
+    theme_reminder = theme_producer_governance_reminder(run_origin)   # ⑦ live/实盘-only durable governance reminder
     if theme_reminder:
-        banner["theme_producer_pending_reminder"] = theme_reminder
+        banner["theme_producer_governance_reminder"] = theme_reminder
 
     # --- §11.5 coverage (in §6): bind ONE-TO-ONE to the machine record's holding rows BY TICKER (R-USSHORT-
     # BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP) — every holding must carry exactly one coverage record; an empty
@@ -571,7 +589,7 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
         2: ["账户组合风险闸: portfolio_guard=%s（结构化、权威，无自由文本状态）" % stage_status["portfolio_guard_status"]],
         3: ["市场环境 两轴: market_risk_regime=%s / theme_opportunity_state=%s"
             % (regime_value or "·", stage_status["theme_opportunity_state"]), theme_selection_status],
-        4: _as_lines(report_context["core_conclusion"], "core_conclusion"),
+        4: canonical_core_conclusion(rows),
         5: _rows_section([_one_glance(r) for r in actionable], "最终操作表"),
         6: _rows_section([_one_glance(r) for r in holdings], "当前持仓复核") + coverage_lines,
         # §7 Top15 = the SELECTION view (多强): display the PRESERVED selection_rank + selection-time core_score
@@ -583,7 +601,7 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
                           for r in candidates], "Top15 选股"),
         8: _rows_section([_observe_glance(r) for r in observes], "观察池"),
         9: exclusion_lines,
-        10: _as_lines(report_context["risk_downgrade_note"], "risk_downgrade_note"),
+        10: canonical_risk_downgrade_section(rows),
         # §3.7 provider health is the INJECTED fixture's self-report, NOT a real provider call — an offline run
         # must never describe it as operationally 权威 clean (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP).
         11: offline_s11,

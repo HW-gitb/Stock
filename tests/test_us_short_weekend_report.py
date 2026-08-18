@@ -6,7 +6,7 @@ lifecycle-count reconcile) from the K machine record (flattened via m1) + the L 
 closed-world report_context, and renders it; the lifecycle count reconciles across section 1 / 12; the row
 sections derive from the flattened §11.3 rows; the formatters (observe split / exclusion / hot-excluded /
 coverage) are wired; and fail-closed on a non-closed-world report_context, a malformed lifecycle result, a
-malformed coverage input, a blank editorial section, and an incomplete price_clock. Pure/offline; no
+malformed coverage input, and an incomplete price_clock. Pure/offline; no
 provider/live; no A-share crossing.
 """
 import sys
@@ -125,7 +125,6 @@ def _report_context(**ov):
                         "session_scope": "RTH", "decision_date": _AS_OF},
         "coverage_inputs": [{"ticker": "HLD", "row_source": "holding_pass2_only",
                              "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}],
-        "core_conclusion": "本周核心结论占位", "risk_downgrade_note": "无重大降级",
     }
     rc.update(ov)
     return rc
@@ -257,6 +256,34 @@ class HappyAssembly(unittest.TestCase):
         for i in range(1, 14):
             self.assertTrue(rd["sections"][i], f"section {i} empty")
 
+    def test_core_and_risk_sections_are_canonical_machine_projections(self):
+        rd = _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context())["report_data"]
+        self.assertEqual(rd["sections"][4], [
+            "本周候选 2 只：建仓 1 / 观察 1；当前持仓 1 只。",
+            "观察原因：price_not_executable=1",
+        ])
+        self.assertEqual(rd["sections"][10], [
+            "逐票观察/降级原因：price_not_executable=1",
+            "逐票风险标签：无",
+        ])
+
+    def test_canonical_sections_freeze_reason_order_and_unique_tag_counts(self):
+        rows = [
+            {"row_source": "top15_candidate", "final_action": "观察",
+             "observe_reason_type": "risk_cooldown", "risk_tags": ["z", "a", "z"]},
+            {"row_source": "holding_pass2_only", "final_action": "观察",
+             "observe_reason_type": "signal_not_ready", "risk_tags": ["a", "b"]},
+            {"row_source": "top15_candidate", "final_action": "建仓", "risk_tags": ["b"]},
+        ]
+        self.assertEqual(wr.canonical_core_conclusion(rows), [
+            "本周候选 2 只：建仓 1 / 观察 2；当前持仓 1 只。",
+            "观察原因：signal_not_ready=1、risk_cooldown=1",
+        ])
+        self.assertEqual(wr.canonical_risk_downgrade_section(rows), [
+            "逐票观察/降级原因：signal_not_ready=1、risk_cooldown=1",
+            "逐票风险标签：a=2、b=2、z=1",
+        ])
+
     def test_optional_comparison_reminder_renders_in_the_honest_banner(self):
         reminder = "US-SHORT A1 comparison track: continue_accumulation; advisory only"
         out = _build_report(
@@ -266,20 +293,20 @@ class HappyAssembly(unittest.TestCase):
         self.assertEqual(out["report_data"]["banner"]["forward_policy_comparison_reminder"], reminder)
         self.assertIn("forward_policy_comparison_reminder", out["weekly_report_md"])
 
-    def test_theme_producer_pending_reminder_helper_live_only(self):
-        # §13 banner ⑦ standing reminder: only LIVE/实盘 run modes yield the fixed advisory text; offline_test /
+    def test_theme_producer_governance_reminder_helper_live_only(self):
+        # §13 banner ⑦ durable governance reminder: only LIVE/实盘 run modes yield the fixed advisory text; offline_test /
         # a malformed origin yield None so an offline fixture run never surfaces it.
         for mode in ("research_live", "mixed_source"):
-            self.assertEqual(wr.theme_producer_pending_reminder({"run_mode": mode}), wr.THEME_PRODUCER_PENDING_REMINDER)
+            self.assertEqual(wr.theme_producer_governance_reminder({"run_mode": mode}), wr.THEME_PRODUCER_GOVERNANCE_REMINDER)
         for origin in ({"run_mode": "offline_test"}, {}, None, "x"):
-            self.assertIsNone(wr.theme_producer_pending_reminder(origin))
+            self.assertIsNone(wr.theme_producer_governance_reminder(origin))
 
-    def test_theme_producer_pending_reminder_absent_on_offline_run(self):
+    def test_theme_producer_governance_reminder_absent_on_offline_run(self):
         # an offline_test build (the default run_origin) must NOT surface banner ⑦ — the offline surface is unchanged
         # (the live/实盘 capstone runs mixed_source, where it DOES surface — covered by the helper test above).
         out = _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context())
-        self.assertNotIn("theme_producer_pending_reminder", out["report_data"]["banner"])
-        self.assertNotIn(wr.THEME_PRODUCER_PENDING_REMINDER, out["weekly_report_md"])
+        self.assertNotIn("theme_producer_governance_reminder", out["report_data"]["banner"])
+        self.assertNotIn(wr.THEME_PRODUCER_GOVERNANCE_REMINDER, out["weekly_report_md"])
 
     def test_lifecycle_count_reconciles(self):
         rd = _build_report(_machine_record(), _lifecycle_result(due_count=2, due_items=(1, 3)),
@@ -420,7 +447,11 @@ class FailClosed(unittest.TestCase):
     def test_non_closed_world_report_context_rejected(self):
         with self.assertRaises(wr.WeekendReportError):     # missing a key
             _build_report(_machine_record(), _lifecycle_result(),
-                                   report_context={k: v for k, v in _report_context().items() if k != "core_conclusion"})
+                                   report_context={k: v for k, v in _report_context().items() if k != "price_clock"})
+        for deleted_key in ("core_conclusion", "risk_downgrade_note"):
+            with self.assertRaises(wr.WeekendReportError):
+                _build_report(_machine_record(), _lifecycle_result(),
+                              report_context={**_report_context(), deleted_key: "poison"})
         with self.assertRaises(wr.WeekendReportError):     # extra key
             _build_report(_machine_record(), _lifecycle_result(),
                                    report_context={**_report_context(), "EXTRA": 1})
@@ -432,8 +463,8 @@ class FailClosed(unittest.TestCase):
             with self.assertRaises(wr.WeekendReportError):
                 _build_report(_machine_record(), bad, report_context=_report_context())
 
-    def test_blank_editorial_section_rejected(self):
-        for key in ("account_risk_note", "core_conclusion", "provider_health_note", "ship_gate_note"):
+    def test_deleted_editorial_context_keys_rejected(self):
+        for key in ("account_risk_note", "provider_health_note", "ship_gate_note"):
             with self.assertRaises(wr.WeekendReportError):
                 _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context(**{key: "  "}))
 

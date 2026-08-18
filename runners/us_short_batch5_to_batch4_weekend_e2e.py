@@ -57,6 +57,8 @@ DEFAULT_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20
 FULL_CANDIDATE_LIVE_PROJECTION_BINDING = source_packet_runner.FULL_CANDIDATE_LIVE_PROJECTION_BINDING
 PROJECTION_INPUTS_BINDING = source_packet_runner.PROJECTION_INPUTS_BINDING
 _PROVIDER_RECEIPT_RUN_MODES = frozenset({"research_live", "mixed_source"})
+_REPORT_CONTEXT_REQUIRED_KEYS = frozenset({"price_clock", "coverage_inputs"})
+_REPORT_CONTEXT_OPTIONAL_KEYS = frozenset({"forward_policy_comparison_reminder", "soft_discovery_receipt_paths"})
 
 _TEMPLATE_KEYS = frozenset(
     {
@@ -211,6 +213,10 @@ def load_batch4_action_template(path: Path, *, expected_sha256: str | None = Non
             raise Batch5ToBatch4E2EError(f"batch4 template {key} must be a JSON object")
     if not isinstance(template["report_context"].get("price_clock"), dict):
         raise Batch5ToBatch4E2EError("batch4 template report_context.price_clock must be an object")
+    report_context_keys = set(template["report_context"])
+    if not (_REPORT_CONTEXT_REQUIRED_KEYS <= report_context_keys
+            and report_context_keys - _REPORT_CONTEXT_REQUIRED_KEYS <= _REPORT_CONTEXT_OPTIONAL_KEYS):
+        raise Batch5ToBatch4E2EError("batch4 template report_context contains deleted or unknown key(s)")
     return {key: copy.deepcopy(template[key]) for key in _TEMPLATE_KEYS}
 
 

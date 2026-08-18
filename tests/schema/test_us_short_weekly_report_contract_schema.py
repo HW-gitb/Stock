@@ -24,7 +24,7 @@ EXPECTED_PRICE_CLOCK_FIELDS = ["price_data_through", "news_window_through", "ses
 EXPECTED_BANNER_IDS = ["①", "②", "③", "④", "⑤", "⑥", "⑦"]
 EXPECTED_BANNER_TAGS = ["true_false_observe_split", "macro_cluster_warning", "ship_gate_progress",
                        "price_clock", "hot_excluded_notice", "forward_policy_comparison_reminder",
-                       "theme_producer_pending_reminder"]
+                       "theme_producer_governance_reminder"]
 EXPECTED_SOFT_DISCOVERY_BANNER = {"id": "⑧", "tag": "soft_discovery_status", "always_shown": False}
 
 

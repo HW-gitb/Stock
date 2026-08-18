@@ -61,8 +61,7 @@ def _report_context():
     return {
         "price_clock": {"price_data_through": _PRICE_BASIS, "news_window_through": "20260613",
                         "session_scope": "RTH", "decision_date": _DD},
-        "coverage_inputs": [], "core_conclusion": "empty run 占位",
-        "risk_downgrade_note": "无",
+        "coverage_inputs": [],
     }
 
 

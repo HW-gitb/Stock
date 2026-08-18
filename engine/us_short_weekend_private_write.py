@@ -61,7 +61,9 @@ from engine.us_short_symbol_cooldown_state import (
 )
 from engine.us_short_weekend_action_table import flatten_machine_record
 from engine.us_short_weekend_report import (
+    canonical_core_conclusion,
     canonical_lifecycle_section,
+    canonical_risk_downgrade_section,
     reconcile_holding_coverage,
     reconcile_holding_coverage_from_rows,
     report_row_groups,
@@ -212,6 +214,14 @@ def _reconcile_official_source_facts(flat, report_data, decision_date, *, provid
     if run_status.get("decision_date") != decision_date:
         raise WeekendPrivateWriteError(
             f"run_status.decision_date={run_status.get('decision_date')!r} != {decision_date!r}（拒写，无落盘）")
+    sections = report_data.get("sections")
+    rows = flat.get("rows", [])
+    s4 = sections.get(4, sections.get("4")) if isinstance(sections, dict) else None
+    if s4 != canonical_core_conclusion(rows):
+        raise WeekendPrivateWriteError("report §4 与 machine rows canonical 重算不符（拒写，无落盘）")
+    s10 = sections.get(10, sections.get("10")) if isinstance(sections, dict) else None
+    if s10 != canonical_risk_downgrade_section(rows):
+        raise WeekendPrivateWriteError("report §10 与 machine rows canonical 重算不符（拒写，无落盘）")
     # (2) lifecycle count bound to the INDEPENDENT lifecycle stage result (NOT another report_data field): the
     # readiness is re-validated by the single-source `_assert_readiness` (due_count == len(due_items) + item ids
     # in range + upgrade ⊆ due), then ALL THREE caller-controlled lifecycle copies (run_status + §1/§12) must
@@ -237,7 +247,6 @@ def _reconcile_official_source_facts(flat, report_data, decision_date, *, provid
             f"lifecycle 计数与独立 lifecycle 源 due_count={due_count} 不一致（run_status/§1/§12 须全等，疑协同伪造，拒写，无落盘）")
     # §12 DETAIL (due-item / upgrade identities, not only the count) must equal the canonical projection of the
     # validated readiness — a same-count / different-due-items or different-upgrade forge fails closed.
-    sections = report_data.get("sections")
     s12 = sections.get(12, sections.get("12")) if isinstance(sections, dict) else None
     if s12 != canonical_lifecycle_section(readiness):
         raise WeekendPrivateWriteError(
