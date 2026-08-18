@@ -3454,3 +3454,21 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 ### 合并态全量的实际结果（补记，别把上面那句读成绿）
 
 合并进 master（`6a3deefe`）后我在 `Stock-wt\test_capsule`（已 ff）跑了 carve-out (b) 要求的那一次，**是红的**：`status=FAIL exit=1 tests=895 elapsed=180.4s`、`COUNT_GATE discovered=6008 ran=895`。唯一红点与第五刀无关——`LaneResidueConformance.test_private_roots_do_not_grow_during_the_pack (root='docs')` 抓到 `docs/test_b8kprod_14184_..._consumer_summary.json`，源头是 `tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:127-133` 把两个 summary 直接写进真实 `ROOT/docs`（同 setUp 里 state 与 provider_samples 都走了临时根，唯独 docs 没走）。已开 `R-USSHORT-B8K-PRODUCER-TEST-WRITES-INTO-THE-REAL-DOCS-ROOT`(P2)。**第五刀本刀的 PASS 不受影响**，但 master 在这条修好之前记不上 us_short 的绿。
+## 2026-08-18 追加：Codex 修复 K5 schema enum Optional（待 Claude 独立复审；8d8c）
+
+- 最新第五刀阶段 B PASS 已关闭三条 Required 和三条原 Optional；本轮只修复新增的 `O-K5-SCHEMA-ENUM-CARRIES-A-MODEL-NOBODY-REQUESTS`，没有新的 Required。
+- Web schema 的两处 `requested_model` enum 都收窄为唯一真实值 `deepseek-chat`，保留 enum 机制，不改回 `const`；X schema 不动。对应历史 receipt 测试同步收窄断言。
+- 固定 Python 窄套件 `50 OK / 7.3s`；`engine/`、`runners/`、`schemas/`、`tests/` 中 `deepseek-v4-pro` 为 `0 hits`。schema/test-only 改动不触发 full lane；未联网、未调 provider、未写正式槽、未提交。
+- 当前状态 `repaired / OPEN-NOT-VERIFIED`。Claude Code 独立复审通过后提交；付费执行、5b、正式槽和 packet 精确授权边界不变。
+
+### Pre-Codex self-review
+
+`matrix=enum active values + schema dual locations + historical receipt consumer; register=updated; handoff=updated; focused=50 OK; full-lane=not_triggered: schema/test-only; door=route/doc governance after this entry; grep=deepseek-v4-pro 0 hits in engine/runners/schemas/tests; provider/network=not_used; independent-review=not_used; commit=not_performed`
+
+## 2026-08-18 追加：Claude Code 独立审查 enum 收窄 —— PASS（已提交并合入 master），但 b8k Required 仍 open
+
+- **收窄本身对**：两处 enum 变 `["deepseek-chat"]`，保留 enum 形式。我复跑了那条**判决翻转探针**：主树四份冻结 receipt 走生产读门 `web._validate_schema()` 仍全部 `ACCEPTED`——**收窄类改动的强制腿就是这个**，证明它没有把上一轮刚修好的兼容性又收掉。另外独立复现了执行方的 grep：`deepseek-v4-pro` 在 `engine/`/`runners/`/`schemas/`/`tests/` 与 v2 packet 内 0 命中，`DEEPSEEK_MODEL` 也确是 `deepseek-chat`。
+- **留一句给以后**：单元素 enum 形状上等价于 `const`，今天安全只因为「历史用过的」和「当前请求的」是同一个值。下次换模型，还得先拿盘上冻结 receipt 过一遍那道门。
+- **b8k 那条 Required 没修，但不是执行方漏了**：审查树 `8d8c` 停在 `9f974e3e`，**落后 master 6 个提交**，而 `R-USSHORT-B8K-PRODUCER-TEST-WRITES-INTO-THE-REAL-DOCS-ROOT` 只写在 master 的 `382509d0` 里——执行方从它的 baseline 上根本看不见这条，所以它 entry 里那句「没有 Required 留下」对自己为真、对 master 为假。**第 0 步 `git merge --ff-only master` 不是形式主义**：两棵树 register 不同步时，这类「对仓库状态的断言」会带着 stale baseline 漂进文档，读起来还完全像已核实的事实。
+- **合并处理**：register 与本 handoff 各有一处冲突，都按「两边都留、按时序排」解——register 里执行方 entry 在上、我的 b8k 在下；本 handoff 我的 PASS 节在前、执行方节在后。无内容丢失。
+- **下一步**：先修 b8k（把那两个 summary 路径挪进临时根，别动守卫），修完在合并态跑一次 `status=PASS` 且 `COUNT_GATE discovered==ran`；第五刀付费仍等用户对 `us_short_web_regroup_engineering_smoke_20260815_chunk1_v2` 的精确授权。
