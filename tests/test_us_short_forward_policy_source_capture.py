@@ -27,10 +27,23 @@ def _packet(*, decision_date: str, price_basis_date: str, tickers: list[str], st
         points = []
         for offset in range(days):
             current = start + timedelta(days=offset)
-            points.append({
-                "date": current.isoformat(), "open": 100.0, "high": 100.0,
-                "low": 98.0, "close": 100.0, "volume": 1000.0,
-            })
+            # The first bars print a prior swing high so the window carries a REAL overhead
+            # structural target. A perfectly flat series has resistance == close, and the price
+            # engine (since "stop measuring a momentum trade with a mean-reversion ruler") refuses
+            # to invent a target from the RR floor, so every candidate would be non-executable and
+            # the whole week would degrade to no_count — a fixture artefact, not the behaviour
+            # under test.
+            shelf = offset < days - 10
+            if shelf:
+                # Prior range whose top is BACKED by a near-tied second high, so `effective_resistance`
+                # keeps it (a lone spike would be de-spiked away and the candidate would have no target).
+                bar = {"open": 109.5, "high": 110.0 if offset % 2 == 0 else 109.5,
+                       "low": 109.0, "close": 109.5}
+            else:
+                # Pullback to the support shelf, likewise backed by a near-tied second low.
+                bar = {"open": 100.0, "high": 100.0,
+                       "low": 98.0 if offset % 2 == 0 else 98.5, "close": 100.0}
+            points.append({"date": current.isoformat(), "volume": 1000.0, **bar})
         series[ticker] = {
             "as_of": price_basis_date[:4] + "-" + price_basis_date[4:6] + "-" + price_basis_date[6:],
             "session": "regular", "adjustment_mode": "split_dividend_adjusted", "points": points,
