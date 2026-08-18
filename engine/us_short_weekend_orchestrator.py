@@ -129,6 +129,15 @@ _PIPELINE_CONTEXT_KEYS = frozenset({
 # mode is gated entirely here; offline_test runs on the injected fixture sessions (deterministic, calendar-bound).
 RUN_MODES = frozenset({"offline_test", "research_live", "mixed_source", "live"})
 
+# The only producer mapping for a new candidate's existing two price sub-modes.  The selection producer emits
+# exactly these four bucket values; an out-of-table value must not silently become pullback.
+_SELECTION_BUCKET_TO_SUB_MODE = {
+    "theme_momentum": "breakout",
+    "overlap": "breakout",
+    "core_top": "pullback",
+    "core_backfill": "pullback",
+}
+
 
 class WeekendOrchestratorError(Exception):
     """The pipeline_context is malformed, or the selection→analysis seam does not reconcile (fail-closed)."""
@@ -232,8 +241,26 @@ def _build_analysis_rows(selection, per_ticker_analysis):
             "selection_rank": d["selection_rank"], "selection_bucket": d["selection_bucket"],
             "core_score": d["core_score"], "theme_momentum_score": d["theme_momentum_score"]}
         selection_themes[ticker] = dict(d["theme_selection"])
-    return [{**canon_map[ct], "selection_record": sel_records.get(ct),
-             "selection_theme": selection_themes.get(ct)} for ct in union_order]
+    rows = []
+    for ct in union_order:
+        row = dict(canon_map[ct])
+        selection_record = sel_records.get(ct)
+        # Only a new candidate gets the automatic mode.  Holding rows, including a legal admitted+holding
+        # overlap, continue through the existing holding path and do not participate in build-mode production.
+        if ct in admitted_set and ct not in holdings_set and "sub_mode" not in row:
+            if not isinstance(selection_record, dict):
+                raise WeekendOrchestratorError(
+                    f"{ct}: 新候选缺 selection_record，无法按 selection_bucket 生产 sub_mode")
+            bucket = selection_record.get("selection_bucket")
+            try:
+                row["sub_mode"] = _SELECTION_BUCKET_TO_SUB_MODE[bucket]
+            except (KeyError, TypeError) as exc:
+                raise WeekendOrchestratorError(
+                    f"{ct}: selection_bucket {bucket!r} 无 sub_mode 映射（fail-closed）") from exc
+        row["selection_record"] = selection_record
+        row["selection_theme"] = selection_themes.get(ct)
+        rows.append(row)
+    return rows
 
 
 def _portfolio_capacity_context(selection, analysis_rows, *, account_state, sizing_context, available_cash,

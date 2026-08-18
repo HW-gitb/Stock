@@ -98,6 +98,17 @@ class Step1Pullback(unittest.TestCase):
 
 
 class Step1Breakout(unittest.TestCase):
+    def test_open_below_trigger_can_fill_on_intraday_breakout(self):
+        r = pf.simulate_fill(
+            _breakout(stop_clear_price=80.0), _bar(open=90.0, high=103.0, low=89.0, close=100.0))
+        self.assertEqual(r["status"], "filled_held")
+        self.assertEqual(r["fill_price"], 102.0)
+
+    def test_open_above_chase_cap_is_not_filled(self):
+        r = pf.simulate_fill(_breakout(), _bar(open=106.0, high=107.0, low=105.0, close=106.0))
+        self.assertEqual(r["status"], "not_filled")
+        self.assertEqual(r["reason"], "open_above_chase_cap")
+
     def test_fill_at_breakout_when_high_reaches(self):
         r = pf.simulate_fill(_breakout(), _bar(open=100.0, high=103.0, low=99.0, close=102.0))  # high 103 >= 102
         self.assertEqual(r["status"], "filled_held")
@@ -108,8 +119,12 @@ class Step1Breakout(unittest.TestCase):
         self.assertEqual(r["fill_price"], 104.0)  # min(max(104,102),105) = 104 (can't fill below open)
 
     def test_fill_capped_at_valid_entry_high(self):
-        r = pf.simulate_fill(_breakout(breakout_entry_price=110.0), _bar(open=100.0, high=111.0, low=99.0, close=104.0))
-        self.assertEqual(r["fill_price"], 105.0)  # min(max(100,110),105) = 105 (never chase above band)
+        r = pf.simulate_fill(_breakout(breakout_entry_price=105.0), _bar(open=100.0, high=111.0, low=99.0, close=104.0))
+        self.assertEqual(r["fill_price"], 105.0)  # trigger is at the band edge; fill never exceeds valid_entry_high
+
+    def test_breakout_trigger_outside_band_is_refused(self):
+        with self.assertRaises(pf.PaperFillError):
+            pf.simulate_fill(_breakout(breakout_entry_price=110.0), _bar(open=100.0, high=111.0, low=99.0, close=104.0))
 
     def test_not_filled_when_high_below_breakout(self):
         r = pf.simulate_fill(_breakout(), _bar(open=100.0, high=101.0, low=99.0, close=100.5))  # high 101 < 102

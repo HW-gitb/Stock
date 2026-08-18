@@ -5392,3 +5392,36 @@ Codex：类B 第一刀（问题5 市场轴）；随后第二刀（问题2 sub_mo
 ### 下一步
 
 Codex：类B 第二刀（问题2 sub_mode 路由 + paper stop-limit），bucket 映射须全覆盖 fail-closed。
+
+## 2026-08-18 追加：桌面 `2us_testrun0816.md:443` 类B第二刀——问题2 sub_mode 路由 + paper stop-limit（Codex executor/fixer，888d，OPEN-NOT-VERIFIED）
+
+### 逐行实施
+
+- **producer→analysis**：新候选没有显式 `sub_mode` 时，只按既有四个 `selection_bucket` 精确生产：`theme_momentum / overlap → breakout`、`core_top / core_backfill → pullback`；显式 `pullback/breakout` 优先，持仓行不参与建仓模式生产。
+- **fail-closed**：表外 `selection_bucket` 或新候选缺 `selection_record` 在进入 analysis/price engine 前抛 `WeekendOrchestratorError`，不使用 `dict.get(..., "pullback")`，不新增 `auto`、枚举、阈值或路由参数。
+- **既有降级顺序保持**：`_resolve_candidate_sub_mode` 的 defensive/theme-probe 行为先执行，随后 overextension warning 强制 pullback，最后由既有 `support_atr_engine` 消费最终模式。
+- **paper fill**：`pullback_limit` 保留 open 全带内才可成交；`breakout_stop_limit` 先校验 trigger 在带内，open 高于 chase cap 或 high 未触发即不成交，否则使用 `max(open, trigger)`，且不超过 `valid_entry_high`。`first_regular_session_only`、同日 STOP 优先与未成交现金不变。
+
+### 一个验收门
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`：第二刀直接组 `85 tests / OK`；source-packet→bridge→selection→analysis→price→machine/action 与相邻 capstone 回归组 `246 tests / OK`；动作表/paper net/schema 组 `91 tests / OK`。
+- 正式链路证明 overlap 输出 `price_sub_mode=breakout`，四个 bucket 映射全覆盖，表外 bucket 在正式 pipeline 进入 analysis/price 前失败；paper consumer 证明 pre-trigger 不成交、低于 trigger 但盘中触发按 trigger 成交、成交不越 chase cap、超 cap 不成交且只认首个 RTH session。
+- 未联网、未调用 provider/API/live、未跑 full lane；未改 provider、artifact、schema、receipt/hash/state、类A几何、类B第一刀市场轴、holding/sizing/退出/账本、主树或桌面文档；未提交、未 merge。
+
+### Required / Optional、结论与下一步
+
+- `R-USSHORT-CLASS-B-SUBMODE-ROUTING-AND-PAPER-STOP-LIMIT`（Required）已按第二刀方案修复；Optional=无。代码与设计同步在 `engine/us_short_weekend_orchestrator.py`、`engine/us_short_paper_fill.py`、`docs/us_short_system_design.md`，登记与 `docs/SESSION_LOG.md` 已更新；继续使用本既有交接文档，不创建碎片。
+- 当前结论为 `repaired / OPEN-NOT-VERIFIED`。固定 Python `py_compile` 与文档门已完成（route-doc + doc-governance `56 tests / OK`）；交 Claude Code 独立审查，PASS 后按 reviewer/committer 流程提交，merge 仍由用户决定。
+
+## 2026-08-18 Claude Code 独立审查：类B 第二刀（问题2 sub_mode 路由 + paper stop-limit）— PASS
+
+映射四值表与生产者字面量逐值相等（审查者正则提取比对），表外 bucket 与缺 selection_record 双双 fail-closed——
+审阅时点名的「不许静默落 pullback」已兑现。e2e 在 machine_record 与 action_table.csv 双断言 breakout
+触发位锚定精确价位，突破通道自此生产可达（补上类A 欠的那半证据）。paper stop-limit 九例亲测：
+开盘低于触发位盘中上破按触发位成交、跳空越帽不追、成交恒 ≤ 带上沿、同日止损优先、pullback 回归零变化。
+零新增参数。类B 整体闭合。
+
+### 下一步
+
+用户：A/B 两类已全部落地合入。下次真实周跑将同时检验——市场轴真值、breakout 路由与建仓价位、
+以及此前四项修复（市值缓存/价差先验/评级解析/破产口径）。

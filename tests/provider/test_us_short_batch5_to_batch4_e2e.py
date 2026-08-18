@@ -844,17 +844,17 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             machine = json.loads(
                 (private_root / "runs_private" / _DECISION_DATE / "machine_record.json").read_text(encoding="utf-8")
             )["rows"][0]
-            self.assertEqual(machine["price"]["price_sub_mode"], "pullback")
+            self.assertEqual(machine["price"]["price_sub_mode"], "breakout")
             self.assertTrue(machine["price"]["executable"])
-            self.assertEqual(machine["price"]["trace"]["t1_basis"], "structural_resistance")
-            self.assertEqual(machine["price"]["action_fields"]["valid_entry_high"], 100.0)
-            self.assertEqual(machine["price"]["action_fields"]["stop_clear_price"], 96.09)
-            self.assertEqual(machine["price"]["action_fields"]["take_profit_reduce_price"], 110.0)
+            self.assertEqual(machine["price"]["trace"]["t1_basis"], "breakout_trigger_atr")
+            self.assertEqual(machine["price"]["action_fields"]["valid_entry_high"], 111.08)
+            self.assertEqual(machine["price"]["action_fields"]["stop_clear_price"], 108.92)
+            self.assertEqual(machine["price"]["action_fields"]["take_profit_reduce_price"], 116.53)
             action_csv = (private_root / "weekly_private" / _DECISION_DATE / "action_table.csv").read_text(
                 encoding="utf-8"
             )
-            self.assertIn("pullback", action_csv)
-            self.assertIn("96.09", action_csv)
+            self.assertIn("breakout", action_csv)
+            self.assertIn("108.92", action_csv)
 
     def test_default_legacy_e2e_rejects_full_candidate_profile_without_explicit_contract(self) -> None:
         targets = ("AAPL",)
