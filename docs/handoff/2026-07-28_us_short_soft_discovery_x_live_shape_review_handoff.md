@@ -3690,3 +3690,30 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **那条已从 P1 撤回、退回 Optional，不需要现在拍板**。真要削它仍是两条路：抬 860s（用户级），或拆 `LaneGuardRegistryConformance` 让同文件其余用例回并行。两条都要动那 25 个碰跨进程锁的模块，本 session 这块已出过两次回归，别顺手改。
 - **脚本改文件一律按行号定位，或自校验命中数**；调用方必须查 `$LASTEXITCODE` 再往下走——上一轮就是锚串命中两处、脚本退 2 而 PowerShell 继续往下跑，白烧一次全量。
 - **主树正在回跑 a_short 真实周**（用户 2026-08-18 通知）：期间**本刀只提交、不 merge**；也别在主树跑大超集。本轮那次 a_short 全量跑在 8d8c、`state/` 逐树隔离，已于 321.6s 跑完。
+
+## 2026-08-18 交接 Codex：第二枪的模型合同（付费前门，未闭不得开枪）
+
+### 背景与当前进度（按仓库实物核过，不按桌面文档的状态位）
+
+刀1–刀4 完成；刀5 实现完成；**刀5 第一枪已打且 FAIL**（请求 `deepseek-chat`、服务 `deepseek-v4-flash`、strict parse 失败）；刀5 阶段B 离线修复完成，**v2 packet 与 v2 schema 已建**；**第二枪未打**——主树没有 `state/us_short/runs_private/soft_discovery_engineering_smoke_v2/`、也没有 `provider_samples/..._engineering_smoke_v2/`。5b runner 已实现，等第二枪 transport PASS 才能跑。
+
+### 交给 Codex 的任务
+
+**任务**：闭合 `R-USSHORT-SMOKE-V2-DROPPED-THE-SERVED-MODEL-GATE-AND-KEPT-THE-OLD-FIELD-NAME`（P1）。**finding 正文与三条闭合要求在 `docs/system_risk_register.md` 顶部同名节，Codex 以那节为准，不以本节转述为准。**
+
+**范围（只动这些）**：
+- `schemas/us_short_web_regroup_engineering_smoke_packet_v2.schema.json`（`paid_boundary.request` 的模型合同）
+- `docs/us_short_web_regroup_engineering_smoke_packet_20260815_v2.json`（同步 packet 实例）
+- `runners/us_short_llm_theme_discovery_web_regroup_smoke.py`（`EXPECTED_MODEL` / packet 授权校验 / summary 字段）
+- `runners/us_short_llm_theme_discovery_fetch_web.py`（`_consume_regroup_response` 的服务方模型门、`_model_identity_is_complete`）
+- 测试只放现有 owner：`tests/provider/test_us_short_llm_theme_discovery_fetch_web.py`、`tests/test_us_short_llm_theme_discovery_plan_budget.py`
+
+**不许动**：`engine/us_short_llm_theme_discovery_paid_gateway.py` 的 `DEEPSEEK_MODEL`（生产同形基准）；桌面文档 `C:\Users\cnhea\Desktop\usshort_软通道收尾.md`（只读用户权威）；第一枪的 packet/raw/summary/ledger（逐字节不变）；5b runner 与 4diii 相关任何文件。
+
+**判断权边界**：模型名本身（继续用 `deepseek-chat` + 服务方族白名单，还是改请求直连模型名 + 等值门）由 Codex 给出技术建议**并连同理由写回 register**，但**桌面方案 §4.7/§五#2/§九#2 与实现的冲突是用户裁决项**——Codex 不改桌面文档、不替用户拍板、闭合后也不得自行开第二枪。
+
+**验证**：承重反向控制（伪造 `deepseek-v4-flash` / 空值 / 旧 alias / 别家模型须在**内容解析前**拒绝且 `debit=0 client=0`，删门即转红）+ focused owner 包；因改到共享付费客户端与真实生产 prompt，按方案 §六#2 需在最终行为代码上跑一次 US-short lane 全量、账本 `discovered == ran` 且终态 PASS。**注意**：常态跑满约 350s，若看到 800s+ 请先按上一节「先怀疑机器」处理再重跑。
+
+### 下一步（顺序不得交换）
+
+`Codex 闭合模型合同 → 我独立审查 PASS → 代码 merge 进主树 → 用户对精确 v2 packet 明确付费授权 → 主树打第二枪（一次）→ transport PASS 才准跑 5b 零付费判卷 → readiness → 刀6 4diii 接线`。
