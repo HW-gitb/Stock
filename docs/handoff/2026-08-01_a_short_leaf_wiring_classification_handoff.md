@@ -9313,3 +9313,25 @@ call .tools\run_unittest_with_repo_pythonpath.cmd tests.phase6.test_egs_main_dai
 - **版本链这次值得表扬，也值得作为样板**：`ANALYSIS_INPUT_SCHEMA_VERSION 1.5.0→1.6.0` 是从 6.1 落地后的当前值 +1 minor，而不是照方案里写死的数字；同时 `schemas/analysis_input.schema.json` 的两条 `allOf`（margin、moneyflow）与 `engine/data/analysis_input_contract.py` 的两处 Python 门**都把新版本加了进去**。我从 4.1 起每轮都盯这一条，因为「新版本悄悄绕过旧 PIT 要求」是 schema 演进里最典型的一种回归。
 - **Rule6 已判 pass ≠ 候选摘要已接线**：方案特意保留 `block_trade` 在 `missing_fields` 而不是删掉，理由是 Rule6 的窄 evaluator 有结论，但候选公开摘要的三个叶（折价笔数/均折价率/金额口径）仍未 materialize。**这是「有上游原料」和「有对外输出」的区别**，删了就是假健康——`candidate_output_deferred` 这个名字也刻意不承诺「公式已定、随时可接」。
 - **本轮未做/未验**：按 rule 8 未起对抗 agent（分类接线，无 provider/secret/新 fail-closed 门，且唯一实质风险方向已被 P4 直接堵住）；主树暖根真实周产物尚未按 `1.6.0` 重跑，`NOT_RUN`。
+
+## 2026-08-18 追加：六刀合并后的真实数据 A/B 实测（用户授权）——过程、复现方法与给修复方的入口
+
+### 怎么搭的（修复方照这个复现，缓存是热的，几分钟就能重跑）
+
+- **两棵一次性 worktree，主树全程不碰**：`D:\cnhea\Stock-wt\ab_pre` @ `f7628f77`（2.1 合并前的 master）、`D:\cnhea\Stock-wt\ab_post` @ `976f72d5`（六刀全在）。跑完不要急着删——provider 缓存已热，重跑成本很低。
+- **两侧逐字相同的命令**（只有代码不同）：
+  `python A-EGS\egs_main.py --as-of 20260819 --price-as-of 20260818 --l3-mode today --reuse-l3-cache --output-root <tree>\result\a_short\backtest\generated`
+- **消除混淆的三个动作**：① `as_of` / `price_as_of` 都显式钉住，用 `runners/resolve_canonical_asof.py` 的输出（`as_of=20260819, price_as_of=20260818, last_settled=20260818`）；② 把主树的 `l3_snapshot_20260816.pkl` 复制进两棵树，配 `--reuse-l3-cache`，**两侧共用同一份 L3、零 provider 调用**——否则两次 L3 各抓一遍，概念数据一动就成了第三个变量；③ **两侧都不加 `--backtest-mode`**，因为那个开关会用 Tier2 补位把观察池填满，恰好会掩盖「亏损门踢票后池子变短」这个要观察的现象。
+- **对照脚本**：`scratchpad\ab_diff.py`，覆盖候选池规模 / Top15 进出 / Top5 进出 / ESP-Q 命中集合 / 亏损排除计数 / regime / 技术四项非空数 / 缺失分类 / 逐只分数·名次·completeness。B 侧一旦能出产物就能直接跑。
+
+### 结果与方法学
+
+- **A 侧 `v7.13` 跑完**（`errors=0 warnings=4 watch=15 tier1=15 final=5`），**B 侧 `v7.15` 中止**（`errors=1 warnings=3 watch=12 tier1=12 final=5` → 拒绝发布 → artifact set 整体回滚）。**逐只对照因此没做成**——B 侧根本没有产物。
+- **最重要的一条教训**：六轮离线审查（含两次独立对抗 agent、十几枪植入对照、每轮 focused 超集全绿、多次 full lane 3200+ 全绿）**没有一次发现这版代码发不出周报**。原因是所有测试都在函数层和合成夹具上，而这个缺陷只在「真实池子规模 + 既有对账不变式」相遇时才出现。**「全绿」和「能上线」是两件事，中间那道只能靠真实数据跑一次。**
+- **归因是老类的第三次复发**：4.1 把 `df_full`/池子构成的语义翻了一次，我在第二轮抓到了 `build_data_health` 的 `ranked_count` 计数腿，**漏了同一个函数里的 watch-pool 对账腿**。同一次语义翻转的消费者，扫了一个没扫全。**语义翻转之后要 grep 的不是「哪个文件」，是「哪些判据读了这个语义」。**
+- **一格如实未钉死**：`errors=1` 的具体 issue id 拿不到（产物回滚、无 journal、日志不打正文）。归因靠「唯一输入相符变化的分支」+ 真函数 `build_watch_pool_reconciliation` 逐格复现（`actual=12,target=15`：`eligible=12` pass，`13/15/20/50` 全 fail）。**修复方第一步先复跑一次把 `data_health.json` 留下来确认，别直接照我的归因动手。**
+- **顺带暴露 5.1 从未在生产上工作过**：B 侧 `[a-short breadth] stk_limit unavailable (RuntimeError)`，全市场涨跌停取数在真 Tushare 上直接失败，breadth 全走 fail-closed、regime 落回 unknown。六轮审查用的全是合成 payload，这条真实路径一次都没跑通过。
+
+### 交接
+
+两条 Required 的完整正文、修复方向与 closure test 见 `docs/system_risk_register.md` 顶部 2026-08-18 A/B 条目（单一来源，本处不复述）。`Codex：修复`——先复跑确认 error 身份，再改；不得为了让对账过去而引入递补（那会重开 5.1「挤掉合格票」的洞）。
