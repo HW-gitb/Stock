@@ -49,6 +49,31 @@ def _daily_rows(code: str, n: int) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _technical_rows(code: str, n: int, *, flat: bool = False) -> pd.DataFrame:
+    rows = []
+    for i in range(n):
+        close = 10.0 if flat else 10.0 + (n - 1 - i)
+        high = close if flat else close + 1.0
+        low = close if flat else close - 1.0
+        rows.append({
+            "ts_code": code,
+            "trade_date": (pd.Timestamp("2026-05-29") - pd.Timedelta(days=i)).strftime("%Y%m%d"),
+            "open": close,
+            "high": high,
+            "low": low,
+            "close": close,
+            "qfq_open": close,
+            "qfq_high": high,
+            "qfq_low": low,
+            "qfq_close": close,
+            "pre_close": close if flat else close - 1.0,
+            "pct_chg": 0.0 if flat else 1.0,
+            "vol": 1000.0,
+            "amount": 200000.0,
+        })
+    return pd.DataFrame(rows)
+
+
 class EgsMainDailyStatsGuardTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -118,6 +143,80 @@ class EgsMainDailyStatsGuardTest(unittest.TestCase):
                     float(stats.loc[0, column]),
                     (10.0 / (10.0 + sessions * 0.01) - 1) * 100,
                 )
+
+    def test_sixty_one_closes_compute_candidate_technical_snapshot(self) -> None:
+        self.egs_main.CONF["daily_stats_min_rows"] = 1
+        n = self.egs_main.DAILY_STATS_REQUIRED_CLOSES
+        stats = self.egs_main.precompute_stock_stats(
+            {"600000.SH"}, _technical_rows("600000.SH", n)
+        )
+        row = stats.iloc[0]
+        closes = pd.Series([10.0 + i for i in range(n)], dtype=float)
+        dif = (
+            closes.ewm(span=12, adjust=False).mean()
+            - closes.ewm(span=26, adjust=False).mean()
+        )
+        dea = dif.ewm(span=9, adjust=False).mean()
+
+        self.assertAlmostEqual(float(row["ma5"]), 68.0)
+        self.assertAlmostEqual(float(row["ma10"]), 65.5)
+        self.assertAlmostEqual(float(row["ma20"]), 60.5)
+        self.assertAlmostEqual(float(row["ma60"]), 40.5)
+        self.assertEqual(float(row["rsi_14"]), 100.0)
+        self.assertAlmostEqual(float(row["atr_14"]), 2.0)
+        self.assertEqual(int(row["atr_window"]), 14)
+        self.assertTrue(bool(row["atr_ex_rights_adjusted"]))
+        self.assertAlmostEqual(float(row["macd_dif"]), float(dif.iloc[-1]))
+        self.assertAlmostEqual(float(row["macd_dea"]), float(dea.iloc[-1]))
+        self.assertAlmostEqual(float(row["macd_hist"]), float(dif.iloc[-1] - dea.iloc[-1]))
+
+    def test_flat_qfq_bars_keep_zero_atr_as_a_valid_snapshot(self) -> None:
+        self.egs_main.CONF["daily_stats_min_rows"] = 1
+        stats = self.egs_main.precompute_stock_stats(
+            {"600000.SH"}, _technical_rows("600000.SH", 15, flat=True)
+        )
+        row = stats.iloc[0]
+
+        self.assertEqual(float(row["atr_14"]), 0.0)
+        self.assertEqual(int(row["atr_window"]), 14)
+        self.assertTrue(bool(row["atr_ex_rights_adjusted"]))
+        self.assertEqual(float(row["rsi_14"]), 100.0)
+        self.assertTrue(pd.isna(row["macd_dif"]))
+
+    def test_technical_snapshot_short_history_is_item_local_and_fail_closed(self) -> None:
+        self.egs_main.CONF["daily_stats_min_rows"] = 1
+        for n in (14, 33, 59):
+            with self.subTest(n=n):
+                row = self.egs_main.precompute_stock_stats(
+                    {"600000.SH"}, _technical_rows("600000.SH", n)
+                ).iloc[0]
+                if n == 14:
+                    self.assertTrue(pd.isna(row["rsi_14"]))
+                    self.assertTrue(pd.isna(row["atr_14"]))
+                if n in (14, 33, 59):
+                    self.assertTrue(pd.isna(row["ma60"]))
+                if n == 33:
+                    self.assertTrue(pd.isna(row["macd_dif"]))
+
+    def test_technical_snapshot_does_not_drop_bad_tail_bars_or_clear_siblings(self) -> None:
+        self.egs_main.CONF["daily_stats_min_rows"] = 1
+
+        bad_close = _technical_rows("600000.SH", 61)
+        bad_close.loc[0, "qfq_close"] = float("nan")
+        bad_close_row = self.egs_main.precompute_stock_stats(
+            {"600000.SH"}, bad_close
+        ).iloc[0]
+        for column in ("ma5", "rsi_14", "atr_14", "macd_dif"):
+            self.assertTrue(pd.isna(bad_close_row[column]), column)
+
+        bad_high = _technical_rows("600000.SH", 61)
+        bad_high.loc[0, "qfq_high"] = float("inf")
+        bad_high_row = self.egs_main.precompute_stock_stats(
+            {"600000.SH"}, bad_high
+        ).iloc[0]
+        self.assertTrue(pd.isna(bad_high_row["atr_14"]))
+        for column in ("ma5", "rsi_14", "macd_dif"):
+            self.assertTrue(math.isfinite(float(bad_high_row[column])), column)
 
     def test_qfq_window_is_long_enough_for_the_longest_declared_lookback(self) -> None:
         self.assertEqual(self.egs_main.DAILY_STATS_MAX_LOOKBACK_SESSIONS, 60)

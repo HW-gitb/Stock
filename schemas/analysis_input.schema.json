@@ -1734,17 +1734,18 @@
               "properties": {
                 "atr_14": {
                   "$ref": "#/$defs/numberNullable",
-                  "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+                  "description": "Unit: CNY/share for A-shares or USD/share for US equities; A-short candidate snapshot uses qfq OHLC."
                 },
                 "atr_window": {
                   "$ref": "#/$defs/nonNegativeIntegerNullable",
-                  "description": "Unit: trading days."
+                  "description": "Unit: trading days; number of trading-day True Range observations actually averaged for this ATR snapshot; A-short success is 14."
                 },
                 "ex_rights_adjusted": {
                   "type": [
                     "boolean",
                     "null"
-                  ]
+                  ],
+                  "description": "Whether the ATR input prices were adjusted for ex-rights/corporate actions; A-short candidate qfq snapshots use true."
                 }
               }
             },
@@ -1754,25 +1755,25 @@
               "properties": {
                 "ma5": {
                   "$ref": "#/$defs/numberNullable",
-                  "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+                  "description": "Unit: CNY/share for A-shares or USD/share for US equities; exact 5-bar qfq SMA for the A-short candidate snapshot."
                 },
                 "ma10": {
                   "$ref": "#/$defs/numberNullable",
-                  "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+                  "description": "Unit: CNY/share for A-shares or USD/share for US equities; exact 10-bar qfq SMA for the A-short candidate snapshot."
                 },
                 "ma20": {
                   "$ref": "#/$defs/numberNullable",
-                  "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+                  "description": "Unit: CNY/share for A-shares or USD/share for US equities; exact 20-bar qfq SMA for the A-short candidate snapshot."
                 },
                 "ma60": {
                   "$ref": "#/$defs/numberNullable",
-                  "description": "Unit: CNY/share for A-shares or USD/share for US equities."
+                  "description": "Unit: CNY/share for A-shares or USD/share for US equities; exact 60-bar qfq SMA for the A-short candidate snapshot."
                 }
               }
             },
             "rsi_14": {
               "$ref": "#/$defs/numberNullable",
-              "description": "Unit: indicator value, 0-100."
+              "description": "Unit: indicator value, 0-100; arithmetic 14-change RSI on qfq closes, matching the current Phase5 candidate formula."
             },
             "macd": {
               "type": "object",
@@ -1780,15 +1781,15 @@
               "properties": {
                 "dif": {
                   "$ref": "#/$defs/numberNullable",
-                  "description": "Unit: indicator value."
+                  "description": "Unit: indicator value; EMA(12)-EMA(26) with adjust=false on A-short qfq closes."
                 },
                 "dea": {
                   "$ref": "#/$defs/numberNullable",
-                  "description": "Unit: indicator value."
+                  "description": "Unit: indicator value; EMA(9) of DIF with adjust=false on the A-short qfq snapshot."
                 },
                 "hist": {
                   "$ref": "#/$defs/numberNullable",
-                  "description": "Unit: indicator value."
+                  "description": "Unit: indicator value; DIF minus DEA, not doubled, for the A-short qfq snapshot."
                 }
               }
             },

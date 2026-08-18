@@ -211,7 +211,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("EGS")
 
-EGS_VERSION = "v7.13"
+EGS_VERSION = "v7.14"
 ANALYSIS_INPUT_SCHEMA_VERSION = "1.5.0"
 SUSPEND_DAILY_COVERAGE_LOG_SCHEMA_VERSION = "1.0.0"
 IV_FEED_STATUSES = (
@@ -804,22 +804,52 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
         ("capital_flow.big_order_ratio", _row_get(row, "big_ratio")),
     ]
     actual_missing_fields = [name for name, value in core_quality_fields if _is_missing(value)]
-    planned_unavailable_fields = [
-        "technical.atr.atr_14",
-        "technical.moving_averages",
-        "technical.rsi_14",
-        "technical.macd",
+    atr_14 = _json_float(_row_get(row, "atr_14"))
+    atr_window = _json_int(_row_get(row, "atr_window"))
+    atr_ex_rights_adjusted = _json_bool(_row_get(row, "atr_ex_rights_adjusted"))
+    moving_averages = {
+        key: _json_float(_row_get(row, key))
+        for key in ("ma5", "ma10", "ma20", "ma60")
+    }
+    rsi_14 = _json_float(_row_get(row, "rsi_14"))
+    macd = {
+        key: _json_float(_row_get(row, f"macd_{key}"))
+        for key in ("dif", "dea", "hist")
+    }
+
+    def _finite_technical(value, *, minimum=None, maximum=None):
+        if value is None or isinstance(value, (bool, np.bool_)):
+            return False
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return False
+        if not np.isfinite(number):
+            return False
+        return (
+            (minimum is None or number >= minimum)
+            and (maximum is None or number <= maximum)
+        )
+
+    technical_missing_fields = []
+    if not _finite_technical(atr_14, minimum=0.0):
+        technical_missing_fields.append("technical.atr.atr_14")
+    if not all(_finite_technical(value) for value in moving_averages.values()):
+        technical_missing_fields.append("technical.moving_averages")
+    if not _finite_technical(rsi_14, minimum=0.0, maximum=100.0):
+        technical_missing_fields.append("technical.rsi_14")
+    if not all(_finite_technical(value) for value in macd.values()):
+        technical_missing_fields.append("technical.macd")
+
+    remaining_unavailable_fields = [
         "capital_flow.northbound",
         "capital_flow.block_trade",
         "analyst.target_price_mean",
     ]
     ttm_profit_dedt = _json_float(_row_get(row, "ttm_profit_dedt"))
+    missing_fields = actual_missing_fields + technical_missing_fields + remaining_unavailable_fields
     if ttm_profit_dedt is None or not np.isfinite(ttm_profit_dedt):
-        missing_fields = actual_missing_fields + planned_unavailable_fields + [
-            "fundamental.profitability.ttm_profit_dedt",
-        ]
-    else:
-        missing_fields = actual_missing_fields + planned_unavailable_fields
+        missing_fields.append("fundamental.profitability.ttm_profit_dedt")
     present_count = len(core_quality_fields) - len(actual_missing_fields)
     completeness_score = round((present_count / len(core_quality_fields)) * 100, 2)
     pending_fields = [
@@ -896,10 +926,14 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
             "close_position_in_range": None,
             "support": {"price": low_20d, "method": "20d_close_range", "confidence": "medium" if low_20d else "unknown"},
             "resistance": {"price": high_20d, "method": "20d_close_range", "confidence": "medium" if high_20d else "unknown"},
-            "atr": {"atr_14": None, "atr_window": None, "ex_rights_adjusted": None},
-            "moving_averages": {"ma5": None, "ma10": None, "ma20": None, "ma60": None},
-            "rsi_14": None,
-            "macd": {"dif": None, "dea": None, "hist": None},
+            "atr": {
+                "atr_14": atr_14,
+                "atr_window": atr_window,
+                "ex_rights_adjusted": atr_ex_rights_adjusted,
+            },
+            "moving_averages": moving_averages,
+            "rsi_14": rsi_14,
+            "macd": macd,
             "bollinger": {"upper": None, "middle": None, "lower": None},
             "limit_up_count_10d": _json_int(_row_get(row, "limit_10d")),
             "limit_up_count_20d": _json_int(_row_get(row, "limit_20d")),
@@ -3866,6 +3900,12 @@ DAILY_ALL_QFQ_WINDOW_TRADING_DAYS = (
 DAILY_ALL_QFQ_CACHE_VERSION = "qfq_v1"
 DAILY_ALL_RAW_OHLC_COLUMNS = ("open", "high", "low", "close")
 DAILY_ALL_QFQ_OHLC_COLUMNS = tuple(f"qfq_{column}" for column in DAILY_ALL_RAW_OHLC_COLUMNS)
+TECHNICAL_MA_WINDOWS = (5, 10, 20, 60)
+TECHNICAL_RSI_PERIOD = 14
+TECHNICAL_ATR_PERIOD = 14
+TECHNICAL_MACD_FAST = 12
+TECHNICAL_MACD_SLOW = 26
+TECHNICAL_MACD_SIGNAL = 9
 
 
 def _validate_daily_qfq_window(n_days):
@@ -3880,6 +3920,94 @@ def _validate_daily_qfq_window(n_days):
             "daily qfq window is too short for the longest declared price lookback: "
             f"window={n_days}, required={required}"
         )
+
+
+def _candidate_technical_snapshot(grp):
+    """Compute the candidate-layer technical snapshot from qfq bars only."""
+    empty = {
+        "ma5": np.nan,
+        "ma10": np.nan,
+        "ma20": np.nan,
+        "ma60": np.nan,
+        "rsi_14": np.nan,
+        "atr_14": np.nan,
+        "atr_window": np.nan,
+        "atr_ex_rights_adjusted": None,
+        "macd_dif": np.nan,
+        "macd_dea": np.nan,
+        "macd_hist": np.nan,
+    }
+    if not isinstance(grp, pd.DataFrame) or grp.empty:
+        return empty
+
+    bars = grp.iloc[::-1].reset_index(drop=True)
+
+    def _window(columns, length):
+        if len(bars) < length or any(column not in bars.columns for column in columns):
+            return None
+        window = bars.loc[bars.index[-length:], list(columns)]
+        for column in columns:
+            if window[column].map(lambda value: isinstance(value, (bool, np.bool_))).any():
+                return None
+        values = window.apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
+        if not np.isfinite(values).all() or (values <= 0).any():
+            return None
+        return values
+
+    for period in TECHNICAL_MA_WINDOWS:
+        values = _window(("qfq_close",), period)
+        if values is not None:
+            empty[f"ma{period}"] = float(values[:, 0].mean())
+
+    rsi_values = _window(("qfq_close",), TECHNICAL_RSI_PERIOD + 1)
+    if rsi_values is not None:
+        changes = np.diff(rsi_values[:, 0])
+        gains = np.maximum(changes, 0.0).sum() / TECHNICAL_RSI_PERIOD
+        losses = np.maximum(-changes, 0.0).sum() / TECHNICAL_RSI_PERIOD
+        empty["rsi_14"] = 100.0 if losses == 0 else float(
+            100.0 - 100.0 / (1.0 + gains / losses)
+        )
+
+    atr_values = _window(
+        ("qfq_high", "qfq_low", "qfq_close"), TECHNICAL_ATR_PERIOD + 1
+    )
+    if atr_values is not None:
+        highs = atr_values[1:, 0]
+        lows = atr_values[1:, 1]
+        previous_closes = atr_values[:-1, 2]
+        true_ranges = np.maximum.reduce((
+            highs - lows,
+            np.abs(highs - previous_closes),
+            np.abs(lows - previous_closes),
+        ))
+        atr_value = float(true_ranges.mean())
+        if np.isfinite(atr_value) and atr_value >= 0:
+            empty["atr_14"] = atr_value
+            empty["atr_window"] = TECHNICAL_ATR_PERIOD
+            empty["atr_ex_rights_adjusted"] = True
+
+    macd_values = (
+        _window(("qfq_close",), len(bars))
+        if len(bars) >= TECHNICAL_MACD_SLOW + TECHNICAL_MACD_SIGNAL - 1
+        else None
+    )
+    if macd_values is not None:
+        closes = macd_values[:, 0]
+
+        def _ema(values, span):
+            alpha = 2.0 / (span + 1.0)
+            result = [float(values[0])]
+            for value in values[1:]:
+                result.append(alpha * float(value) + (1.0 - alpha) * result[-1])
+            return np.asarray(result, dtype=float)
+
+        dif = _ema(closes, TECHNICAL_MACD_FAST) - _ema(closes, TECHNICAL_MACD_SLOW)
+        dea = _ema(dif, TECHNICAL_MACD_SIGNAL)
+        empty["macd_dif"] = float(dif[-1])
+        empty["macd_dea"] = float(dea[-1])
+        empty["macd_hist"] = float(dif[-1] - dea[-1])
+
+    return empty
 
 
 def _daily_all_qfq_cache_key(as_of):
@@ -6026,6 +6154,8 @@ def precompute_stock_stats(codes, all_daily):
         closes = grp["qfq_close"].dropna()
         if len(closes) < 1: continue
 
+        technical = _candidate_technical_snapshot(grp)
+
         pct_20d = _trailing_return_pct(closes, DAILY_STATS_LOOKBACKS["pct_20d"])
         pct_5d  = _trailing_return_pct(closes, DAILY_STATS_LOOKBACKS["pct_5d"])
         pct_60d = _trailing_return_pct(closes, DAILY_STATS_LOOKBACKS["pct_60d"])
@@ -6109,6 +6239,7 @@ def precompute_stock_stats(codes, all_daily):
             "low_20d":        low_20d,
             "drawdown_20d":   drawdown_20d,
             "has_crash_veto": has_crash_veto,
+            **technical,
         })
     if not rows:
         raise RuntimeError(
@@ -6247,7 +6378,9 @@ def build_master(df_l0, stats_df, df_db, df_fin, sw_map, red_dict):
     if not stats_df.empty:
         st_cols = [c for c in ["ts_code","avg_amount_5d","vol_confirm","limit_20d","limit_10d",
                                 "is_lock","is_breakout","limit_breakout_legacy","high_20d","low_20d","pct_5d","pct_60d",
-                                "drawdown_20d","has_crash_veto","qfq_close","qfq_source_trade_date"]
+                                "drawdown_20d","has_crash_veto","qfq_close","qfq_source_trade_date",
+                                "ma5","ma10","ma20","ma60","rsi_14","atr_14","atr_window",
+                                "atr_ex_rights_adjusted","macd_dif","macd_dea","macd_hist"]
                    if c in stats_df.columns]
         df = df.merge(stats_df[st_cols], on="ts_code", how="left")
 

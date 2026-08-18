@@ -105,6 +105,38 @@ class RunAnalysisReportTest(unittest.TestCase):
 
         self.assertEqual(report["data_lineage"]["l3_mode"], "today")
 
+    def test_complete_technical_snapshot_stops_report_data_missing_unknowns(self) -> None:
+        payload = _load_payload()
+        candidate = find_candidate(payload, "600000.SH")
+        candidate["technical"]["atr"]["atr_14"] = 1.25
+        candidate["technical"]["rsi_14"] = 55.0
+        candidate["technical"]["macd"]["dif"] = 0.1
+
+        report = build_report(
+            payload,
+            candidate,
+            generated_at="2026-05-25T00:00:00+08:00",
+        )
+        data_missing = {
+            item["field"]
+            for item in report["unknowns"]
+            if item["reason"] == "data_missing"
+        }
+        self.assertNotIn("technical.atr.atr_14", data_missing)
+        self.assertNotIn("technical.rsi_14", data_missing)
+        self.assertNotIn("technical.macd", data_missing)
+
+        candidate["technical"]["atr"]["atr_14"] = None
+        report_with_null = build_report(
+            payload,
+            candidate,
+            generated_at="2026-05-25T00:00:00+08:00",
+        )
+        self.assertIn(
+            "technical.atr.atr_14",
+            {item["field"] for item in report_with_null["unknowns"]},
+        )
+
     def test_current_hithink_lineage_is_preserved(self) -> None:
         payload = current_hithink_analysis_input_payload()
         candidate = find_candidate(payload, "600000.SH")

@@ -146,7 +146,9 @@ Phase 1a 目标：先定义 `analysis_input.json` 的稳定输入合同，再让
 | M2.1-M2.5 生态系统 | `industry`, `catalyst`, `llm_tasks`, `event_risk.regulatory` | 已覆盖；LLM 判断模板 Phase 4 |
 | M2.6 10 日回溯 | `capital_flow.margin`, `capital_flow.northbound`, `capital_flow.block_trade` | 已覆盖；复合标记可由 analyzer 计算 |
 | M3.1 基本面 | `fundamental`, `industry.industry_trend` | 已覆盖 |
-| M3.2 技术面 | `technical`, `liquidity` | 已覆盖；MA/RSI/MACD/ATR Phase 3 补 |
+| M3.2 技术面 | `technical`, `liquidity` | 已覆盖；EGS 候选层已由同一 65-session qfq 日线面板接入 MA/RSI/MACD/ATR 快照；Phase5 仍用独立 PIT `price_series` 重算正式指标 |
+
+M3.2 技术快照的 MA/RSI/MACD/ATR 使用固定 qfq 口径；候选 ATR 为固定 ATR14，`atr_window` 表示实际参与平均的 14 个 True Range 观察数，`ex_rights_adjusted` 表示输入价格已做除权/公司行动调整。v14.2 §3.2 的近 14 日除权事件识别、ATR20 延窗和 M6.5 扰动提示尚未实现，详见风险登记中的对应条目；Phase5 正式指标仍沿独立 PIT `price_series` 链路。
 | M3.3 财报与波动率 | `fundamental.expectation`, `market_context.volatility`, `volatility` | 已覆盖 |
 | M3.3B IV/HV | `candidates[].volatility` | 已覆盖；HV 可由日线算，IV 待数据源 |
 | M3.4 分析师目标价 | `analyst` | 已覆盖；数据源/搜索待接 |

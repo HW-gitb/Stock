@@ -100,6 +100,71 @@ class EgsMainQfqPriceBasisTest(unittest.TestCase):
         self.assertAlmostEqual(qfq_rows[0]["pct_chg"], 0.0)
         self.assertAlmostEqual(raw_rows[0]["pct_chg"], -50.0)
 
+    def test_candidate_technical_snapshot_uses_qfq_not_raw_ex_rights_jump(self):
+        dates = [
+            (pd.Timestamp("20260602") - pd.Timedelta(days=i)).strftime("%Y%m%d")
+            for i in range(61)
+        ]
+        daily_frames = []
+        factor_frames = []
+        for i, trade_date in enumerate(dates):
+            qfq_close = 10.0 + (60 - i) * 0.1
+            factor = 1.0 if i >= 30 else 2.0
+            raw_close = qfq_close * 2.0 / factor
+            qfq_high = qfq_close + 0.5
+            qfq_low = qfq_close - 0.5
+            daily_frames.append(pd.DataFrame([{
+                "ts_code": "600000.SH",
+                "trade_date": trade_date,
+                "open": raw_close,
+                "high": (qfq_high * 2.0 / factor),
+                "low": (qfq_low * 2.0 / factor),
+                "close": raw_close,
+                "pre_close": raw_close,
+                "pct_chg": 0.0,
+                "vol": 1000.0,
+                "amount": 100000.0,
+            }]))
+            factor_frames.append(pd.DataFrame([{
+                "ts_code": "600000.SH",
+                "trade_date": trade_date,
+                "adj_factor": factor,
+            }]))
+
+        panel = self.egs._build_qfq_daily_all(
+            daily_frames, factor_frames, dates[0], dates
+        )
+        ordered = panel.sort_values("trade_date")
+        raw_jump = ordered["close"].diff().abs().dropna().max()
+        qfq_step = ordered["qfq_close"].diff().abs().dropna().max()
+        self.assertGreater(float(raw_jump), float(qfq_step) * 5.0)
+
+        old_min_rows = self.egs.CONF["daily_stats_min_rows"]
+        self.egs.CONF["daily_stats_min_rows"] = 1
+        try:
+            qfq_stats = self.egs.precompute_stock_stats({"600000.SH"}, panel)
+            raw_replaced = panel.copy()
+            for raw_column, qfq_column in zip(
+                self.egs.DAILY_ALL_RAW_OHLC_COLUMNS,
+                self.egs.DAILY_ALL_QFQ_OHLC_COLUMNS,
+            ):
+                raw_replaced[raw_column] = raw_replaced[qfq_column]
+            qfq_only_stats = self.egs.precompute_stock_stats(
+                {"600000.SH"}, raw_replaced
+            )
+        finally:
+            self.egs.CONF["daily_stats_min_rows"] = old_min_rows
+
+        for column in (
+            "ma5", "ma10", "ma20", "ma60", "rsi_14", "atr_14",
+            "macd_dif", "macd_dea", "macd_hist",
+        ):
+            self.assertAlmostEqual(
+                float(qfq_stats.loc[0, column]),
+                float(qfq_only_stats.loc[0, column]),
+                msg=column,
+            )
+
     def test_missing_duplicate_or_future_factors_abort_the_batch(self):
         daily, factors = self._two_day_frames()
         factors[1] = pd.DataFrame([_factor_row("20260602", 2.0, code="000001.SZ")])
