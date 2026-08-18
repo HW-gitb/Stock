@@ -5227,3 +5227,27 @@ Claude Code：独立审查这一处 fixture 迁移，并确认正式 `theme.run_
 ### 下一步
 
 Codex：按方案A + 方案B 一轮做完（同一刀，别拆）；完成后交 Claude Code 独立审查。
+
+## 2026-08-18 Codex 回交：市值 overview 空转最小修复（888d，OPEN-NOT-VERIFIED）
+
+- **实施**：按本节方案 A+B 同一刀完成。`fetch_massive_ticker_overview` 对身份匹配的成功响应只记录 `type`、`has_market_cap`、`observed_on` 到 gitignored `state/us_short/massive_instrument_type_observations.json`，90 天内已知无市值残差跳过，91 天重新调用；没有保存 raw response。
+- **Pass1**：只对已观测 `UNIT/PFD/FUND` 且市值仍缺失、原本只有一个市值缺失理由的行改为 `non_common_equity_instrument`；`CS` 保持 `market_cap_usd_unknown_or_invalid`，原 gate eligibility 和逐票去留不变。artifact lineage 保存 type，validator 用同一规则重算。
+- **摘要/守恒**：`market_cap_completion` 记录 `massive_overview_skipped_by_cache_count`、`massive_overview_physical_call_count`；逻辑残差按 skipped + attempted 守恒，物理 HTTP 次数单独记录；Massive observability 不把 cache skip 当作 physical target，最终 unresolved 仍保留。
+- **自审/验证**：固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；`tests.provider.test_us_short_universe_fetch` 用 `unittest` `137 tests / OK / 2.311s`；覆盖 cache hit no-call、TTL、逐票 keep/drop 反向控制、reason distribution、计数守恒和 artifact validator；`py_compile`、`git diff --check` 通过。pytest 未安装，未使用其他 Python；未联网、未调 provider/live、未跑 full lane。
+- **落盘/边界**：cache 测试使用隔离 state 根，当前工作树未留下 cache；当前仅有本刀代码、schema、测试及 register/SESSION_LOG/handoff 的有意未提交改动。状态为 `OPEN-NOT-VERIFIED`，交 Claude Code 独立审查并提交；不触碰主树或桌面文档。
+
+### 下一步
+
+Claude Code：独立审查本轮 A+B diff，重点确认 cache-hit 与不跳过的逐票 keep/drop 完全一致、91 天 TTL 重新调用、以及 `UNIT/PFD/FUND` 只改变理由后提交。
+
+## 2026-08-18 Claude Code 独立审查：市值兜底腿 104 秒空转 — PASS
+
+方案A+B 一轮做完，交办时列的三条"明确不做"均被遵守。第一验收门（剔除去留逐位不变）经 12 组用例实测成立：
+`_pass1_verdict` 三重收窄后只换标签，`eligible` / `ticker` / 键集合全不变，多理由行与 CS 行不 relabel。
+TTL 边界 90/91 天、正向观测永不跳过、脏缓存五形状、残差二分守恒、植入对照均通过（71/71）。
+缓存落在 `state/us_short/massive_instrument_type_observations.json`，经 `.gitignore:44` 忽略。
+不阻断 `O-MKTCAP-CACHE-1`：`final_unresolved_count` 在 completion 与 observability 两个对象里含义不同。
+
+### 下一步
+
+用户：下次周跑可验证第二周缓存命中（该腿应从 9 次调用 / 104 秒降到 0）。

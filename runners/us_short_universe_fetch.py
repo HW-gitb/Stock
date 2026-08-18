@@ -111,6 +111,10 @@ MASSIVE_RATE_LIMIT_RETRY_SECONDS = 65.0
 MASSIVE_RATE_LIMIT_MAX_RETRIES = 2
 MASSIVE_RATE_LIMIT_WINDOW_CAPACITY = 5
 MASSIVE_BATCH_LOGICAL_CALL_CAP = 30
+MASSIVE_INSTRUMENT_OBSERVATIONS_FILENAME = "massive_instrument_type_observations.json"
+MASSIVE_INSTRUMENT_OBSERVATION_TTL_DAYS = 90
+NON_COMMON_EQUITY_INSTRUMENT_TYPES = frozenset({"UNIT", "PFD", "FUND"})
+NON_COMMON_EQUITY_INSTRUMENT_REASON = "non_common_equity_instrument"
 
 # ADV window (§13.1 #2 liquidity prior — measurement methodology, recorded per-run in lineage so it is
 # auditable and cannot silently drift to a 1-day spike). 20 trading days ≈ one trading month smooths a
@@ -283,15 +287,19 @@ def build_massive_ticker_overview_observability(
     physical_http_call_count: int,
     rescued_count: int,
     final_unresolved_count: int,
+    skipped_by_cache_count: int = 0,
 ) -> dict[str, Any]:
     """Describe the existing Massive fallback outcome without creating another capstone health family."""
-    counts = (target_count, physical_http_call_count, rescued_count, final_unresolved_count)
+    counts = (
+        target_count, physical_http_call_count, rescued_count,
+        final_unresolved_count, skipped_by_cache_count,
+    )
     if any(type(value) is not int or value < 0 for value in counts):
         raise RuntimeError("Massive overview observability counts must be non-negative exact ints")
     if rescued_count + final_unresolved_count != target_count:
         raise RuntimeError("Massive overview outcome must conserve its exact target set")
     if target_count == 0:
-        outcome = "not_needed"
+        outcome = "cache_skipped" if skipped_by_cache_count else "not_needed"
     elif final_unresolved_count == 0:
         outcome = "all_targets_rescued"
     elif rescued_count == 0:
@@ -300,6 +308,7 @@ def build_massive_ticker_overview_observability(
         outcome = "partial_rescue_with_unresolved"
     return {
         "target_count": target_count,
+        "skipped_by_cache_count": skipped_by_cache_count,
         "physical_http_call_count": physical_http_call_count,
         "rescued_count": rescued_count,
         "final_unresolved_count": final_unresolved_count,
@@ -323,6 +332,56 @@ def _write_json_atomic(payload: Any, path: Path) -> None:
         json.dump(payload, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
     tmp.replace(path)
+
+
+def _load_massive_instrument_observations(path: Path) -> dict[str, dict[str, Any]]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for raw_ticker, record in payload.items():
+        ticker = canonical_us_ticker(raw_ticker)
+        if (ticker is None or not isinstance(record, dict)
+                or not isinstance(record.get("type"), str)
+                or type(record.get("has_market_cap")) is not bool
+                or not isinstance(record.get("observed_on"), str)):
+            continue
+        out[ticker] = {
+            "type": record["type"].strip(),
+            "has_market_cap": record["has_market_cap"],
+            "observed_on": record["observed_on"],
+        }
+    return out
+
+
+def _massive_observation_is_fresh(
+    record: dict[str, Any] | None, price_basis_date: str,
+) -> bool:
+    if not isinstance(record, dict) or record.get("has_market_cap") is not False:
+        return False
+    try:
+        observed_on = datetime.strptime(record["observed_on"], "%Y%m%d").date()
+        basis = datetime.strptime(price_basis_date, "%Y%m%d").date()
+    except (KeyError, TypeError, ValueError):
+        return False
+    age_days = (basis - observed_on).days
+    return 0 <= age_days <= MASSIVE_INSTRUMENT_OBSERVATION_TTL_DAYS
+
+
+def _massive_instrument_types(
+    observations: dict[str, dict[str, Any]],
+) -> dict[str, str]:
+    return {
+        ticker: record["type"].strip().upper()
+        for ticker, record in observations.items()
+        if isinstance(record, dict) and isinstance(record.get("type"), str)
+        and record["type"].strip()
+    }
 
 
 def _write_summary_safe(summary: Any, path: Path, sensitive: list[str]) -> None:
@@ -882,12 +941,15 @@ def fetch_massive_ticker_overview(
     tickers: list[str], price_basis_date: str, key: str, *,
     stats_out: dict[str, int] | None = None,
     sleep_func=None,
+    observation_path: Path | None = None,
 ) -> dict[str, float]:
     """Fetch the exact residual ticker-overview set with the canonical Massive pacing/retry contract."""
     out: dict[str, float] = {}
     physical_calls = 0
     sleep = sleep_func or time.sleep
     seen: set[str] = set()
+    observations = _load_massive_instrument_observations(observation_path) if observation_path else {}
+    observations_changed = False
     for raw_ticker in tickers:
         ticker = canonical_us_ticker(raw_ticker)
         if ticker is None or ticker in seen:
@@ -916,10 +978,21 @@ def fetch_massive_ticker_overview(
         if not isinstance(row, dict):
             continue
         returned_ticker = canonical_us_ticker(row.get("ticker"))
-        market_cap = row.get("market_cap")
-        if returned_ticker != ticker or not _is_finite(market_cap) or market_cap <= 0:
+        if returned_ticker != ticker:
             continue
-        out[ticker] = float(market_cap)
+        market_cap = row.get("market_cap")
+        instrument_type = row.get("type")
+        if observation_path and isinstance(instrument_type, str) and instrument_type.strip():
+            observations[ticker] = {
+                "type": instrument_type.strip(),
+                "has_market_cap": _is_finite(market_cap) and market_cap > 0,
+                "observed_on": price_basis_date,
+            }
+            observations_changed = True
+        if _is_finite(market_cap) and market_cap > 0:
+            out[ticker] = float(market_cap)
+    if observation_path and observations_changed:
+        _write_json_atomic(observations, observation_path)
     if stats_out is not None:
         stats_out.update({"actual_request_count": physical_calls})
     return out
@@ -1250,6 +1323,20 @@ def _coverage_status(price: Any, shares: Any, adv_days: int, window_days: int, m
     return "complete"
 
 
+def _pass1_verdict(
+    gate_row: dict[str, Any], *, governance: dict[str, Any], instrument_type: str | None,
+) -> dict[str, Any]:
+    verdict = cheap_eligible(gate_row, governance=governance)
+    if (
+        gate_row["market_cap_usd"] is None
+        and isinstance(instrument_type, str)
+        and instrument_type.strip().upper() in NON_COMMON_EQUITY_INSTRUMENT_TYPES
+        and verdict["reasons"] == ["market_cap_usd_unknown_or_invalid"]
+    ):
+        return {**verdict, "reasons": [NON_COMMON_EQUITY_INSTRUMENT_REASON]}
+    return verdict
+
+
 def apply_pass1(
     sec_tickers: dict[str, dict[str, Any]],
     sec_shares: dict[int, dict[str, Any]],
@@ -1258,6 +1345,7 @@ def apply_pass1(
     governance: dict[str, Any],
     yfinance_caps: dict[str, dict[str, Any]] | None = None,
     massive_caps: dict[str, float] | None = None,
+    instrument_types: dict[str, str] | None = None,
     status_records: dict[str, dict[str, Any]] | None = None,
     as_of: str,
     observed_at: str,
@@ -1275,6 +1363,7 @@ def apply_pass1(
     """
     yfinance_caps = yfinance_caps or {}
     massive_caps = massive_caps or {}
+    instrument_types = instrument_types or {}
     status_supplied = status_records is not None
     if status_supplied and not isinstance(status_records, dict):
         raise RuntimeError("status_records must be a dict keyed by canonical ticker")
@@ -1334,7 +1423,10 @@ def apply_pass1(
             "bankruptcy": status_values["bankruptcy"],
             "otc": status_values["otc"],
         }
-        verdict = cheap_eligible(gate_row, governance=governance)
+        instrument_type = instrument_types.get(sym)
+        verdict = _pass1_verdict(
+            gate_row, governance=governance, instrument_type=instrument_type,
+        )
 
         row = {
             "ticker": verdict["ticker"] or sym,
@@ -1368,6 +1460,8 @@ def apply_pass1(
                 "market_cap_source": market_cap_source,
             },
         }
+        if isinstance(instrument_type, str) and instrument_type.strip():
+            row["lineage"]["instrument_type"] = instrument_type.strip().upper()
         if market_cap_source in {
             YFINANCE_SOURCE_SHARES_X_MASSIVE_CLOSE,
             YFINANCE_SOURCE_MARKET_CAP_SNAPSHOT,
@@ -1412,7 +1506,10 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
             ineligible += 1
             for rs in r["reasons"]:
                 reason_counts[rs] = reason_counts.get(rs, 0) + 1
-            if r["reasons"] == ["market_cap_usd_unknown_or_invalid"]:
+            if r["reasons"] in (
+                ["market_cap_usd_unknown_or_invalid"],
+                [NON_COMMON_EQUITY_INSTRUMENT_REASON],
+            ):
                 needs_market_cap.append(r["ticker"])
         if r["price"] is None:
             no_price += 1
@@ -1439,6 +1536,8 @@ def build_market_cap_completion(
     sec_companyfacts_request_count: int,
     yfinance_attempted_count: int,
     massive_overview_attempted_count: int,
+    massive_overview_skipped_by_cache_count: int = 0,
+    massive_overview_physical_call_count: int | None = None,
 ) -> dict[str, int]:
     """Build and check the single conservation aggregate consumed by problem 6."""
     if any(not isinstance(values, list) for values in (
@@ -1464,9 +1563,12 @@ def build_market_cap_completion(
     sec_rescued = len(initial - companyfacts_residual)
     yfinance_rescued = len(companyfacts_residual - yfinance_residual)
     massive_rescued = len(yfinance_residual - final)
+    if massive_overview_physical_call_count is None:
+        massive_overview_physical_call_count = massive_overview_attempted_count
     counts = (
         sec_companyfacts_target_count, sec_companyfacts_request_count,
         yfinance_attempted_count, massive_overview_attempted_count,
+        massive_overview_skipped_by_cache_count, massive_overview_physical_call_count,
     )
     if any(type(value) is not int or value < 0 for value in counts):
         raise RuntimeError("market-cap completion call counts must be non-negative integers")
@@ -1476,6 +1578,9 @@ def build_market_cap_completion(
             or yfinance_rescued > yfinance_attempted_count
             or massive_overview_attempted_count > len(yfinance_residual)):
         raise RuntimeError("market-cap completion call counts exceed their exact stage targets")
+    if (massive_overview_skipped_by_cache_count > len(yfinance_residual)
+            or massive_overview_skipped_by_cache_count + massive_overview_attempted_count != len(yfinance_residual)):
+        raise RuntimeError("Massive overview skipped and attempted counts must conserve the exact residual")
     completion = {
         "needed_count": len(initial_needs),
         "sec_companyfacts_target_count": sec_companyfacts_target_count,
@@ -1484,6 +1589,8 @@ def build_market_cap_completion(
         "yfinance_attempted_count": yfinance_attempted_count,
         "yfinance_rescued_count": yfinance_rescued,
         "massive_overview_attempted_count": massive_overview_attempted_count,
+        "massive_overview_skipped_by_cache_count": massive_overview_skipped_by_cache_count,
+        "massive_overview_physical_call_count": massive_overview_physical_call_count,
         "massive_overview_rescued_count": massive_rescued,
         "final_unresolved_count": len(final_needs),
     }
@@ -1585,7 +1692,10 @@ def validate_candidate_artifact(artifact: dict[str, Any], *, expected_decision_d
                     "adv_usd": r["adv_usd"], "market_cap_usd": r["market_cap_usd"],
                     "delisted": r["delisted"], "halted": r["halted"],
                     "bankruptcy": r["bankruptcy"], "otc": r["otc"]}
-        v = cheap_eligible(gate_row, governance=governance)
+        v = _pass1_verdict(
+            gate_row, governance=governance,
+            instrument_type=r.get("lineage", {}).get("instrument_type"),
+        )
         if r["eligible"] != v["eligible"] or r["reasons"] != v["reasons"]:
             raise RuntimeError(f"行 {r['ticker']} 的 eligible/reasons 与按存储输入重算的 cheap_eligible 不一致（反伪造）")
         if r["status_flags_sourced"] is False:
@@ -1692,6 +1802,21 @@ def validate_candidate_artifact(artifact: dict[str, Any], *, expected_decision_d
 
 def _candidate_path_for(decision_date: str) -> Path:
     return CANDIDATE_LIST_DIR / f"candidate_universe_{decision_date}.json"
+
+
+def _massive_instrument_observation_path() -> Path:
+    return CANDIDATE_LIST_DIR / MASSIVE_INSTRUMENT_OBSERVATIONS_FILENAME
+
+
+def _massive_overview_targets(
+    residual: list[str], observations: dict[str, dict[str, Any]], price_basis_date: str,
+) -> tuple[list[str], list[str]]:
+    skipped = [
+        ticker for ticker in residual
+        if _massive_observation_is_fresh(observations.get(ticker), price_basis_date)
+    ]
+    skipped_set = set(skipped)
+    return [ticker for ticker in residual if ticker not in skipped_set], skipped
 
 
 def default_candidate_path(decision_date: str) -> Path:
@@ -1999,8 +2124,12 @@ def run_fetch(
 
     print("[5/5] Pass1 准入 (市值=SEC流通股×收盘价; ADV=窗口日均成交额; status=sourced)...", flush=True)
     governance = load_eligibility_governance(governance_path)
+    massive_observation_path = _massive_instrument_observation_path()
+    massive_instrument_observations = _load_massive_instrument_observations(massive_observation_path)
+    massive_instrument_types = _massive_instrument_types(massive_instrument_observations)
     rows = apply_pass1(sec_map, sec_shares, market_data, governance=governance,
-                       as_of=used_date, observed_at=generated_at, status_records=status_records)
+                       as_of=used_date, observed_at=generated_at, status_records=status_records,
+                       instrument_types=massive_instrument_types)
     summary_counts = summarize_rows(rows)
     print(f"      pass-A eligible={summary_counts['eligible_count']}  "
           f"needs_mktcap={len(summary_counts['needs_market_cap'])}", flush=True)
@@ -2029,6 +2158,7 @@ def run_fetch(
         rows = apply_pass1(
             sec_map, sec_shares, market_data, governance=governance,
             as_of=used_date, observed_at=generated_at, status_records=status_records,
+            instrument_types=massive_instrument_types,
         )
         summary_counts = summarize_rows(rows)
     after_companyfacts_needs = list(summary_counts["needs_market_cap"])
@@ -2048,31 +2178,41 @@ def run_fetch(
             observed_at=generated_at, stats_out=yfinance_stats,
         )
         rows = apply_pass1(sec_map, sec_shares, market_data, governance=governance, yfinance_caps=yfinance_caps,
-                           as_of=used_date, observed_at=generated_at, status_records=status_records)
+                           as_of=used_date, observed_at=generated_at, status_records=status_records,
+                           instrument_types=massive_instrument_types)
         summary_counts = summarize_rows(rows)
     after_yfinance_needs = list(summary_counts["needs_market_cap"])
     massive_overview_stats: dict[str, int] = {"actual_request_count": 0}
     massive_overview_caps: dict[str, float] = {}
-    massive_overview_targets = list(after_yfinance_needs)
     _assert_exact_market_cap_layer_targets(
-        after_yfinance_needs, massive_overview_targets, layer="Massive ticker-overview fallback",
+        after_yfinance_needs, after_yfinance_needs, layer="Massive ticker-overview fallback",
     )
-    if massive_overview_targets:
+    massive_overview_targets, massive_overview_skipped_tickers = _massive_overview_targets(
+        after_yfinance_needs, massive_instrument_observations, price_basis_date,
+    )
+    massive_overview_skipped_by_cache_count = len(massive_overview_skipped_tickers)
+    if massive_overview_targets or massive_overview_skipped_by_cache_count:
         minimum_pacing_seconds = (
             max(len(massive_overview_targets) - 1, 0) * MASSIVE_GROUPED_REQUEST_INTERVAL_SECONDS
         )
         print(
-            f"      Massive ticker-overview 残余补齐: {len(massive_overview_targets)} 个 "
-            f"(初始尝试最少 pacing={minimum_pacing_seconds:.0f}s; 不截断残余)...",
+            f"      Massive ticker-overview 残余补齐: {len(after_yfinance_needs)} 个 "
+            f"(缓存跳过={massive_overview_skipped_by_cache_count}; 物理目标={len(massive_overview_targets)}; "
+            f"初始尝试最少 pacing={minimum_pacing_seconds:.0f}s)...",
             flush=True,
         )
-        massive_overview_caps = fetch_massive_ticker_overview(
-            massive_overview_targets, price_basis_date, massive_key, stats_out=massive_overview_stats,
-        )
+        if massive_overview_targets:
+            massive_overview_caps = fetch_massive_ticker_overview(
+                massive_overview_targets, price_basis_date, massive_key,
+                stats_out=massive_overview_stats, observation_path=massive_observation_path,
+            )
+            massive_instrument_observations = _load_massive_instrument_observations(massive_observation_path)
+            massive_instrument_types = _massive_instrument_types(massive_instrument_observations)
         rows = apply_pass1(
             sec_map, sec_shares, market_data, governance=governance,
             yfinance_caps=yfinance_caps, massive_caps=massive_overview_caps,
             as_of=used_date, observed_at=generated_at, status_records=status_records,
+            instrument_types=massive_instrument_types,
         )
         summary_counts = summarize_rows(rows)
 
@@ -2086,12 +2226,16 @@ def run_fetch(
         sec_companyfacts_request_count=sec_companyfacts_stats.get("actual_request_count", 0),
         yfinance_attempted_count=yfinance_stats.get("logical_ticker_attempt_count", 0),
         massive_overview_attempted_count=len(massive_overview_targets),
+        massive_overview_skipped_by_cache_count=massive_overview_skipped_by_cache_count,
+        massive_overview_physical_call_count=massive_overview_stats.get("actual_request_count", 0),
     )
+    massive_skipped_set = set(massive_overview_skipped_tickers)
     massive_overview_observability = build_massive_ticker_overview_observability(
         target_count=len(massive_overview_targets),
         physical_http_call_count=massive_overview_stats.get("actual_request_count", 0),
         rescued_count=market_cap_completion["massive_overview_rescued_count"],
-        final_unresolved_count=market_cap_completion["final_unresolved_count"],
+        final_unresolved_count=len(set(final_needs) - massive_skipped_set),
+        skipped_by_cache_count=massive_overview_skipped_by_cache_count,
     )
 
     yfinance_attempted = yfinance_stats.get("logical_ticker_attempt_count", 0)
@@ -2169,6 +2313,7 @@ def run_fetch(
             as_of=used_date,
             observed_at=generated_at,
             status_records=status_records,
+            instrument_types=massive_instrument_types,
         )
         summary_counts = summarize_rows(rows)
         # Replace the preliminary unscreened status snapshot only after the complete candidate-wide scan parsed.
