@@ -530,7 +530,7 @@ class SourceReconciliation(unittest.TestCase):
         ]
         rd = _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context(),
                            selection=_selection(records=records))["report_data"]
-        self.assertIn("本周剔除 2 只", "\n".join(rd["sections"][9]))
+        self.assertIn("本周剔除（按实际阶段合计）2只", "\n".join(rd["sections"][9]))
 
     def test_detached_exclusion_and_ship_gate_prose_are_rejected(self):
         for key, value in (("exclusion_data", {"as_of": _AS_OF, "categories": {}}),

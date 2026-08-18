@@ -5484,3 +5484,71 @@ Codex：类B 第二刀（问题2 sub_mode 路由 + paper stop-limit），bucket 
 ### 下一步
 
 Codex：类C 第二刀（§9 从真实 Pass1+Pass2+Top15 生成范围与数量；注意 2.A 禁止把 reason_distribution 加总当票数）。
+
+## 2026-08-18 Codex 严格按桌面 `2us_testrun0816.md:706-832` 修复类C第二刀（问题6）（888d，OPEN-NOT-VERIFIED）
+
+### 逐行实施
+
+- **2.A candidate artifact 与 Pass1**：从已有 candidate artifact 的 `rows` 逐票生成互斥 `pass1_category(reasons)`，只输出 `{total_excluded, category_counts}`；校验它与 `summary.ineligible_count` 守恒，未把重叠 `reason_distribution` 相加。mixed_source 透传并强制校验上游摘要；无上游的离线夹具只从本地 Pass1 记录推导。
+- **2.B 三阶段计数**：冻结阶段顺序 `pass1_eligibility -> pass2_audit_gate -> top15_selection`。mixed_source 的 Pass1 数量/类别只认上游，禁止本地重复 Pass1；Pass2/Top15 取 selection exclusion records，200→15 的 185 只记 `top15_selection`。public summary 改为显式 `stage_counts`，删除 `covers_passes` 及 schema/preset/test 依赖；阶段、八类、总数均守恒，§9 范围和总数同源。
+- **2.C 催化召回**：增加 `catalyst_recall_rejected_count` 与独立展示行；`off_universe/below_floor` 可与 Pass1 重合，但不计入主合计、不发布 ticker，也不改变 recall/hot/hard-veto 行为。
+- **2.D §9 展示与治理**：首行输出实际阶段合计和三阶段计数，随后输出八类、既有 hot_excluded 行及召回独立行；只从 `presets/us_short_exclusion_summary_governance_20260620.json` 删除 `covers_passes`，未改 eligibility thresholds。
+- **2.E private writer 反向验收门**：orchestrator 传入同一 selection；writer 在任何写入前按 `selection -> build_selection_exclusion_data -> build_exclusion_summary -> render_exclusion_section` 重算，精确对比 `report_data.sections[9]`。结构化与 markdown 协同篡改均 fail before zero write；未新增 artifact/receipt/hash。
+
+### 一个验收门
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`：Class C focused `287 tests / OK`；offline capstone→bridge→Batch4→private writer `1 test / OK`；相关 model-paper 回归 `24 tests / OK`；受影响 Python `py_compile` 通过；`git diff --check` 通过（仅 LF→CRLF 警告）。
+- focused fixtures 覆盖多原因 Pass1 只计一张票、上游缺失/不守恒与本地重复 Pass1 fail before report、Pass2/Top15 分阶段计数、召回重合不双计、结构化+markdown 反向篡改及空/非空输出；正式 offline 链路直接检查 weekly report §4/§9/§10 与横幅⑦。
+- 跨切回归共 `113 tests`；唯一错误是既有 `R-USSHORT-CAPSTONE-STAGE-READS-CANDIDATE-PATH-ITS-TEST-CONTEXT-NEVER-HAD` 的 fake context 缺 `candidate_path`，不属于本刀，未扩大范围修复。
+
+### Required / Optional、边界与下一步
+
+- `R-USSHORT-CLASS-C2-EXCLUSION-SUMMARY-RANGE-COUNT-SOURCE-DRIFT` 已修，当前为 `repaired / OPEN-NOT-VERIFIED`；Optional=无。待 Claude Code 独立审查，PASS 后按 reviewer/committer 流程处理。
+- 未联网、未调用 provider/API/live、未跑 full lane；未改 Pass1 gates、Pass2 veto、Top15 ranking、recall admission、hot_excluded determination、provider fetch、candidate policy；未改主树、桌面文档或 `docs/CURRENT.md`；未提交、未 merge。
+
+### 下一步
+
+Claude Code：审查
+## 2026-08-18 Claude Code 独立审查：类C 第二刀 — FAIL（一条 Required）
+
+§9 三阶段同源化本体全部正确并已逐项核对（2.A 互斥票数禁令兑现、2.B 双计守卫与守恒、2.C recall 单列、
+2.E 写入边界复算、covers_passes 全仓退役）。唯一阻断：改首行形状后
+`tests/test_us_short_weekend_orchestrator.py:468` 仍断言旧串 `"本周剔除 1 只"`，超集 461 tests 红一条。
+其余 3 处断言点已更新，仅此一处漏；该用例有价值不应删，改断言并顺带断言 `pass1_eligibility=1` 即可。
+
+### 下一步
+
+Codex：修该断言（另建议改共享输出形状前先 grep 全部断言点——本会话第二次同类失手）。
+
+## 2026-08-18 — Codex 修复最新交接 Required：类C第二刀 stale §9 assertion（888d，OPEN-NOT-VERIFIED）
+
+### 修复
+
+- 仅修改 `tests/test_us_short_weekend_orchestrator.py::test_real_pass1_reject_drives_report_exclusion_count`：旧的 `本周剔除 1 只` 改为新的 `本周剔除（按实际阶段合计）1只：`，并增加 `pass1_eligibility=1` 阶段断言。
+- 不改生产代码、不改 §9 生成逻辑、不删该真实 Pass1 reject 端到端测试、不改任何阈值或其他类C刀。
+
+### 一个验收门
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`：orchestrator `52 tests / OK`；Class C focused 超集 `339 tests / OK`；route-doc + doc-governance `56 tests / OK`。
+- 未联网、未调用 provider/live、未跑 full lane、未提交、未 merge。
+
+### Required / Optional、边界与下一步
+
+- `R-USSHORT-C2-STALE-SECTION9-ASSERTION-LEFT-RED` 已修，当前为 `repaired / OPEN-NOT-VERIFIED`；Optional=无。待 Claude Code 独立审查，PASS 后按 reviewer/committer 流程处理。
+- 类C第二刀 2.A–2.E 本体不变；未改主树、桌面文档或 `docs/CURRENT.md`。
+
+### 下一步
+
+Claude Code：审查
+
+## 2026-08-18 Claude Code 独立审查：类C 第二刀复修轮 — PASS（已提交，待 merge）
+
+上轮 Required 闭合：端到端用例保留、断言改为新首行并加 `pass1_eligibility=1` 阶段行；同一超集 461 全绿。
+审查者反向控制 28/28，含用真实量级复算的守恒（4817+1+185 → stage 和 = category 和 = 5003，185 落 top15_selection）
+与「3 个 reason 的票只计 1 张」的直接证伪。`covers_passes` 全仓退役。类C 两刀完成。
+
+**merge 状态**：主树正在回跑 a-short，按协议 merge 排队；跑完由用户通知后一次性合并 + 合并态验证。
+
+### 下一步
+
+Codex：类D（切断同日旧 soft-boost 证据回填）→ 类E（非阻断失败送达周报）。

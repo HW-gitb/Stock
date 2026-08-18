@@ -25,6 +25,20 @@
                      "description": "Current holdings with signals; tickers MUST reconcile 1:1 with account_state.positions (enforced by the runner/builder, not by JSON Schema)."},
         "candidate_pass2_signals": {"type": "object", "additionalProperties": {"type": "object"},
                                     "description": "Per-ticker Pass2 signal payloads keyed by ticker."},
+        "pass1_exclusion_summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["total_excluded", "category_counts"],
+          "properties": {
+            "total_excluded": {"type": "integer", "minimum": 0},
+            "category_counts": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            }
+          },
+          "description": "Optional source-packet Pass1 mutually exclusive summary; offline fixtures may omit it and derive local records."
+        },
         "selection_inputs": {
           "type": "object",
           "additionalProperties": false,

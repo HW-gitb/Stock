@@ -4,7 +4,7 @@
 Design authority: docs/us_short_system_design.md §11.4 (剔除摘要 + 隐私拆分 + hot_excluded 审计) / §11.2 (周报
 本周剔除摘要 section) / §11.6 (lifecycle/exclusion 隐私: private 明细 vs tracked 脱敏汇总) / §18.0 P0 (私密路径
 guard) / §18.1. Governance authority = the FROZEN presets/us_short_exclusion_summary_governance_20260620.json
-(batch-1, design-locked v1): the 8 exclusion categories + covers_passes are read from it (single source).
+(batch-1, design-locked v1): the 8 exclusion categories are read from it (single source).
 
 §11.4 splits the weekly exclusion summary by PRIVACY:
   * PUBLIC (tracked-safe): per-category public-universe exclusion COUNTS + hot_excluded heat and unevaluable
@@ -70,8 +70,7 @@ def _categories() -> list:
     return list(_governance()["exclusion_categories"])
 
 
-def _covers_passes() -> list:
-    return list(_governance()["covers_passes"])
+_STAGES = ("pass1_eligibility", "pass2_audit_gate", "top15_selection")
 
 
 def _assert_public(public) -> None:
@@ -79,8 +78,8 @@ def _assert_public(public) -> None:
     (additionalProperties:false + integer-only counts → no ticker / holding / $ field can be smuggled onto a
     tracked path), then the draft-07-inexpressible cross-field invariants: as_of a strict REAL date; the
     category set EXACTLY the frozen governance set (closed-world + complete — every category present, none
-    extra); total_excluded == sum of the per-category counts (derived single source, cannot drift); covers_passes
-    the frozen governance set. Raises ExclusionSummaryError on any violation. A summary from
+    extra); total_excluded == sum of the per-category counts and stage counts (derived single source, cannot drift).
+    Raises ExclusionSummaryError on any violation. A summary from
     build_exclusion_summary always passes."""
     for err in jsonschema.Draft7Validator(_public_schema()).iter_errors(public):
         raise ExclusionSummaryError("public exclusion summary violates the de-identified schema: %s" % err.message)
@@ -98,10 +97,13 @@ def _assert_public(public) -> None:
     total = sum(counts.values())  # values are integers (schema-enforced)
     if public["total_excluded"] != total:
         raise ExclusionSummaryError("total_excluded %r != sum(category_counts) %d" % (public["total_excluded"], total))
-    if set(public["covers_passes"]) != set(_covers_passes()):
+    stage_counts = public["stage_counts"]
+    if set(stage_counts) != set(_STAGES):
         raise ExclusionSummaryError(
-            "covers_passes %s != the frozen governance covers_passes %s" % (sorted(public["covers_passes"]), sorted(_covers_passes()))
+            "stage_counts %s != the frozen stage set %s" % (sorted(stage_counts), sorted(_STAGES))
         )
+    if public["total_excluded"] != sum(stage_counts.values()):
+        raise ExclusionSummaryError("total_excluded != sum(stage_counts)")
 
 
 def _public_count(entry, category) -> int:
@@ -197,6 +199,14 @@ def build_exclusion_summary(exclusion_data) -> dict:
     # a category PRESENT in the input must carry a valid public_count; an OMITTED category counts 0 (the public
     # summary always shows the full 8-category classification, zeros explicit)
     category_counts = {cat: (_public_count(categories[cat], cat) if cat in categories else 0) for cat in _categories()}
+    stage_counts = exclusion_data.get("stage_counts")
+    if not (isinstance(stage_counts, dict) and set(stage_counts) == set(_STAGES)
+            and all(_int_not_bool(value) and value >= 0 for value in stage_counts.values())):
+        raise ExclusionSummaryError("exclusion_data['stage_counts'] 须明确包含三阶段非负整数")
+    recall_count = exclusion_data.get("catalyst_recall_rejected_count", 0)
+    if not (_int_not_bool(recall_count) and recall_count >= 0):
+        raise ExclusionSummaryError(
+            "catalyst_recall_rejected_count must be a NON-NEGATIVE int, got %r" % (recall_count,))
     private_categories = {
         cat: list((categories[cat].get("holdings", []) if cat in categories else []) or [])
         for cat in _categories()
@@ -220,9 +230,10 @@ def build_exclusion_summary(exclusion_data) -> dict:
         "schema_name": "us_short_exclusion_summary_public",
         "schema_version": _SCHEMA_VERSION,
         "as_of": as_of,
-        "covers_passes": _covers_passes(),
         "category_counts": category_counts,
+        "stage_counts": dict(stage_counts),
         "total_excluded": sum(category_counts.values()),
+        "catalyst_recall_rejected_count": recall_count,
         "hot_excluded_public_heat_count": heat_count,
         "hot_excluded_unevaluable_count": unevaluable_count,
     }
@@ -245,7 +256,12 @@ def render_exclusion_section(public) -> list:
     _assert_public(public)
     counts = public["category_counts"]
     lines = [
-        "本周剔除 %d 只（覆盖 %s）。" % (public["total_excluded"], " + ".join(public["covers_passes"])),
+        "本周剔除（按实际阶段合计）%d只：" % public["total_excluded"],
+        "pass1_eligibility=%d / pass2_audit_gate=%d / top15_selection=%d；" % (
+            public["stage_counts"]["pass1_eligibility"],
+            public["stage_counts"]["pass2_audit_gate"],
+            public["stage_counts"]["top15_selection"],
+        ),
     ]
     for cat in _categories():  # frozen order (single source), all 8 shown (zeros explicit — honest classification)
         lines.append("- %s：%d" % (cat, counts[cat]))
@@ -253,6 +269,10 @@ def render_exclusion_section(public) -> list:
         "高热度被剔除（hot_excluded，仅审计·绝不救回 hard veto / 不改准入）：%d 只（公开 universe 计数）；"
         "缺同轮主题热度、未能评估：%d 只（喂 §13 复审）。"
         % (public["hot_excluded_public_heat_count"], public["hot_excluded_unevaluable_count"])
+    )
+    lines.append(
+        "催化召回未通过地板：%d只（独立审计，可能与Pass1重合，不计入上述合计）"
+        % public["catalyst_recall_rejected_count"]
     )
     return lines
 

@@ -315,6 +315,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 本周运行状态 / 账户风控状态(`portfolio_guard_status`) / 市场环境(两轴：`market_risk_regime` + `theme_opportunity_state`) / 本周核心结论 / 最终操作表(精简一眼表) / 当前持仓复核 / Top15 选股 / Top6-15 观察池 / 本周剔除摘要(exclusion_summary) / 风险与降级 / 数据源健康摘要 / 字段·模块生命周期提醒 / 本周不 clean 项。lifecycle 提醒条数第 1 节与对应节须一致。
 - **顶部诚实横幅（借 A 股 M6.7）**：① 真/假观察拆分——把 `observe_reason_type` 按**冻结 observe_reason_type 词表全口径**聚合（含 `capacity_or_budget_deferred` = 过闸可执行但被本周建仓上限/同主题/极度防御仓位上限挤出名额、非系统不看好），其中"没账户/没现金"（`cash_or_account_missing`）那类是 sizing 假象、不是系统不看好；② 宏观集群预警（§8）——"N 个建仓同属 X 集群、合计 Y% 仓位"；③ ship-gate 进度 + 达标 lifecycle 项数量对账；④ **price clock（必显）**——`price_data_through=上周五收盘（=canonical 决策日前一已收盘交易日，逢节回退）/ news_window_through=运行时刻（决策日开盘前任意时刻；含周末+周一早间突发）/ session_scope=RTH / decision_date=canonical（即将到来的美股交易日，§2.1）`，杜绝误以为用了周一盘中价；窗口内多次跑同一 decision_date 即同一价格钟；⑤ **高热度被剔除提示**——"本周 N 只高赛道热度票被剔除（安全闸/流动性/数据），见 `hot_excluded`（§11.4）"。
 - §4 本周核心结论与 §10 风险/降级均由同一批最终 machine rows 生成：候选/建仓/观察/持仓数量、冻结观察原因顺序、逐票风险标签涉及票数；private writer 写入前重算并拒绝不一致报告。
+- §9 剔除摘要的总数、三阶段范围、八类主类别和召回审计均由同一个 public summary 生成；private writer 写入前从本轮 selection 复算并拒绝不一致报告。
 - ⑦ **跨行业赛道治理提醒（仅 LIVE/实盘）**：`跨行业赛道发现+确认只有在源绑定成员确认、独立市场验证和 forward shadow 完成并经用户决定后才可解锁；本提醒不改变 selection/sizing。`；它是治理提醒，不是当前部件状态声明。
 
 ### 11.3 action_table.csv（完整列）
@@ -322,7 +323,8 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 - **精简一眼表**（周报内 ~8 列）：操作 / 模型股数+实盘权限 / 入·盈一·盈二·损 / 类型 / 优先级 / 触发条件 / 未来大事 / 关键标签。
 
 ### 11.4 exclusion_summary（剔除摘要 + 隐私拆分）
-周报告知本周剔除 N 只 + 分类（流动性/价格市值/停牌退市破产/增发SEC/数据unknown/事件unknown/数据源失败/分不够）；覆盖 Pass-1 资格剔除 + Pass-2 审计闸剔除。防误杀 + 看是否过度保守。**隐私**：暴露"真实持仓被剔" → 私密路径；纯公开 universe 计数 → 可 tracked。
+周报告知本周剔除 N 只 + 分类（流动性/价格市值/停牌退市破产/增发SEC/数据unknown/事件unknown/数据源失败/分不够），用于**防误杀 + 看是否过度保守**，并始终显式列出三个实际阶段：`pass1_eligibility`、`pass2_audit_gate`、`top15_selection`。Pass1 在正式 mixed_source 路径只从已校验的 `candidate_universe_<decision_date>.json` 逐票 verdict 生成互斥主类别；不能把重叠的 `reason_distribution` 相加冒充票数。`total_excluded`、`stage_counts` 与 `category_counts` 必须守恒；offline fixture 没有上游 artifact 时，只从本地 `pass1_eligibility` records 生成，不宣称外部全市场覆盖。**隐私**：暴露"真实持仓被剔" → 私密路径；纯公开 universe 计数 → 可 tracked。
+- 催化召回的 `recall_excluded` 单独显示为 `催化召回未通过地板`，可与 Pass1 重合但不计入上述合计，也不公开 ticker；public contract 字段为 `catalyst_recall_rejected_count`。
 - **`hot_excluded`（高热度被剔除审计）**：在 exclusion_summary 内单列"被剔除**但赛道热度高**"的票（有 `theme_heat_score` 且达分位、却在安全闸/流动性/数据 gate 出局者）+ 各自剔除原因（镜像 A 股 overlay `dropped_at_l0_l5`）。**只用于发现误杀，绝不救回 hard veto / 不改准入**；持仓票走私密拆分（同上），纯公开 universe 热票计数可 tracked。意义：把"系统是不是太保守"从感觉变成每周可见清单，喂 §13 复审赛道权重/安全闸阈值。
 - **运行时审计接线（2026-07-19）**：只在真实 `exclusion_records` 形成后，按同 ticker / decision date / theme-contract digest join 同轮全池主题分位；只接安全/流动性/数据 gate，Pass2 hard veto 与 Top15 分数淘汰永不进入。缺热度单列 `hot_excluded_unevaluable_count`，不得当作低热度后显示 0；该轨不进入 `result_effects`。
 

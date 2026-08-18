@@ -82,13 +82,17 @@ def _theme_selection_contract(tickers, *, lifecycle_by_ticker=None, origin_by_ti
     }
 
 
-def _dc(universe, *, recall=None, holdings=None, pass2=None, selection_inputs=None):
+def _dc(universe, *, recall=None, holdings=None, pass2=None, selection_inputs=None,
+        pass1_exclusion_summary=None):
     pass2 = pass2 or {}
     if selection_inputs is None:
         selection_inputs = _selection_inputs(list(pass2))
-    return {"universe": universe, "catalyst_recall_feed": recall,
-            "holdings": holdings or [], "candidate_pass2_signals": pass2,
-            "selection_inputs": selection_inputs}
+    dc = {"universe": universe, "catalyst_recall_feed": recall,
+          "holdings": holdings or [], "candidate_pass2_signals": pass2,
+          "selection_inputs": selection_inputs}
+    if pass1_exclusion_summary is not None:
+        dc["pass1_exclusion_summary"] = pass1_exclusion_summary
+    return dc
 
 
 class RunSelectionTests(unittest.TestCase):
@@ -165,6 +169,77 @@ class RunSelectionTests(unittest.TestCase):
         self.assertEqual(by_ticker["PENNY"]["category"], "价格市值")
         self.assertEqual(by_ticker["OTCX"]["category"], "停牌退市破产")
         self.assertEqual(by_ticker["MISS"]["category"], "数据unknown")
+        summary = build_selection_exclusion_data(out)
+        self.assertEqual(summary["stage_counts"], {
+            "pass1_eligibility": 4, "pass2_audit_gate": 0, "top15_selection": 0,
+        })
+        self.assertEqual(sum(row["public_count"] for row in summary["categories"].values()), 4)
+
+    def test_mixed_source_pass1_summary_is_mutually_exclusive_and_recall_is_separate(self):
+        # BOTH fails price and ADV together; the upstream summary carries one primary Pass1 ticket,
+        # while recall_excluded may name the same ticker without entering the exclusion total.
+        pass1_summary = {
+            "total_excluded": 1,
+            "category_counts": {
+                "流动性": 1, "价格市值": 0, "停牌退市破产": 0, "增发SEC": 0,
+                "数据unknown": 0, "事件unknown": 0, "数据源失败": 0, "分不够": 0,
+            },
+        }
+        out = self._run(_dc(
+            [_univ_row("AAPL"), _univ_row("BOTH", price=1.0, adv=1.0)],
+            recall=["BOTH"], pass2={"AAPL": {}}, selection_inputs=_selection_inputs(["AAPL"]),
+            pass1_exclusion_summary=pass1_summary,
+        ))
+        self.assertEqual(out["recall_excluded"], [{"ticker": "BOTH", "reason": "below_floor"}])
+        self.assertFalse(any(row["stage"] == "pass1_eligibility" for row in out["exclusion_records"]))
+        report_selection = {**out, "pass1_exclusion_summary": pass1_summary}
+        exclusion_data = build_selection_exclusion_data(report_selection)
+        self.assertEqual(exclusion_data["stage_counts"], {
+            "pass1_eligibility": 1, "pass2_audit_gate": 0, "top15_selection": 0,
+        })
+        self.assertEqual(exclusion_data["categories"]["流动性"]["public_count"], 1)
+        self.assertEqual(exclusion_data["catalyst_recall_rejected_count"], 1)
+
+    def test_mixed_source_pass1_summary_mismatch_fails_before_selection(self):
+        bad_summary = {
+            "total_excluded": 0,
+            "category_counts": {
+                "流动性": 0, "价格市值": 0, "停牌退市破产": 0, "增发SEC": 0,
+                "数据unknown": 0, "事件unknown": 0, "数据源失败": 0, "分不够": 0,
+            },
+        }
+        dc = _dc([_univ_row("AAPL"), _univ_row("LOW", adv=1.0)],
+                 pass2={"AAPL": {}}, selection_inputs=_selection_inputs(["AAPL"]),
+                 pass1_exclusion_summary=bad_summary)
+        with self.assertRaises(wp.WeekendPipelineError):
+            wp.run_selection(_now("20260613", 10, 0), _SESSIONS, dc,
+                             eligibility_governance=self.gov,
+                             require_pass1_exclusion_summary=True)
+
+    def test_mixed_source_requires_upstream_pass1_summary(self):
+        dc = _dc([_univ_row("AAPL")], pass2={"AAPL": {}})
+        with self.assertRaises(wp.WeekendPipelineError):
+            wp.run_selection(_now("20260613", 10, 0), _SESSIONS, dc,
+                             eligibility_governance=self.gov,
+                             require_pass1_exclusion_summary=True)
+
+    def test_public_builder_rejects_local_pass1_record_when_upstream_summary_exists(self):
+        summary = {
+            "total_excluded": 0,
+            "category_counts": {
+                "流动性": 0, "价格市值": 0, "停牌退市破产": 0, "增发SEC": 0,
+                "数据unknown": 0, "事件unknown": 0, "数据源失败": 0, "分不够": 0,
+            },
+        }
+        out = self._run(_dc([_univ_row("AAPL")], pass2={"AAPL": {}},
+                             pass1_exclusion_summary=summary))
+        forged = {**out, "pass1_exclusion_summary": summary,
+                  "exclusion_records": [{
+                      "stage": "pass1_eligibility", "ticker": "AAPL", "category": "价格市值",
+                      "reasons": ["price_below_floor"],
+                  }]}
+        with self.assertRaises(ValueError):
+            build_selection_exclusion_data(forged)
 
     def test_real_pass1_exclusion_joins_same_run_heat_without_rescue(self):
         contract = _theme_selection_contract(["AAPL"])
@@ -195,6 +270,11 @@ class RunSelectionTests(unittest.TestCase):
         self.assertEqual(by_ticker["OFFER"]["category"], "增发SEC")
         self.assertEqual(by_ticker["A15"]["category"], "分不够")
         self.assertEqual(by_ticker["A15"]["stage"], "top15_selection")
+        summary = build_selection_exclusion_data(out)
+        self.assertEqual(summary["stage_counts"], {
+            "pass1_eligibility": 0, "pass2_audit_gate": 1, "top15_selection": 1,
+        })
+        self.assertEqual(sum(row["public_count"] for row in summary["categories"].values()), 2)
 
     def test_top15_cap_enforced_for_pass2_clean_candidates(self):
         tickers = ["A%02d" % i for i in range(16)]

@@ -9,7 +9,8 @@ from engine.us_short_hot_excluded import hot_excluded_summary
 
 ROOT = Path(__file__).resolve().parent.parent
 _GOV_PATH = ROOT / "presets" / "us_short_exclusion_summary_governance_20260620.json"
-_CATEGORIES = tuple(json.loads(_GOV_PATH.read_text(encoding="utf-8"))["exclusion_categories"])
+EXCLUSION_CATEGORIES = tuple(json.loads(_GOV_PATH.read_text(encoding="utf-8"))["exclusion_categories"])
+_CATEGORIES = EXCLUSION_CATEGORIES
 _CATEGORY_SET = frozenset(_CATEGORIES)
 
 
@@ -40,6 +41,33 @@ def pass2_category(reasons) -> str:
     if any(any(label in r for label in ("流动性", "spread")) for r in rs):
         return "流动性"
     return "数据unknown"
+
+
+def validate_pass1_exclusion_summary(summary) -> dict:
+    if not (isinstance(summary, dict) and set(summary) == {"total_excluded", "category_counts"}):
+        raise SelectionExclusionError("pass1_exclusion_summary 形状非法")
+    counts = summary["category_counts"]
+    if not (isinstance(counts, dict) and set(counts) == _CATEGORY_SET):
+        raise SelectionExclusionError("pass1_exclusion_summary.category_counts 类别集合非法")
+    if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in counts.values()):
+        raise SelectionExclusionError("pass1_exclusion_summary.category_counts 须为非负整数")
+    total = summary["total_excluded"]
+    if isinstance(total, bool) or not isinstance(total, int) or total < 0 or total != sum(counts.values()):
+        raise SelectionExclusionError("pass1_exclusion_summary total 不守恒")
+    return {"total_excluded": total, "category_counts": dict(counts)}
+
+
+def pass1_exclusion_summary_from_rows(rows) -> dict:
+    if not isinstance(rows, list):
+        raise SelectionExclusionError("Pass1 rows 须为 list")
+    counts = {category: 0 for category in _CATEGORIES}
+    for row in rows:
+        if not (isinstance(row, dict) and isinstance(row.get("eligible"), bool)
+                and isinstance(row.get("reasons"), list)):
+            raise SelectionExclusionError("Pass1 row 缺少 eligible/reasons")
+        if not row["eligible"]:
+            counts[pass1_category(row["reasons"])] += 1
+    return {"total_excluded": sum(counts.values()), "category_counts": counts}
 
 
 def _hot_audit_gate(record):
@@ -87,14 +115,18 @@ def build_hot_excluded_audit(exclusion_records, *, heat_audit, as_of, source_dig
 
 
 def build_selection_exclusion_data(selection: dict) -> dict:
-    """Build the report formatter input from ``run_selection.exclusion_records`` only."""
+    """Build the report formatter input from the selection's stage-local exclusion records."""
     if not isinstance(selection, dict):
         raise SelectionExclusionError("selection 须为 dict")
     as_of = selection.get("decision_date")
     records = selection.get("exclusion_records")
     if not (isinstance(as_of, str) and isinstance(records, list)):
         raise SelectionExclusionError("selection 须含 decision_date(str) + exclusion_records(list)")
-    counts = {category: 0 for category in _CATEGORIES}
+    upstream_pass1 = selection.get("pass1_exclusion_summary")
+    if upstream_pass1 is not None:
+        upstream_pass1 = validate_pass1_exclusion_summary(upstream_pass1)
+    local_counts = {category: 0 for category in _CATEGORIES}
+    stage_counts = {stage: 0 for stage in ("pass1_eligibility", "pass2_audit_gate", "top15_selection")}
     for record in records:
         if not (isinstance(record, dict)
                 and set(record) == {"stage", "ticker", "category", "reasons"}
@@ -105,7 +137,30 @@ def build_selection_exclusion_data(selection: dict) -> dict:
                 and record["reasons"]
                 and all(isinstance(reason, str) and reason for reason in record["reasons"])):
             raise SelectionExclusionError(f"selection exclusion record 非法: {record!r}")
-        counts[record["category"]] += 1
+        if upstream_pass1 is not None and record["stage"] == "pass1_eligibility":
+            raise SelectionExclusionError(
+                "upstream Pass1 摘要存在时不得保留本地 pass1_eligibility 记录（禁止重复计数）"
+            )
+        local_counts[record["category"]] += 1
+        stage_counts[record["stage"]] += 1
+    if upstream_pass1 is None:
+        counts = dict(local_counts)
+    else:
+        counts = {
+            category: upstream_pass1["category_counts"][category] + local_counts[category]
+            for category in _CATEGORIES
+        }
+        stage_counts["pass1_eligibility"] = upstream_pass1["total_excluded"]
+    if sum(stage_counts.values()) != sum(counts.values()):
+        raise SelectionExclusionError("exclusion summary counts do not conserve")
+    recall_excluded = selection.get("recall_excluded", [])
+    if not isinstance(recall_excluded, list):
+        raise SelectionExclusionError("selection.recall_excluded 须为 list")
+    for row in recall_excluded:
+        if not (isinstance(row, dict) and set(row) == {"ticker", "reason"}
+                and isinstance(row["ticker"], str) and row["ticker"]
+                and row["reason"] in {"off_universe", "below_floor"}):
+            raise SelectionExclusionError(f"selection recall_excluded 记录非法: {row!r}")
     hot_audit = selection.get("hot_excluded_audit")
     expected_digest = selection.get("theme_contract_digest")
     if not (isinstance(hot_audit, dict)
@@ -129,5 +184,7 @@ def build_selection_exclusion_data(selection: dict) -> dict:
         "as_of": as_of,
         "categories": {category: {"public_count": count, "holdings": []}
                        for category, count in counts.items()},
+        "stage_counts": stage_counts,
+        "catalyst_recall_rejected_count": len(recall_excluded),
         "hot_excluded": hot_summary,
     }

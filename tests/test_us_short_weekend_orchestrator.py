@@ -465,7 +465,9 @@ class EmptyRunEndToEnd(unittest.TestCase):
             pc = _pipeline_context(reg, rr, wr, universe=[_univ_row("PENNY", price=1.0)])
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             self.assertTrue(out["emitted"])
-            self.assertIn("本周剔除 1 只", "\n".join(out["report_data"]["sections"][9]))
+            section9 = "\n".join(out["report_data"]["sections"][9])
+            self.assertIn("本周剔除（按实际阶段合计）1只：", section9)
+            self.assertIn("pass1_eligibility=1", section9)
 
     def test_nonempty_holding_in_top15_overlap_writes_official_artifacts(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:

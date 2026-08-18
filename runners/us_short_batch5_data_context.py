@@ -31,6 +31,7 @@ from engine.us_short_sec_offering_audit import (
     OfferingAuditError,
     build_offering_audit_from_sec_submissions,
 )
+from engine.us_short_selection_exclusions import pass1_exclusion_summary_from_rows
 from engine.us_short_seam_score import OUTPUT_KEYS, ScoreSeamError, compose_score_inputs
 from engine.us_short_theme_selection import ThemeSelectionError, validate_theme_selection_contract
 from engine.us_short_weekend_pipeline import _select_top15
@@ -50,6 +51,7 @@ DATA_CONTEXT_KEYS = (
     "holdings",
     "candidate_pass2_signals",
     "selection_inputs",
+    "pass1_exclusion_summary",
 )
 UNIVERSE_ROW_KEYS = (
     "ticker",
@@ -625,11 +627,17 @@ def _prepare_context_inputs(
         for ticker in candidates
         if pass2_safety_admit(pass2_signals[ticker], row_context="candidate")["admit_to_topn"]
     ]
+    pass1_exclusion_summary = pass1_exclusion_summary_from_rows(artifact["rows"])
+    if pass1_exclusion_summary["total_excluded"] != artifact["summary"]["ineligible_count"]:
+        raise DataContextAssemblyError(
+            "pass1_exclusion_summary.total_excluded 与 candidate_artifact.summary.ineligible_count 不一致"
+        )
     return {
         "universe_rows": universe_rows,
         "recall_feed": recall_feed,
         "pass2_signals": pass2_signals,
         "pass2_clean": pass2_clean,
+        "pass1_exclusion_summary": pass1_exclusion_summary,
     }
 
 
@@ -645,6 +653,7 @@ def _assembled_context_from_prepared(
         "holdings": _canonical_holdings(holdings),
         "candidate_pass2_signals": prepared["pass2_signals"],
         "selection_inputs": selection_inputs,
+        "pass1_exclusion_summary": prepared["pass1_exclusion_summary"],
     }
 
 

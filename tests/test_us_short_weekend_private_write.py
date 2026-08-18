@@ -35,6 +35,8 @@ from engine.us_short_action_rank import action_group as _ag  # noqa: E402
 from engine.us_short_private_paths import PrivatePathError  # noqa: E402
 from engine.us_short_weekend_action_table import WeekendActionTableError  # noqa: E402
 from engine.us_short_weekend_report import canonical_lifecycle_section  # noqa: E402
+from engine.us_short_exclusion_summary import build_exclusion_summary, render_exclusion_section  # noqa: E402
+from engine.us_short_selection_exclusions import build_selection_exclusion_data  # noqa: E402
 
 _AS_OF = "20260112"
 _BUILD_AF = {
@@ -59,6 +61,20 @@ _OK_S11 = ["数据源健康: provider_health=clean（离线 fixture 自报；%s�
 _OK_S13 = [OFFLINE_LIMITATION_LINE]
 
 
+def _selection(as_of=_AS_OF):
+    digest = "a" * 64
+    return {
+        "decision_date": as_of,
+        "theme_contract_digest": digest,
+        "exclusion_records": [],
+        "recall_excluded": [],
+        "hot_excluded_audit": {
+            "as_of": as_of, "source_digest": digest, "heat_threshold": None,
+            "rows": [], "unevaluable_count": 0,
+        },
+    }
+
+
 def _readiness(due_count=0, due_items=(), upgrade=(), as_of=_AS_OF, total_items=39):
     """A readiness object that passes the single-source `_assert_readiness` (due_count == len(due_items))."""
     return {"schema_name": "us_short_lifecycle_readiness", "schema_version": "1.0.0",
@@ -77,6 +93,9 @@ def _report_data(as_of=_AS_OF, *, sections_override=None, readiness=None):
     sections["1"] = canonical_section_1(OFFLINE_TEST_RUN_ORIGIN, run_status)   # §1 = canonical disclosure + status
     sections["4"] = ["本周候选 1 只：建仓 1 / 观察 0；当前持仓 0 只。", "观察原因：无"]
     sections["10"] = ["逐票观察/降级原因：无", "逐票风险标签：无"]
+    sections["9"] = render_exclusion_section(
+        build_exclusion_summary(build_selection_exclusion_data(_selection(as_of)))["public"]
+    )
     sections["11"] = list(_OK_S11) + [provider_health_detail_line(classify_provider_health(_provider_health()))]
     sections["12"] = canonical_lifecycle_section(readiness)                    # §12 = canonical lifecycle detail
     sections["13"] = list(_OK_S13)
@@ -128,6 +147,7 @@ def _wrp(**kw):
     kw.setdefault("provider_health", _PROVIDER_HEALTH)
     kw.setdefault("coverage_inputs", _COVERAGE_INPUTS)
     kw.setdefault("lifecycle_result", _LIFECYCLE_RESULT)
+    kw.setdefault("selection", _selection(kw.get("decision_date", _AS_OF)))
     return pw.write_run_private(**kw)
 
 
@@ -546,6 +566,17 @@ class OfflineProvenanceFailClosed(unittest.TestCase):
     def test_report_section10_modified_after_builder_rejected(self):
         rd = _report_data(sections_override={"10": ["篡改后的 §10"]})
         self._assert_rejected_no_write(report_data=rd, weekly_report_md=render_weekly_report(rd))
+
+    def test_coordinated_section9_tamper_rejected_from_selection_before_write(self):
+        # Re-rendering both structured §9 and markdown must not make a forged summary official;
+        # the private writer recomputes §9 from the same in-memory selection and rejects before any write.
+        rd = _report_data()
+        rd["sections"] = dict(rd["sections"])
+        rd["sections"]["9"] = list(rd["sections"]["9"])
+        rd["sections"]["9"][0] = "本周剔除（按实际阶段合计）999只："
+        forged_md = render_weekly_report(rd)
+        self.assertNotEqual(forged_md, _REPORT_MD)
+        self._assert_rejected_no_write(report_data=rd, weekly_report_md=forged_md)
 
     def test_section1_operational_line_after_sentinel_rejected(self):
         # §1 retains the canonical sentinel/disclosure but appends an operational-authorization line — §1 is now

@@ -54,7 +54,9 @@ from engine.us_short_run_origin import (
     require_research_live_provider_health_result,
     validate_run_origin,
 )
+from engine.us_short_exclusion_summary import build_exclusion_summary, render_exclusion_section
 from engine.us_short_result_effects import PORTFOLIO_GUARD_STATE_FILENAME, build_next_portfolio_guard_state
+from engine.us_short_selection_exclusions import build_selection_exclusion_data
 from engine.us_short_symbol_cooldown_state import (
     STATE_FILENAME as SYMBOL_COOLDOWN_STATE_FILENAME,
     validate_symbol_cooldown_state,
@@ -289,7 +291,7 @@ def _reconcile_official_source_facts(flat, report_data, decision_date, *, provid
             f"与持仓覆盖重算 {non_full} 不符（拒写，无落盘）")
 
 
-def write_run_private(*, decision_date, machine_record, weekly_report_md, report_data,
+def write_run_private(*, decision_date, machine_record, weekly_report_md, report_data, selection,
                       provider_health, coverage_inputs, lifecycle_result,
                       runs_private_root=None, weekly_private_root=None,
                       holding_action_state=None, portfolio_guard_state=None, symbol_cooldown_state=None,
@@ -305,6 +307,8 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md, report
     report_data = the 4d-ii-m2 `build_weekly_report` STRUCTURED report_data — the boundary re-validates its offline
         provenance (run_origin three-way + §1/§11/§13 invariants) and requires render(report_data)==weekly_report_md
         (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP: structured provenance, not a markdown substring).
+    selection = the same in-memory selection result consumed by the report builder; §9 is recomputed from it here
+        and must exactly match report_data before any private write.
     provider_health = the RUN-LEVEL `classify_provider_health` result the run used; revalidated here and bound to
         report_data.offline_honesty.provider_health_state (a run-level source that cannot be replaced inside report_data).
     coverage_inputs = the run's holding coverage inputs; reconciled 1:1 to the machine holding rows and bound to
@@ -367,6 +371,18 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md, report
     if render_weekly_report(report_data) != weekly_report_md:
         raise WeekendPrivateWriteError(
             "weekly_report_md 与 report_data 重渲染不一致（疑手改 markdown，拒写，无落盘）")
+    if not isinstance(selection, dict) or selection.get("decision_date") != decision_date:
+        raise WeekendPrivateWriteError("selection 缺失或 decision_date 不属于本 run（拒写，无落盘）")
+    try:
+        expected_exclusion_section = render_exclusion_section(
+            build_exclusion_summary(build_selection_exclusion_data(selection))["public"]
+        )
+    except Exception as exc:
+        raise WeekendPrivateWriteError(f"selection §9 exclusion source 对账失败（拒写，无落盘）: {exc}") from exc
+    sections = report_data.get("sections")
+    actual_exclusion_section = sections.get(9, sections.get("9")) if isinstance(sections, dict) else None
+    if actual_exclusion_section != expected_exclusion_section:
+        raise WeekendPrivateWriteError("report §9 与 selection 重算不一致（疑篡改，拒写，无落盘）")
     # source-fact reconciliation (R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP strict full re-review):
     # re-derive run_status counts from the machine record + bind provider-health/coverage/lifecycle to run-level
     # sources, so a caller-forged report_data.run_status / offline_honesty value cannot ride byte-equality.
