@@ -133,6 +133,25 @@ load config / state / data  (+ provider 健康检查 §3.7；不健康→restric
 ### 4.1 安全闸（硬，"别太保守"不适用于它）
 退市/停牌/破产、恶性增发（按 §5.1a recency/materiality 判——挂着的 shelf／陈旧／小额不算，不一刀切）、流动性枯竭、结构化 SEC 审计字段 unknown 等**底线风险 → 直接出局/blocked/restricted、不进排名**。执行分两段（§4.0）：cheap eligibility 在 Pass 1；audit safety gate 在 Pass 2。"别太保守"只对通过闸之后的排名生效。
 
+> **破产筛查只跑一次，且刻意跑在 Pass 2 —— 不是数据获取失败（复核周运行产物前先看这条）。**
+> 周运行 `us_short_universe_fetch_summary_*.json` 里的
+> `status_source_outcome.per_source.sec_8k_item_103 = "missing"`、`failed_sources = ["sec_8k_item_103"]`、
+> `bankruptcy_8k_scan_performed = false`、`bankruptcy_8k_source = "not_supplied"`、
+> `provider_call_evidence.sec_bankruptcy_submissions_calls = 0`
+> **全是预期状态，不是抓取故障**；真跑复核不应再把它记成数据获取问题。三条依据：
+> ① §541 明写周路径 leaves Universe bankruptcy provenance `unscreened`，改为复用 Pass 2 已为增发审计拉取的
+> 同一份 SEC company-submissions 记录解析 Item 1.03，**零额外 provider 调用**；
+> ② `engine/us_short_status_source.py::FLAG_GATE_POLICY` 把 `bankruptcy` 单列为 `positive_detection_only`
+> （只有确凿查到 8-K 才挡），与 `delisted/halted/otc` 的 `conservative_reject`（不知道就挡）刻意分档——
+> 否则"破产状态未知"会把整个 universe 清空；
+> ③ `run_fetch(scan_bankruptcy_for_eligible=...)` 默认 False、无对应 CLI 开关、无生产调用方，
+> `--bankruptcy-screen-path` 注入通道周 capstone 也从不传。全候选池扫描是历史批量能力，不在周路径上。
+>
+> **已知残留（未决，非缺陷）**：top-K 漏斗是在"未筛查"的破产字段上选出候选的。若某只已提交 Item 1.03 的票
+> 靠破产反弹挤进 top-K，它会在 Pass 2 被剔除，但**它占用的名额不会被递补**（第 K+1 名不补进来）。
+> 损失是"少一个正常候选"，不是"买到破产股"。要闭合的话最省的补法是 Pass 2 判定 positive 时按序递补一只，
+> 而不是把候选池全量扫描前移到 Pass 1（后者每周约 2846 次全新 SEC 调用）。
+
 ### 4.2 core_score（仅对过闸标的）
 ```text
 core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/预期差 − risk_downgrade
