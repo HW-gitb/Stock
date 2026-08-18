@@ -214,6 +214,20 @@ def _days_between(later_ymd: str, earlier_ymd: str) -> int:
     ).days
 
 
+def _grade_date_disposition(
+    grade_date: str,
+    *,
+    as_of: str,
+    observed_date: str,
+    window: int = _RECENCY_WINDOW_DAYS,
+) -> str:
+    if grade_date > observed_date:
+        return "future"
+    if _days_between(as_of, grade_date) > window:
+        return "stale"
+    return "fit"
+
+
 def _classify_grade_record(
     record: Any,
     *,
@@ -247,10 +261,14 @@ def _classify_grade_record(
     symbol = record.get("symbol")
     if symbol is not None and (type(symbol) is not str or canonical_us_ticker(symbol) != ticker):
         raise YFinanceGradesError(f"[{ticker}] record symbol mismatches the ticker key")
-    if grade_date > observed_date:
-        return "future", None
-    if _days_between(as_of, grade_date) > window:
-        return "stale", None
+    disposition = _grade_date_disposition(
+        grade_date,
+        as_of=as_of,
+        observed_date=observed_date,
+        window=window,
+    )
+    if disposition != "fit":
+        return disposition, None
     return (
         "fit",
         {
