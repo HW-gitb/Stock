@@ -9,8 +9,8 @@ caps binding, the harshest discount applied, a below-min build downgrading to �
 capacity_or_budget_deferred, else cost_inefficient_min_size), non-建仓 rows carrying through with sizing=None, and fail-closed
 value-validation of the injected sizing_context + each build row's price levels.
 
-Deterministic chain numbers for _cand() in 进攻: valid_entry_high=101.5, stop_clear_price=99.78,
-base=⌊100000×0.0075/1.72⌋=436, single_ticker_cap=⌊100000×0.10/101.5⌋=98.
+Deterministic chain numbers for _cand() in 进攻: valid_entry_high=101.5, stop_clear_price=99.42,
+base=⌊100000×0.0075/2.08⌋=477, single_ticker_cap=⌊100000×0.10/101.5⌋=98.
 """
 import sys
 import unittest
@@ -83,9 +83,9 @@ class SizeRowsTests(unittest.TestCase):
         self.assertEqual(row["final_action"], "建仓")
         s = row["sizing"]
         self.assertEqual(s["status"], "sized")
-        self.assertEqual(s["base_shares"], 436)
+        self.assertEqual(s["base_shares"], 477)
         self.assertEqual(s["single_ticker_cap_shares"], 98)
-        self.assertEqual(s["desired_model_shares"], 98)   # single-ticker cap binds (98 < base 436)
+        self.assertEqual(s["desired_model_shares"], 98)   # single-ticker cap binds (98 < base 477)
 
     def test_liquidity_cap_binds(self):
         row = _size_real([_cand()], sctx=_sctx(liquidity=50))["rows"][0]
@@ -94,7 +94,7 @@ class SizeRowsTests(unittest.TestCase):
     def test_harshest_discount_applied_below_cap(self):
         row = _size_real([_cand()], sctx=_sctx(discount=(0.1, 0.8)))["rows"][0]  # harshest = 0.1
         self.assertEqual(row["final_action"], "建仓")
-        self.assertEqual(row["sizing"]["desired_model_shares"], 43)  # ⌊436×1.0×0.1⌋=43, below the 98 cap
+        self.assertEqual(row["sizing"]["desired_model_shares"], 47)  # ⌊477×1.0×0.1⌋=47, below the 98 cap
 
     def test_zero_discount_below_min_observes(self):
         row = _size_real([_cand()], sctx=_sctx(discount=(0.0,)))["rows"][0]

@@ -467,9 +467,9 @@ class OverextensionWiring(unittest.TestCase):
                 _run([_cand_row(overextension=bad)])
 
     def test_warning_raises_the_rr_gate_via_the_price_engine(self):
-        # a §4.3 `warning` tier → _analyze_one passes raise_rr_gate to the §6 price engine → a borderline RR (1.636)
+        # a §4.3 `warning` tier → _analyze_one passes raise_rr_gate to the §6 price engine → a borderline RR (1.889)
         # that PASSES the base 进攻 floor 1.5 now OBSERVES (fails the raised floor 2.0); a `none`/absent tier does not.
-        ind = {"effective_support": 98.0, "support_quality": "strong", "effective_resistance": 109.0,
+        ind = {"effective_support": 98.0, "support_quality": "strong", "effective_resistance": 108.5,
                "resistance_quality": "strong", "atr": 2.0}
         px = {"close": 100.0, "indicators": ind}
         out = {r["ticker"]: r for r in _run([

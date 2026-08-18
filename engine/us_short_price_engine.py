@@ -9,7 +9,7 @@ Two real engines (the §6 contract — no third engine in v1; ``ema_trailing_eng
   * ``support_atr_engine``  — new-entry / add: effective support/resistance (de-spiked) +
     ATR define entry band, protective stop, take-profit, RR gate, side-aware tick rounding,
     and a post-round RR recheck. Two ``price_sub_mode``: ``pullback`` (回踩) / ``breakout``
-    (突破: failure line as stop, chase cap, ATR fallback take-profit, higher RR floor).
+    (突破: failure line as stop, chase cap, trigger-anchored ATR take-profit, higher RR floor).
   * ``holding_exit_engine`` — holding: passive trailing stop / take-profit / event clear
     reference levels (§6.1: v1 emits base levels only; active scale-out logic is §13 #34).
 
@@ -47,11 +47,11 @@ RR_FLOOR = {"进攻": 1.5, "震荡": 1.5, "防御": 2.0, "极度防御": 2.0}   
 ATR_MULT = {"进攻": 1.75, "震荡": 1.25, "防御": 1.0, "极度防御": 1.0}  # §13 #4/#33 trailing-stop / pullback-stop ATR multiple
 BREAKOUT_RR_BONUS = 0.5        # §13 #16/#33 breakout entry sits above price → higher RR floor (+0.5)
 WARNING_RR_BONUS = 0.5         # §13 #16/#36 §4.3 overextension `warning` → raise the RR gate (+0.5, STRICTER only)
-BREAKOUT_FAIL_ATR = 0.5        # §13 #33 breakout failure line = effective_resistance − this×ATR (近期突破位下沿, NOT far structure)
-BREAKOUT_CHASE_ATR = 0.5       # §13 #33/#13 breakout chase cap (valid_entry_high) = close + this×ATR
-BREAKOUT_TP_ATR = 3.0          # §13 #20 突破 tp ATR 倍数: breakout take-profit (no overhead resistance) = close + this×ATR
+BREAKOUT_FAIL_ATR = 0.5        # §13 #33 breakout failure line = trigger_raw − this×ATR (近期突破位下沿, NOT far structure)
+BREAKOUT_CHASE_ATR = 0.5       # §13 #33/#13 breakout chase cap (valid_entry_high) = trigger_raw + this×ATR
+BREAKOUT_TP_ATR = 3.0          # §13 #20 突破 tp ATR 倍数: breakout take-profit = trigger_raw + this×ATR
 PULLBACK_BAND_ATR = 0.5        # §13 #13 pullback valid_entry_low = max(support, close − this×ATR)
-TP2_RISK_MULT = 2.0            # §13 #20 second take-profit floor = close + this×risk
+TP2_RISK_MULT = 2.0            # §13 #20 second take-profit floor = entry_ref + this×risk
 SR_SPIKE_ATR = 1.0            # §13 #24 de-spike: extreme > this×ATR beyond the nearest non-tied value → wick
 SR_LOOKBACK = 20             # support/resistance window
 ATR_WINDOW = 14
@@ -260,64 +260,64 @@ def support_atr_engine(inp, regime, sub_mode="pullback", raise_rr_gate=False):
     if sub_mode == "breakout":
         if res is None:
             return observe("缺有效压力,无法定位突破失效线")
+        trigger_raw = res
+        valid_low_raw = max(close, trigger_raw)
+        valid_high_raw = trigger_raw + BREAKOUT_CHASE_ATR * a
+        if valid_low_raw > valid_high_raw:
+            return observe("突破入场区间超过追价上限,转观察")
         # failure line = just below the broken structural level (NOT the far 20-day support)
-        stop_raw = res - BREAKOUT_FAIL_ATR * a
-        valid_low_raw, valid_high_raw = close, close + BREAKOUT_CHASE_ATR * a
+        stop_raw = trigger_raw - BREAKOUT_FAIL_ATR * a
+        t1_raw, t1_basis = trigger_raw + BREAKOUT_TP_ATR * a, "breakout_trigger_atr"
     else:  # pullback
         if sup is None:
             return observe("缺有效支撑,无法精算止损")
         if sup >= close:  # support must be BELOW price for a pullback; support≥close is not a valid low-absorb structure
             return observe("有效支撑≥现价,非有效低吸结构,转观察")
-        stop_raw = sup - ATR_MULT.get(regime, _NEUTRAL_ATR_MULT) * a
         valid_low_raw, valid_high_raw = max(sup, close - PULLBACK_BAND_ATR * a), close
+        stop_raw = valid_low_raw - ATR_MULT.get(regime, _NEUTRAL_ATR_MULT) * a
+        if res is None or res <= valid_high_raw:
+            return observe("缺有效上方结构目标,转观察")
+        t1_raw, t1_basis = res, "structural_resistance"
 
-    if stop_raw >= close:
-        return observe("止损≥现价(明显无效结构)")
-    risk = close - stop_raw
+    entry_ref_raw = valid_high_raw
+    risk_raw = entry_ref_raw - stop_raw
+    if risk_raw <= 0:
+        return observe("风险价差非正,转观察")
     rr_floor = (RR_FLOOR.get(regime, _NEUTRAL_RR_FLOOR)
                 + (BREAKOUT_RR_BONUS if sub_mode == "breakout" else 0.0)
                 + (WARNING_RR_BONUS if raise_rr_gate is True else 0.0))
-    use_structural_res = bool(res is not None and res > close)
-    if use_structural_res:
-        t1_raw, t1_basis = res, "structural_resistance"
-    elif sub_mode == "breakout":
-        t1_raw, t1_basis = close + BREAKOUT_TP_ATR * a, "breakout_atr_fallback"  # §13 #20 突破无上方阻力 → ATR 倍数兜底
-    else:
-        t1_raw, t1_basis = close + rr_floor * risk, "rr_floor_fallback"
-    t2_raw = max(t1_raw + ATR_MULT.get(regime, _NEUTRAL_ATR_MULT) * a, close + TP2_RISK_MULT * risk)
+    t2_raw = max(t1_raw + ATR_MULT.get(regime, _NEUTRAL_ATR_MULT) * a,
+                 entry_ref_raw + TP2_RISK_MULT * risk_raw)
 
-    rr_ref = (t1_raw - close) / risk if risk > 0 else 0.0
-    if rr_ref < rr_floor:
-        f["risk_reward_ratio"] = round(rr_ref, 3)
+    rr_raw = (t1_raw - entry_ref_raw) / risk_raw
+    if rr_raw < rr_floor:
+        f["risk_reward_ratio"] = round(rr_raw, 3)
         f["min_rr_gate_status"] = "fail_below_floor"
-        return observe(f"RR {rr_ref:.2f} < {rr_floor}")
+        return observe(f"RR {rr_raw:.2f} < {rr_floor}")
 
     # side-aware tick = final executable price, then re-check structure post-round
-    entry_t = tick_ref(close, tick)
     stop_t = tick_up(stop_raw, tick)
     t1_t = tick_down(t1_raw, tick)
     t2_t = tick_down(t2_raw, tick)
-    if None in (entry_t, stop_t, t1_t, t2_t):
+    valid_low_t = tick_up(valid_low_raw, tick)
+    valid_high_t = tick_down(valid_high_raw, tick)
+    if None in (valid_low_t, valid_high_t, stop_t, t1_t, t2_t):
         f["post_round_rr_status"] = "broke_after_round"
         return observe("价格非有限,取整失败")
-    if not (stop_t < entry_t and t1_t > entry_t and t2_t >= t1_t):
+    if valid_low_t > valid_high_t:
+        f["post_round_rr_status"] = "broke_after_round"
+        return observe("入场区间取整后失效(low>high 或非有限),转观察")
+    entry_ref = valid_high_t
+    if not (stop_t < entry_ref and t1_t > entry_ref and t2_t >= t1_t):
         f["post_round_rr_status"] = "broke_after_round"
         return observe("取整后结构失效(止损≥入/止盈≤入/盈二<盈一)")
 
-    # entry band (side-aware: low up, high down). A contradictory/degenerate band is a structural
-    # invalidity, NOT something to rescue into a current-price plan → fail closed to observe.
-    valid_low_t = tick_up(valid_low_raw, tick)
-    valid_high_t = tick_down(valid_high_raw, tick)
-    if valid_low_t is None or valid_high_t is None or valid_low_t > valid_high_t:
-        f["post_round_rr_status"] = "broke_after_round"
-        return observe("入场区间取整后失效(low>high 或非有限),转观察")
-
     # worst-case RR re-check at the band ceiling (don't ship a plan that's only OK at the best fill)
-    risk_eh = valid_high_t - stop_t
+    risk_eh = entry_ref - stop_t
     if risk_eh <= 0:
         f["post_round_rr_status"] = "broke_after_round"
         return observe("区间上沿≤止损(最不利价无效)")
-    rr_eh = (t1_t - valid_high_t) / risk_eh
+    rr_eh = (t1_t - entry_ref) / risk_eh
     if rr_eh < rr_floor:
         f["risk_reward_ratio"] = round(rr_eh, 3)
         f["min_rr_gate_status"] = "fail_below_floor"
@@ -334,8 +334,8 @@ def support_atr_engine(inp, regime, sub_mode="pullback", raise_rr_gate=False):
     f["min_rr_gate_status"] = "pass"
     f["post_round_rr_status"] = "ok"
     return _result(True, "support_atr_engine", f, None, tick, regime,
-                   {"t1_basis": t1_basis, "rr_reference": round(rr_ref, 3),
-                    "risk_per_share": round(close - stop_t, 6)})
+                   {"t1_basis": t1_basis, "rr_reference": round(rr_raw, 3),
+                    "risk_per_share": round(entry_ref - stop_t, 6)})
 
 
 # ── §6.1 holding_exit_engine (passive base levels; v1 no active scale-out) ─────────────────

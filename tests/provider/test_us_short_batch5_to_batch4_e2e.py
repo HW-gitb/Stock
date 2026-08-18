@@ -737,9 +737,14 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
 
     def test_local_ohlcv_packet_is_the_only_executable_price_input(self) -> None:
         points = [
-            {"date": f"2026-05-{idx:02d}", "high": 101.0 + idx, "low": 99.0 + idx, "close": 100.0 + idx}
-            for idx in range(1, 15)
-        ] + [{"date": "2026-06-12", "high": 116.0, "low": 114.0, "close": 115.0}]
+            {"date": f"2026-05-{idx:02d}", "high": 100.1, "low": 99.9, "close": 100.0}
+            for idx in range(1, 12)
+        ] + [
+            {"date": "2026-05-12", "high": 109.0, "low": 99.9, "close": 100.0},
+            {"date": "2026-05-13", "high": 109.0, "low": 99.9, "close": 100.0},
+            {"date": "2026-05-14", "high": 110.0, "low": 99.9, "close": 100.0},
+            {"date": "2026-06-12", "high": 100.1, "low": 99.9, "close": 100.0},
+        ]
         _write_json(self.paths["ohlcv"], {
             "schema_name": "us_short_batch5_full_universe_ohlcv_series_packet", "schema_version": "1.0.0",
             "generated_at": "2026-06-15T13:00:00Z",
@@ -795,6 +800,20 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             ]
             self.assertEqual(price_source["input"]["bars"], expected_bars)
             self.assertEqual(row["price_input"], price_source["input"])
+            machine = json.loads(
+                (private_root / "runs_private" / _DECISION_DATE / "machine_record.json").read_text(encoding="utf-8")
+            )["rows"][0]
+            self.assertEqual(machine["price"]["price_sub_mode"], "pullback")
+            self.assertTrue(machine["price"]["executable"])
+            self.assertEqual(machine["price"]["trace"]["t1_basis"], "structural_resistance")
+            self.assertEqual(machine["price"]["action_fields"]["valid_entry_high"], 100.0)
+            self.assertEqual(machine["price"]["action_fields"]["stop_clear_price"], 96.09)
+            self.assertEqual(machine["price"]["action_fields"]["take_profit_reduce_price"], 110.0)
+            action_csv = (private_root / "weekly_private" / _DECISION_DATE / "action_table.csv").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("pullback", action_csv)
+            self.assertIn("96.09", action_csv)
 
     def test_default_legacy_e2e_rejects_full_candidate_profile_without_explicit_contract(self) -> None:
         targets = ("AAPL",)
