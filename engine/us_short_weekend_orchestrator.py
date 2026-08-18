@@ -69,6 +69,7 @@ from engine.us_short_result_source_linkage import (  # Cut4 source facts → the
     bind_result_source_facts,
     source_coverage_effect_records,
 )
+from engine.us_short_execution_cost_prior import ExecutionCostPriorError, dollar_costs
 from engine.us_short_macro_cluster import apply_macro_cluster_two_pass
 from engine.us_short_theme_result_linkage import (
     ThemeResultLinkageError,
@@ -342,6 +343,26 @@ def _runtime_basket_context(rows, supplied):
             "theme_opportunity_state": supplied["theme_opportunity_state"]}
 
 
+def _probe_cost_inputs(basket_result):
+    costs = {}
+    for row in basket_result["rows"]:
+        if row.get("final_action") != "建仓" or "theme_probe" not in row:
+            continue
+        sizing = row.get("sizing") if isinstance(row.get("sizing"), dict) else {}
+        fields = row.get("price", {}).get("action_fields", {}) if isinstance(row.get("price"), dict) else {}
+        try:
+            costs[row["ticker"]] = dollar_costs(
+                row.get("execution_cost_prior"),
+                shares=sizing.get("desired_model_shares"),
+                reference_price=fields.get("valid_entry_high"),
+            )
+        except (ExecutionCostPriorError, KeyError) as exc:
+            raise WeekendOrchestratorError(
+                f"{row.get('ticker')}: promoted probe lacks a usable execution-cost prior"
+            ) from exc
+    return costs
+
+
 def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", research_live_capability=None):
     """4d-ii-o end-to-end weekend pipeline. Resolves the canonical decision_date, runs selection + the full
     4d-ii decision chain + machine-record assembly + lifecycle eval + weekly-report render + private write,
@@ -538,7 +559,7 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
         existing_positions=_macro_existing_positions(pc["account_state"], rows), as_of=decision_date)
     runtime_basket_context = _runtime_basket_context(sized["rows"], pc["basket_context"])
     basket = resolve_build_capacity(sized, basket_context=runtime_basket_context)
-    cost_floored = apply_probe_cost_floor(basket, cost_inputs=pc["cost_inputs"])
+    cost_floored = apply_probe_cost_floor(basket, cost_inputs=_probe_cost_inputs(basket))
     cash = apply_cash_allocation(cost_floored, available_cash=pc["available_cash"],
                                  portfolio_capacity=portfolio_capacity)
     ranked = apply_action_rank(cash)

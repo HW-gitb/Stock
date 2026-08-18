@@ -212,7 +212,10 @@ def _ohlcv_price(ohlcv_packet: dict[str, Any] | None, *, ticker: str, price_basi
         if float(point["high"]) < float(point["low"]) or not (float(point["low"]) <= float(point["close"]) <= float(point["high"])):
             return _degrade("price:bad_geometry")
         previous = date
-        bars.append({"high": float(point["high"]), "low": float(point["low"]), "close": float(point["close"])})
+        bar = {"high": float(point["high"]), "low": float(point["low"]), "close": float(point["close"])}
+        if "volume" in point:
+            bar["volume"] = point["volume"]
+        bars.append(bar)
     try:
         final_compact = _iso_to_compact(points[-1]["date"], where=f"{ticker} OHLCV final point")
     except ResultSourceLinkageError:

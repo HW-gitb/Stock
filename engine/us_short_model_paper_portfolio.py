@@ -200,6 +200,13 @@ def validate_decision_bundle(bundle: dict) -> None:
     if tickers != sorted(tickers) or len(set(tickers)) != len(tickers):
         raise ModelPaperPortfolioError("decision orders must have unique tickers in sorted order")
     for row in bundle["orders"]:
+        has_order_spread = ("round_trip_spread_fraction" in row or "spread_source" in row)
+        if has_order_spread:
+            if "round_trip_spread_fraction" not in row or "spread_source" not in row:
+                raise ModelPaperPortfolioError("order spread prior must carry fraction and source together")
+            _finite_nonnegative(row["round_trip_spread_fraction"], f"{row['ticker']}.round_trip_spread_fraction")
+            if not isinstance(row["spread_source"], str) or not row["spread_source"].strip():
+                raise ModelPaperPortfolioError(f"{row['ticker']}.spread_source is invalid")
         action = row["final_action"]
         if action == "加仓":
             raise ModelPaperPortfolioError("add action is not implemented; fail closed")
@@ -549,7 +556,11 @@ def settle_decision_bundle(prior_state: dict, decision_bundle: dict, price_packe
             fill = _price_decimal(fill_result["fill_price"], "fill_price")
             notional = Decimal(shares) * fill
             costs = decision_bundle["cost_prior"]
-            cost_fraction = _decimal(costs["commission_fee"], "commission_fee") + _decimal(costs["spread_cost"], "spread_cost") + _decimal(costs["slippage_bps"], "slippage_bps") / Decimal("10000")
+            spread_fraction = (_decimal(row["round_trip_spread_fraction"], "round_trip_spread_fraction")
+                               if "round_trip_spread_fraction" in row
+                               else _decimal(costs["spread_cost"], "spread_cost"))
+            cost_fraction = (_decimal(costs["commission_fee"], "commission_fee") + spread_fraction
+                             + _decimal(costs["slippage_bps"], "slippage_bps") / Decimal("10000"))
             cost_paid = (notional * cost_fraction).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_EVEN)
             cash_out = notional + cost_paid
             if cash < cash_out:

@@ -5281,3 +5281,51 @@ TTL 边界 90/91 天、正向观测永不跳过、脏缓存五形状、残差二
 ### 下一步
 
 用户：桌面 `2us_testrun0816.md` §9.2 可标已修复；下次周跑该 9 只应恢复真实评级信号。
+
+## 2026-08-18 追加：桌面 `2us_testrun0816.md` §9.6 execution-cost prior 一刀修复（Codex executor/fixer，888d，OPEN-NOT-VERIFIED）
+
+### 实施
+
+- **单一 prior**：新增 `engine/us_short_execution_cost_prior.py`。严格按 §9.6 先用最新最多 20 根 split-adjusted RTH bars 做 CHL；有效相邻 pair 至少 15 个时按 `eta=(lnH+lnL)/2`、`c=lnC`、`x=(c_t-eta_t)*(c_t-eta_{t+1})`、arithmetic mean，并在 15+ pair 时把一端最小值与一端最大值各替换为次值；输出 full round-trip `modeled_chl_winsor_v1`。CHL 不足时只用 ADV one-way buckets `2/5/12/25bp`，`one_way=max(bucket_bps/10000, 0.005/price)`；低于 `$5m` 无 CHL 或 one-way 超过 100bp 分别为 unavailable / `unavailable_too_wide`。
+- **实际接线**：`result_source_linkage` 从同一 OHLCV packet 保留已有 `volume`，不改变 `spread:unavailable_manual_check`；Batch5/Batch4 result row 生成 prior。orchestrator 在 `resolve_build_capacity` 后仅对最终 promoted `theme_probe` rows 用 `desired_model_shares × valid_entry_high` 生成 exact dollar costs，再调用既有 `apply_probe_cost_floor`。holding context 对 trusted TP1 只算 10% reduce shares、`avg_cost_usd` reference，并保留既有 `_cost_floor_clears`。model-paper 新建订单携带 per-order spread prior，按 actual fill notional 收费一次；commission/slippage 保持现有主模型定义，comparison track 不复用。
+- **失败/兼容**：new paper 缺失或不可用 prior 在 atomic write 前 fail closed；旧 holdings/bundles 不回填；旧 run-level spread 仅 legacy compatibility，不 double-charge。为闭环传递新增的 per-order 字段保持 optional，旧 bundle 仍可读。
+
+### 一个验收门
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 运行 `tests.test_us_short_execution_cost_prior`：`9 tests / OK`；覆盖 CHL exact formula、mean/winsor、15/14 边界、tick isolation、exact dollars/cost floor、entry/holding/model-paper 三消费者、old bundle compatibility、missing-prior atomic-write 前失败和 no-double-charge。
+- 同一固定 Python 跑核心回归：`206 tests / OK`；provider-boundary/offline e2e：`87 tests / OK`；变更 Python `py_compile` 与 `git diff --check` 通过。
+
+### 边界与下一步
+
+- 未联网、未调用 provider/API/live、未使用 quotes/NBBO/minute、未生成 receipt/hash/state/新 artifact、未做历史 NAV migration 或 comparison-track 复用；未跑 full lane。未修改主树、桌面文档或 `docs/CURRENT.md`，未提交、未 merge。
+- 当前结论为 `repaired / OPEN-NOT-VERIFIED`。下一步：Claude Code 独立审查本轮 §9.6 diff；PASS 后按 reviewer/committer 流程提交，merge 仍由用户决定。
+
+## 2026-08-18 追加：§9.6 Required/Optional 最小修复（Codex executor/fixer，888d，OPEN-NOT-VERIFIED）
+
+### 修复
+
+- **CHL 主路**：`engine/us_short_momentum_grouped_reconstruct.py::reconstruct_ohlcv_series_from_grouped` 只输出同时具备 H/L/C/`volume` 的执行成本 OHLCV bar；缺 volume 的日期成为 gap。现有 grouped fetch 的 `v` 原值透传；momentum 路径和旧 packet 读取不改。
+- **Optional**：CHL winsorization 每端从一个样本扩为两个样本，覆盖一根异常 bar 同时影响相邻两个 pair；不新增阈值、数据源或防御层，仍使用 `modeled_chl_winsor_v1`。
+- **文档门**：本轮 SESSION_LOG 补齐 `Pre-Codex self-review`、Required/Optional matrix、register、handoff、focused、full-lane、door 字段；旧 §9.6 执行条目也补了真实的历史阻断说明，避免复发性 doc guard 红。
+
+### 一个验收门
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`：execution-cost prior + upstream OHLCV producer focused `31 tests / OK`；覆盖 `volume` 正向 source path、缺 volume gap 反向控制、`spread_source=modeled_chl_winsor_v1`、单根异常 bar 双 pair winsorization 及原有三消费者链。
+- 尚未进行真实一周 provider/network 重跑；未跑 full lane。该证据边界保持 `NOT_VERIFIED`，不得写成 live-week 或 production 结论。
+
+### 边界与下一步
+
+- 未改 provider/API、旧历史 artifact、comparison track、receipt/hash/state、新 artifact、主树或桌面文档；未提交、未 merge。
+- 当前结论为 `repaired / OPEN-NOT-VERIFIED`。下一步：完成固定 Python 文档三守卫并交 Claude Code 独立审查；PASS 后按 reviewer/committer 流程提交。
+
+## 2026-08-18 Claude Code 独立审查：执行成本先验复修轮 — PASS
+
+上轮 P1（volume 是 CHL 主路隐藏前置、上游不带则主路永不执行）按「补上游」闭合：执行侧 OHLCV point builder
+把 volume 改必填（缺则整 bar 记 gap、保守降级），并新增端到端测试证明 packet points 直达
+`modeled_chl_winsor_v1`。momentum 走独立 builder，选股链未被收紧波及（已核）。doc guard 三红已消，
+超集 278 tests OK。`O-COST-PRIOR-1`（winsorize 单元素）维持不阻断。真实厂商 grouped daily 恒带 `v`
+留待下次周跑顺带确认。
+
+### 下一步
+
+用户：下次周跑可一并验证两件事——市值缓存腿降为 0 调用、`spread_source` 出现 `modeled_chl_winsor_v1`。

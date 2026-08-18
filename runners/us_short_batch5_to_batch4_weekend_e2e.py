@@ -36,6 +36,7 @@ from engine.us_short_result_source_linkage import (  # noqa: E402
     bind_result_source_facts,
     validate_result_source_fact,
 )
+from engine.us_short_execution_cost_prior import build_execution_cost_prior  # noqa: E402
 from engine.us_short_weekend_analysis import analyze_rows  # noqa: E402
 from engine.us_short_weekend_decision import decide_actions  # noqa: E402
 from engine.us_short_weekend_orchestrator import _build_analysis_rows  # noqa: E402
@@ -342,6 +343,16 @@ def _sizing_input_for_ticker(ticker: str, universe_by_ticker: dict[str, dict[str
     return {"discount_mults": [], "liquidity_cap_shares": liquidity_cap}
 
 
+def _attach_execution_cost_priors(rows: dict[str, dict[str, Any]], universe_by_ticker: dict[str, dict[str, Any]]) -> None:
+    for ticker, row in rows.items():
+        facts = row.get("source_result_facts") if isinstance(row, dict) else None
+        price = facts.get("price") if isinstance(facts, dict) else None
+        price_input = price.get("input") if isinstance(price, dict) else None
+        bars = price_input.get("bars") if isinstance(price_input, dict) else None
+        universe = universe_by_ticker.get(ticker) or {}
+        row["execution_cost_prior"] = build_execution_cost_prior(bars, adv_usd=universe.get("adv_usd"))
+
+
 def _basket_input_for_ticker() -> dict[str, Any]:
     return {
         "theme_probe": {
@@ -373,6 +384,7 @@ def _derive_current_action_inputs(
         as_of=components.get("run_provenance", {}).get("as_of"),
         price_basis_date=components.get("run_provenance", {}).get("price_basis_date"),
     )
+    _attach_execution_cost_priors(per_ticker_analysis, universe)
     if not per_ticker_analysis:
         basket_empty = copy.deepcopy(basket_context)
         basket_empty["per_ticker"] = {}

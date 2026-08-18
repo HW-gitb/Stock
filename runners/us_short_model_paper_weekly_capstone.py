@@ -18,6 +18,12 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from engine.us_short_execution_cost_prior import (
+    COMMISSION_FEE,
+    ExecutionCostPriorError,
+    SLIPPAGE_BPS,
+    usable_spread_fraction,
+)
 from engine.us_short_model_paper_portfolio import artifact_sha256
 from engine.us_short_model_paper_store import ModelPaperStoreError, load_current_nav, load_current_state, load_pending_decision
 from engine.us_short_model_paper_weekly import (
@@ -266,7 +272,7 @@ def _machine_order(row: dict) -> dict:
         if not isinstance(evidence, dict):
             raise ModelPaperWeeklyCapstoneError(f"{row['ticker']}: event clear lacks source-bound evidence")
         event_ref = artifact_sha256(evidence)
-    return {
+    order = {
         "ticker": row["ticker"], "final_action": action, "recommended_action_shares": shares,
         **entry,
         "stop_clear_price": fields.get("stop_clear_price"),
@@ -275,6 +281,15 @@ def _machine_order(row: dict) -> dict:
         "event_clear_reference_price": fields.get("event_clear_reference_price"),
         "event_source_ref_sha256": event_ref,
     }
+    if action == "建仓":
+        try:
+            fraction, source = usable_spread_fraction(row.get("execution_cost_prior"))
+        except ExecutionCostPriorError as exc:
+            raise ModelPaperWeeklyCapstoneError(
+                f"{row['ticker']}: new paper build lacks a usable execution-cost prior"
+            ) from exc
+        order.update({"round_trip_spread_fraction": fraction, "spread_source": source})
+    return order
 
 
 def paper_plan_factory_from_machine_record(machine_record_path: Path | str):
@@ -302,7 +317,7 @@ def paper_plan_factory_from_machine_record(machine_record_path: Path | str):
             "source_receipt_sha256": source_sha256,
             "source_as_of": record["as_of"],
             "paper_account_adapter_sha256": artifact_sha256(adapter),
-            "cost_prior": {"commission_fee": 0.001, "slippage_bps": 0.0, "spread_cost": 0.0},
+            "cost_prior": {"commission_fee": COMMISSION_FEE, "slippage_bps": SLIPPAGE_BPS, "spread_cost": 0.0},
             "orders": copy.deepcopy(orders),
         }
     return factory
