@@ -131,6 +131,32 @@ class FullPackLedgerTests(unittest.TestCase):
             self.assertIn("new private test directories remained", output.getvalue())
             self.assertTrue(leaked.exists())
 
+    def test_us_short_green_allows_new_date_subdir_under_existing_private_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            protected = Path(tmp) / "provider_samples"
+            existing = protected / "us_short_batch5_full_universe_theme"
+            existing.mkdir(parents=True)
+            state = {"engine/x.py": "aaa", "@CODE_CONTENT": "c1"}
+            passed = Result("PASS", 0, 3, 0.2, "Ran 3 tests in 0.1s\n\nOK\n")
+            output = StringIO()
+
+            def run_pack(*_args):
+                (existing / "20260615").mkdir()
+                return passed, {"mode": "parallel"}
+
+            with patch.object(fpl, "PRIVATE_TEST_ROOTS", (protected,)), \
+                    patch.object(fpl, "external_test_dependency_error", return_value=None), \
+                    patch.object(fpl, "_execute_full_pack", side_effect=run_pack):
+                with redirect_stdout(output):
+                    result = fpl.run_full_pack(
+                        "us_short", "dated-child control", 30,
+                        ["discover", "-s", "tests", "-p", "test_us_short*.py"],
+                        state=state, ledger=Path(tmp) / "ledger.json",
+                    )
+            self.assertEqual(result, 0)
+            self.assertNotIn("new private test directories remained", output.getvalue())
+            self.assertTrue((existing / "20260615").exists())
+
     def test_new_tmp_root_cleanup_is_bound_to_run_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             parent = Path(tmp) / "provider_samples"
