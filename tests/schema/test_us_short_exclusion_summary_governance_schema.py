@@ -2,7 +2,7 @@
 """Schema + invariant + cross-schema tests for us_short_exclusion_summary_governance
 (US-short batch 1, design §11.4 exclusion_summary).
 
-The contract freezes the exclusion category set, two-pass coverage, the privacy split, and the
+The contract freezes the exclusion category set, the privacy split, and the
 hot_excluded audit (never rescues hard-veto / never changes admission). Tests assert (a) the
 const-pins, (b) byte-faithful category triangulation + exclusion_summary ∈ the weekly_report
 section set, (c) provenance in §11.4, and (d) negative schema cases incl. exposing real-holding
@@ -56,14 +56,10 @@ class UsShortExclusionSummaryGovernance(unittest.TestCase):
         self.assertEqual(len(c), 8)
         self.assertEqual(len(c), len(set(c)))
 
-    def test_covers_both_passes(self):
-        self.assertEqual(self.preset["covers_passes"], ["pass1_eligibility", "pass2_audit_gate"])
-
     # --- triangulation / cross-schema ---
     def test_schema_const_equals_preset(self):
         p = self.schema["properties"]
         self.assertEqual(p["exclusion_categories"]["const"], self.preset["exclusion_categories"])
-        self.assertEqual(p["covers_passes"]["const"], self.preset["covers_passes"])
 
     def test_exclusion_categories_byte_faithful_to_design_11_4(self):
         self.assertEqual(self.preset["exclusion_categories"], _design_categories())
@@ -104,9 +100,6 @@ class UsShortExclusionSummaryGovernance(unittest.TestCase):
 
     def test_schema_rejects_category_dropped(self):
         self._reject(lambda d: d["exclusion_categories"].pop())
-
-    def test_schema_rejects_covers_passes_drift(self):
-        self._reject(lambda d: d["covers_passes"].pop())
 
     def test_hot_excluded_const_contract_fully_guarded(self):
         # checklist §A point4 (cover ALL members — same class as the ship-gate safety-boolean gap, this

@@ -25,7 +25,6 @@ from engine.us_short_private_paths import PrivatePathError  # noqa: E402
 
 GOV = json.loads((ROOT / "presets" / "us_short_exclusion_summary_governance_20260620.json").read_text(encoding="utf-8"))
 CATS = GOV["exclusion_categories"]
-PASSES = GOV["covers_passes"]
 
 
 def _good_input(**over):
@@ -38,8 +37,19 @@ def _good_input(**over):
         },
         "hot_excluded": {"public_heat_count": 2, "unevaluable_count": 1,
                          "holdings": [{"ticker": "NVDA", "reason": "liquidity_gate"}]},
+        "stage_counts": {"pass1_eligibility": 3, "pass2_audit_gate": 1, "top15_selection": 2},
     }
     d.update(over)
+    if "stage_counts" not in over and "categories" in over and isinstance(d["categories"], dict):
+        values = [
+            entry.get("public_count", 0)
+            for entry in d["categories"].values()
+            if isinstance(entry, dict)
+        ]
+        if all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in values):
+            d["stage_counts"] = {
+                "pass1_eligibility": sum(values), "pass2_audit_gate": 0, "top15_selection": 0,
+            }
     return d
 
 
@@ -77,8 +87,10 @@ class CompleteClosedWorldCategories(unittest.TestCase):
         with self.assertRaises(es.ExclusionSummaryError):
             es.build_exclusion_summary(_good_input(categories={"不存在的类别": {"public_count": 1}}))
 
-    def test_covers_passes_from_frozen_governance(self):
-        self.assertEqual(set(es.build_exclusion_summary(_good_input())["public"]["covers_passes"]), set(PASSES))
+    def test_three_stage_counts_and_recall_count_are_public(self):
+        pub = es.build_exclusion_summary(_good_input())["public"]
+        self.assertEqual(pub["stage_counts"], {"pass1_eligibility": 3, "pass2_audit_gate": 1, "top15_selection": 2})
+        self.assertEqual(pub["catalyst_recall_rejected_count"], 0)
 
 
 class CountWholeClassFailsClosed(unittest.TestCase):
@@ -160,8 +172,8 @@ class PublicSchemaDeIdGate(unittest.TestCase):
         with self.assertRaises(es.ExclusionSummaryError):
             es._assert_public(p)
 
-    def test_covers_passes_tamper_refused(self):
-        p = self._pub(); p["covers_passes"] = ["pass1_eligibility"]  # dropped pass2
+    def test_stage_counts_tamper_refused(self):
+        p = self._pub(); p["stage_counts"]["top15_selection"] = 99
         with self.assertRaises(es.ExclusionSummaryError):
             es._assert_public(p)
 
@@ -173,16 +185,17 @@ class PublicSchemaDeIdGate(unittest.TestCase):
 
 class SectionRender(unittest.TestCase):
     def test_renders_all_categories_total_and_hot(self):
-        pub = es.build_exclusion_summary(_good_input())["public"]
+        pub = es.build_exclusion_summary(_good_input(catalyst_recall_rejected_count=1))["public"]
         lines = es.render_exclusion_section(pub)
         self.assertTrue(all(isinstance(x, str) and x.strip() for x in lines))  # every line non-blank
         joined = "\n".join(lines)
         for cat in CATS:
             self.assertIn(cat, joined)
-        self.assertIn("本周剔除 6 只", joined)
+        self.assertIn("本周剔除（按实际阶段合计）6只", joined)
         self.assertIn("hot_excluded", joined)
         self.assertIn("未能评估", joined)
         self.assertIn("绝不救回", joined)  # audit-only intent surfaced (never rescues hard veto)
+        self.assertIn("催化召回未通过地板：1只（独立审计，可能与Pass1重合，不计入上述合计）", joined)
         for ticker in ("AAPL", "MSFT", "NVDA"):  # de-identified section
             self.assertNotIn(ticker, joined)
 
@@ -190,7 +203,7 @@ class SectionRender(unittest.TestCase):
         pub = es.build_exclusion_summary(_good_input(categories={}, hot_excluded={}))["public"]
         lines = es.render_exclusion_section(pub)
         self.assertTrue(lines and all(x.strip() for x in lines))
-        self.assertIn("本周剔除 0 只", "\n".join(lines))
+        self.assertIn("本周剔除（按实际阶段合计）0只", "\n".join(lines))
 
     def test_render_refuses_bad_public(self):
         pub = es.build_exclusion_summary(_good_input())["public"]; pub["total_excluded"] = 999

@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "us_short_exclusion_summary_governance",
-  "title": "US-short §11.4 exclusion_summary governance — const-pins the exclusion category set, the two-pass coverage, the privacy split, and the hot_excluded audit (never rescues hard-veto / never changes admission)",
-  "description": "Batch-1 declarative governance contract. Freezes the §11.4 weekly exclusion summary: the exclusion category set (流动性/价格市值/停牌退市破产/增发SEC/数据unknown/事件unknown/数据源失败/分不够), coverage of BOTH Pass-1 eligibility drops and Pass-2 audit-gate drops, the privacy split (real-holding exclusions → private path; pure public-universe counts → trackable), and the hot_excluded audit (tickers with theme_heat_score at percentile yet dropped at a safety/liquidity/data gate — surfaced ONLY to find mistaken kills; it NEVER rescues a hard veto and NEVER changes admission; holding rows private; feeds §13 review of theme weights / safety-gate thresholds). The hot_excluded percentile threshold is forward-calibrated (not pinned). draft-07 cannot express: category byte-faithfulness, provenance in §11.4, and exclusion_summary presence in the weekly_report section set — enforced in tests.",
+  "title": "US-short §11.4 exclusion_summary governance — const-pins the exclusion category set, the privacy split, and the hot_excluded audit (never rescues hard-veto / never changes admission)",
+  "description": "Batch-1 declarative governance contract. Freezes the §11.4 weekly exclusion summary: the exclusion category set (流动性/价格市值/停牌退市破产/增发SEC/数据unknown/事件unknown/数据源失败/分不够), the privacy split (real-holding exclusions → private path; pure public-universe counts → trackable), and the hot_excluded audit (tickers with theme_heat_score at percentile yet dropped at a safety/liquidity/data gate — surfaced ONLY to find mistaken kills; it NEVER rescues a hard veto and NEVER changes admission; holding rows private; feeds §13 review of theme weights / safety-gate thresholds). The hot_excluded percentile threshold is forward-calibrated (not pinned). draft-07 cannot express: category byte-faithfulness, provenance in §11.4, and exclusion_summary presence in the weekly_report section set — enforced in tests.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -11,7 +11,6 @@
     "as_of",
     "status",
     "exclusion_categories",
-    "covers_passes",
     "purpose",
     "privacy",
     "hot_excluded",
@@ -44,13 +43,6 @@
         "事件unknown",
         "数据源失败",
         "分不够"
-      ]
-    },
-    "covers_passes": {
-      "description": "§11.4 覆盖 Pass-1 资格剔除 + Pass-2 审计闸剔除 — both passes' drops are summarized.",
-      "const": [
-        "pass1_eligibility",
-        "pass2_audit_gate"
       ]
     },
     "purpose": {

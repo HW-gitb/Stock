@@ -60,6 +60,7 @@ _DATA_CONTEXT_KEYS = {
     "holdings",
     "candidate_pass2_signals",
     "selection_inputs",
+    "pass1_exclusion_summary",
 }
 _UNIVERSE_ROW_KEYS = {
     "ticker",

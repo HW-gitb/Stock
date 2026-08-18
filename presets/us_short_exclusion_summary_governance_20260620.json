@@ -13,10 +13,6 @@
     "数据源失败",
     "分不够"
   ],
-  "covers_passes": [
-    "pass1_eligibility",
-    "pass2_audit_gate"
-  ],
   "purpose": "prevent_mistaken_kills_and_check_overconservatism",
   "privacy": {
     "real_holding_exclusion_private": true,

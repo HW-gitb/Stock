@@ -443,13 +443,23 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
     cal = _assert_calendar(pc["calendar"], run_mode)
     sessions = sessions_for_window(now_et.strftime("%Y%m%d"), calendar=cal)
 
-    selection = run_selection(now_et, sessions, pc["data_context"], eligibility_governance=pc["eligibility_governance"])
+    selection = run_selection(
+        now_et,
+        sessions,
+        pc["data_context"],
+        eligibility_governance=pc["eligibility_governance"],
+        require_pass1_exclusion_summary=(run_mode == "mixed_source"),
+    )
     if selection["out_of_window"]:
         # §2.1 intraday dead zone: NO-EMIT — do not run the downstream chain, produce no machine record /
         # report / private artifact (a run that cannot have a canonical decision_date emits nothing).
         return {"out_of_window": True, "emitted": False, "no_emit_reason": "out_of_window",
                 "decision_date": None, "run_date": selection["run_date"], "selection": selection}
     decision_date = selection["decision_date"]   # §2.1 the ONE canonical anchor threaded below
+    report_selection = selection
+    upstream_pass1 = pc["data_context"].get("pass1_exclusion_summary")
+    if upstream_pass1 is not None:
+        report_selection = {**selection, "pass1_exclusion_summary": upstream_pass1}
 
     # (1b) §3.7 provider-health gate: critical SEC health degraded/down/missing NO-EMITs. Advisory FMP grades stays
     # visible as usable_with_fallback and may emit with its §4.2 catalyst contribution neutral-filled. The classifier
@@ -644,10 +654,11 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
         stage_status={"provider_health": provider_health,
                       "portfolio_guard_status": portfolio_guard_result["state"],
                       "theme_opportunity_state": pc["basket_context"]["theme_opportunity_state"]},
-        selection=selection)
+        selection=report_selection)
     written = write_run_private(                                                  # decision_date → N (idempotent)
         decision_date=decision_date, machine_record=machine_record, weekly_report_md=report["weekly_report_md"],
         report_data=report["report_data"],
+        selection=report_selection,
         # source-fact reconciliation (R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP): the persistence boundary
         # rebinds report_data.run_status / offline_honesty to the RUN-LEVEL provider-health + holding coverage + the
         # independent lifecycle stage result the run actually used, so a forged count/state (incl. a coordinated

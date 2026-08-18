@@ -1052,6 +1052,14 @@ class CapstoneFakeChainTest(unittest.TestCase):
         dated_children = {path.name for path in (self.private_root / "runs_private").iterdir()
                           if path.is_dir() and path.name != "_superseded"}
         self.assertEqual(dated_children, {prior_date, decision_date})
+        weekly_report = (self.private_root / "weekly_private" / decision_date / "weekly_report.md").read_text(
+            encoding="utf-8")
+        self.assertIn("## 4.", weekly_report)
+        self.assertIn("## 9.", weekly_report)
+        self.assertIn("pass1_eligibility=", weekly_report)
+        self.assertIn("top15_selection=", weekly_report)
+        self.assertIn("## 10.", weekly_report)
+        self.assertNotIn("跨行业赛道发现+确认", weekly_report)  # offline_test keeps banner ⑦ absent
 
     def test_pass2_summary_soft_boost_result_reaches_later_stage_context(self):
         order: list[str] = []
@@ -2671,7 +2679,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                 build_weekly_report(object(), object(), report_context={}, run_context={}, stage_status={},
                                     selection={}, run_origin=FORGED, **cap)
             with self.assertRaises(RunOriginError):
-                write_run_private(decision_date="20260615", machine_record={}, weekly_report_md="x", report_data={},
+                write_run_private(decision_date="20260615", machine_record={}, weekly_report_md="x", report_data={}, selection={},
                                   provider_health={}, coverage_inputs={}, lifecycle_result={}, run_origin=FORGED, **cap)
         # A2: the STANDALONE official action-table persister is ALSO gated (the earlier "3 producers" grep MISSED it —
         # it takes the flattened record, not run_origin directly). A private out_path reaches the research_live gate.
@@ -2693,7 +2701,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                 build_weekly_report(object(), object(), report_context={}, run_context={}, stage_status={},
                                     selection={}, run_origin=FORGED, research_live_capability=critical_down_receipt)
             with self.assertRaises(RunOriginError):
-                write_run_private(decision_date="20260615", machine_record={}, weekly_report_md="x", report_data={},
+                write_run_private(decision_date="20260615", machine_record={}, weekly_report_md="x", report_data={}, selection={},
                                   provider_health={}, coverage_inputs={}, lifecycle_result={}, run_origin=FORGED,
                                   research_live_capability=critical_down_receipt)
             with self.assertRaises(RunOriginError):

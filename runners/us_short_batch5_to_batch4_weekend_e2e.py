@@ -381,6 +381,7 @@ def _derive_current_action_inputs(
     basket_context: dict[str, Any],
     prior_regime: str | None,
     prior_upgrade_count: int,
+    require_pass1_exclusion_summary: bool = False,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, Any], dict[str, dict[str, float]]]:
     data_context = components["data_context"]
     universe = _universe_by_ticker(data_context)
@@ -401,6 +402,7 @@ def _derive_current_action_inputs(
         sessions_for_window(now_et.strftime("%Y%m%d"), calendar=calendar),
         data_context,
         eligibility_governance=load_eligibility_governance(governance_path),
+        require_pass1_exclusion_summary=require_pass1_exclusion_summary,
     )
     if selection["out_of_window"]:
         basket_empty = copy.deepcopy(basket_context)
@@ -469,6 +471,7 @@ def _assemble_batch4_packet(
     forward_policy_comparison_reminder: str | None = None,
     soft_discovery_receipt_paths: dict[str, str | None] | None = None,
     model_paper_track: dict[str, Any] | None = None,
+    require_pass1_exclusion_summary: bool = False,
 ) -> dict[str, Any]:
     data_context = components["data_context"]
     run_provenance = components["run_provenance"]
@@ -496,6 +499,7 @@ def _assemble_batch4_packet(
         basket_context=basket_context,
         prior_regime=prior_regime,
         prior_upgrade_count=prior_upgrade_count,
+        require_pass1_exclusion_summary=require_pass1_exclusion_summary,
     )
     if model_paper_track is not None:
         if not isinstance(model_paper_track, dict):
@@ -787,6 +791,7 @@ def run_e2e(
             forward_policy_comparison_reminder=forward_policy_comparison_reminder,
             soft_discovery_receipt_paths=soft_discovery_receipt_paths,
             model_paper_track=model_paper_track,
+            require_pass1_exclusion_summary=(run_mode == "mixed_source"),
         )
         _write_private_json(context_path, packet)
         batch4_summary = _safe_batch4_run(

@@ -7,18 +7,23 @@
     "schema_name": {"const": "us_short_exclusion_summary_public"},
     "schema_version": {"type": "string", "minLength": 1},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-    "covers_passes": {
-      "type": "array",
-      "items": {"type": "string", "minLength": 1},
-      "minItems": 1,
-      "uniqueItems": true
-    },
     "category_counts": {
       "type": "object",
       "minProperties": 1,
       "additionalProperties": {"type": "integer", "minimum": 0}
     },
+    "stage_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pass1_eligibility", "pass2_audit_gate", "top15_selection"],
+      "properties": {
+        "pass1_eligibility": {"type": "integer", "minimum": 0},
+        "pass2_audit_gate": {"type": "integer", "minimum": 0},
+        "top15_selection": {"type": "integer", "minimum": 0}
+      }
+    },
     "total_excluded": {"type": "integer", "minimum": 0},
+    "catalyst_recall_rejected_count": {"type": "integer", "minimum": 0},
     "hot_excluded_public_heat_count": {"type": "integer", "minimum": 0},
     "hot_excluded_unevaluable_count": {"type": "integer", "minimum": 0}
   },
@@ -26,9 +31,10 @@
     "schema_name",
     "schema_version",
     "as_of",
-    "covers_passes",
     "category_counts",
+    "stage_counts",
     "total_excluded",
+    "catalyst_recall_rejected_count",
     "hot_excluded_public_heat_count",
     "hot_excluded_unevaluable_count"
   ],
