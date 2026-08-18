@@ -3318,3 +3318,12 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **验证结果（合并态主树）**：`status=PASS exit=0 tests=5993 elapsed=768.8s deadline=860s`、`COUNT_GATE 5993=5993`、无 REFUSED。红消失，绿也记上了。
 - **代价要记住（已自纠）**：主树本次 `768.8s`、余量只剩 91 秒（10.6%）是真的；但我原先拿来对比的 `345.4s`/`473.5s` 是 **8d8c** 的数、`768.8s` 是**主树**的数，跨树比无效，那句「这刀多花了 420 秒」作废——8d8c 用同一份修复只跑了 `343.6s`。同树可比的是主树自己：`432.9s` → `768.8s`。**教训：墙钟只能同树比，跨树波动能到一倍以上。**老条目 `R-USSHORT-LANE-PACK-IS-GREEN-ONLY-BY-4-SECONDS...` 的 closure 判据是 ≥15% 余量，因此**它回到 open**。下一刀再加几十秒就会撞 860s，而 TIMEOUT 和真红在账面上难分。
 - **下一步注意**：真正该动的是「为什么整模块都得串行」——尾巴是按**模块**判定的。若只有 `LaneGuardRegistryConformance` 需要锁，把它拆成单独模块，同文件其余用例就能回并行，这是唯一能把那 420 秒要回来的方向。`conformance_resources` 已砍过一次空间有限，`conformance_executable` 明确不许为墙钟牺牲，抬 860s 属用户级决定。
+
+## 2026-08-18 追加：第五刀阶段 B 已执行 —— DeepSeek 服务模型别名漂移（主树，失败后不重跑）
+
+- **执行边界**：严格使用固定 packet `us_short_web_regroup_engineering_smoke_20260815_chunk1_v1` 和主树 `D:\cnhea\Stock`；预检确认 packet、34 条 Web 原始来源、生产派生的 10 条目标块、16384 上限和 DeepSeek 凭证均可用。没有走正式 0815 CLI，没有新建或占用正式决策槽。
+- **调用事实**：恰 1 次 DeepSeek 调用，0 retry、0 unknown、0 recovery；requested model=`deepseek-chat`，served model=`deepseek-v4-flash`；usage=`4558/822/5380`，`finish_reason=stop`。
+- **落盘事实**：原始响应先于解析写入 gitignored `provider_samples/us_short_llm_theme_discovery_engineering_smoke/provider_responses/20260815/`，hash 重读通过；摘要写入私有 `state/us_short/runs_private/soft_discovery_engineering_smoke/`。严格解析因服务模型不匹配被拒，摘要 `transport_verdict=FAIL`；不能评价主题、绑定、语义或模板。
+- **正式效果**：`formal_decision_date=null`；formal slot、discovery、receipt、merge、validation、boost、score 全部 false；失败后本 packet 不得重跑，补验证必须新 packet + 新授权。
+- **当前状态**：`R-USSHORT-K5B-STAGE-B-SERVED-MODEL-DRIFT` open。先审模型别名绑定策略，不把“任意 served_model 都接受”当修复，也不再花钱补枪。
+- **下一步**：Claude：独立审查第五刀阶段 B 结果并决定模型绑定修复方案。
