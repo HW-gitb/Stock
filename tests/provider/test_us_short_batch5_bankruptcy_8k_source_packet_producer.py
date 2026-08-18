@@ -167,7 +167,9 @@ class Bankruptcy8kSourcePacketProducerTest(unittest.TestCase):
         import importlib
 
         producer = importlib.import_module(PRODUCER_MODULE)
-        self.assertFalse(producer._git_ignored(self.summary_root / "probe.json"))
+        probe_path = self.summary_root / "probe.json"
+        probe_path.write_text("{}\n", encoding="utf-8")
+        self.assertFalse(producer._git_ignored(probe_path))
         self.assertEqual(
             _class_guards.LaneResidueConformance._growth(
                 ROOT / "docs", _class_guards.INITIAL_PRIVATE_FILES["docs"]
