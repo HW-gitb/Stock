@@ -24,7 +24,7 @@
         "transport_response_counts": {"type": "object", "additionalProperties": false, "required": ["tavily", "deepseek"], "properties": {"tavily": {"type": "integer", "minimum": 0}, "deepseek": {"type": "integer", "minimum": 0}}},
         "regroup_chunk_counts": {"type": "object", "additionalProperties": false, "required": ["attempted", "successful", "failed", "failed_indexes"], "properties": {"attempted": {"type": "integer", "minimum": 0}, "successful": {"type": "integer", "minimum": 0}, "failed": {"type": "integer", "minimum": 0}, "failed_indexes": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 0}}}},
         "scoring_eligible": {"const": false}, "top15_effect_enabled": {"const": false}, "operation_advice_effect_enabled": {"const": false}, "dynamic_seats_enabled": {"const": false}, "theme_probe_enabled": {"const": false}, "lifecycle_actions_enabled": {"const": false},
-        "regroup_model": {"type": "object", "additionalProperties": false, "required": ["requested_model", "served_model", "system_fingerprints"], "properties": {"requested_model": {"const": "deepseek-chat"}, "served_model": {"type": ["string", "null"]}, "system_fingerprints": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}}}
+        "regroup_model": {"type": "object", "additionalProperties": false, "required": ["requested_model", "served_model", "system_fingerprints"], "properties": {"requested_model": {"enum": ["deepseek-chat", "deepseek-v4-pro"]}, "served_model": {"type": ["string", "null"]}, "system_fingerprints": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}}}
       },
       "allOf": [
         {"if": {"properties": {"execution_mode": {"const": "live_authorized"}}}, "then": {"properties": {"network_access_performed": {"const": true}, "provider_calls_performed": {"const": true}, "network_call_count": {"minimum": 1}, "provider_call_count": {"minimum": 1}}}},
@@ -151,7 +151,7 @@
       "properties": {
         "provider": {"const": "deepseek"},
         "chunk_index": {"type": "integer", "minimum": 0},
-        "requested_model": {"const": "deepseek-chat"},
+        "requested_model": {"enum": ["deepseek-chat", "deepseek-v4-pro"]},
         "served_model": {"type": ["string", "null"]},
         "finish_reason": {"type": ["string", "null"]},
         "usage": {

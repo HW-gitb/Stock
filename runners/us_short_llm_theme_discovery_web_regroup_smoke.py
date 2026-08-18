@@ -18,12 +18,23 @@ from typing import Any, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
 LIVE_ROOT = Path(r"D:\cnhea\Stock")
-PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815.json"
-SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet.schema.json"
-PRIVATE_ROOT = ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke"
-PARENT_PLAN_PATH = PRIVATE_ROOT / "us_short_web_regroup_engineering_smoke_20260815_parent_plan.json"
-RAW_ROOT = ROOT / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke"
-SUMMARY_PATH = PRIVATE_ROOT / "us_short_web_regroup_engineering_smoke_20260815_summary.json"
+PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v2"
+EXPECTED_MODEL = "deepseek-chat"
+EXPECTED_TARGET_CHUNK_INDEX = 1
+PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v2.json"
+SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet_v2.schema.json"
+PRIVATE_ROOT = ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke_v2"
+PARENT_PLAN_PATH = PRIVATE_ROOT / "us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json"
+RAW_ROOT = ROOT / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke_v2"
+SUMMARY_PATH = PRIVATE_ROOT / "us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json"
+EXPECTED_RENDERED_PROMPT_SHA256 = "97c7f93afc77310a193d585defc7b4afc596c87e27703c1ad9b053bcc3743a32"
+EXPECTED_OUTPUT_BOUNDARY = {
+    "diagnostic_root": "state/us_short/runs_private/soft_discovery_engineering_smoke_v2/",
+    "parent_plan_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v2/us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json",
+    "budget_ledger_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v2/us_short_llm_theme_discovery_plan_web_20260815_budget.json",
+    "raw_root": "provider_samples/us_short_llm_theme_discovery_engineering_smoke_v2/",
+    "summary_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v2/us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json",
+}
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -55,6 +66,67 @@ def _sha256_file(path: Path) -> str:
         raise EngineeringSmokeError("required artifact digest cannot be read") from exc
 
 
+def _assert_packet_contract(packet: Mapping[str, Any]) -> None:
+    try:
+        request = packet["paid_boundary"]["request"]
+        call_counts = packet["paid_boundary"]["call_counts"]
+        input_boundary = packet["input"]
+        output_boundary = packet["output_boundary"]
+    except (KeyError, TypeError) as exc:
+        raise EngineeringSmokeError("engineering-smoke packet contract is malformed") from exc
+    if (
+        packet.get("schema_name") != "us_short_web_regroup_engineering_smoke_packet_v2"
+        or packet.get("schema_version") != "2.0.0"
+        or packet.get("packet_id") != PACKET_ID
+        or packet.get("source_decision_date") != "20260815"
+        or packet.get("formal_decision_date") is not None
+        or packet.get("formal_decision_slots_occupied") is not False
+        or packet.get("regrades_historical_decision") is not False
+        or packet.get("provider_execution_authorized_by_packet_creation") is not False
+    ):
+        raise EngineeringSmokeError("engineering-smoke packet identity is not runner-authorized")
+    if (
+        input_boundary.get("target_chunk_index") != EXPECTED_TARGET_CHUNK_INDEX
+        or input_boundary.get("target_source_count") != 10
+        or input_boundary.get("rendered_prompt_sha256") != EXPECTED_RENDERED_PROMPT_SHA256
+    ):
+        raise EngineeringSmokeError("engineering-smoke packet target or prompt binding is not authorized")
+    if (
+        request.get("model") != EXPECTED_MODEL
+        or request.get("expected_served_model") is not None
+        or request.get("temperature") != 0
+        or request.get("max_tokens") != paid_gateway.DEEPSEEK_REGROUP_MAX_TOKENS
+        or request.get("response_format") != "json_object"
+        or request.get("max_themes_per_chunk") != paid_gateway.DEEPSEEK_REGROUP_MAX_THEMES_PER_CHUNK
+        or call_counts != {
+            "tavily": 0, "deepseek": 1, "xai": 0, "retry": 0,
+            "recovery": 0, "unknown_sibling": 0,
+        }
+    ):
+        raise EngineeringSmokeError("engineering-smoke paid boundary is not runner-authorized")
+    if (
+        output_boundary.get("parent_plan_ref") != EXPECTED_OUTPUT_BOUNDARY["parent_plan_ref"]
+        or output_boundary.get("budget_ledger_ref") != EXPECTED_OUTPUT_BOUNDARY["budget_ledger_ref"]
+        or output_boundary.get("diagnostic_root") != EXPECTED_OUTPUT_BOUNDARY["diagnostic_root"]
+        or output_boundary.get("raw_root") != EXPECTED_OUTPUT_BOUNDARY["raw_root"]
+        or output_boundary.get("summary_ref") != EXPECTED_OUTPUT_BOUNDARY["summary_ref"]
+        or output_boundary.get("formal_outputs_forbidden") is not True
+        or any(output_boundary.get("effects", {}).values())
+    ):
+        raise EngineeringSmokeError("engineering-smoke output boundary is not runner-authorized")
+    expected_private_root = ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke_v2"
+    expected_parent_plan = expected_private_root / "us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json"
+    expected_raw_root = ROOT / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke_v2"
+    expected_summary = expected_private_root / "us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json"
+    if (
+        PRIVATE_ROOT.resolve() != expected_private_root.resolve()
+        or PARENT_PLAN_PATH.resolve() != expected_parent_plan.resolve()
+        or RAW_ROOT.resolve() != expected_raw_root.resolve()
+        or SUMMARY_PATH.resolve() != expected_summary.resolve()
+    ):
+        raise EngineeringSmokeError("engineering-smoke runtime output paths are not packet-authorized")
+
+
 def _validate_packet(packet_path: Path = PACKET_PATH) -> dict[str, Any]:
     if Path(packet_path).resolve() != PACKET_PATH.resolve():
         raise EngineeringSmokeError("only the tracked engineering-smoke packet is accepted")
@@ -74,6 +146,7 @@ def _validate_packet(packet_path: Path = PACKET_PATH) -> dict[str, Any]:
         ROOT / packet["input"]["receipt_ref"]
     ):
         raise EngineeringSmokeError("frozen Web receipt digest does not match the packet")
+    _assert_packet_contract(packet)
     return packet
 
 
@@ -247,18 +320,140 @@ def _assert_one_shot_roots_empty() -> None:
             raise EngineeringSmokeError("this packet already has diagnostic evidence; replay is forbidden")
 
 
+def _validate_rendered_prompt(packet: Mapping[str, Any], rows: list[dict[str, str]]) -> str:
+    prompt = web._build_deepseek_prompt(packet["source_decision_date"], rows)
+    rendered_sha256 = web._sha256_bytes(prompt.encode("utf-8"))
+    if rendered_sha256 != packet["input"]["rendered_prompt_sha256"]:
+        raise EngineeringSmokeError("rendered DeepSeek prompt digest does not match the packet")
+    return prompt
+
+
+def _read_budget_ledger(
+    packet: Mapping[str, Any], budget: Any,
+) -> tuple[Path, dict[str, Any]]:
+    state_dir = getattr(budget, "state_dir", None)
+    if state_dir is None:
+        raise EngineeringSmokeError("diagnostic budget has no private state directory")
+    path = plan_budget.default_plan_budget_path(
+        "web", packet["source_decision_date"], state_dir=Path(state_dir),
+    )
+    try:
+        ledger_ref = path.resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError as exc:
+        raise EngineeringSmokeError("diagnostic budget ledger escaped the private root") from exc
+    if ledger_ref != packet["output_boundary"]["budget_ledger_ref"]:
+        raise EngineeringSmokeError("diagnostic budget ledger path differs from the packet")
+    ledger = _read_json(path)
+    if type(ledger) is not dict:
+        raise EngineeringSmokeError("diagnostic budget ledger is not an object")
+    return path, ledger
+
+
+def _ledger_metrics(ledger: Mapping[str, Any]) -> dict[str, int]:
+    counts = ledger.get("dispatch_counts")
+    vendors = ledger.get("vendor_dispatch_counts")
+    recovery_events = ledger.get("recovery_events")
+    if (
+        type(counts) is not dict
+        or type(vendors) is not dict
+        or type(recovery_events) is not list
+    ):
+        raise EngineeringSmokeError("diagnostic budget ledger counts are missing")
+    fields = {
+        "reservation_count": ledger.get("reservation_attempt_count"),
+        "query_reservation_count": len(ledger.get("query_reservations", [])),
+        "provider_call_count": counts.get("dispatch_count"),
+        "deepseek_call_count": vendors.get("deepseek"),
+        "tavily_call_count": vendors.get("tavily"),
+        "xai_call_count": vendors.get("xai"),
+        "retry_count": counts.get("retry_dispatch_count"),
+        "recovery_count": len(recovery_events),
+        "unknown_sibling_count": counts.get("unknown_dispatch_count"),
+    }
+    if any(type(value) is not int or value < 0 for value in fields.values()):
+        raise EngineeringSmokeError("diagnostic budget ledger counts are invalid")
+    return fields
+
+
+def _failure_reason(exc: BaseException | None) -> tuple[str | None, str | None]:
+    if exc is None:
+        return None, None
+    reason = getattr(exc, "reason", None)
+    detail = getattr(exc, "detail", None)
+    reason_map = {
+        "regroup_model_identity_changed": "served_model_mismatch",
+        "regroup_model_identity_missing": "served_model_missing",
+        "regroup_response_truncated": "finish_reason_not_stop",
+        "regroup_theme_count_exceeded": "max_themes_exceeded",
+        "regroup_response_invalid": "response_shape_invalid",
+    }
+    if isinstance(reason, str):
+        return reason_map.get(reason, reason), detail if isinstance(detail, str) else None
+    if isinstance(exc, plan_budget.PostPaymentDispatchError):
+        return "completion_ledger_error", None
+    if isinstance(exc, paid_gateway.PaidProviderError):
+        return "provider_call_failed", None
+    message = str(exc)
+    message_map = {
+        "DeepSeek response is not JSON": "response_not_json",
+        "DeepSeek response must be text": "response_content_missing",
+        "DeepSeek response shape is unsafe": "response_shape_invalid",
+    }
+    return message_map.get(message, "diagnostic_failure"), None
+
+
+def _post_check_status(
+    parsed_themes: list[Any] | None, *, failure_reason: str | None,
+) -> tuple[str, str]:
+    if parsed_themes is None:
+        status = "failed" if failure_reason == "max_themes_exceeded" else "not_evaluated"
+        return status, "not_evaluated"
+    status = (
+        "passed"
+        if len(parsed_themes) <= paid_gateway.DEEPSEEK_REGROUP_MAX_THEMES_PER_CHUNK
+        else "failed"
+    )
+    semantic_status = (
+        "passed"
+        if all(
+            isinstance(theme, dict)
+            and isinstance(theme.get("semantic_assertions"), list)
+            for theme in parsed_themes
+        )
+        else "failed"
+    )
+    return status, semantic_status
+
+
 def _summary(
     packet: Mapping[str, Any], *, status: str, provider_ref: Mapping[str, Any] | None,
     parse_status: str, parse_error_type: str | None, parsed_theme_count: int | None,
-    raw_hash_reread: bool, terminal_error_type: str | None = None,
+    parsed_themes: list[Any] | None, raw_hash_reread: bool, budget: Any,
+    terminal_error: BaseException | None = None,
+    parse_error: BaseException | None = None,
 ) -> dict[str, Any]:
+    ledger_path, ledger = _read_budget_ledger(packet, budget)
+    metrics = _ledger_metrics(ledger)
     served_model = provider_ref.get("served_model") if provider_ref is not None else None
     usage = provider_ref.get("usage") if provider_ref is not None else None
     finish_reason = provider_ref.get("finish_reason") if provider_ref is not None else None
-    model_match = served_model == packet["paid_boundary"]["request"]["model"]
-    theme_contract = (
-        parsed_theme_count is not None
-        and parsed_theme_count <= packet["paid_boundary"]["request"]["max_themes_per_chunk"]
+    model_match = web._model_identity_is_complete(
+        packet["paid_boundary"]["request"]["model"], served_model,
+    )
+    parse_reason, parse_detail = _failure_reason(parse_error)
+    terminal_reason, terminal_detail = _failure_reason(terminal_error)
+    failure_reason = parse_reason or terminal_reason
+    theme_status, semantic_status = _post_check_status(
+        parsed_themes, failure_reason=failure_reason,
+    )
+    expected_counts = packet["paid_boundary"]["call_counts"]
+    counts_match = (
+        metrics["tavily_call_count"] == expected_counts["tavily"]
+        and metrics["deepseek_call_count"] == expected_counts["deepseek"]
+        and metrics["xai_call_count"] == expected_counts["xai"]
+        and metrics["retry_count"] == expected_counts["retry"]
+        and metrics["recovery_count"] == expected_counts["recovery"]
+        and metrics["unknown_sibling_count"] == expected_counts["unknown_sibling"]
     )
     raw_ref = provider_ref.get("raw_receipt_ref") if provider_ref is not None else None
     raw_sha = provider_ref.get("response_sha256") if provider_ref is not None else None
@@ -274,24 +469,34 @@ def _summary(
         ))
         and finish_reason == "stop"
         and parse_status == "passed"
-        and theme_contract
-        and terminal_error_type is None
+        and theme_status == "passed"
+        and counts_match
+        and metrics["provider_call_count"] == 1
+        and metrics["reservation_count"] == 1
+        and terminal_error is None
     )
     return {
         "schema_name": "us_short_web_regroup_engineering_smoke_summary",
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "status": status,
         "transport_verdict": "PASS" if passed else "FAIL",
         "packet_id": packet["packet_id"],
         "source_decision_date": packet["source_decision_date"],
         "original_chunk_index": packet["input"]["target_chunk_index"],
-        "provider_call_count": 1,
-        "deepseek_call_count": 1,
-        "tavily_call_count": 0,
-        "xai_call_count": 0,
-        "retry_count": 0,
+        "provider_call_count": metrics["provider_call_count"],
+        "deepseek_call_count": metrics["deepseek_call_count"],
+        "tavily_call_count": metrics["tavily_call_count"],
+        "xai_call_count": metrics["xai_call_count"],
+        "retry_count": metrics["retry_count"],
+        "recovery_count": metrics["recovery_count"],
+        "unknown_sibling_count": metrics["unknown_sibling_count"],
+        "budget_reservation_count": metrics["reservation_count"],
+        "budget_query_reservation_count": metrics["query_reservation_count"],
+        "budget_ledger_ref": ledger_path.resolve().relative_to(ROOT.resolve()).as_posix(),
         "requested_model": packet["paid_boundary"]["request"]["model"],
+        "expected_served_model": packet["paid_boundary"]["request"]["expected_served_model"],
         "served_model": served_model,
+        "system_fingerprint": provider_ref.get("system_fingerprint") if provider_ref is not None else None,
         "max_tokens_requested": packet["paid_boundary"]["request"]["max_tokens"],
         "strict_json_requested": True,
         "response_format": packet["paid_boundary"]["request"]["response_format"],
@@ -303,8 +508,12 @@ def _summary(
         "raw_hash_reread": raw_hash_reread,
         "strict_parse_status": parse_status,
         "strict_parse_error_type": parse_error_type,
+        "strict_parse_error_reason": parse_reason,
+        "strict_parse_error_detail": parse_detail,
         "parsed_theme_count": parsed_theme_count,
-        "max_four_themes_status": "passed" if theme_contract else "failed",
+        "theme_count_status": theme_status,
+        "max_four_themes_status": theme_status,
+        "semantic_fields_status": semantic_status,
         "model_identity_match": model_match,
         "formal_decision_slots_occupied": False,
         "discovery_published": False,
@@ -314,16 +523,19 @@ def _summary(
         "boost_published": False,
         "score_effect": False,
         "replay_permitted": False,
-        "terminal_error_type": terminal_error_type,
+        "terminal_error_type": type(terminal_error).__name__ if terminal_error is not None else None,
+        "terminal_error_reason": terminal_reason,
+        "terminal_error_detail": terminal_detail,
         "executed_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
 def _reread_raw_hash(provider_ref: Mapping[str, Any]) -> bool:
+    raw_prefix = RAW_ROOT.resolve().relative_to(ROOT.resolve()).as_posix() + "/"
     raw_path = _safe_repo_file(
         ROOT,
         provider_ref["raw_receipt_ref"],
-        prefix="provider_samples/us_short_llm_theme_discovery_engineering_smoke/",
+        prefix=raw_prefix,
     )
     payload = _read_json(raw_path)
     if type(payload) is not dict or type(payload.get("response")) is not dict:
@@ -341,12 +553,14 @@ def run_one_shot(
     if packet is not None and packet != validated_packet:
         raise EngineeringSmokeError("packet argument does not match the validated tracked packet")
     packet = validated_packet
+    _assert_packet_contract(packet)
     if confirm_user_authorization != packet["packet_id"]:
         raise EngineeringSmokeError("exact packet authorization is required")
     if ROOT.resolve() != LIVE_ROOT.resolve():
         raise EngineeringSmokeError("paid smoke execution is allowed only from the fixed main tree")
     _assert_one_shot_roots_empty()
     rows = _frozen_target_rows(packet)
+    _validate_rendered_prompt(packet, rows)
     parent_plan = _build_diagnostic_parent_plan(packet)
     api_key = web._require_single_deepseek_api_key(os.environ.get("DEEPSEEK_API_KEY", ""))
     _write_private_plan(parent_plan)
@@ -385,7 +599,7 @@ def run_one_shot(
         persist_response=persist_response,
         consume_response=lambda request, response: web._consume_regroup_response(
             response,
-            expected_served_model=packet["paid_boundary"]["request"]["model"],
+            expected_served_model=None,
             chunk_index=int(request.scope.split(":", 1)[1]),
         ),
     )
@@ -402,23 +616,30 @@ def run_one_shot(
             parse_status="not_run",
             parse_error_type=None,
             parsed_theme_count=None,
+            parsed_themes=None,
             raw_hash_reread=False,
-            terminal_error_type=type(item.outcome.call_error).__name__,
+            budget=budget,
+            terminal_error=item.outcome.call_error,
         )
         web.publish_engineering_smoke_diagnostic(summary)
         return summary
     raw_hash_reread = _reread_raw_hash(provider_ref)
     parse_status = "passed"
     parse_error_type = None
+    parse_error = None
     parsed_theme_count: int | None = None
+    parsed_themes: list[Any] | None = None
     if item.item_error is not None:
         parse_status = "failed"
         parse_error_type = type(item.item_error).__name__
+        parse_error = item.item_error
     elif isinstance(item.value, tuple) and len(item.value) == 3:
-        parsed_theme_count = len(item.value[2])
+        parsed_themes = item.value[2] if isinstance(item.value[2], list) else None
+        parsed_theme_count = len(parsed_themes) if parsed_themes is not None else None
     else:
         parse_status = "failed"
         parse_error_type = "unexpected_parser_value"
+        parse_error = EngineeringSmokeError("unexpected parser value")
     summary = _summary(
         packet,
         status="live_authorized_engineering_smoke_response_captured",
@@ -426,8 +647,11 @@ def run_one_shot(
         parse_status=parse_status,
         parse_error_type=parse_error_type,
         parsed_theme_count=parsed_theme_count,
+        parsed_themes=parsed_themes,
         raw_hash_reread=raw_hash_reread,
-        terminal_error_type=(type(batch.stop_error).__name__ if batch.stop_error is not None else None),
+        budget=budget,
+        terminal_error=batch.stop_error,
+        parse_error=parse_error,
     )
     web.publish_engineering_smoke_diagnostic(summary)
     return summary

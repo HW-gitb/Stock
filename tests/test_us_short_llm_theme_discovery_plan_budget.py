@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import tempfile
 import threading
+import sys
+import types
 import unittest
 from unittest import mock
 
@@ -61,7 +63,7 @@ def _noop_persist(_request, _value):
     return None
 
 
-def _k5_response(*, content: str = '{"themes": []}', model: str = "deepseek-chat",
+def _k5_response(*, content: str = '{"themes": []}', model: str = "deepseek-v4-flash",
                  usage: dict | None = None, finish_reason: str = "stop") -> dict:
     return {
         "choices": [{"message": {"content": content}, "finish_reason": finish_reason}],
@@ -94,19 +96,45 @@ class _K5FakeDeepSeek:
 
 
 class _K5FakeBudget:
-    def __init__(self, *, parent_plan: dict, completion_error: BaseException | None = None):
+    def __init__(
+        self, *, parent_plan: dict, state_dir: Path,
+        completion_error: BaseException | None = None,
+    ):
         self.parent_plan = parent_plan
+        self.state_dir = state_dir
         self.completion_error = completion_error
         self.calls: list[tuple[str, str, str]] = []
+        self.ledger_path = plan_budget.default_plan_budget_path(
+            "web", DECISION_DATE, state_dir=state_dir,
+        )
+
+    def _write_ledger(self, status: str) -> None:
+        self.ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        self.ledger_path.write_text(json.dumps({
+            "reservation_attempt_count": 1,
+            "query_reservations": [{"last_status": status}],
+            "dispatch_counts": {
+                "stage1_dispatch_count": 0,
+                "stage2_dispatch_count": 1,
+                "retry_dispatch_count": 0,
+                "dispatch_count": 1,
+                "unknown_dispatch_count": 0,
+            },
+            "vendor_dispatch_counts": {"tavily": 0, "deepseek": 1, "xai": 0},
+            "recovery_events": [],
+        }), encoding="utf-8")
 
     def dispatch_with_outcome(self, provider, *, scope, stage, call):
         self.calls.append((provider, scope, stage))
+        self._write_ledger("in_flight")
         try:
             value = call()
         except BaseException as exc:
             if plan_budget.is_control_error(exc):
                 raise
+            self._write_ledger("failure")
             return plan_budget.DispatchOutcome(call_error=exc)
+        self._write_ledger("complete")
         return plan_budget.DispatchOutcome(value=value, completion_error=self.completion_error)
 
 
@@ -117,21 +145,21 @@ def _k5_smoke_fixture(
     publish_error: BaseException | None = None,
 ):
     packet = json.loads(
-        (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815.json").read_text(
+        (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v2.json").read_text(
             encoding="utf-8"
         )
     )
     with tempfile.TemporaryDirectory(prefix="us_short_k5_") as raw:
         root = Path(raw)
         state_dir = root / "state" / "us_short"
-        private_root = state_dir / "runs_private" / "soft_discovery_engineering_smoke"
-        provider_root = root / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke"
+        private_root = state_dir / "runs_private" / "soft_discovery_engineering_smoke_v2"
+        provider_root = root / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke_v2"
         parent_plan = {"plan_identity": "p" * 64}
         fake_client = _K5FakeDeepSeek(
             response if response is not None else _k5_response(), error=client_error,
         )
         fake_budget = _K5FakeBudget(
-            parent_plan=parent_plan, completion_error=completion_error,
+            parent_plan=parent_plan, state_dir=private_root, completion_error=completion_error,
         )
         target_rows = [{
             "source_id": "web:" + "a" * 64,
@@ -140,14 +168,18 @@ def _k5_smoke_fixture(
         }]
         packet_path = root / "packet.json"
         schema_path = root / "packet.schema.json"
-        summary_path = private_root / "us_short_web_regroup_engineering_smoke_20260815_summary.json"
+        summary_path = private_root / "us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json"
         patches = [
             mock.patch.object(smoke, "ROOT", root),
             mock.patch.object(smoke, "LIVE_ROOT", root),
             mock.patch.object(smoke, "PACKET_PATH", packet_path),
             mock.patch.object(smoke, "SCHEMA_PATH", schema_path),
             mock.patch.object(smoke, "PRIVATE_ROOT", private_root),
-            mock.patch.object(smoke, "PARENT_PLAN_PATH", private_root / "parent_plan.json"),
+            mock.patch.object(
+                smoke,
+                "PARENT_PLAN_PATH",
+                private_root / "us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json",
+            ),
             mock.patch.object(smoke, "RAW_ROOT", provider_root),
             mock.patch.object(smoke, "SUMMARY_PATH", summary_path),
             mock.patch.object(web, "ROOT", root),
@@ -155,6 +187,7 @@ def _k5_smoke_fixture(
             mock.patch.object(web, "_gitignored", return_value=True),
             mock.patch.object(smoke, "_validate_packet", return_value=packet),
             mock.patch.object(smoke, "_frozen_target_rows", return_value=target_rows),
+            mock.patch.object(smoke, "_validate_rendered_prompt", return_value="prompt"),
             mock.patch.object(smoke, "_build_diagnostic_parent_plan", return_value=parent_plan),
             mock.patch.object(smoke, "_private_gitignored", return_value=True),
             mock.patch.object(web, "_require_single_deepseek_api_key", return_value="sk-" + "a" * 16),
@@ -408,6 +441,24 @@ def _replace_all(source: str, needle: str, replacement: str) -> str:
 
 
 class PlanBudgetAcceptanceTests(unittest.TestCase):
+    def test_K5_sdk_clients_disable_transport_retries_for_both_openai_compatible_paths(self):
+        captured: list[dict] = []
+
+        class FakeOpenAI:
+            def __init__(self, **kwargs):
+                captured.append(kwargs)
+                self.chat = types.SimpleNamespace(completions=object())
+                self.responses = types.SimpleNamespace()
+
+        with mock.patch.dict(sys.modules, {"openai": types.SimpleNamespace(OpenAI=FakeOpenAI)}):
+            paid_gateway.DeepSeekClient(
+                "sk-" + "a" * 16, live_transport=_live_transport("deepseek"),
+            )
+            paid_gateway.GrokXSearchClient(
+                "xai-" + "b" * 16, live_transport=_live_transport("xai"),
+            )
+        self.assertEqual([row["max_retries"] for row in captured], [0, 0])
+
     def _reserved(self, parent: dict, state: Path) -> plan_budget.PlanDispatchBudget:
         return plan_budget.reserve_plan_budget(
             parent, state_dir=state, root=ROOT, gitignored=lambda _path: True,
@@ -871,12 +922,12 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
 
     def test_K5_packet_schema_and_diagnostic_parent_plan_freeze_one_web_stage2_call(self):
         packet = json.loads(
-            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815.json").read_text(
+            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v2.json").read_text(
                 encoding="utf-8"
             )
         )
         schema = json.loads(
-            (ROOT / "schemas/us_short_web_regroup_engineering_smoke_packet.schema.json").read_text(
+            (ROOT / "schemas/us_short_web_regroup_engineering_smoke_packet_v2.schema.json").read_text(
                 encoding="utf-8"
             )
         )
@@ -900,7 +951,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
 
     def test_K5_requires_exact_packet_confirmation_before_fixed_main_tree_gate(self):
         packet = json.loads(
-            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815.json").read_text(
+            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v2.json").read_text(
                 encoding="utf-8"
             )
         )
@@ -931,6 +982,10 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                     json.loads(path.read_text(encoding="utf-8"))["status"],
                     summary["status"],
                 )
+                with self.assertRaises(TypeError):
+                    web.publish_engineering_smoke_diagnostic(
+                        summary, path=Path(raw) / "caller_selected.json",
+                    )
                 with self.assertRaisesRegex(web.WebThemeDiscoveryError, "diagnostic-only"):
                     web.publish_engineering_smoke_diagnostic({
                         "status": "live_authorized_completed",
@@ -944,6 +999,30 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
             finally:
                 web.STATE_DIR = old_state
 
+    def test_K5_rendered_prompt_gate_calls_the_production_builder(self):
+        rows = [{
+            "source_id": "web:" + "a" * 64,
+            "url": "https://example.com/evidence",
+            "title": "Evidence title",
+            "content": "AAPL demand evidence",
+            "published_date": "2026-08-14T12:00:00+00:00",
+        }]
+        prompt = web._build_deepseek_prompt("20260815", rows)
+        packet = {
+            "source_decision_date": "20260815",
+            "input": {"rendered_prompt_sha256": web._sha256_bytes(prompt.encode("utf-8"))},
+        }
+        self.assertEqual(smoke._validate_rendered_prompt(packet, rows), prompt)
+        packet["input"]["rendered_prompt_sha256"] = "0" * 64
+        with self.assertRaisesRegex(smoke.EngineeringSmokeError, "prompt digest"):
+            smoke._validate_rendered_prompt(packet, rows)
+
+    def test_K5_unparsed_theme_status_keeps_semantic_not_evaluated(self):
+        self.assertEqual(
+            smoke._post_check_status(None, failure_reason="max_themes_exceeded"),
+            ("failed", "not_evaluated"),
+        )
+
     def test_K5_runner_does_not_reference_formal_decision_publisher_or_slots(self):
         source = Path(smoke.__file__).read_text(encoding="utf-8")
         self.assertNotIn("publish_decision_pair", source)
@@ -952,7 +1031,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
 
     def test_K5_required_2_run_one_shot_revalidates_tampered_packet_before_budget_or_client(self):
         packet = json.loads(
-            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815.json").read_text(
+            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v2.json").read_text(
                 encoding="utf-8"
             )
         )
@@ -968,6 +1047,62 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         validate.assert_called_once_with(smoke.PACKET_PATH)
         reserve.assert_not_called()
         client.assert_not_called()
+
+    def test_K5_new_summary_marks_identity_rejection_content_checks_not_evaluated(self):
+        with _k5_smoke_fixture(response=_k5_response(model=None)) as fixture:
+            summary = smoke.run_one_shot(
+                fixture["packet"], confirm_user_authorization=fixture["packet"]["packet_id"],
+            )
+        self.assertEqual(summary["transport_verdict"], "FAIL")
+        self.assertEqual(summary["strict_parse_error_reason"], "served_model_missing")
+        self.assertEqual(summary["strict_parse_error_detail"], "chunk[1]:served_model")
+        self.assertEqual(summary["max_four_themes_status"], "not_evaluated")
+        self.assertEqual(summary["semantic_fields_status"], "not_evaluated")
+        self.assertEqual(summary["requested_model"], "deepseek-chat")
+        self.assertIsNone(summary["served_model"])
+        self.assertEqual(summary["system_fingerprint"], "fp_test")
+        self.assertEqual(summary["budget_ledger_ref"], fixture["packet"]["output_boundary"]["budget_ledger_ref"])
+        self.assertEqual(summary["deepseek_call_count"], 1)
+
+    def test_K5_new_summary_reads_counts_from_the_budget_ledger(self):
+        with _k5_smoke_fixture() as fixture:
+            real_write = fixture["budget"]._write_ledger
+
+            def undercount(status):
+                real_write(status)
+                ledger = json.loads(fixture["budget"].ledger_path.read_text(encoding="utf-8"))
+                ledger["vendor_dispatch_counts"]["deepseek"] = 0
+                fixture["budget"].ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+            with mock.patch.object(fixture["budget"], "_write_ledger", side_effect=undercount):
+                summary = smoke.run_one_shot(
+                    fixture["packet"],
+                    confirm_user_authorization=fixture["packet"]["packet_id"],
+                )
+        self.assertEqual(summary["deepseek_call_count"], 0)
+        self.assertEqual(summary["transport_verdict"], "FAIL")
+
+    def test_K5_packet_prompt_and_runtime_output_mutations_stop_before_budget_or_client(self):
+        with _k5_smoke_fixture() as fixture:
+            fixture["packet"]["input"]["rendered_prompt_sha256"] = "0" * 64
+            with self.assertRaisesRegex(smoke.EngineeringSmokeError, "target or prompt binding"):
+                smoke.run_one_shot(
+                    fixture["packet"],
+                    confirm_user_authorization=fixture["packet"]["packet_id"],
+                )
+            fixture["reserve_mock"].assert_not_called()
+            fixture["client_constructor"].assert_not_called()
+
+        with _k5_smoke_fixture() as fixture:
+            formal_path = fixture["root"] / "state" / "us_short" / "formal.json"
+            with mock.patch.object(smoke, "SUMMARY_PATH", formal_path):
+                with self.assertRaisesRegex(smoke.EngineeringSmokeError, "runtime output paths"):
+                    smoke.run_one_shot(
+                        fixture["packet"],
+                        confirm_user_authorization=fixture["packet"]["packet_id"],
+                    )
+            fixture["reserve_mock"].assert_not_called()
+            fixture["client_constructor"].assert_not_called()
 
     def test_K5_13_1_target_chunk_is_derived_from_production_order_not_receipt_storage_order(self):
         fetched_at = datetime(2026, 8, 15, tzinfo=timezone.utc)
@@ -1129,7 +1264,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
             self.assertEqual(request["temperature"], 0)
             self.assertEqual(request["max_tokens"], paid_gateway.DEEPSEEK_REGROUP_MAX_TOKENS)
             self.assertEqual(request["response_format"], {"type": "json_object"})
-            self.assertEqual(summary["served_model"], "deepseek-chat")
+            self.assertEqual(summary["served_model"], "deepseek-v4-flash")
             self.assertEqual(summary["usage"], response["usage"])
             self.assertEqual(summary["finish_reason"], "stop")
             self.assertEqual(summary["original_chunk_index"], 1)
@@ -1143,7 +1278,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         usage_missing["usage"] = None
         variants = {
             "served_model_missing": _k5_response(model=None),
-            "served_model_drift": _k5_response(model="deepseek-v4-flash"),
+            "served_model_empty": _k5_response(model=""),
             "usage_missing": usage_missing,
             "finish_length": _k5_response(finish_reason="length"),
             "five_themes": _k5_response(content=json.dumps({"themes": [{}, {}, {}, {}, {}]})),

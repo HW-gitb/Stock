@@ -15,16 +15,16 @@ import sys
 from typing import Any, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815.json"
-PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet.schema.json"
+PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v2.json"
+PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet_v2.schema.json"
 TRANSPORT_SUMMARY_PATH = (
-    ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke"
-    / "us_short_web_regroup_engineering_smoke_20260815_summary.json"
+    ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke_v2"
+    / "us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json"
 )
-TRANSPORT_RAW_ROOT = ROOT / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke"
+TRANSPORT_RAW_ROOT = ROOT / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke_v2"
 REPLAY_SUMMARY_PATH = (
-    ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke"
-    / "us_short_web_regroup_replay_20260815_summary.json"
+    ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke_v2"
+    / "us_short_web_regroup_replay_20260815_chunk1_summary.json"
 )
 SIC_SNAPSHOT_PATH = (
     ROOT / "state" / "us_short" / "sec_sic_classification_snapshots"
@@ -111,11 +111,17 @@ def _validate_transport_summary(packet: Mapping[str, Any]) -> dict[str, Any]:
     summary = _read_json(TRANSPORT_SUMMARY_PATH)
     if type(summary) is not dict:
         raise WebRegroupReplayError("fifth-knife transport summary is not an object")
+    request = packet.get("paid_boundary", {}).get("request", {})
     if (
         summary.get("packet_id") != packet["packet_id"]
         or summary.get("source_decision_date") != EXPECTED_DECISION_DATE
         or summary.get("transport_verdict") != "PASS"
         or summary.get("status") != "live_authorized_engineering_smoke_response_captured"
+        or summary.get("original_chunk_index") != packet["input"]["target_chunk_index"]
+        or summary.get("requested_model") != request.get("model")
+        or summary.get("expected_served_model") != request.get("expected_served_model")
+        or summary.get("model_identity_match") is not True
+        or summary.get("budget_ledger_ref") != packet["output_boundary"]["budget_ledger_ref"]
     ):
         raise WebRegroupReplayError("fifth-knife transport summary is not a PASS for this packet")
     if (
@@ -124,6 +130,8 @@ def _validate_transport_summary(packet: Mapping[str, Any]) -> dict[str, Any]:
         or summary.get("tavily_call_count") != 0
         or summary.get("xai_call_count") != 0
         or summary.get("retry_count") != 0
+        or summary.get("recovery_count") != 0
+        or summary.get("unknown_sibling_count") != 0
         or summary.get("raw_persisted_before_parse") is not True
         or summary.get("raw_hash_reread") is not True
         or summary.get("strict_parse_status") != "passed"
@@ -210,10 +218,11 @@ def _load_target_inputs(packet: Mapping[str, Any]) -> tuple[list[dict[str, Any]]
 
 
 def _load_transport_response(summary: Mapping[str, Any]) -> tuple[dict[str, Any], datetime]:
+    raw_prefix = TRANSPORT_RAW_ROOT.resolve().relative_to(ROOT.resolve()).as_posix() + "/"
     raw_path = _safe_repo_file(
         ROOT,
         summary.get("raw_provider_response_ref"),
-        prefix="provider_samples/us_short_llm_theme_discovery_engineering_smoke/",
+        prefix=raw_prefix,
     )
     raw = _read_json(raw_path)
     if type(raw) is not dict or raw.get("provider") != "deepseek" or type(raw.get("response")) is not dict:
@@ -308,7 +317,7 @@ def run_replay() -> dict[str, Any]:
     response, response_fetched_at = _load_transport_response(transport_summary)
     served_model, _fingerprint, themes = web._consume_regroup_response(
         response,
-        expected_served_model=transport_summary.get("requested_model"),
+        expected_served_model=None,
         chunk_index=packet["input"]["target_chunk_index"],
     )
     target_ids = {row["source_id"] for row in target_rows}
