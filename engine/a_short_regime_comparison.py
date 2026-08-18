@@ -63,6 +63,46 @@ def _index_close_map(csi1000: pd.DataFrame, as_of_now: str | None) -> tuple[list
     return dates, close
 
 
+def _backfill_forward_return_values(forward_returns: dict, anchor: str,
+                                    dates: list, close: dict) -> dict:
+    fr = dict(forward_returns or {})
+    a_pos = {d: i for i, d in enumerate(dates)}.get(str(anchor))
+    a_close = close.get(str(anchor))
+    anchor_ok = a_pos is not None and a_close is not None
+    for h, ndays in _HORIZON_DAYS.items():
+        existing = fr.get(h)
+        t_close = None
+        if anchor_ok:
+            t_pos = a_pos + ndays
+            if t_pos < len(dates):
+                t_close = close.get(dates[t_pos])
+        available = anchor_ok and t_close is not None
+        if existing is not None:
+            if not available:
+                raise ValueError(
+                    f"backfill_forward_returns: existing forward_returns.{h}={existing} on {anchor} "
+                    "cannot be verified — target horizon not available ≤ as_of_now (not elapsed / "
+                    "out of series); refusing to count an unverifiable look-ahead value"
+                )
+            recomputed = round((t_close / a_close - 1.0) * 100.0, 6)
+            if abs(float(existing) - recomputed) > 1e-6:
+                raise ValueError(
+                    f"backfill_forward_returns: existing forward_returns.{h}={existing} on {anchor} "
+                    f"!= deterministic CSI1000 return {recomputed}; corrupt prefilled value"
+                )
+        elif available:
+            fr[h] = round((t_close / a_close - 1.0) * 100.0, 6)
+    return {h: fr.get(h, None) for h in _HORIZON_DAYS}
+
+
+def backfill_forward_return_values(forward_returns: dict, anchor: str,
+                                   csi1000: pd.DataFrame,
+                                   as_of_now: str | None = None) -> dict:
+    """Shared pure CSI1000 raw close-to-close backfill used by comparison consumers."""
+    dates, close = _index_close_map(csi1000, as_of_now)
+    return _backfill_forward_return_values(forward_returns, str(anchor), dates, close)
+
+
 def backfill_forward_returns(records: Iterable[dict], csi1000: pd.DataFrame,
                              as_of_now: str | None = None) -> list[dict]:
     """Fill elapsed forward returns on each record from the CSI1000 series; return updated copies.
@@ -75,40 +115,13 @@ def backfill_forward_returns(records: Iterable[dict], csi1000: pd.DataFrame,
     RAISES; only a matching value is preserved. Each updated record is re-validated; invalid → raises.
     """
     dates, close = _index_close_map(csi1000, as_of_now)
-    pos = {d: i for i, d in enumerate(dates)}
     out = []
     for rec in records:
         r = json.loads(json.dumps(rec))   # deep copy (records are plain JSON)
-        fr = r.get("forward_returns") or {}
         anchor = str(r.get("as_of"))
-        a_pos = pos.get(anchor)
-        a_close = close.get(anchor)              # finite-positive or None (from _index_close_map)
-        anchor_ok = a_pos is not None and a_close is not None
-        for h, ndays in _HORIZON_DAYS.items():
-            existing = fr.get(h)
-            t_close = None
-            if anchor_ok:
-                t_pos = a_pos + ndays
-                if t_pos < len(dates):
-                    t_close = close.get(dates[t_pos])
-            available = anchor_ok and t_close is not None   # the h-th day after anchor has elapsed
-            if existing is not None:
-                # an existing value is trusted only if it is AUDITABLE: the horizon must have elapsed
-                # under as_of_now AND the stored value must equal the deterministic CSI1000 return.
-                if not available:
-                    raise ValueError(
-                        f"backfill_forward_returns: existing forward_returns.{h}={existing} on {anchor} "
-                        f"cannot be verified — target horizon not available ≤ as_of_now (not elapsed / "
-                        f"out of series); refusing to count an unverifiable look-ahead value")
-                recomputed = round((t_close / a_close - 1.0) * 100.0, 6)
-                if abs(float(existing) - recomputed) > 1e-6:
-                    raise ValueError(
-                        f"backfill_forward_returns: existing forward_returns.{h}={existing} on {anchor} "
-                        f"!= deterministic CSI1000 return {recomputed}; corrupt prefilled value")
-                # matches → keep as-is (no overwrite)
-            elif available:
-                fr[h] = round((t_close / a_close - 1.0) * 100.0, 6)
-        r["forward_returns"] = {h: fr.get(h, None) for h in _HORIZON_DAYS}
+        r["forward_returns"] = _backfill_forward_return_values(
+            r.get("forward_returns") or {}, anchor, dates, close
+        )
         r["forward_returns_pending"] = [h for h in _HORIZON_DAYS if r["forward_returns"][h] is None]
         r["backfill_complete"] = not r["forward_returns_pending"]
         validate_comparison_record(r)              # self-check the updated record

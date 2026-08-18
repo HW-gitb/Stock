@@ -109,6 +109,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             "stage_counts": [
                 {"stage": "l1_industry_leader", "excluded_count": 1},
                 {"stage": "l2_quality_risk", "excluded_count": 1},
+                {"stage": "loss_making_admission", "excluded_count": 1},
             ],
         }
 
@@ -129,6 +130,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
         self.assertNotIn("rank_unexpected", summary["excluded_counts"])
         self.assertEqual(summary["rank_exclusion_counts"]["l1_industry_leader"], 1)
         self.assertEqual(summary["rank_exclusion_counts"]["l2_quality_risk"], 1)
+        self.assertEqual(summary["rank_exclusion_counts"]["loss_making_admission"], 1)
         self.assertEqual(summary["rank_exclusion_counts"]["rank_unexpected"], 0)
         self.assertEqual(summary["excluded_counts"]["short_history_momentum"], 2)
         self.assertEqual(summary["excluded_counts"]["financial_data_unavailable"], 1)

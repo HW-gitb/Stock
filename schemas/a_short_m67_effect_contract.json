@@ -333,7 +333,7 @@
       "source_prefixes": [
         "universe_summary"
       ],
-      "source_paths_sha256": "669d40c9388ff8b49d1791e661c71a27cef7f0025cbf282129f7e672cd78f06a",
+      "source_paths_sha256": "22c1ed704bf5ab1b4ec73cb6028e77564b69af8353c471060c94a65131cfb22d",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
@@ -903,6 +903,12 @@
       "terminal_surface": "A-EGS/egs_main.py candidate ranking (sort_values final_score/l4_score/pct_20d_n) and reports[].m67.table.EGS分",
       "mutation_evidence": "changing final_score changes the EGS rank order that selects candidates; the same value is carried to the M6.7 table EGS分 column via a_short_weekly_pipeline.py:599 -> a_short_phase5_engine.py:1795"
     },
+    "universe_summary.rank_exclusion_counts.loss_making_admission": {
+      "category": "upstream_candidate_set_or_rank",
+      "consumer_ref": "A-EGS/egs_main.py::loss_making_admission -> runners/a_short_weekly_pipeline.py::_build_exclusion_summary",
+      "terminal_surface": "rank_universe_reconciliation and weekly.exclusion_summary candidate_admission row",
+      "mutation_evidence": "changing the loss-making admission count changes the published candidate-admission exclusion summary while the hard admission partition controls the post-admission candidate set"
+    },
     "market_context.breadth.csi300_pct_change_window": {
       "category": "m67_main_decision",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_northbound_control_from_analysis -> _apply_northbound_market_gate",
@@ -1267,7 +1273,7 @@
     "identity_batch_gate": "partial_consumption",
     "l3_coverage_provenance": "true_dangling",
     "runtime_configuration": "main_decision",
-    "universe_selection": "true_dangling",
+    "universe_selection": "partial_consumption",
     "market_context": "partial_consumption",
     "account_context": "true_dangling",
     "candidate_identity_selection": "true_dangling",
@@ -2670,6 +2676,7 @@
     "universe_summary.listed_count",
     "universe_summary.rank_exclusion_counts.l1_industry_leader",
     "universe_summary.rank_exclusion_counts.l2_quality_risk",
+    "universe_summary.rank_exclusion_counts.loss_making_admission",
     "universe_summary.rank_exclusion_counts.rank_unexpected",
     "universe_summary.watch_count"
   ],

@@ -291,7 +291,21 @@ class ProfileWatchPoolTests(unittest.TestCase):
             source,
         )
         self.assertIn(
-            "watch_df  = select_profile_watch_pool(watch_pool_eligible_frame(df_full), top_n=watch_n)",
+            "watch_df  = _pre_admission_watch[\n"
+            "        _pre_admission_watch[\"ts_code\"].astype(str).isin(_admitted_codes)\n"
+            "    ].copy()",
+            source,
+        )
+        self.assertIn(
+            "_pre_admission_top15 = select_profile_watch_pool(\n"
+            "        watch_pool_eligible_frame(df_l5_scored), top_n=15\n"
+            "    )",
+            source,
+        )
+        self.assertIn(
+            "_pre_admission_watch = select_profile_watch_pool(\n"
+            "        watch_pool_eligible_frame(df_l5_scored), top_n=CONF[\"watch_n\"]\n"
+            "    )",
             source,
         )
 

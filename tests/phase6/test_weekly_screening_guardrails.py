@@ -59,6 +59,13 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
             r"(?m)^\s*watch_df\s*=\s*select_profile_watch_pool\([^\n]+\)",
             source,
         )
+        if watch_match is None:
+            watch_match = re.search(
+                r"(?ms)^\s*watch_df\s*=\s*_pre_admission_watch\[\s*"
+                r"_pre_admission_watch\[\"ts_code\"\]\.astype\(str\)\.isin\(_admitted_codes\)\s*"
+                r"\]\.copy\(\)",
+                source,
+            )
         self.assertIsNotNone(watch_match)
         watch_pos = watch_match.start()
         self.assertIn("_ov_pool = watch_df[[", source)
@@ -374,6 +381,14 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("[switch]$SkipRegime", text)                       # opt-out switch exists
         self.assertIn("regime_daily_ledger.json", text)                  # ledger-existence check
         self.assertIn("$RegimeArgs += '--bootstrap'", text)              # absent ledger -> one-time backfill
+        self.assertIn("--loss-making-rank-csv", text)
+        self.assertIn("--loss-making-tracker-path", text)
+        regime_start = text.index("if ($SkipRegime)")
+        live_start = text.index("} else {", regime_start)
+        stage5_end = text.index("\n# P4:", live_start)
+        self.assertNotIn("--loss-making-rank-csv", text[regime_start:live_start])
+        self.assertIn("--loss-making-rank-csv", text[live_start:stage5_end])
+        self.assertIn("loss_making_exclusion_tracker.json", text[live_start:stage5_end])
         self.assertIn("only live runs advance the forward regime evidence", text)  # historical replay skipped
         self.assertIn("does NOT block the weekly", text)                 # non-blocking comparison-only sidecar
         self.assertIn("forward_tracker.py backfill --windows 5,10,20", text)

@@ -1533,7 +1533,7 @@
         "object",
         "null"
       ],
-      "description": "4.2 Round2: L0 硬否决、无 M6.7 个股行的批次级风险摘要(counts-only, 源 analysis_input.universe_summary.excluded_counts；post-L0 排名淘汰不属于本摘要)。public: 仅计数, 不含个股代码/持仓, 故不暴露隐私(运行级私密路由仍按 --account 整体生效)。可选/缺省 null(本轮无 L0 过滤)。",
+      "description": "4.2/4.1: L0 硬否决与扣非 TTM 候选准入硬排除的批次级风险摘要(counts-only, 源 analysis_input.universe_summary)。public: 仅计数, 不含个股代码/持仓, 故不暴露隐私(运行级私密路由仍按 --account 整体生效)。可选/缺省 null(本轮无排除)。",
       "additionalProperties": false,
       "required": [
         "as_of",
@@ -1574,7 +1574,8 @@
                 "enum": [
                   "l0_filter",
                   "l2_filter",
-                  "stage3_filter"
+                  "stage3_filter",
+                  "candidate_admission"
                 ]
               },
               "veto_class": {

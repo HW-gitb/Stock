@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_short_loss_making_exclusion_tracker/1.0.0/schema.json",
+  "title": "A-short loss-making exclusion tracker",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "forward_return_basis", "records"],
+  "properties": {
+    "schema_name": {"const": "a_short_loss_making_exclusion_tracker"},
+    "schema_version": {"const": "1.0.0"},
+    "forward_return_basis": {
+      "const": {
+        "benchmark": "000852.SH",
+        "benchmark_name": "CSI1000",
+        "measure": "forward_close_to_close_simple_return",
+        "horizons_trading_days": {"h1": 1, "h3": 3, "h5": 5, "h10": 10},
+        "unit": "percent",
+        "price_basis": "index_close_unadjusted",
+        "cost_basis": "gross",
+        "scope": "market_level_regime_indicator"
+      }
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "as_of", "run_revision_id", "official_rank_reconciliation", "ts_code",
+          "ttm_profit_dedt", "final_score", "pre_admission_rank", "exclusion_reason",
+          "forward_returns", "forward_returns_pending", "backfill_complete"
+        ],
+        "properties": {
+          "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "run_revision_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+          "official_rank_reconciliation": {
+            "type": "string",
+            "pattern": "^result/a_short/[0-9]{8}/revisions/[0-9a-f]{32}/rank_universe_reconciliation\\.csv$"
+          },
+          "ts_code": {"type": "string", "minLength": 1},
+          "ttm_profit_dedt": {"type": ["number", "null"]},
+          "final_score": {"type": "number"},
+          "pre_admission_rank": {"type": "integer", "minimum": 1},
+          "exclusion_reason": {
+            "enum": [
+              "loss_making_ttm_profit_dedt_non_positive",
+              "ttm_profit_dedt_unavailable"
+            ]
+          },
+          "forward_returns": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["h1", "h3", "h5", "h10"],
+            "properties": {
+              "h1": {"type": ["number", "null"]},
+              "h3": {"type": ["number", "null"]},
+              "h5": {"type": ["number", "null"]},
+              "h10": {"type": ["number", "null"]}
+            }
+          },
+          "forward_returns_pending": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"enum": ["h1", "h3", "h5", "h10"]}
+          },
+          "backfill_complete": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

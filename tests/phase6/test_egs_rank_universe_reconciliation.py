@@ -1,11 +1,18 @@
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
 
+from engine.a_short_loss_making_admission import (
+    LOSS_MAKING_REASON,
+    UNAVAILABLE_REASON,
+    apply_loss_making_admission,
+)
+from runners.backtest_rank import load_eligible_universe
 
 ROOT = Path(__file__).resolve().parents[2]
 EGS_SCRIPT = ROOT / "A-EGS" / "egs_main.py"
@@ -74,6 +81,159 @@ class RankUniverseReconciliationTest(unittest.TestCase):
         self.assertEqual(by_code["B"]["reason"], "l1_industry_leader_elim")
         self.assertEqual(by_code["C"]["reason"], "l2_quality_or_risk_elim")
         self.assertEqual(by_code["A"]["outcome"], "ranked")
+
+    def test_loss_making_admission_partitions_pre_rank_without_rescoring(self) -> None:
+        scored = pd.DataFrame([
+            {"ts_code": "A", "ttm_profit_dedt": 10.0, "final_score": 100.0,
+             "l4_score": 90.0, "pct_20d_n": 5.0, "tier": "Tier1",
+             "l1_name": "L1-A", "l2_name": "L2-A", "pe_ttm": None, "q0_profit_dedt": -1.0},
+            {"ts_code": "B", "ttm_profit_dedt": 0.0, "final_score": 99.0,
+             "l4_score": 89.0, "pct_20d_n": 4.0, "tier": "Tier1",
+             "l1_name": "L1-B", "l2_name": "L2-B", "pe_ttm": 20.0, "q0_profit_dedt": 2.0},
+            {"ts_code": "C", "ttm_profit_dedt": 8.0, "final_score": 98.0,
+             "l4_score": 88.0, "pct_20d_n": 3.0, "tier": "Tier1",
+             "l1_name": "L1-C", "l2_name": "L2-C", "pe_ttm": None, "q0_profit_dedt": None},
+            {"ts_code": "D", "ttm_profit_dedt": None, "final_score": 97.0,
+             "l4_score": 87.0, "pct_20d_n": 2.0, "tier": "Tier1",
+             "l1_name": "L1-D", "l2_name": "L2-D", "pe_ttm": 20.0, "q0_profit_dedt": 2.0},
+        ])
+        admitted, reasons, audit = apply_loss_making_admission(scored)
+
+        pre = self.egs_main.select_profile_watch_pool(scored, top_n=15)
+        post = pre[pre["ts_code"].isin(set(admitted["ts_code"]))]
+        self.assertEqual(pre["ts_code"].tolist(), ["A", "B", "C", "D"])
+        self.assertEqual(post["ts_code"].tolist(), ["A", "C"])
+        self.assertEqual(reasons["B"], LOSS_MAKING_REASON)
+        self.assertEqual(reasons["D"], UNAVAILABLE_REASON)
+        self.assertEqual(audit.set_index("ts_code").loc["B", "pre_admission_rank"], 2)
+        pd.testing.assert_frame_equal(
+            admitted[["ts_code", "final_score", "tier"]].reset_index(drop=True),
+            scored.loc[[0, 2], ["ts_code", "final_score", "tier"]].reset_index(drop=True),
+        )
+
+    def test_data_health_accepts_full_l5_artifact_when_admission_excludes_rows(self) -> None:
+        scored = pd.DataFrame([
+            {"ts_code": "A", "ttm_profit_dedt": 10.0, "final_score": 100.0,
+             "l4_score": 90.0, "pct_20d_n": 5.0, "tier": "Tier1",
+             "l1_name": "行业A", "l2_name": "行业B", "close": 10.0,
+             "pe": 20.0, "pb": 2.0},
+            {"ts_code": "B", "ttm_profit_dedt": 8.0, "final_score": 99.0,
+             "l4_score": 89.0, "pct_20d_n": 4.0, "tier": "Tier1",
+             "l1_name": "行业A", "l2_name": "行业B", "close": 11.0,
+             "pe": 21.0, "pb": 2.1},
+            {"ts_code": "C", "ttm_profit_dedt": 0.0, "final_score": 98.0,
+             "l4_score": 88.0, "pct_20d_n": 3.0, "tier": "Tier1",
+             "l1_name": "行业A", "l2_name": "行业B", "close": 12.0,
+             "pe": 22.0, "pb": 2.2},
+        ])
+        admitted, reasons, _audit = apply_loss_making_admission(scored)
+        summary, _detail = self.egs_main.build_rank_universe_reconciliation(
+            df_l0=_frame("A", "B", "C"),
+            feature_source=_feature_frame("A", "B", "C"),
+            stages=[
+                ("l5_rank", scored, False, "l5_unexpected_row_loss"),
+                ("loss_making_admission", admitted, True, reasons),
+            ],
+            sources={},
+        )
+        analysis_input = {
+            "schema_name": "analysis_input",
+            "schema_version": self.egs_main.ANALYSIS_INPUT_SCHEMA_VERSION,
+            "source": {
+                "screening_engine_version": self.egs_main.EGS_VERSION,
+                "data_provider": "tushare",
+            },
+            "candidates": [
+                {"data_quality": {"completeness_score": 100}}
+                for _ in range(len(admitted))
+            ],
+        }
+
+        health = self.egs_main.build_data_health(
+            df_full=scored,
+            watch_df=admitted,
+            tier1_final=admitted,
+            analysis_input=analysis_input,
+            latest_td="20260714",
+            analysis_path=str(EGS_SCRIPT),
+            snapshot_path=str(EGS_SCRIPT),
+            candidates_path=str(EGS_SCRIPT),
+            tier1_csv_path=str(EGS_SCRIPT),
+            full_csv_path=str(EGS_SCRIPT),
+            rank_reconciliation=summary,
+        )
+
+        self.assertEqual(summary["ranked_count"], 2)
+        self.assertEqual(summary["expected_excluded_count"], 1)
+        self.assertNotEqual(summary["ranked_count"], len(scored))
+        self.assertEqual(health["metrics"]["full_count"], len(scored))
+        self.assertNotIn(
+            "rank_universe_reconciliation",
+            {item["check"] for item in health["errors"]},
+        )
+
+    def test_admission_does_not_reselect_a_non_monotonic_pool(self) -> None:
+        groups = [
+            ("A", "A3"), ("A", "A2"), ("A", "A2"), ("B", "B2"), ("C", "C2"),
+            ("A", "A1"), ("B", "B1"), ("B", "B2"), ("C", "C1"), ("C", "C2"),
+            ("B", "B3"), ("A", "A3"), ("A", "A2"), ("A", "A1"), ("A", "A3"),
+            ("C", "C1"), ("B", "B3"), ("A", "A2"), ("C", "C1"), ("C", "C1"),
+            ("B", "B2"), ("C", "C1"), ("B", "B1"), ("C", "C1"), ("B", "B2"),
+        ]
+        scored = pd.DataFrame([
+            {"ts_code": f"C{index:02d}", "ttm_profit_dedt": 0.0 if index == 3 else 1.0,
+             "final_score": 100.0 - index, "l4_score": 90.0 - index,
+             "pct_20d_n": 10.0 - index / 10.0, "tier": "Tier1",
+             "l1_name": l1, "l2_name": l2}
+            for index, (l1, l2) in enumerate(groups)
+        ])
+        admitted, _reasons, _audit = apply_loss_making_admission(scored)
+        pre = self.egs_main.select_profile_watch_pool(scored, top_n=15)
+        expected = pre[pre["ts_code"].isin(set(admitted["ts_code"]))]
+        reselected = self.egs_main.select_profile_watch_pool(admitted, top_n=15)
+
+        self.assertIn("C05", expected["ts_code"].tolist())
+        self.assertNotIn("C05", reselected["ts_code"].tolist())
+        self.assertEqual(expected["ts_code"].tolist(), [
+            "C00", "C04", "C05", "C06", "C07", "C08", "C09", "C10",
+            "C11", "C12", "C13", "C15", "C16", "C17",
+        ])
+
+    def test_production_gate_keeps_full_rank_artifact_and_filters_existing_pools(self) -> None:
+        source = EGS_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn(
+            "_pre_admission_top15 = select_profile_watch_pool(\n"
+            "        watch_pool_eligible_frame(df_l5_scored), top_n=15\n"
+            "    )",
+            source,
+        )
+        self.assertIn(
+            "top50 = _pre_selector_top[\n"
+            "        _pre_selector_top[\"ts_code\"].astype(str).isin(_admitted_codes)\n"
+            "    ].copy()",
+            source,
+        )
+        self.assertIn("df_full = df_l5_scored", source)
+        self.assertNotIn(
+            "top50 = select_profile_watch_pool(\n"
+            "        watch_pool_eligible_frame(df_full), top_n=CONF[\"top_n\"]\n"
+            "    )",
+            source,
+        )
+
+    def test_full_rank_writer_keeps_loss_row_for_backtest_eligible_consumer(self) -> None:
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            source_root = Path(tmp)
+            path = source_root / "_intermediate" / "egs_full_20260817.csv"
+            full_rank = pd.DataFrame([
+                {"ts_code": "LOSS.SZ", "tier": "Tier1", "final_score": 95.0,
+                 "l4_score": 80.0, "pct_20d_n": 4.0},
+                {"ts_code": "GOOD.SZ", "tier": "Tier1", "final_score": 90.0,
+                 "l4_score": 79.0, "pct_20d_n": 3.0},
+            ])
+            self.egs_main.write_csv_atomic(full_rank, str(path), index=False)
+            loaded = load_eligible_universe(source_root, ["20260817"])
+            self.assertEqual(set(loaded["ts_code"]), {"LOSS.SZ", "GOOD.SZ"})
 
     def test_score_l1_records_the_exact_terminal_reason(self) -> None:
         frame = pd.DataFrame({

@@ -116,6 +116,7 @@ from engine.data.analysis_input_contract import (
     validate_json_schema,
 )
 from engine.a_short_observability import safe_exception_summary
+from engine.a_short_loss_making_admission import apply_loss_making_admission
 from engine.data.a_share_board_scope import is_a_share_main_board
 from engine.egs_industry_heat import (
     compute_industry_heat_score, get_active_weights, final_score_and_tier,
@@ -206,7 +207,7 @@ logging.basicConfig(
 log = logging.getLogger("EGS")
 
 EGS_VERSION = "v7.13"
-ANALYSIS_INPUT_SCHEMA_VERSION = "1.4.0"
+ANALYSIS_INPUT_SCHEMA_VERSION = "1.5.0"
 SUSPEND_DAILY_COVERAGE_LOG_SCHEMA_VERSION = "1.0.0"
 IV_FEED_STATUSES = (
     "not_requested",
@@ -1077,7 +1078,8 @@ def _code_set(value):
     }
 
 
-def build_rank_universe_reconciliation(df_l0, stages, sources, *, feature_source):
+def build_rank_universe_reconciliation(df_l0, stages, sources, *, feature_source,
+                                       rank_annotations=None):
     """Account for every post-L0 symbol and expose source truncation.
 
     ``stages`` entries are ``(name, dataframe, expected_exclusion, reason)``.
@@ -1176,6 +1178,28 @@ def build_rank_universe_reconciliation(df_l0, stages, sources, *, feature_source
     source_features = feature_source[["ts_code", *feature_columns]].copy()
     source_features["ts_code"] = source_features["ts_code"].astype(str)
     detail = detail.merge(source_features, on="ts_code", how="left", validate="one_to_one")
+    annotation_columns = [
+        "decision_as_of", "run_revision_id", "ttm_profit_dedt", "final_score",
+        "pre_admission_rank", "pre_admission_top15", "post_admission_top15",
+    ]
+    for column in annotation_columns:
+        detail[column] = None
+    if rank_annotations is not None:
+        if not isinstance(rank_annotations, pd.DataFrame) or "ts_code" not in rank_annotations.columns:
+            raise RuntimeError("rank reconciliation annotations must be a dataframe with ts_code")
+        if rank_annotations["ts_code"].duplicated().any():
+            raise RuntimeError("rank reconciliation annotations have duplicate ts_code")
+        available_columns = [
+            column for column in annotation_columns if column in rank_annotations.columns
+        ]
+        annotation_frame = rank_annotations[["ts_code", *available_columns]].copy()
+        annotation_frame["ts_code"] = annotation_frame["ts_code"].astype(str)
+        detail = detail.drop(columns=annotation_columns).merge(
+            annotation_frame, on="ts_code", how="left", validate="one_to_one"
+        )
+        for column in annotation_columns:
+            if column not in detail.columns:
+                detail[column] = None
 
     source_coverage = {}
     source_coverage_failure_count = 0
@@ -1536,6 +1560,9 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 ),
                 "rank_unexpected": int(
                     (rank_reconciliation or {}).get("unexpected_stage_change_count", 0)
+                ),
+                "loss_making_admission": _rank_stage_excluded_count(
+                    rank_reconciliation, "loss_making_admission"
                 ),
             },
         },
@@ -2207,11 +2234,15 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
                 duplicate_code_count=rank_reconciliation.get("duplicate_code_count"),
             ))
     elif rank_reconciliation.get("status") == "pass" and df_full is not None:
-        if int(rank_reconciliation.get("ranked_count", -1)) != int(len(df_full)):
+        reconciled_full_count = (
+            int(rank_reconciliation.get("ranked_count", -1))
+            + _rank_stage_excluded_count(rank_reconciliation, "loss_making_admission")
+        )
+        if reconciled_full_count != int(len(df_full)):
             errors.append(_health_issue(
                 "rank_universe_reconciliation",
-                "reconciled ranked count does not match full-rank output",
-                reconciled_ranked_count=rank_reconciliation.get("ranked_count"),
+                "reconciled full-rank count does not match full-rank output",
+                reconciled_full_count=reconciled_full_count,
                 full_count=len(df_full),
             ))
 
@@ -7673,7 +7704,40 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
         moneyflow_observation,
         moneyflow_coverage=moneyflow_coverage,
     )
-    df_full, top50 = score_l5(df_l4, sw_map)
+    df_l5_scored, _pre_selector_top = score_l5(df_l4, sw_map)
+    _pre_admission_top15 = select_profile_watch_pool(
+        watch_pool_eligible_frame(df_l5_scored), top_n=15
+    )
+    _pre_admission_watch = select_profile_watch_pool(
+        watch_pool_eligible_frame(df_l5_scored), top_n=CONF["watch_n"]
+    )
+    df_admitted, loss_making_reasons, loss_making_audit = apply_loss_making_admission(
+        df_l5_scored
+    )
+    # The admission gate partitions the existing selector outputs.  Re-running
+    # the non-monotonic concentration selector on the reduced frame can remove
+    # an otherwise qualified row, so the full scored frame remains the egs_full
+    # artifact and only admitted rows feed production selection.
+    df_full = df_l5_scored
+    _admitted_codes = set(df_admitted["ts_code"].astype(str))
+    top50 = _pre_selector_top[
+        _pre_selector_top["ts_code"].astype(str).isin(_admitted_codes)
+    ].copy()
+    _pre_top15_codes = set(_pre_admission_top15.get("ts_code", pd.Series(dtype=str)).astype(str))
+    _post_top15_codes = set(
+        _pre_admission_top15.loc[
+            _pre_admission_top15["ts_code"].astype(str).isin(_admitted_codes), "ts_code"
+        ].astype(str)
+    )
+    loss_making_rank_annotations = loss_making_audit.copy()
+    loss_making_rank_annotations["decision_as_of"] = decision_as_of
+    loss_making_rank_annotations["run_revision_id"] = run_revision_id
+    loss_making_rank_annotations["pre_admission_top15"] = (
+        loss_making_rank_annotations["ts_code"].astype(str).isin(_pre_top15_codes)
+    )
+    loss_making_rank_annotations["post_admission_top15"] = (
+        loss_making_rank_annotations["ts_code"].astype(str).isin(_post_top15_codes)
+    )
 
     rank_reconciliation, rank_reconciliation_detail = build_rank_universe_reconciliation(
         df_l0=df_l0,
@@ -7684,7 +7748,8 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
             ("l2_quality_risk", df_l2, True, l2_exclusion_reasons),
             ("l3_scoring", df_l3, False, "l3_unexpected_row_loss"),
             ("l4_scoring", df_l4, False, "l4_unexpected_row_loss"),
-            ("l5_rank", df_full, False, "l5_unexpected_row_loss"),
+            ("l5_rank", df_l5_scored, False, "l5_unexpected_row_loss"),
+            ("loss_making_admission", df_admitted, True, loss_making_reasons),
         ],
         sources={
             "daily_stats_l0": (df_l0, stats_df, 1.0),
@@ -7694,6 +7759,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
                 df_stocks, df_raw_fin, financial_full_universe_min_coverage
             ),
         },
+        rank_annotations=loss_making_rank_annotations,
     )
     if rank_reconciliation["status"] != "pass":
         raise RuntimeError(
@@ -7755,7 +7821,9 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
     watch_n   = CONF["watch_n"]
     # Same single bar as score_l5's Tier1 pool: one mechanism, two selector call
     # sites, so the watch pool and Tier1 can never disagree about short history.
-    watch_df  = select_profile_watch_pool(watch_pool_eligible_frame(df_full), top_n=watch_n)
+    watch_df  = _pre_admission_watch[
+        _pre_admission_watch["ts_code"].astype(str).isin(_admitted_codes)
+    ].copy()
     watch_eligible_count = int(len(top50))
     short_history_barred_count = int(_short_history_mask(df_full).sum())
     # Hard invariant, not a log line: the downgrade is only real if no short
@@ -7783,9 +7851,9 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
     # 正式运行不动，避免污染周末观察池的 Tier1 语义。
     if backtest_mode and len(watch_df) < watch_n:
         existing_codes = set(watch_df["ts_code"].tolist()) if "ts_code" in watch_df.columns else set()
-        tier2_fill = df_full[(df_full["tier"] == "Tier2") &
-                             (df_full["l2_name"] != "未知") &
-                             (~df_full["ts_code"].isin(existing_codes))] \
+        tier2_fill = df_admitted[(df_admitted["tier"] == "Tier2") &
+                             (df_admitted["l2_name"] != "未知") &
+                             (~df_admitted["ts_code"].isin(existing_codes))] \
             .sort_values(["final_score", "l4_score", "pct_20d_n"],
                          ascending=[False, False, False]) \
             .head(watch_n - len(watch_df))

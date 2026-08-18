@@ -4512,6 +4512,22 @@ class ExclusionSummaryTests(unittest.TestCase):
     def test_build_zero_returns_none(self):
         self.assertIsNone(_build_exclusion_summary({}, AS_OF))
 
+    def test_candidate_admission_rank_map_is_reported_separately(self):
+        es = _build_exclusion_summary(
+            {"unlock": 2}, {"loss_making_admission": 3}, AS_OF
+        )
+        self.assertEqual(es["total_excluded"], 5)
+        row = next(item for item in es["by_reason"] if item["stage"] == "candidate_admission")
+        self.assertEqual(row["source_field"], "loss_making_admission")
+        self.assertEqual(row["veto_class"], "production_hard_veto")
+        self.assertTrue(row["production_effect_enabled"])
+        self.assertIn("扣非 TTM 非正或无法验证 3 只", es["m67_text"])
+
+    def test_rank_map_unknown_nonzero_and_zero_are_fail_closed(self):
+        with self.assertRaises(ValueError):
+            _build_exclusion_summary({}, {"unknown_rank_reason": 1}, AS_OF)
+        self.assertIsNone(_build_exclusion_summary({}, {"loss_making_admission": 0}, AS_OF))
+
     def test_holder_reduction_uncomputable_has_its_own_exclusion_reason(self):
         es = _build_exclusion_summary({"holder_reduction_uncomputable": 2}, AS_OF)
         self.assertEqual(es["total_excluded"], 2)
