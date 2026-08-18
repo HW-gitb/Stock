@@ -42,6 +42,13 @@ UPGRADE_CONFIRM_RUNS = 2            # frozen anti-chatter: an upgrade needs this
 # §13.1 #3 forward priors (design-hinted VIX cut points 18/25/35), NOT frozen const.
 VIX_CUTS = ((18.0, "进攻"), (25.0, "震荡"), (35.0, "防御"))  # value < cut → that regime; ≥ last bound → 极度防御
 
+# §13.1 #3 forward priors for the first real market-axis producer.  These are
+# deliberately kept here, outside the frozen governance preset.
+MARKET_AXIS_MIN_SMA_POINTS = 50
+MARKET_TREND_QQQ_DEFENSE_RATIO = 0.90
+BREADTH_COVERAGE_MIN = 0.80
+BREADTH_CUTS = ((0.60, "进攻"), (0.40, "震荡"), (0.25, "防御"))
+
 
 MARKET_REGIME_STATE_FILENAME = "market_regime_state.json"
 MARKET_REGIME_STATE_SCHEMA_NAME = "us_short_market_regime_state"
@@ -122,6 +129,96 @@ def classify_vix(value):
         return UNKNOWN
     for cut, regime in VIX_CUTS:
         if v < cut:
+            return regime
+    return "极度防御"
+
+
+def _iso_price_basis(value):
+    if isinstance(value, str) and len(value) == 10 and value[4] == "-" and value[7] == "-":
+        return value
+    if isinstance(value, str) and len(value) == 8 and value.isdigit():
+        return f"{value[:4]}-{value[4:6]}-{value[6:]}"
+    return value
+
+
+def _sma50_snapshot(series, *, price_basis_date, session="RTH", adjustment_mode="split_adjusted"):
+    """Return the current 50-close snapshot for one already envelope-validated series."""
+    basis = _iso_price_basis(price_basis_date)
+    if not isinstance(series, dict) or series.get("as_of") != basis:
+        return None
+    if series.get("session") != session or series.get("adjustment_mode") != adjustment_mode:
+        return None
+    points = series.get("points")
+    if not isinstance(points, list):
+        return None
+    valid = []
+    for point in points:
+        if not isinstance(point, dict):
+            continue
+        date = point.get("date")
+        close = point.get("close")
+        if not isinstance(date, str) or date > basis:
+            continue
+        if isinstance(close, bool) or not isinstance(close, (int, float)):
+            continue
+        close = float(close)
+        if math.isfinite(close) and close > 0.0:
+            valid.append((date, close))
+    valid.sort(key=lambda item: item[0])
+    if len(valid) < MARKET_AXIS_MIN_SMA_POINTS or valid[-1][0] != basis:
+        return None
+    closes = [close for _, close in valid[-MARKET_AXIS_MIN_SMA_POINTS:]]
+    sma50 = sum(closes) / MARKET_AXIS_MIN_SMA_POINTS
+    return {"latest_close": closes[-1], "sma50": sma50, "above": closes[-1] >= sma50}
+
+
+def classify_market_trend(
+    series_by_ticker, *, price_basis_date, session="RTH", adjustment_mode="split_adjusted"
+):
+    """Classify SPY/QQQ against their own SMA50 using the current price basis only."""
+    if not isinstance(series_by_ticker, dict):
+        return UNKNOWN
+    snapshots = {
+        ticker: _sma50_snapshot(
+            series_by_ticker.get(ticker),
+            price_basis_date=price_basis_date,
+            session=session,
+            adjustment_mode=adjustment_mode,
+        )
+        for ticker in ("SPY", "QQQ")
+    }
+    if any(snapshot is None for snapshot in snapshots.values()):
+        return UNKNOWN
+    spy, qqq = snapshots["SPY"], snapshots["QQQ"]
+    if spy["above"] and qqq["above"]:
+        return "进攻"
+    if spy["above"] or qqq["above"]:
+        return "震荡"
+    qqq_ratio = qqq["latest_close"] / qqq["sma50"]
+    return "防御" if qqq_ratio > MARKET_TREND_QQQ_DEFENSE_RATIO else "极度防御"
+
+
+def classify_breadth(
+    eligible_tickers, series_by_ticker, *, price_basis_date, session="RTH", adjustment_mode="split_adjusted"
+):
+    """Classify Pass1-eligible breadth after the fixed 80% computability gate."""
+    if not isinstance(eligible_tickers, list) or not eligible_tickers or not isinstance(series_by_ticker, dict):
+        return UNKNOWN
+    snapshots = [
+        _sma50_snapshot(
+            series_by_ticker.get(ticker),
+            price_basis_date=price_basis_date,
+            session=session,
+            adjustment_mode=adjustment_mode,
+        )
+        for ticker in eligible_tickers
+    ]
+    computable = [snapshot for snapshot in snapshots if snapshot is not None]
+    if len(computable) / len(eligible_tickers) < BREADTH_COVERAGE_MIN:
+        return UNKNOWN
+    ratio = sum(snapshot["above"] for snapshot in computable) / len(computable)
+    for cut, regime in BREADTH_CUTS:
+        if ratio >= cut:
             return regime
     return "极度防御"
 

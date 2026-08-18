@@ -1402,7 +1402,8 @@ def default_pipeline(
                          if st.classify_soft_boost_artifact_state(c)["state"] == "comparison_ready" else []),
               st.run_soft_boost_comparison_capture, best_effort=True,
               contract_version="1.0.0", reuse_policy="never"),
-        Stage("weekly_bridge", False, lambda c: [c.source_packet_path], _official_output_paths, st.run_weekly_bridge),
+        Stage("weekly_bridge", False, lambda c: [c.source_packet_path, c.candidate_path, c.series_packet_path],
+              _official_output_paths, st.run_weekly_bridge),
         Stage("model_paper_weekly", False,
               lambda c: ([c.ohlcv_series_packet_path, _official_output_paths(c)[0], _official_output_paths(c)[2]]
                          if _model_paper_enabled(c) else []),

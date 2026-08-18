@@ -659,6 +659,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                 now_et=datetime(2026, 6, 15, 9, 0, 0),
                 context_components_path=self.paths["components"],
                 run_mode="mixed_source",
+                market_axis_regimes={"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"},
                 _research_live_capability=receipt,
                 bootstrap_lifecycle=True,
                 generated_at="2026-06-15T13:01:00Z",

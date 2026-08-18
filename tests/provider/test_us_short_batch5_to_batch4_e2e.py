@@ -322,6 +322,35 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
         self.assertEqual(packet["market_axis_regimes"]["market_trend"], original_axes["market_trend"])
         self.assertEqual(packet["market_axis_regimes"]["breadth"], original_axes["breadth"])
 
+    def test_explicit_market_axis_map_replaces_template_and_reaches_regime_cap(self) -> None:
+        from engine.us_short_regime import compute_market_risk_regime
+
+        template = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+        template["market_axis_regimes"] = {"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"}
+        components = {
+            "data_context": {"selection_inputs": {"theme_opportunity_state": "no_strong_theme"}},
+            "per_ticker_analysis": {},
+            "run_provenance": {"as_of": _DECISION_DATE, "price_basis_date": "20260612"},
+        }
+        axes = {"vix": "进攻", "market_trend": "防御", "breadth": "进攻"}
+        packet = e2e._assemble_batch4_packet(
+            components=components,
+            template=template,
+            provider_health=_provider_health(),
+            account_state_path=Path("account.json"),
+            calendar_path=Path("calendar.json"),
+            governance_path=Path("governance.json"),
+            private_root=Path("private"),
+            official_output_root=None,
+            now_et=datetime(2026, 6, 15, 9, 0, 0),
+            market_axis_regimes=axes,
+        )
+        self.assertEqual(packet["market_axis_regimes"], axes)
+        self.assertEqual(
+            compute_market_risk_regime(packet["market_axis_regimes"])["position_cap"],
+            0.5,
+        )
+
     def test_explicit_model_paper_track_replaces_template_and_omission_preserves_fixture_path(self) -> None:
         template = json.loads(TEMPLATE.read_text(encoding="utf-8"))
         components = {
@@ -366,6 +395,18 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
                 private_root=Path("missing-private"),
                 now_et=datetime(2026, 6, 15, 9, 0, 0),
                 run_mode="research_live",
+            )
+
+    def test_mixed_source_requires_explicit_market_axis_map(self) -> None:
+        with self.assertRaisesRegex(e2e.Batch5ToBatch4E2EError, "complete vix/market_trend/breadth"):
+            e2e.run_e2e(
+                source_packet_path=Path("missing-source.json"),
+                batch4_template_path=Path("missing-template.json"),
+                account_state_path=Path("missing-account.json"),
+                provider_health_path=Path("missing-health.json"),
+                private_root=Path("missing-private"),
+                now_et=datetime(2026, 6, 15, 9, 0, 0),
+                run_mode="mixed_source",
             )
 
     def test_template_bytes_must_match_receipt_digest_at_parse(self) -> None:

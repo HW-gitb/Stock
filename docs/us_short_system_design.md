@@ -245,6 +245,9 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 
 ## 7. 市场环境（两轴：风控刹车 vs 赛道机会，别只 worst_of）
 - **三类输入**：① VIX 风险温度（**目标使用 FMP `^VIX`；未过 provider 授权门（§3 边界）前禁用或标 `unapproved`**，不当已验；**VIX 未授权 / unavailable → 该轴按 unknown，`market_risk_regime` 退到 `SPY/QQQ + breadth` 并按 unknown 降级规则保守处理**）② 大盘趋势 `SPY + QQQ`（必须含 QQQ——池偏 AI/半导体/成长）③ 板块/市场广度（走基础 universe 成分股；行业 ETF 据公开档为付费、不依赖）。
+- **问题5 第一刀的同轮输入边界**：`weekly_bridge` 只登记并读取同轮 `candidate_universe_<decision_date>.json`（Pass1 eligible 全分母）与同一 `price_basis_date` 的 `us_short_batch5_full_universe_momentum_series_<price_basis_date>_packet.json`（RTH、`split_adjusted`、eligible + `SPY/QQQ` 序列）；继续使用既有 schema、decision clock 和 series contract，不新增 provider call、artifact、sidecar、preset、schema、receipt、hash 或 state。输入缺失、损坏或跨 clock / session / adjustment mode 直接 stage integrity failure；输入有效但轴样本不足只得 `unknown`。
+- **问题5 第一刀的公式**：每个 benchmark 取截至 `price_basis_date` 的最后 50 个有限正 RTH close，`latest >= SMA50` 为站上。`market_trend`：SPY、QQQ 均站上=`进攻`；恰一站上=`震荡`；均未站上且 `QQQ / QQQ_SMA50 > 0.90`=`防御`；否则=`极度防御`；任一 benchmark 不足 50 个同 clock 有效 close=`unknown`。`breadth`：分母为全部 Pass1 eligible，分子为有 50 个有效 close 且最后点为当前 `price_basis_date` 的 computable member；coverage `<80%`=`unknown`；否则以 computable member 站上 SMA50 比例分档：`>=60%`=`进攻`、`40%–<60%`=`震荡`、`25%–<40%`=`防御`、`<25%`=`极度防御`。阈值仍为 §13 #3 prior，代码落在 `engine/us_short_regime.py`。
+- **问题5 第一刀的接线**：`weekly_bridge` 必须把 `{vix, market_trend, breadth}` 完整显式传入 `run_e2e`，再由 `weekend_analysis` 消费；`mixed_source` 缺任一轴即失败，禁止读 `template["market_axis_regimes"]` 回退；只有 offline fixture 路径保留模板轴兼容。
 - **两轴拆分**（关键反保守）：
   - `market_risk_regime` = `worst_of(VIX, SPY/QQQ 趋势, breadth)` → **决定仓位上限**（进攻 1.0 / 震荡 0.8 / 防御 0.5 / 极度防御 0）。
   - `theme_opportunity_state` = 赛道机会强度 → **决定赛道机会优先级**。
