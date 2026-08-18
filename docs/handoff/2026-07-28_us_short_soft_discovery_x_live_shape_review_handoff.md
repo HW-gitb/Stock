@@ -3641,3 +3641,79 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 ### 但余量只剩 5.5%
 
 `860 - 812.9 = 47.1s`，低于 `R-USSHORT-LANE-PACK-IS-GREEN-ONLY-BY-4-SECONDS...` 的 ≥15% closure 判据，该条仍 open。**口径提醒**：812.9s 不能跟历史 343.6s 比——那些是 fail-fast 早停、从没跑满 320 个模块；可比的是同为跑满的枚举跑 726.7s。
+
+> **⚠ 2026-08-18 晚更正：上面这句「口径提醒」是错的。** 把全机 72 个 run sidecar 解出来后确认：`08-18 18:40` 那次 **319 模块 / 6008 用例 / 零红跑满，墙钟只有 342.3s**；35 次跑满记录墙钟中位数 639.6s、最小 320.8s。**sub-400s 的跑满是真的，不是早停。**我 21:44 之后那两次 800s+ 是机器整体降速约 2.3×（我从未碰过的 `conformance_executable` 由 67.8s 变 172.1s）。详见 `docs/system_risk_register.md` 顶部「⚠ 更正」节。
+
+## 2026-08-18 追加：把上一轮的 Options/Optional 各推进一步（用户令自修自审）
+
+### `--no-failfast` 从「临时改码」变成受控开关
+
+上一轮为了一次列全所有红，我临时改了 runner 的两处 halt 再还原，还因锚串命中两处白跑 316s。现在 `run_parallel_pack` 有 keyword `halt_on_red=True`（fail-closed 默认），CLI 有 `--no-failfast`，开跑先打横幅说明「这不是 lane verdict、绝不可记账」。deadline 那处 halt 不受影响。
+
+**关键防线是「它进不了账本」**：`full_pack_ledger` 调 `run_parallel_pack` 时从不传这个参数，并新增静态用例断言 ledger 源码里既无 `halt_on_red` 也无 `--no-failfast`——**哪天有人把它接进记账路径，测试立刻红**。承重反向控制：把波次那处改回硬编码 `True`，点名用例精确红在 `'SKIPPED' unexpectedly found`，还原哈希回基线。端到端实跑过 `--no-failfast us_short 300 -- ... test_us_short_regime*.py`：横幅出、`COUNT_GATE 61=61`、`PASS`。
+
+### 墙钟那条我只做了测量，没做重构——这是有意的
+
+新增 `SERIAL_TAIL_COST <tail 秒> of <总秒> (<占比>) across <N> modules` 一行，并写明「只有两个杠杆：减少尾巴模块 / 让尾巴模块变快，加 worker 无用」。
+
+**不做重构的三个理由**：① 两个杠杆都要动那 25 个「碰跨进程锁」的模块，而这块基础设施**本 session 已经出过两次回归**，在自修自审轮做这种手术风险不相称；② 抬 860s 按 `AGENTS.md` 是**用户级决定**；③ 这个数字对负载极敏感——同树同码，跑满一次 726.7s、另一次 812.9s，**在把尾巴成本打印出来之前去追百分比就是瞎调**。
+
+给决策用的实测：模块耗时合计 `1261.9s` / 320 模块 vs 墙钟 `812.9s`（8 worker）→ 并行度只有 **1.55 倍**；最贵的三个尾巴模块 `conformance_executable 172.1s`、`market_diagnostic_rehearsal 130.4s`、`conformance_resources 121.9s`。闭合仍需用户在「抬 860s」与「授权把 `LaneGuardRegistryConformance` 拆成独立模块」之间选一条。
+
+### 一条通用的做法
+
+**改验证基础设施（runner/ledger 这类）时，除了它自己的 owner 测试，还要跑一次真实全量证明「记绿这条路没被改坏」**——因为它就是所有绿的产地，坏了会静默作废后面每一次绿。
+
+### 验证命令与结果
+
+固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，全部在 `D:\cnhea\Codex\worktrees\8d8c\Stock` 内跑。
+
+1. **owner 焦点包** `-m unittest tests.test_parallel_lane_runner` → `PASS tests=55 58.0s`。
+2. **承重反向控制**：把波次那处改回硬编码 `True`（脚本 `plant_haltflag.py`，命中数自校验，`count!=1` 就退出 2）→ `test_no_failfast_enumerates_every_red_instead_of_stopping_at_the_first` 精确红在 `AssertionError: 'SKIPPED' unexpectedly found`；还原后 `RESTORED_SHA_MATCH=True`。
+3. **端到端 CLI 冒烟** `parallel_lane_runner.py --no-failfast us_short 300 -- discover ... -p "test_us_short_regime*.py"` → 横幅打出、`SERIAL_TAIL_COST 0.4s of 1.4s (30.7%) across 1 modules`、`COUNT_GATE 61=61`、`RESULT status=PASS`。
+4. **记绿这条路没被改坏**（走 `full_pack_ledger`，`halt_on_red` 走默认）→ **`RESULT status=PASS exit=0 tests=3232 elapsed=321.6s deadline=860s mode=parallel`、`COUNT_GATE discovered=3232 ran=3232 equal=True`**。
+
+第 4 步**本来跑的是 us_short，撞线了**：`RESULT status=TIMEOUT exit=124 elapsed=859.4s deadline=860s`、`COUNT_GATE discovered=6041 ran=6040`（320 个模块只跑完 319 个）。按 rule ⑥ 那是 `UNKNOWN`、不重复等待，于是**缩窄到同一 runner 的 a_short lane**——盘子小得多，但走的是一模一样的 discovery → 并行派发 → count gate → 账本记绿全链路，足以证明本刀没弄坏记绿。
+
+顺带一个活体确认：**a_short 那次没有打印 `SERIAL_TAIL_COST`**——因为该 lane 的串行尾巴为空，正是新增第三个用例断言的「tail 为空就不打这行」。
+
+### 失效的旧结论
+
+- 「lane 余量 47.1s（5.5%）虽薄但够用」——**作废**，但**不是往坏的方向作废**（见下）。同树同码三次跑满分别是 `726.7s / 812.9s / 859.4s`，最后这次直接 TIMEOUT。
+- **⚠ 同日晚二次更正**：上一条据此写的「升为 P1 / lane 已无法稳定记绿」**已撤回**。那三次都在机器降速 2.3× 的窗口内；同一个包在 `08-18 18:40` 跑满只用 `342.3s`（319 模块 6008 用例零红），35 次跑满墙钟中位数 `639.6s`。**常态余量约 510s（~59%），该条退回 Optional 低危。**权威在 `docs/system_risk_register.md` 顶部「⚠ 更正」节。
+- 「要一次列全所有红就临时改 runner 再还原」——**作废**，改用 `--no-failfast`。上一轮正是这种临时改码因锚串命中两处而白跑 316s。
+
+### 下一步注意
+
+- **`TIMEOUT` 不是红**：`status=TIMEOUT` 按 `UNKNOWN` 处理，别当成「有测试挂了」去追不存在的 bug。**但也别据此认为 lane 到期了**——常态是 ~350s 跑满，撞线只发生在机器降速的窗口里。
+- **看到 800s+ 先怀疑机器、别先怀疑代码**：判据是「最慢模块的绝对秒数」。`conformance_executable` 常态 64–73s；若它变成 ~172s 而模块集没变，那是全机等比例降速，**重跑即可**，别去改测试布局。
+- **那条已从 P1 撤回、退回 Optional，不需要现在拍板**。真要削它仍是两条路：抬 860s（用户级），或拆 `LaneGuardRegistryConformance` 让同文件其余用例回并行。两条都要动那 25 个碰跨进程锁的模块，本 session 这块已出过两次回归，别顺手改。
+- **脚本改文件一律按行号定位，或自校验命中数**；调用方必须查 `$LASTEXITCODE` 再往下走——上一轮就是锚串命中两处、脚本退 2 而 PowerShell 继续往下跑，白烧一次全量。
+- **主树正在回跑 a_short 真实周**（用户 2026-08-18 通知）：期间**本刀只提交、不 merge**；也别在主树跑大超集。本轮那次 a_short 全量跑在 8d8c、`state/` 逐树隔离，已于 321.6s 跑完。
+
+## 2026-08-18 交接 Codex：第二枪的模型合同（付费前门，未闭不得开枪）
+
+### 背景与当前进度（按仓库实物核过，不按桌面文档的状态位）
+
+刀1–刀4 完成；刀5 实现完成；**刀5 第一枪已打且 FAIL**（请求 `deepseek-chat`、服务 `deepseek-v4-flash`、strict parse 失败）；刀5 阶段B 离线修复完成，**v2 packet 与 v2 schema 已建**；**第二枪未打**——主树没有 `state/us_short/runs_private/soft_discovery_engineering_smoke_v2/`、也没有 `provider_samples/..._engineering_smoke_v2/`。5b runner 已实现，等第二枪 transport PASS 才能跑。
+
+### 交给 Codex 的任务
+
+**任务**：闭合 `R-USSHORT-SMOKE-V2-DROPPED-THE-SERVED-MODEL-GATE-AND-KEPT-THE-OLD-FIELD-NAME`（P1）。**finding 正文与三条闭合要求在 `docs/system_risk_register.md` 顶部同名节，Codex 以那节为准，不以本节转述为准。**
+
+**范围（只动这些）**：
+- `schemas/us_short_web_regroup_engineering_smoke_packet_v2.schema.json`（`paid_boundary.request` 的模型合同）
+- `docs/us_short_web_regroup_engineering_smoke_packet_20260815_v2.json`（同步 packet 实例）
+- `runners/us_short_llm_theme_discovery_web_regroup_smoke.py`（`EXPECTED_MODEL` / packet 授权校验 / summary 字段）
+- `runners/us_short_llm_theme_discovery_fetch_web.py`（`_consume_regroup_response` 的服务方模型门、`_model_identity_is_complete`）
+- 测试只放现有 owner：`tests/provider/test_us_short_llm_theme_discovery_fetch_web.py`、`tests/test_us_short_llm_theme_discovery_plan_budget.py`
+
+**不许动**：`engine/us_short_llm_theme_discovery_paid_gateway.py` 的 `DEEPSEEK_MODEL`（生产同形基准）；桌面文档 `C:\Users\cnhea\Desktop\usshort_软通道收尾.md`（只读用户权威）；第一枪的 packet/raw/summary/ledger（逐字节不变）；5b runner 与 4diii 相关任何文件。
+
+**判断权边界**：模型名本身（继续用 `deepseek-chat` + 服务方族白名单，还是改请求直连模型名 + 等值门）由 Codex 给出技术建议**并连同理由写回 register**，但**桌面方案 §4.7/§五#2/§九#2 与实现的冲突是用户裁决项**——Codex 不改桌面文档、不替用户拍板、闭合后也不得自行开第二枪。
+
+**验证**：承重反向控制（伪造 `deepseek-v4-flash` / 空值 / 旧 alias / 别家模型须在**内容解析前**拒绝且 `debit=0 client=0`，删门即转红）+ focused owner 包；因改到共享付费客户端与真实生产 prompt，按方案 §六#2 需在最终行为代码上跑一次 US-short lane 全量、账本 `discovered == ran` 且终态 PASS。**注意**：常态跑满约 350s，若看到 800s+ 请先按上一节「先怀疑机器」处理再重跑。
+
+### 下一步（顺序不得交换）
+
+`Codex 闭合模型合同 → 我独立审查 PASS → 代码 merge 进主树 → 用户对精确 v2 packet 明确付费授权 → 主树打第二枪（一次）→ transport PASS 才准跑 5b 零付费判卷 → readiness → 刀6 4diii 接线`。

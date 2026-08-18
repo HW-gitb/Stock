@@ -433,6 +433,54 @@ class ParallelLaneRunnerTests(unittest.TestCase):
             ["test_small", "test_big"],
         )
 
+    def test_no_failfast_enumerates_every_red_instead_of_stopping_at_the_first(self):
+        modules = {
+            "test_red_one": FAILING_MODULE,
+            "test_red_two": FAILING_MODULE,
+            "test_red_three": FAILING_MODULE,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root, args = self._tree(tmp, modules)
+            default_result, _ = self._run(root, args, tmp, workers=1)
+        with tempfile.TemporaryDirectory() as tmp:
+            root, args = self._tree(tmp, modules)
+            every_red, _ = driver.run_parallel_pack(
+                "synthetic", args, 120, workers=1,
+                runs_dir=Path(tmp) / "runs", durations_path=Path(tmp) / "durations.json",
+                cwd=root, halt_on_red=False,
+            )
+        # Default: the first red stops dispatch, so the other modules are reported as SKIPPED.
+        self.assertEqual(default_result.status, "FAIL")
+        self.assertIn("SKIPPED", default_result.output)
+        # Diagnostic: every module runs, so every red is visible in one pass and nothing is skipped.
+        self.assertEqual(every_red.status, "FAIL")
+        self.assertNotIn("SKIPPED", every_red.output)
+        for name in modules:
+            self.assertIn(f"---- FAIL output: {name} ----", every_red.output)
+
+    def test_full_pack_ledger_cannot_reach_the_no_failfast_mode(self):
+        """The diagnostic mode must never be able to record a lane green."""
+        source = (Path(driver.__file__).resolve().parent / "full_pack_ledger.py").read_text(
+            encoding="utf-8")
+        self.assertNotIn("halt_on_red", source)
+        self.assertNotIn("--no-failfast", source)
+
+    def test_serial_tail_cost_reports_the_seconds_that_run_one_at_a_time(self):
+        outcomes = [
+            driver.ModuleOutcome("test_tail_a", "PASS", 0, 1, 30.0, ""),
+            driver.ModuleOutcome("test_tail_b", "PASS", 0, 1, 20.0, ""),
+            driver.ModuleOutcome("test_wave", "PASS", 0, 1, 5.0, ""),
+        ]
+        report = driver._report(
+            "synthetic", outcomes, [], 3, 3, None, [], 100.0, 4,
+            ["test_tail_a", "test_tail_b"], [], 860,
+        )
+        self.assertIn("SERIAL_TAIL_COST 50.0s of 100.0s (50.0%) across 2 modules", report)
+        no_tail = driver._report(
+            "synthetic", outcomes, [], 3, 3, None, [], 100.0, 4, [], [], 860,
+        )
+        self.assertNotIn("SERIAL_TAIL_COST", no_tail)
+
 
 if __name__ == "__main__":
     unittest.main()
