@@ -74,6 +74,56 @@ class DataQualityShadowTests(unittest.TestCase):
         self.assertFalse(shadow["production_effect_enabled"])
         validate_data_quality_shadow(shadow, expected_as_of=AS_OF)
 
+    def test_unavailable_classifications_are_visible_without_changing_shadow_action(self):
+        missing = [
+            "capital_flow.northbound",
+            "capital_flow.block_trade",
+            "analyst.target_price_mean",
+        ]
+        base_quality = self._quality(missing_fields=missing)
+        classified_quality = self._quality(
+            missing_fields=missing,
+            permanently_unavailable=["capital_flow.northbound"],
+            paid_source_declined=["analyst.target_price_mean"],
+            candidate_output_deferred=["capital_flow.block_trade"],
+        )
+        base_result = classify_data_quality_shadow(base_quality)
+        classified_result = classify_data_quality_shadow(classified_quality)
+        self.assertEqual(classified_result["status"], base_result["status"])
+        self.assertEqual(classified_result["block"], base_result["block"])
+        self.assertEqual(classified_result["degrade"], base_result["degrade"])
+        self.assertEqual(classified_result["warn"], base_result["warn"])
+        self.assertEqual(classified_result["permanently_unavailable"], [
+            "capital_flow.northbound",
+        ])
+        self.assertEqual(classified_result["paid_source_declined"], [
+            "analyst.target_price_mean",
+        ])
+        self.assertEqual(classified_result["candidate_output_deferred"], [
+            "capital_flow.block_trade",
+        ])
+
+        base_weekly = self._weekly(base_quality)
+        classified_weekly = self._weekly(classified_quality)
+        self.assertEqual(
+            base_weekly["reports"][0]["m67"]["table"]["操作"],
+            classified_weekly["reports"][0]["m67"]["table"]["操作"],
+        )
+        self.assertEqual(
+            base_weekly["reports"][0]["m67"]["table"]["股数"],
+            classified_weekly["reports"][0]["m67"]["table"]["股数"],
+        )
+        shadow = build_data_quality_shadow(
+            [{"ts_code": "600000.SH", "data_quality": classified_quality}],
+            AS_OF,
+        )
+        self.assertEqual(shadow["schema_version"], "1.1.0")
+        row = shadow["candidates"][0]
+        self.assertEqual(row["permanently_unavailable"], ["capital_flow.northbound"])
+        self.assertEqual(row["paid_source_declined"], ["analyst.target_price_mean"])
+        self.assertEqual(row["candidate_output_deferred"], ["capital_flow.block_trade"])
+        validate_data_quality_shadow(shadow, expected_as_of=AS_OF)
+
     def test_warn_and_degrade_are_visible_without_production_effect(self):
         base = self._weekly(self._quality())
         degraded = self._weekly(self._quality(completeness_score=0.9))

@@ -372,6 +372,45 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             130.0,
         )
 
+    def test_export_classifies_global_unavailable_fields_without_changing_completeness(self) -> None:
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            _analysis_path, _snapshot_path, _candidates_path, payload = self._export(
+                tmp,
+                latest_td="20260522",
+            )
+
+        data_quality = payload["candidates"][0]["data_quality"]
+        self.assertEqual(payload["schema_version"], "1.6.0")
+        self.assertEqual(self.egs_main.EGS_VERSION, "v7.15")
+        self.assertEqual(data_quality["permanently_unavailable"], [
+            "capital_flow.northbound",
+        ])
+        self.assertEqual(data_quality["paid_source_declined"], [
+            "analyst.target_price_mean",
+        ])
+        self.assertEqual(data_quality["candidate_output_deferred"], [
+            "capital_flow.block_trade",
+        ])
+        classified = set().union(
+            data_quality["permanently_unavailable"],
+            data_quality["paid_source_declined"],
+            data_quality["candidate_output_deferred"],
+        )
+        self.assertEqual(classified, {
+            "capital_flow.northbound",
+            "analyst.target_price_mean",
+            "capital_flow.block_trade",
+        })
+        self.assertTrue(classified.issubset(set(data_quality["missing_fields"])))
+        self.assertEqual(data_quality["completeness_score"], round(6 / 23 * 100, 2))
+        self.assertNotIn("technical.atr.atr_14", classified)
+        self.assertNotIn("technical.moving_averages", classified)
+        self.assertNotIn("technical.rsi_14", classified)
+        self.assertNotIn("technical.macd", classified)
+        source = Path(EGS_SCRIPT).read_text(encoding="utf-8")
+        self.assertNotIn("remaining_unavailable_fields", source)
+        self.assertNotIn("planned_unavailable_fields", source)
+
     def test_ttm_ocf_ratio_preserves_tushare_percentage_points_through_schema(self) -> None:
         with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
             _analysis_path, _snapshot_path, _candidates_path, payload = self._export(

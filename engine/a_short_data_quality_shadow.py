@@ -17,7 +17,7 @@ import jsonschema
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "schemas" / "a_short_data_quality_shadow.schema.json"
 SCHEMA_NAME = "a_short_data_quality_shadow"
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 REQUIRED_FIELDS = (
     "quote.close",
     "technical.support",
@@ -45,6 +45,9 @@ def classify_data_quality_shadow(data_quality) -> dict:
     missing = _field_list(payload.get("missing_fields"))
     pending = _field_list(payload.get("pending_fields"))
     rule11 = _field_list(payload.get("rule11_required"))
+    permanently_unavailable = _field_list(payload.get("permanently_unavailable"))
+    paid_source_declined = _field_list(payload.get("paid_source_declined"))
+    candidate_output_deferred = _field_list(payload.get("candidate_output_deferred"))
     score = _finite_score(payload.get("completeness_score"))
     reasons: list[str] = []
     required_missing = sorted(set(missing + pending + rule11) & set(REQUIRED_FIELDS))
@@ -80,6 +83,9 @@ def classify_data_quality_shadow(data_quality) -> dict:
         "missing_fields": missing,
         "pending_fields": pending,
         "rule11_required": rule11,
+        "permanently_unavailable": permanently_unavailable,
+        "paid_source_declined": paid_source_declined,
+        "candidate_output_deferred": candidate_output_deferred,
         "reasons": reasons or ["no_shadow_quality_issue"],
     }
 

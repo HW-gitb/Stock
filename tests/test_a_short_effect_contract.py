@@ -744,6 +744,48 @@ class EffectContractStaticTests(unittest.TestCase):
         error = static_contract_error(contract)
         self.assertIn("must change outcome", error)
 
+    def test_unavailable_classification_leaves_have_real_shadow_readers_and_proof(self):
+        group = next(row for row in self.contract["groups"]
+                     if row["id"] == "candidate_data_quality")
+        expected = sorted([
+            "candidates[].data_quality.completeness_score",
+            "candidates[].data_quality.missing_fields[]",
+            "candidates[].data_quality.pending_fields[]",
+            "candidates[].data_quality.rule11_required",
+            "candidates[].data_quality.permanently_unavailable[]",
+            "candidates[].data_quality.paid_source_declined[]",
+            "candidates[].data_quality.candidate_output_deferred[]",
+        ])
+        self.assertEqual(group["proven_consumer_paths"], expected)
+        self.assertEqual(group["source_paths_sha256"], effect_contract_module._hash(expected))
+        shadow_source = (ROOT / "engine" / "a_short_data_quality_shadow.py").read_text(encoding="utf-8")
+        for field in (
+            "permanently_unavailable",
+            "paid_source_declined",
+            "candidate_output_deferred",
+        ):
+            self.assertIn(f'payload.get("{field}")', shadow_source)
+        self.assertIsNone(static_contract_error(self.contract))
+
+        for path in expected[-3:]:
+            tampered = copy.deepcopy(self.contract)
+            tampered_group = next(row for row in tampered["groups"]
+                                 if row["id"] == "candidate_data_quality")
+            tampered_group["proven_consumer_paths"].remove(path)
+            self.assertIn("lacks all-leaf consumer proof", static_contract_error(tampered) or "")
+
+        tampered = copy.deepcopy(self.contract)
+        tampered_group = next(row for row in tampered["groups"]
+                             if row["id"] == "candidate_data_quality")
+        tampered_group["source_paths_sha256"] = "0" * 64
+        self.assertIn("analysis_input paths changed", static_contract_error(tampered) or "")
+
+        tampered = copy.deepcopy(self.contract)
+        track = next(row for row in tampered["comparison_tracks"]
+                     if row["id"] == "candidate_data_quality_shadow")
+        track["schema_sha256"] = "0" * 64
+        self.assertIn("schema changed", static_contract_error(tampered) or "")
+
     def test_event_risk_phase5_gate_batch_is_leaf_bound_and_changes_main_decision(self):
         group = next(row for row in self.contract["groups"]
                      if row["id"] == "candidate_event_risk_phase5_gates")

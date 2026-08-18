@@ -16,7 +16,7 @@
   ],
   "properties": {
     "schema_name": {"const": "a_short_data_quality_shadow"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "1.1.0"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
     "comparison_only": {"const": true},
     "production_effect_enabled": {"const": false},
@@ -73,6 +73,9 @@
           "missing_fields": {"type": "array", "items": {"type": "string"}},
           "pending_fields": {"type": "array", "items": {"type": "string"}},
           "rule11_required": {"type": "array", "items": {"type": "string"}},
+          "permanently_unavailable": {"type": "array", "items": {"type": "string"}},
+          "paid_source_declined": {"type": "array", "items": {"type": "string"}},
+          "candidate_output_deferred": {"type": "array", "items": {"type": "string"}},
           "reasons": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
         }
       }

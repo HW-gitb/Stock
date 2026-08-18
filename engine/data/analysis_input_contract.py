@@ -204,7 +204,7 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
     l3_provider = source.get("l3_provider")
     l3_coverage = source.get("l3_coverage")
     schema_version = payload.get("schema_version")
-    if schema_version in {"1.3.0", "1.4.0", "1.5.0"}:
+    if schema_version in {"1.3.0", "1.4.0", "1.5.0", "1.6.0"}:
         margin = (payload.get("market_context") or {}).get("margin_coverage")
         if not isinstance(margin, dict):
             raise AnalysisInputContractError(
@@ -235,7 +235,7 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
                 raise AnalysisInputContractError(
                     f"{label} complete margin coverage is below the universe floor"
                 )
-        if schema_version in {"1.4.0", "1.5.0"}:
+        if schema_version in {"1.4.0", "1.5.0", "1.6.0"}:
             moneyflow = (payload.get("market_context") or {}).get("moneyflow_coverage")
             if not isinstance(moneyflow, dict):
                 raise AnalysisInputContractError(

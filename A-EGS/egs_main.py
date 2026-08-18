@@ -211,8 +211,8 @@ logging.basicConfig(
 )
 log = logging.getLogger("EGS")
 
-EGS_VERSION = "v7.14"
-ANALYSIS_INPUT_SCHEMA_VERSION = "1.5.0"
+EGS_VERSION = "v7.15"
+ANALYSIS_INPUT_SCHEMA_VERSION = "1.6.0"
 SUSPEND_DAILY_COVERAGE_LOG_SCHEMA_VERSION = "1.0.0"
 IV_FEED_STATUSES = (
     "not_requested",
@@ -841,13 +841,23 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
     if not all(_finite_technical(value) for value in macd.values()):
         technical_missing_fields.append("technical.macd")
 
-    remaining_unavailable_fields = [
+    permanently_unavailable = [
         "capital_flow.northbound",
-        "capital_flow.block_trade",
+    ]
+    paid_source_declined = [
         "analyst.target_price_mean",
     ]
+    candidate_output_deferred = [
+        "capital_flow.block_trade",
+    ]
     ttm_profit_dedt = _json_float(_row_get(row, "ttm_profit_dedt"))
-    missing_fields = actual_missing_fields + technical_missing_fields + remaining_unavailable_fields
+    missing_fields = (
+        actual_missing_fields
+        + technical_missing_fields
+        + permanently_unavailable
+        + paid_source_declined
+        + candidate_output_deferred
+    )
     if ttm_profit_dedt is None or not np.isfinite(ttm_profit_dedt):
         missing_fields.append("fundamental.profitability.ttm_profit_dedt")
     present_count = len(core_quality_fields) - len(actual_missing_fields)
@@ -1096,6 +1106,9 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
             "missing_fields": missing_fields,
             "pending_fields": pending_fields,
             "rule11_required": False,
+            "permanently_unavailable": permanently_unavailable,
+            "paid_source_declined": paid_source_declined,
+            "candidate_output_deferred": candidate_output_deferred,
         },
     }
     candidate["llm_tasks"] = build_task_configs(candidate, latest_td)

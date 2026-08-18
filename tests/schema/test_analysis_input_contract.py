@@ -123,6 +123,86 @@ class AnalysisInputContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "schema validation failed"):
             validate_analysis_input_contract(payload)
 
+    def test_current_1_6_quality_classification_inherits_margin_and_moneyflow_gates(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["schema_version"] = "1.6.0"
+        payload["price_data_through"] = payload["trade_date"]
+        payload["source"].update({
+            "l3_mode": "neutralize",
+            "l3_pit_strict": False,
+            "l3_snapshot_date": None,
+            "l3_provider": "neutralized",
+        })
+        payload["market_context"]["margin_coverage"] = {
+            "reference_date": payload["trade_date"],
+            "effective_ref_date": None,
+            "row_count": 0,
+            "universe_size": 0,
+            "coverage_complete": False,
+            "status": "unavailable",
+        }
+        dates = ["20260522", "20260521", "20260520", "20260519", "20260518"]
+        payload["market_context"]["moneyflow_coverage"] = {
+            "reference_date": payload["trade_date"],
+            "effective_ref_date": None,
+            "lag_sessions": None,
+            "fallback_applied": False,
+            "fallback_reason": None,
+            "requested_trade_dates": dates,
+            "observed_trade_dates": [],
+            "row_count": 0,
+            "universe_size": 0,
+            "target_universe_size": 1,
+            "target_complete_count": 0,
+            "coverage_complete": False,
+            "status": "unavailable",
+        }
+        payload["candidates"][0]["data_quality"].update({
+            "permanently_unavailable": ["capital_flow.northbound"],
+            "paid_source_declined": ["analyst.target_price_mean"],
+            "candidate_output_deferred": ["capital_flow.block_trade"],
+        })
+
+        validate_analysis_input_contract(payload)
+
+    def test_current_1_5_payload_without_classification_arrays_remains_valid(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["schema_version"] = "1.5.0"
+        payload["price_data_through"] = payload["trade_date"]
+        payload["source"].update({
+            "l3_mode": "neutralize",
+            "l3_pit_strict": False,
+            "l3_snapshot_date": None,
+            "l3_provider": "neutralized",
+        })
+        payload["market_context"]["margin_coverage"] = {
+            "reference_date": payload["trade_date"],
+            "effective_ref_date": None,
+            "row_count": 0,
+            "universe_size": 0,
+            "coverage_complete": False,
+            "status": "unavailable",
+        }
+        payload["market_context"]["moneyflow_coverage"] = {
+            "reference_date": payload["trade_date"],
+            "effective_ref_date": None,
+            "lag_sessions": None,
+            "fallback_applied": False,
+            "fallback_reason": None,
+            "requested_trade_dates": [
+                "20260522", "20260521", "20260520", "20260519", "20260518",
+            ],
+            "observed_trade_dates": [],
+            "row_count": 0,
+            "universe_size": 0,
+            "target_universe_size": 1,
+            "target_complete_count": 0,
+            "coverage_complete": False,
+            "status": "unavailable",
+        }
+
+        validate_analysis_input_contract(payload)
+
     def test_current_moneyflow_coverage_receipt_is_required_and_clock_bound(self) -> None:
         payload = cloned_minimal_analysis_input_payload()
         payload["schema_version"] = "1.4.0"

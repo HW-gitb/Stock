@@ -106,6 +106,11 @@ class EgsRule6ComputableWiringTests(unittest.TestCase):
         )
         exported = {item["id"]: item for item in candidate["event_risk"]["rule6_checks"]}
         self.assertEqual({exported[check_id]["status"] for check_id in COMPUTABLE_IDS}, {"pass"})
+        data_quality = candidate["data_quality"]
+        self.assertIn("capital_flow.block_trade", data_quality["missing_fields"])
+        self.assertEqual(data_quality["candidate_output_deferred"], [
+            "capital_flow.block_trade",
+        ])
 
     def test_missing_evaluation_is_unknown_not_a_clear_or_manual_only_disposition(self):
         em = self.egs
