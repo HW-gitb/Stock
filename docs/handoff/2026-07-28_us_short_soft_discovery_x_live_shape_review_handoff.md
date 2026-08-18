@@ -3450,3 +3450,14 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 
 - 代码同步主树后，仍需**用户对 packet `us_short_web_regroup_engineering_smoke_20260815_chunk1_v2` 的精确授权**才可开枪；失败不补枪。
 - 开枪前把 `R-USSHORT-K5-SMOKE-CLIENT-KEEPS-THE-SDK-DEFAULT-RETRIES` 的结论记在心上——`max_retries=0` 已落地并有构造参数用例，所以「一次逻辑派发」现在也等于「一次计费请求」。
+
+## 2026-08-18 追加：Codex 修复 K5 schema enum Optional（待 Claude 独立复审；8d8c）
+
+- 最新第五刀阶段 B PASS 已关闭三条 Required 和三条原 Optional；本轮只修复新增的 `O-K5-SCHEMA-ENUM-CARRIES-A-MODEL-NOBODY-REQUESTS`，没有新的 Required。
+- Web schema 的两处 `requested_model` enum 都收窄为唯一真实值 `deepseek-chat`，保留 enum 机制，不改回 `const`；X schema 不动。对应历史 receipt 测试同步收窄断言。
+- 固定 Python 窄套件 `50 OK / 7.3s`；`engine/`、`runners/`、`schemas/`、`tests/` 中 `deepseek-v4-pro` 为 `0 hits`。schema/test-only 改动不触发 full lane；未联网、未调 provider、未写正式槽、未提交。
+- 当前状态 `repaired / OPEN-NOT-VERIFIED`。Claude Code 独立复审通过后提交；付费执行、5b、正式槽和 packet 精确授权边界不变。
+
+### Pre-Codex self-review
+
+`matrix=enum active values + schema dual locations + historical receipt consumer; register=updated; handoff=updated; focused=50 OK; full-lane=not_triggered: schema/test-only; door=route/doc governance after this entry; grep=deepseek-v4-pro 0 hits in engine/runners/schemas/tests; provider/network=not_used; independent-review=not_used; commit=not_performed`
