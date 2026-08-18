@@ -46,7 +46,12 @@ from engine.us_short_soft_boost_comparison_adjudication import (
 )
 from engine import us_short_soft_boost_consumption as _soft_boost_consumption
 from engine.us_short_forward_policy_source_capture import _validated_ohlcv_packet
-from engine.us_short_regime import REGIMES, UNKNOWN
+from engine.us_short_regime import (
+    REGIMES,
+    UNKNOWN,
+    classify_breadth,
+    classify_market_trend,
+)
 from runners import us_short_batch5_data_context_source_packet as _source_packet
 from runners import us_short_batch5_full_candidate_live_source_packet as _pass2
 from runners import us_short_batch5_full_candidate_pass2_preflight as _preflight
@@ -68,6 +73,76 @@ _ELIGIBILITY_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governan
 _CALENDAR_PATH = ROOT / "presets" / "us_short_market_calendar_2026_2027.json"
 _CURRENT_UNIVERSE_SUMMARY_SCHEMA_VERSION = "1.3.0"
 _LEGACY_UNIVERSE_SUMMARY_SCHEMA_VERSIONS = frozenset({"1.0.0", "1.2.0"})
+
+
+def _market_axis_inputs(ctx) -> tuple[list[str], dict[str, Any], str]:
+    """Validate the two existing same-round inputs used by the real market-axis producer."""
+    try:
+        candidate = json.loads(ctx.candidate_path.read_text(encoding="utf-8"))
+        packet = json.loads(ctx.series_packet_path.read_text(encoding="utf-8"))
+        jsonschema.validate(candidate, json.loads(_universe.CANDIDATE_SCHEMA_PATH.read_text(encoding="utf-8")))
+        candidate = _universe.validate_candidate_artifact(
+            candidate,
+            expected_decision_date=ctx.decision_date,
+            governance=load_eligibility_governance(_ELIGIBILITY_GOVERNANCE_PATH),
+        )
+        jsonschema.validate(packet, json.loads(_mom_fetch.PACKET_SCHEMA_PATH.read_text(encoding="utf-8")))
+    except Exception as exc:
+        raise ValueError("market-axis candidate or momentum packet failed existing schema validation") from exc
+
+    price_basis_date = f"{ctx.price_basis_date[:4]}-{ctx.price_basis_date[4:6]}-{ctx.price_basis_date[6:]}"
+    clock = packet["decision_clock"]
+    contract = packet["series_contract"]
+    provenance = packet["provenance"]
+    if (
+        candidate["decision_date"] != ctx.decision_date
+        or candidate["price_basis_date"] != ctx.price_basis_date
+        or candidate["used_date"] != price_basis_date
+        or clock["expected_decision_date"] != ctx.decision_date
+        or clock["candidate_price_basis_date"] != ctx.price_basis_date
+        or clock["price_basis_date"] != price_basis_date
+        or clock["source_as_of"] != price_basis_date
+        or contract["as_of"] != price_basis_date
+        or provenance["source_as_of"] != price_basis_date
+        or contract["session"] != _mom_fetch.SESSION_LABEL
+        or contract["adjustment_mode"] != _mom_fetch.ADJUSTMENT_MODE
+        or contract["benchmark_symbols"] != list(_mom_fetch.BENCHMARK_SYMBOLS)
+    ):
+        raise ValueError("market-axis candidate and momentum packet clocks/contracts do not match")
+    try:
+        series_by_ticker = _mom_prod._canonical_series_by_ticker(
+            series_by_ticker=packet["series_by_ticker"],
+            allowed=set(candidate["eligible_tickers"]) | set(_mom_fetch.BENCHMARK_SYMBOLS),
+            price_basis_date=price_basis_date,
+            session=contract["session"],
+            adjustment_mode=contract["adjustment_mode"],
+        )
+        for benchmark in _mom_fetch.BENCHMARK_SYMBOLS:
+            if benchmark not in series_by_ticker:
+                raise ValueError(f"required benchmark series missing: {benchmark}")
+    except Exception as exc:
+        raise ValueError("market-axis momentum packet series are not same-clock eligible inputs") from exc
+    return list(candidate["eligible_tickers"]), series_by_ticker, price_basis_date
+
+
+def _build_market_axis_regimes(ctx, *, vix_regime: str) -> dict[str, str]:
+    eligible_tickers, series_by_ticker, price_basis_date = _market_axis_inputs(ctx)
+    return {
+        "vix": vix_regime,
+        "market_trend": classify_market_trend(
+            series_by_ticker,
+            price_basis_date=price_basis_date,
+            session=_mom_fetch.SESSION_LABEL,
+            adjustment_mode=_mom_fetch.ADJUSTMENT_MODE,
+        ),
+        "breadth": classify_breadth(
+            eligible_tickers,
+            series_by_ticker,
+            price_basis_date=price_basis_date,
+            session=_mom_fetch.SESSION_LABEL,
+            adjustment_mode=_mom_fetch.ADJUSTMENT_MODE,
+        ),
+    }
 
 
 def _stage_summary_targets(ctx) -> dict[str, Path]:
@@ -921,6 +996,7 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
             "adjudication_receipt_path": (str(ctx.soft_boost_adjudication_receipt_path)
                                            if ctx.soft_boost_adjudication_receipt_path.is_file() else None),
         }
+    market_axis_regimes = _build_market_axis_regimes(ctx, vix_regime=vix_regime)
     summary = _bridge.run_e2e(
         source_packet_path=ctx.source_packet_path,
         batch4_template_path=ctx.batch4_template_path,
@@ -938,6 +1014,7 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         bootstrap_lifecycle=True,
         generated_at=ctx.generated_at,
         vix_regime=vix_regime,
+        market_axis_regimes=market_axis_regimes,
         forward_policy_comparison_reminder=comparison_reminder,
         soft_discovery_receipt_paths=soft_paths,
         model_paper_track=model_paper_track if formal_model_paper else None,

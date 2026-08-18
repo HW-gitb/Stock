@@ -5360,3 +5360,35 @@ TTL 边界 90/91 天、正向观测永不跳过、脏缓存五形状、残差二
 
 Codex：类B 第一刀（问题5 市场轴）；随后第二刀（问题2 sub_mode 路由 + paper stop-limit），
 注意审阅意见中的映射全覆盖 fail-closed 要求。
+
+## 2026-08-18 追加：桌面 `2us_testrun0816.md:335` 类B第一刀——问题5市场轴（Codex executor/fixer，888d，OPEN-NOT-VERIFIED）
+
+### 逐行实施
+
+- **方案范围**：严格执行第一刀，只处理问题5市场轴；同轮正式输入固定为 `candidate_universe_<decision_date>.json`（Pass1 eligible 全分母）和同一 `price_basis_date` 的 `us_short_batch5_full_universe_momentum_series_<price_basis_date>_packet.json`（RTH、`split_adjusted`、eligible + `SPY/QQQ`）。不新增 provider call、artifact、sidecar、preset、schema、receipt、hash 或 state。
+- **输入门**：`weekly_bridge` 正式登记 source packet、candidate artifact 和 momentum packet，复用既有 schema、decision clock、series contract、session、adjustment mode 与 benchmark-symbol 校验；缺失、损坏或跨 clock / session / adjustment mode 为 stage integrity failure；packet 有效但轴样本不足为 `unknown`。
+- **市场趋势公式**：SPY 与 QQQ 各取截至当前 price basis 的最后 50 个有限正 RTH close，latest `>=` SMA50 为站上；两者均站上=`进攻`，恰一站上=`震荡`，均未站上且 `QQQ / QQQ_SMA50 > 0.90`=`防御`，否则=`极度防御`；任一 benchmark 不足 50 个同 clock 有效 close=`unknown`。
+- **市场广度公式**：computable member 必须是 Pass1 eligible、具备 50 个有效 close 且最后点为当前 price basis；coverage = computable / 全部 Pass1 eligible，`<80%`=`unknown`；通过 coverage 门后，以 computable member 站上 SMA50 比例按 `>=60% / 40% / 25%` 分为 `进攻 / 震荡 / 防御`，低于 25% 为 `极度防御`。
+- **接线**：`weekly_capstone -> weekly_bridge -> engine.us_short_regime -> run_e2e -> weekend_analysis -> compute_market_risk_regime` 显式传递 `{vix, market_trend, breadth}`；正式 `mixed_source` 缺任一轴即失败，禁止从 `template["market_axis_regimes"]` fallback；offline fixture 模式保留模板兼容。
+
+### 一个验收门
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`：`tests.test_us_short_regime` `22 tests / OK`；bridge/e2e/offline 聚焦组 `141 tests / OK`；受影响 Python 文件 `py_compile` 通过。覆盖公式边界、future point 忽略、49 点 unknown、breadth 80% 门、missing/cross-clock 输入、模板投毒、显式三轴到 consumer 与 0.5 仓位帽。
+- 未联网、未调用 provider/API/live、未跑 full lane；未改类A价格几何、问题2 `sub_mode` / paper stop-limit、§6、§12.1、主树、桌面文档或 `docs/CURRENT.md`，未提交、未 merge。
+
+### Required / Optional、结论与下一步
+
+- `R-USSHORT-MARKET-AXES-TEMPLATE-CONSTANTS`（Required）已按第一刀修复；Optional=无。文档落盘于 `docs/us_short_system_design.md` §7、`docs/system_risk_register.md` 顶部、`docs/SESSION_LOG.md` 顶部及本交接文档；不创建新交接碎片。
+- 当前结论保持 `repaired / OPEN-NOT-VERIFIED`。下一步：完成文档门后交 Claude Code 独立审查；PASS 后按 reviewer/committer 流程提交，merge 仍由用户决定。
+
+## 2026-08-18 Claude Code 独立审查：类B 第一刀（问题5 市场轴）— PASS
+
+四道验收门全过：轴公式边界（含 PIT 与四种 unknown）审查者亲跑 18/18；投毒+咬合由
+`test_explicit_market_axis_map_replaces_template_and_reaches_regime_cap` 与 mixed_source 拒缺轴测试钉死；
+不可得路径走既有 `_bump` 降级或 stage 失败；真实 packet 亲算本周 trend=进攻 / breadth=进攻
+（SPY 776>749、QQQ 731>713、above 66.5%、coverage 80.9%）——本周模板常量碰巧与真实一致，
+修复价值在市场转向的周。不阻断 `O-AXIS-1`：覆盖率贴 80% 门，广度轴可能偶发 unknown（保守方向）。
+
+### 下一步
+
+Codex：类B 第二刀（问题2 sub_mode 路由 + paper stop-limit），bucket 映射须全覆盖 fail-closed。

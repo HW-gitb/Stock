@@ -459,6 +459,7 @@ def _assemble_batch4_packet(
     prior_regime: str | None = None,
     prior_upgrade_count: int = 0,
     vix_regime: str | None = None,
+    market_axis_regimes: dict[str, Any] | None = None,
     forward_policy_comparison_reminder: str | None = None,
     soft_discovery_receipt_paths: dict[str, str | None] | None = None,
     model_paper_track: dict[str, Any] | None = None,
@@ -470,18 +471,22 @@ def _assemble_batch4_packet(
     if not isinstance(basket_context, dict):
         raise Batch5ToBatch4E2EError("batch4 template basket_context must be an object")
     basket_context["theme_opportunity_state"] = theme_state
-    market_axis_regimes = copy.deepcopy(template["market_axis_regimes"])
-    if not isinstance(market_axis_regimes, dict):
+    resolved_market_axis_regimes = (
+        copy.deepcopy(market_axis_regimes)
+        if market_axis_regimes is not None
+        else copy.deepcopy(template["market_axis_regimes"])
+    )
+    if not isinstance(resolved_market_axis_regimes, dict):
         raise Batch5ToBatch4E2EError("batch4 template market_axis_regimes must be an object")
     if vix_regime is not None:
-        market_axis_regimes["vix"] = vix_regime
+        resolved_market_axis_regimes["vix"] = vix_regime
     per_ticker_analysis, sizing_per_ticker, basket_context, cost_inputs = _derive_current_action_inputs(
         components=components,
         account_state_path=account_state_path,
         calendar_path=calendar_path,
         governance_path=governance_path,
         now_et=now_et,
-        market_axis_regimes=market_axis_regimes,
+        market_axis_regimes=resolved_market_axis_regimes,
         basket_context=basket_context,
         prior_regime=prior_regime,
         prior_upgrade_count=prior_upgrade_count,
@@ -504,7 +509,7 @@ def _assemble_batch4_packet(
         "per_ticker_analysis": per_ticker_analysis,
         "run_provenance": run_provenance,
         "provider_health": provider_health,
-        "market_axis_regimes": market_axis_regimes,
+        "market_axis_regimes": resolved_market_axis_regimes,
         "prior_regime": prior_regime,
         "prior_upgrade_count": prior_upgrade_count,
         "sizing_per_ticker": sizing_per_ticker,
@@ -587,6 +592,7 @@ def run_e2e(
     dry_run: bool = False,
     generated_at: str | None = None,
     vix_regime: str | None = None,
+    market_axis_regimes: dict[str, Any] | None = None,
     forward_policy_comparison_reminder: str | None = None,
     soft_discovery_receipt_paths: dict[str, str | None] | None = None,
     model_paper_track: dict[str, Any] | None = None,
@@ -599,6 +605,13 @@ def run_e2e(
     if run_mode == "research_live":
         raise Batch5ToBatch4E2EError(
             "batch5-to-batch4 bridge consumes caller action inputs and must use mixed_source, never research_live"
+        )
+    if run_mode == "mixed_source" and (
+        not isinstance(market_axis_regimes, dict)
+        or set(market_axis_regimes) != {"vix", "market_trend", "breadth"}
+    ):
+        raise Batch5ToBatch4E2EError(
+            "mixed_source requires the complete vix/market_trend/breadth market_axis_regimes map"
         )
     # Provider-backed report modes are CAPSTONE-INTERNAL: minted ONLY when the caller holds the
     # run-specific capstone receipt (bound to source path/digest + provider evidence, NOT a caller-settable boolean).
@@ -764,6 +777,7 @@ def run_e2e(
             prior_regime=prior_regime,
             prior_upgrade_count=prior_upgrade_count,
             vix_regime=vix_regime,
+            market_axis_regimes=market_axis_regimes,
             forward_policy_comparison_reminder=forward_policy_comparison_reminder,
             soft_discovery_receipt_paths=soft_discovery_receipt_paths,
             model_paper_track=model_paper_track,

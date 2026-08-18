@@ -1029,6 +1029,9 @@ class CapstoneFakeChainTest(unittest.TestCase):
             stages=stages,
         )
         with mock.patch.object(capstone_stages, "_write_provider_health", side_effect=prepare_offline_health), \
+             mock.patch.object(capstone_stages, "_build_market_axis_regimes", return_value={
+                 "vix": "防御", "market_trend": "进攻", "breadth": "进攻",
+             }), \
              mock.patch.object(capstone_stages._bridge, "run_e2e", side_effect=offline_bridge):
             first = run_weekly_capstone(**run_kwargs)
             first_state = json.loads(
@@ -2324,12 +2327,18 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             ctx.vix_regime_summary_path.parent.mkdir(parents=True, exist_ok=True)
             ctx.vix_regime_summary_path.write_text(json.dumps(vix_summary), encoding="utf-8")
             with mock.patch.object(st, "_write_provider_health"), \
+                 mock.patch.object(st, "_build_market_axis_regimes", return_value={
+                     "vix": "进攻", "market_trend": "进攻", "breadth": "进攻",
+                 }), \
                  mock.patch.object(st._bridge, "run_e2e", return_value={"batch4_run": {"emitted": True}}) as m:
                 st.run_weekly_bridge(ctx)
                 self.assertEqual(m.call_args.kwargs.get("run_mode"), "mixed_source")
                 self.assertIs(m.call_args.kwargs.get("_research_live_capability"), cap)
         # authorized BUT capability not injected (the default) → None forwarded (the auth flag alone does not mint it)
         with mock.patch.object(st, "_write_provider_health"), \
+             mock.patch.object(st, "_build_market_axis_regimes", return_value={
+                 "vix": "进攻", "market_trend": "进攻", "breadth": "进攻",
+             }), \
              mock.patch.object(st._bridge, "run_e2e", return_value={"batch4_run": {"emitted": True}}) as m:
             st.run_weekly_bridge(self._ctx(authorized=True))
             self.assertIsNone(m.call_args.kwargs.get("_research_live_capability"))
@@ -2371,6 +2380,9 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
         )
 
         with mock.patch.object(st, "_write_provider_health"), \
+             mock.patch.object(st, "_build_market_axis_regimes", return_value={
+                 "vix": "进攻", "market_trend": "进攻", "breadth": "进攻",
+             }), \
              mock.patch.object(st, "comparison_banner_from_private_ledger_path", return_value=""), \
              mock.patch.object(st, "_deliver_serenity_shadow_to_official_report", return_value=None), \
              mock.patch.object(st, "_record_serenity_report_delivery"), \
@@ -2425,6 +2437,9 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             ctx.vix_regime_summary_path.parent.mkdir(parents=True, exist_ok=True)
             ctx.vix_regime_summary_path.write_text(json.dumps(summary), encoding="utf-8")
             with mock.patch.object(st, "_write_provider_health"), \
+                 mock.patch.object(st, "_build_market_axis_regimes", return_value={
+                     "vix": regime, "market_trend": "进攻", "breadth": "进攻",
+                 }), \
                  mock.patch.object(st._bridge, "run_e2e", return_value={"batch4_run": {"emitted": True}}) as m:
                 out = st.run_weekly_bridge(ctx)
             self.assertTrue(out["batch4_run"]["emitted"])
@@ -2438,6 +2453,9 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             )
             from engine.us_short_run_origin import RunOriginError
             with mock.patch.object(st, "_write_provider_health"), \
+                 mock.patch.object(st, "_build_market_axis_regimes", return_value={
+                     "vix": "进攻", "market_trend": "进攻", "breadth": "进攻",
+                 }), \
                  mock.patch.object(st._bridge, "run_e2e"):
                 with self.assertRaises(RunOriginError):
                     st.run_weekly_bridge(ctx)

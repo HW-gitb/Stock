@@ -10,6 +10,7 @@ import json
 import sys
 import tempfile
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,110 @@ def _r(vix=None, trend=None, breadth=None):
     if breadth is not None:
         d["breadth"] = breadth
     return d
+
+
+_AXIS_BASIS = "2026-08-14"
+
+
+def _axis_series(latest, *, prior=100.0, future=None, count=50):
+    basis = date.fromisoformat(_AXIS_BASIS)
+    points = [
+        {"date": (basis - timedelta(days=count - 1 - index)).isoformat(), "close": prior}
+        for index in range(count - 1)
+    ]
+    points.append({"date": _AXIS_BASIS, "close": latest})
+    if future is not None:
+        points.append({"date": (basis + timedelta(days=1)).isoformat(), "close": future})
+    return {"as_of": _AXIS_BASIS, "session": "RTH", "adjustment_mode": "split_adjusted", "points": points}
+
+
+class MarketAxisFormulaTests(unittest.TestCase):
+    def test_market_trend_table_includes_sma50_and_qqq_ratio_cut(self):
+        exact_boundary_prior = (50 * 100.0 - 90.0) / 49.0
+        cases = (
+            ("both above", 101.0, 101.0, 100.0, "进攻"),
+            ("one above", 101.0, 99.0, 100.0, "震荡"),
+            ("qqq ratio above .90", 99.0, 90.0, 100.0, "防御"),
+            ("qqq ratio at .90", 99.0, 90.0, exact_boundary_prior, "极度防御"),
+        )
+        for label, spy_latest, qqq_latest, qqq_prior, expected in cases:
+            with self.subTest(label=label):
+                self.assertEqual(
+                    rg.classify_market_trend(
+                        {"SPY": _axis_series(spy_latest), "QQQ": _axis_series(qqq_latest, prior=qqq_prior)},
+                        price_basis_date=_AXIS_BASIS,
+                    ),
+                    expected,
+                )
+
+    def test_market_trend_uses_basis_or_earlier_and_unknowns_short_benchmark(self):
+        future_only_signal = {
+            "SPY": _axis_series(99.0, future=150.0),
+            "QQQ": _axis_series(99.0, future=150.0),
+        }
+        self.assertEqual(rg.classify_market_trend(future_only_signal, price_basis_date=_AXIS_BASIS), "防御")
+        short = {
+            "SPY": _axis_series(101.0, count=49),
+            "QQQ": _axis_series(101.0),
+        }
+        self.assertEqual(rg.classify_market_trend(short, price_basis_date=_AXIS_BASIS), rg.UNKNOWN)
+
+    def test_breadth_table_covers_80_60_40_25_boundaries(self):
+        cases = (
+            (5, 5, 3, "进攻"),
+            (5, 5, 2, "震荡"),
+            (5, 4, 1, "防御"),
+            (5, 5, 1, "极度防御"),
+            (5, 4, 4, "进攻"),
+            (5, 3, 3, rg.UNKNOWN),
+        )
+        for eligible_count, computable_count, above_count, expected in cases:
+            with self.subTest(eligible_count=eligible_count, computable_count=computable_count, above_count=above_count):
+                tickers = [f"T{index}" for index in range(eligible_count)]
+                series = {
+                    ticker: _axis_series(101.0 if index < above_count else 99.0)
+                    for index, ticker in enumerate(tickers[:computable_count])
+                }
+                self.assertEqual(
+                    rg.classify_breadth(tickers, series, price_basis_date=_AXIS_BASIS),
+                    expected,
+                )
+
+
+class MarketAxisBridgeInputTests(unittest.TestCase):
+    def test_weekly_bridge_reads_same_round_candidate_and_momentum_packet(self):
+        from types import SimpleNamespace
+
+        from runners import us_short_weekly_capstone_stages as stages
+        from tests.provider import test_us_short_batch5_full_universe_momentum_producer as fixture
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            series = fixture._base_series_map()
+            for ticker in fixture._ALL_ELIGIBLE:
+                series[ticker] = fixture._series(start=100.0, step=1.0)
+            candidate_path = root / "candidate.json"
+            packet_path = root / "momentum.json"
+            candidate_path.write_text(
+                json.dumps(fixture._candidate_artifact(fixture._ALL_ELIGIBLE)), encoding="utf-8"
+            )
+            packet_path.write_text(json.dumps(fixture._series_packet(series)), encoding="utf-8")
+            ctx = SimpleNamespace(
+                candidate_path=candidate_path,
+                series_packet_path=packet_path,
+                decision_date=fixture._DECISION_DATE,
+                price_basis_date=fixture._PRICE_BASIS_DATE,
+            )
+            self.assertEqual(
+                stages._build_market_axis_regimes(ctx, vix_regime="进攻"),
+                {"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"},
+            )
+
+            packet = fixture._series_packet(series)
+            packet["decision_clock"]["price_basis_date"] = "2026-06-11"
+            packet_path.write_text(json.dumps(packet), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "market-axis"):
+                stages._build_market_axis_regimes(ctx, vix_regime="进攻")
 
 
 class ClassifyVixTests(unittest.TestCase):
