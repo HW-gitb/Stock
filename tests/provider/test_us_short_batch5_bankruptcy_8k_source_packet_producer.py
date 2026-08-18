@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -17,7 +18,9 @@ if str(ROOT) not in sys.path:
 
 from jsonschema import Draft7Validator  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import _DECISION_DATE, _candidate_artifact  # noqa: E402
+from tests import test_us_short_discovery_class_guards as _class_guards  # noqa: E402
 from tests.provider.us_short_private_test_root_light import (  # noqa: E402
+    _TEMP_ROOT_MARKER,
     temporary_us_short_directory,
     temporary_us_short_state_directory,
 )
@@ -124,13 +127,30 @@ class Bankruptcy8kSourcePacketProducerTest(unittest.TestCase):
         )
         self.sample_root = Path(self._sample_root_context.__enter__())
         self.addCleanup(self._sample_root_context.__exit__, None, None, None)
+        self._summary_root_context = tempfile.TemporaryDirectory(
+            prefix="us_short_batch5_bankruptcy_8k_source_packet_producer_summaries_",
+            dir=str(ROOT / "docs"),
+        )
+        self.summary_root = Path(self._summary_root_context.__enter__())
+        (self.summary_root / _TEMP_ROOT_MARKER).touch()
+        self.addCleanup(self._summary_root_context.__exit__, None, None, None)
+        import importlib
+
+        producer = importlib.import_module(PRODUCER_MODULE)
+        source_packet_runner = producer.source_packet_runner
+        original_docs_dir = producer.DOCS_DIR
+        producer.DOCS_DIR = self.summary_root
+        self.addCleanup(setattr, producer, "DOCS_DIR", original_docs_dir)
+        original_source_docs_dir = source_packet_runner.DOCS_DIR
+        source_packet_runner.DOCS_DIR = self.summary_root
+        self.addCleanup(setattr, source_packet_runner, "DOCS_DIR", original_source_docs_dir)
         self.slug = f"test_b8kprod_{os.getpid()}_{self._testMethodName[:24]}"
         self.paths = {
             "candidate": self.state_dir / f"{self.slug}_candidate.json",
             "source_packet": self.state_dir / f"{self.slug}_packet.json",
             "screen": self.state_dir / f"{self.slug}_screen.json",
-            "producer_summary": ROOT / "docs" / f"{self.slug}_producer_summary.json",
-            "consumer_summary": ROOT / "docs" / f"{self.slug}_consumer_summary.json",
+            "producer_summary": self.summary_root / f"{self.slug}_producer_summary.json",
+            "consumer_summary": self.summary_root / f"{self.slug}_consumer_summary.json",
         }
         self.raw_root = self.sample_root / self.slug / "raw"
         for path in self.paths.values():
@@ -142,6 +162,18 @@ class Bankruptcy8kSourcePacketProducerTest(unittest.TestCase):
         for path in self.paths.values():
             path.unlink(missing_ok=True)
             path.with_name(path.name + ".tmp").unlink(missing_ok=True)
+
+    def test_private_summary_root_does_not_grow_real_docs(self):
+        import importlib
+
+        producer = importlib.import_module(PRODUCER_MODULE)
+        self.assertFalse(producer._git_ignored(self.summary_root / "probe.json"))
+        self.assertEqual(
+            _class_guards.LaneResidueConformance._growth(
+                ROOT / "docs", _class_guards.INITIAL_PRIVATE_FILES["docs"]
+            ),
+            [],
+        )
 
     def _env(self, producer):
         return mock.patch.dict(
