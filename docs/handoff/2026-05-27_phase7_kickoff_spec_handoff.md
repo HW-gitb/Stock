@@ -5159,3 +5159,71 @@ Claude Code：独立审查本工作树的 P2 Required 与 `O-THEME-LEGACY-1` 收
 ### 下一步
 
 Claude Code：独立审查这一处 fixture 迁移，并确认正式 `theme.run_packet` 的 legacy 拒绝未被放宽。
+
+## 2026-08-16 交办 Codex：省掉市值兜底腿每周 104 秒的空转（桌面 `2us_testrun0816.md` §9.3）
+
+`R-USSHORT-MARKET-CAP-OVERVIEW-LEG-PAYS-104S-FOR-A-FIELD-THAT-DOES-NOT-EXIST`
+
+### 先说一句取舍（不是拒绝执行，是让你带着这个前提做）
+
+104 秒占整轮 53 分钟的 3%。**本条真正的价值不在省时间，在于顺手把"不该交易的工具"和"数据真缺"从同一个剔除理由里分开**——
+后者几乎零成本且每周都在误导读报告的人。若时间有限，先做方案B。
+
+### 已实测坐实的前提（2026-08-16，用户授权联网，主树跑）
+
+生产同一端点 `GET https://api.massive.com/v3/reference/tickers/{ticker}?date=`、同一提取逻辑，
+9 只残差全测 + AAPL 对照，按免费档 5 次/分钟节流：
+
+- 10 次调用**全部 HTTP 200**，无 429 / 无权限错误。对照 AAPL 拿到 `market_cap=4,464,797,487,400`。
+- 9 只残差全部 200 且记录正常，但**响应里没有 `market_cap` 这个键**。
+- 类型分布：`PSUS=FUND`；`STRC/STRF/STRK=PFD`；`CATLU/XIIIU/BRTMU=UNIT`；`BPRE/VCX=CS`（也无 market_cap，BPRE 只有 `share_class_shares_outstanding=143,044,372`）。
+
+**结论：不是免费档限制，也不是抓取失败，是这些工具本身没有"市值"这个概念。**
+`initial_attempt_minimum_pacing_seconds=104.0` = `MASSIVE_GROUPED_REQUEST_INTERVAL_SECONDS(13.0) × 8 个间隔`，与实测一致。
+
+### 明确不做（这三条都是我核过后否掉的，不要"顺手"做）
+
+1. **不要新增 FMP 兜底**。`runners/us_short_universe_fetch.py` 全文件 FMP 出现 0 次，市值链路从来是
+   SEC CompanyFacts → yfinance → Massive，所以那不是"恢复"是"新增"；且 FMP profile 对 UNIT/PFD/FUND 同样给 0 或 null，加了无效。
+2. **不要加市场级 `/v3/reference/tickers` 批量拉取来提前取 type**。全市场约 1.1 万只、`limit=1000` 要 11+ 页，
+   为省 9 次调用而多发 11 次，净亏。
+3. **不要用 ticker 后缀猜工具类型**（"结尾 U 就是 unit"之类）。`STRC/STRF/STRK` 不符合任何后缀规律，
+   而误判会把真正的普通股静默剔掉。
+
+### 方案A：把 overview 已经返回的 `type` 记下来，下次直接跳过（这是省 104 秒的唯一划算路径）
+
+鸡生蛋问题在于 `type` 是 overview 响应**里**的字段，本轮调用前拿不到。解法是**跨周复用本轮已经付过费的观测**：
+
+- **写**：`fetch_massive_ticker_overview` 每次拿到 200 响应后，把 `{ticker: {"type": <type>, "has_market_cap": <bool>, "observed_on": <price_basis_date>}}`
+  落到一个 gitignored 的小状态文件（建议 `state/us_short/massive_instrument_type_observations.json`，沿用本 runner 现有的原子写）。
+  只记这三个字段，不要把整份响应存进去。
+- **读**：下一轮构造残差列表时，跳过缓存里 `has_market_cap == false` 且 `observed_on` 在 **90 天**以内的 ticker。
+  超过 90 天的重新实调一次（SPAC 单位可能拆分成普通股、优先股可能被赎回，不能永久钉死）。
+- **被跳过的 ticker 结果不变**：它今天就是以"市值未知"被剔除的，跳过后仍然是，所以最坏情况只是"多一个周期才发现它变了"，
+  与现状同级，不引入新的错误风险。
+- **摘要要如实**：在 `market_cap_completion` 里新增 `massive_overview_skipped_by_cache_count` 与
+  `massive_overview_physical_call_count`，不要让"跳过"被计成"尝试过"。现有那几处一致性校验
+  （`rescued + final_unresolved == target`）必须跟着把 skipped 算进去，别让它变成静默放宽。
+
+预期效果：第一周仍是 9 次调用/104 秒；第二周起这 9 只全部命中缓存，该腿降到 0 次调用/0 秒。
+
+### 方案B：给这批票一个说得通的剔除理由（推荐无论 A 做不做都做）
+
+- 目前它们以 `market_cap_usd_unknown_or_invalid` 被剔，本周该理由共 2163 只，
+  把"这压根不是一只普通股"和"数据真缺"混在了一起，报告 §9 也因此读不出真相。
+- 用方案A 已经拿到的 `type`，在 Pass1 剔除理由里区分出一类
+  （建议 `non_common_equity_instrument`，覆盖 `UNIT/PFD/FUND`；`CS` 但无 market_cap 的仍归原理由）。
+- 这一条只改分类与统计口径，**不得改变任何一只票的最终去留**——两个理由都是剔除，剔除集合必须逐位不变。
+
+### 最小验收门
+
+1. **反向控制（必做）**：缓存命中导致跳过时，被跳过 ticker 的最终 Pass1 去留与"不跳过"完全一致（逐 ticker 比对，不是计数比对）。
+2. **TTL 反向**：把某条缓存的 `observed_on` 改到 91 天前，该 ticker 必须重新实调，不得被跳过。
+3. **计数一致性**：`skipped + physical_calls == 残差总数`；且 `rescued + final_unresolved == target` 在引入 skipped 后仍成立。
+4. **理由不改去留**：方案B 前后 Pass1 的剔除 ticker 集合逐位相同，只有理由分布变化。
+5. **缓存文件不入库**：`state/` 已整目录 gitignored，确认新文件落在其下且 `git status` 干净。
+6. 跑 `tests.provider.test_us_short_universe_fetch` 超集（本刀改的是 `fetch_massive_ticker_overview` 与 Pass1 剔除理由分类）。
+
+### 下一步
+
+Codex：按方案A + 方案B 一轮做完（同一刀，别拆）；完成后交 Claude Code 独立审查。
