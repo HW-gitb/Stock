@@ -115,6 +115,11 @@ from engine.data.analysis_input_contract import (
     validate_analysis_input_contract,
     validate_json_schema,
 )
+from engine.a_short_market_breadth import (
+    MarketBreadthError,
+    compute_full_market_breadth,
+    full_market_universe,
+)
 from engine.a_short_observability import safe_exception_summary
 from engine.a_short_loss_making_admission import apply_loss_making_admission
 from engine.data.a_share_board_scope import is_a_share_main_board
@@ -241,7 +246,11 @@ EGS_API_FAMILIES = [
     "moneyflow", "moneyflow_hsgt", "margin_detail", "margin",
     "share_float", "stk_holdertrade", "balancesheet", "block_trade", "stock_basic", "namechange", "trade_cal",
     "index_member_all", "index_member", "index_classify",
+    "stk_limit",
 ]
+BREADTH_STREAK_SESSIONS = 10
+BREADTH_STK_LIMIT_CACHE_VERSION = "v1"
+BREADTH_STK_LIMIT_FIELDS = ("ts_code", "trade_date", "up_limit", "down_limit")
 # Tushare ``moneyflow_hsgt.north_money`` is reported in 万元; the market
 # environment consumers below use normalized RMB so display and thresholds
 # share one explicit unit boundary.
@@ -1444,6 +1453,9 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         csi300_pct_change_window = float(csi300_pct_change_window)
     market_breadth_facts, market_breadth_source = _market_breadth_leaves(
         market_context_facts.get("full_market_breadth"), price_data_through)
+    market_regime = _normalize_market_regime(
+        market_context_facts.get("market_regime")
+    )
     moneyflow_coverage = dict(
         moneyflow_coverage
         or _default_moneyflow_coverage(
@@ -1577,14 +1589,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 "is_pre_holiday_window": calendar_is_pre_holiday,
                 "holiday_days_ahead": calendar_holiday_days,
             },
-            "market_regime": {
-                "status": "unknown",
-                "confidence": "unknown",
-                "position_cap_single_pct": None,
-                "position_cap_total_pct": None,
-                "min_reward_risk": None,
-                "triggers": [],
-            },
+            "market_regime": market_regime,
             "volatility": dict(iv_projection or _unknown_iv_projection()),
             "breadth": {
                 **market_breadth_facts,
@@ -3886,6 +3891,70 @@ def _date8(value, label):
     if not re.fullmatch(r"\d{8}", text):
         raise RuntimeError(f"{label} must be YYYYMMDD")
     return text
+
+
+def _validate_stk_limit_frame(frame, expected_dates, label):
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        raise RuntimeError(f"{label} payload is empty")
+    missing = set(BREADTH_STK_LIMIT_FIELDS) - set(frame.columns)
+    if missing:
+        raise RuntimeError(f"{label} payload missing required fields: {sorted(missing)}")
+    result = frame[list(BREADTH_STK_LIMIT_FIELDS)].copy()
+    result["ts_code"] = result["ts_code"].astype(str).str.strip()
+    if result["ts_code"].isin({"", "nan", "none", "null"}).any():
+        raise RuntimeError(f"{label} payload contains blank ts_code")
+    result["trade_date"] = result["trade_date"].map(
+        lambda value: _date8(value, f"{label} trade_date")
+    )
+    expected = [_date8(value, f"{label} expected trade_date") for value in expected_dates]
+    if set(result["trade_date"]) != set(expected):
+        raise RuntimeError(f"{label} payload dates do not match the requested window")
+    if result.duplicated(["trade_date", "ts_code"]).any():
+        raise RuntimeError(f"{label} payload contains duplicate ts_code/trade_date")
+    for column in ("up_limit", "down_limit"):
+        result[column] = pd.to_numeric(result[column], errors="coerce")
+    values = result[["up_limit", "down_limit"]].to_numpy(dtype=float)
+    if not np.isfinite(values).all() or (values <= 0).any():
+        raise RuntimeError(f"{label} payload contains non-finite or non-positive limits")
+    return result.sort_values(["trade_date", "ts_code"], kind="mergesort").reset_index(drop=True)
+
+
+def get_full_market_stk_limit_window(trade_dates):
+    """Fetch the exact settled 11-session ``stk_limit`` panel for breadth."""
+    requested = [_date8(value, "breadth trade_date") for value in list(trade_dates)[:BREADTH_STREAK_SESSIONS + 1]]
+    if len(requested) != BREADTH_STREAK_SESSIONS + 1 or len(set(requested)) != len(requested):
+        raise RuntimeError(
+            f"breadth requires exactly {BREADTH_STREAK_SESSIONS + 1} unique settled trade dates"
+        )
+    key = (
+        f"full_market_stk_limit_{requested[0]}_{BREADTH_STREAK_SESSIONS + 1}_"
+        f"{BREADTH_STK_LIMIT_CACHE_VERSION}"
+    )
+    try:
+        cached = load_cache(key)
+    except (OSError, EOFError, pickle.PickleError, TypeError, ValueError, RuntimeError) as exc:
+        log.warning("stk_limit cache rejected; refetching: %s", type(exc).__name__)
+        cached = None
+    if cached is not None:
+        try:
+            return _validate_stk_limit_frame(cached, requested, "stk_limit cache")
+        except (RuntimeError, ValueError) as exc:
+            log.warning("stk_limit cache rejected; refetching: %s", type(exc).__name__)
+
+    endpoint = getattr(pro, "stk_limit", None)
+    if not callable(endpoint):
+        raise RuntimeError("tushare.stk_limit provider is unavailable")
+    frames = []
+    for trade_date in requested:
+        frame = safe_api(
+            endpoint,
+            trade_date=trade_date,
+            fields="ts_code,trade_date,up_limit,down_limit",
+        )
+        frames.append(_validate_stk_limit_frame(frame, [trade_date], "stk_limit"))
+    result = _validate_stk_limit_frame(pd.concat(frames, ignore_index=True), requested, "stk_limit")
+    save_cache(key, result)
+    return result
 
 
 def _validate_ohlc(frame, columns, label):
@@ -7348,7 +7417,367 @@ def _csi300_window_metadata(trade_dates):
     }
 
 
-def market_environment(trade_dates, stats_df, *, return_facts=False):
+def _breadth_unavailable_observation(requested_dates, reason, *, observed_dates=None,
+                                     universe_size=0, eligible_stock_count=0,
+                                     usable_stock_count=0):
+    requested = [str(value) for value in (requested_dates or ())]
+    observed = [str(value) for value in (observed_dates or ())]
+    return {
+        "full_market_limit_up_count": None,
+        "full_market_limit_down_count": None,
+        "full_market_consecutive_limit_up_height": None,
+        "coverage": {
+            "status": "unavailable",
+            "universe_name": _breadth_universe_name(),
+            "requested_trade_dates": requested,
+            "observed_trade_dates": observed,
+            "universe_size": int(universe_size),
+            "eligible_stock_count": int(eligible_stock_count),
+            "usable_stock_count": int(usable_stock_count),
+            "absent_stock_count": max(0, int(universe_size) - int(eligible_stock_count)),
+            "height_window_saturated": False,
+            "unavailable_reason": str(reason),
+        },
+    }
+
+
+def _breadth_window_frame(frame, dates):
+    if not isinstance(frame, pd.DataFrame) or "trade_date" not in frame.columns:
+        return frame
+    wanted = {str(value) for value in dates}
+    return frame[frame["trade_date"].astype(str).isin(wanted)].copy()
+
+
+def _breadth_valid_int(value):
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)):
+        return None
+    value = int(value)
+    return value if value >= 0 else None
+
+
+def _breadth_reason_has(coverage, text):
+    return text in str((coverage or {}).get("unavailable_reason") or "")
+
+
+def _breadth_height_usable(observation):
+    coverage = observation.get("coverage") or {}
+    height = _breadth_valid_int(
+        observation.get("full_market_consecutive_limit_up_height")
+    )
+    return (
+        coverage.get("status") in {"complete", "partial"}
+        and height is not None
+        and not _breadth_reason_has(coverage, "incomplete_history_window")
+        and not _breadth_reason_has(
+            coverage, "contender_bar_missing_in_window"
+        )
+    )
+
+
+def _build_full_market_breadth_observation(trade_dates, all_daily=None, df_stocks=None,
+                                            suspended_set=None):
+    dates = [str(value) for value in (trade_dates or ())]
+    current_window = list(reversed(dates[:BREADTH_STREAK_SESSIONS]))
+    previous_window = list(reversed(dates[1:BREADTH_STREAK_SESSIONS + 1]))
+    if all_daily is None or df_stocks is None:
+        return (
+            _breadth_unavailable_observation(current_window, "breadth_producer_not_wired"),
+            _breadth_unavailable_observation(previous_window, "breadth_producer_not_wired"),
+        )
+    if len(dates) < BREADTH_STREAK_SESSIONS + 1:
+        return (
+            _breadth_unavailable_observation(current_window, "breadth_window_unavailable"),
+            _breadth_unavailable_observation(previous_window, "breadth_window_unavailable"),
+        )
+
+    try:
+        limit_panel = get_full_market_stk_limit_window(dates[:BREADTH_STREAK_SESSIONS + 1])
+    except (RuntimeError, MarketBreadthError) as exc:
+        log.warning("[a-short breadth] stk_limit unavailable (%s)", type(exc).__name__)
+        return (
+            _breadth_unavailable_observation(current_window, "stk_limit_fetch_failed"),
+            _breadth_unavailable_observation(previous_window, "stk_limit_fetch_failed"),
+        )
+
+    try:
+        current = compute_full_market_breadth(
+            as_of=dates[0],
+            daily=_breadth_window_frame(all_daily, current_window),
+            stk_limit=_breadth_window_frame(limit_panel, current_window),
+            stock_basic=df_stocks,
+            trading_days=current_window,
+            streak_sessions=BREADTH_STREAK_SESSIONS,
+        )
+        previous = compute_full_market_breadth(
+            as_of=dates[1],
+            daily=_breadth_window_frame(all_daily, previous_window),
+            stk_limit=_breadth_window_frame(limit_panel, previous_window),
+            stock_basic=df_stocks,
+            trading_days=previous_window,
+            streak_sessions=BREADTH_STREAK_SESSIONS,
+        )
+        current_universe = full_market_universe(df_stocks, dates[0])
+    except MarketBreadthError as exc:
+        log.warning("[a-short breadth] breadth contract unavailable (%s)", type(exc).__name__)
+        return (
+            _breadth_unavailable_observation(current_window, "breadth_contract_error"),
+            _breadth_unavailable_observation(previous_window, "breadth_contract_error"),
+        )
+
+    current = dict(current)
+    current_coverage = dict(current.get("coverage") or {})
+    current_daily = _breadth_window_frame(all_daily, [dates[0]])
+    observed_codes = (
+        set(current_daily["ts_code"].dropna().astype(str))
+        if isinstance(current_daily, pd.DataFrame) and "ts_code" in current_daily.columns
+        else set()
+    )
+    suspended = {str(code) for code in (suspended_set or set()) if pd.notna(code)}
+    unexplained_absent = current_universe - observed_codes - suspended
+    if unexplained_absent:
+        reason = str(current_coverage.get("unavailable_reason") or "")
+        current_coverage["unavailable_reason"] = "; ".join(
+            part for part in (reason, "unexplained_daily_absent") if part
+        )
+    current_coverage["_unexplained_daily_absent"] = bool(unexplained_absent)
+    current_count = _breadth_valid_int(current.get("full_market_limit_down_count"))
+    current_day_usable = (
+        current_coverage.get("status") in {"complete", "partial"}
+        and current_count is not None
+        and not unexplained_absent
+    )
+    current_height_usable = (
+        current_day_usable
+        and _breadth_height_usable(current)
+    )
+    current_coverage["_current_day_usable"] = bool(current_day_usable)
+    current_coverage["_current_height_usable"] = bool(current_height_usable)
+    current["coverage"] = current_coverage
+
+    previous = dict(previous)
+    previous_coverage = dict(previous.get("coverage") or {})
+    previous_coverage["_previous_height_usable"] = bool(
+        _breadth_height_usable(previous)
+    )
+    previous["coverage"] = previous_coverage
+    return current, previous
+
+
+def _verified_iv_percentile(iv_projection):
+    if not isinstance(iv_projection, dict):
+        return None
+    if (
+        iv_projection.get("iv_feed_status") != "ready"
+        or iv_projection.get("source_status") != "complete"
+        or iv_projection.get("freshness_status") != "aligned"
+    ):
+        return None
+    value = iv_projection.get("iv_percentile_252d")
+    if isinstance(value, (bool, np.bool_)):
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if np.isfinite(value) and 0.0 <= value <= 100.0 else None
+
+
+def _market_regime_policy(status):
+    regime_names = {"defense": "防御期", "contraction": "收缩期"}
+    regime_name = regime_names.get(status)
+    if regime_name is None:
+        return None
+    phase5 = ((_RUNTIME_CONFIGURATION.get("m67") or {}).get("phase5") or {})
+    try:
+        single_cap = float((phase5.get("single_cap_pct") or {})[regime_name]) * 100.0
+        min_reward_risk = float((phase5.get("rr_floor") or {})[regime_name])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not np.isfinite(single_cap) or not np.isfinite(min_reward_risk):
+        return None
+    return {
+        "position_cap_single_pct": single_cap,
+        "position_cap_total_pct": 50.0 if status == "defense" else None,
+        "min_reward_risk": min_reward_risk,
+    }
+
+
+def _unknown_market_regime(triggers=None):
+    return {
+        "status": "unknown",
+        "confidence": "unknown",
+        "position_cap_single_pct": None,
+        "position_cap_total_pct": None,
+        "min_reward_risk": None,
+        "triggers": list(triggers or []),
+    }
+
+
+def derive_v14_2_market_regime(current_breadth, previous_breadth, iv_projection,
+                               *, current_day_usable=None,
+                               current_height_usable=None,
+                               previous_height_usable=None):
+    current = current_breadth if isinstance(current_breadth, dict) else {}
+    previous = previous_breadth if isinstance(previous_breadth, dict) else {}
+    current_coverage = current.get("coverage") if isinstance(current.get("coverage"), dict) else {}
+    previous_coverage = previous.get("coverage") if isinstance(previous.get("coverage"), dict) else {}
+    if not isinstance(current_day_usable, bool):
+        current_day_usable = current_coverage.get("_current_day_usable")
+    if not isinstance(current_day_usable, bool):
+        current_day_usable = (
+            current_coverage.get("status") in {"complete", "partial"}
+            and not _breadth_reason_has(current_coverage, "unexplained_daily_absent")
+        )
+    if not isinstance(current_height_usable, bool):
+        current_height_usable = current_coverage.get("_current_height_usable")
+    if not isinstance(current_height_usable, bool):
+        current_height_usable = (
+            current_day_usable
+            and _breadth_height_usable(current)
+        )
+    if not isinstance(previous_height_usable, bool):
+        previous_height_usable = previous_coverage.get("_previous_height_usable")
+    if not isinstance(previous_height_usable, bool):
+        previous_height_usable = _breadth_height_usable(previous)
+
+    limit_down = (
+        _breadth_valid_int(current.get("full_market_limit_down_count"))
+        if current_day_usable else None
+    )
+    current_height = (
+        _breadth_valid_int(current.get("full_market_consecutive_limit_up_height"))
+        if current_height_usable else None
+    )
+    previous_height = (
+        _breadth_valid_int(previous.get("full_market_consecutive_limit_up_height"))
+        if previous_height_usable else None
+    )
+    iv_percentile = _verified_iv_percentile(iv_projection)
+    down_status = (
+        "unknown" if limit_down is None else "pass" if limit_down > 100 else "fail"
+    )
+    iv_status = (
+        "unknown" if iv_percentile is None
+        else "pass" if iv_percentile > 90.0 else "fail"
+    )
+    height_value = (
+        f"prior={previous_height};current={current_height}"
+        if previous_height is not None and current_height is not None else None
+    )
+    contraction_status = (
+        "unknown" if height_value is None
+        else "pass" if previous_height >= 5 and current_height <= 3 else "fail"
+    )
+    triggers = [
+        {"id": "limit_down_defense_leg", "status": down_status,
+         "value": limit_down, "threshold": ">100"},
+        {"id": "iv_percentile_defense_leg", "status": iv_status,
+         "value": iv_percentile, "threshold": ">90"},
+        {"id": "limit_up_height_contraction_leg", "status": contraction_status,
+         "value": height_value, "threshold": "prior>=5,current<=3"},
+        {"id": "limit_up_index_defense_leg", "status": "unknown",
+         "value": None, "threshold": "drop>3%"},
+    ]
+    status = (
+        "contraction" if contraction_status == "pass"
+        else "defense" if down_status == "pass" or iv_status == "pass" else "unknown"
+    )
+    policy = _market_regime_policy(status)
+    if policy is None:
+        return _unknown_market_regime(triggers)
+    return {
+        "status": status,
+        "confidence": "unknown",
+        **policy,
+        "triggers": triggers,
+    }
+
+
+def _normalize_market_regime(value):
+    def _base():
+        return _unknown_market_regime()
+
+    if not isinstance(value, dict):
+        return _base()
+    status = value.get("status")
+    if status not in {"unknown", "defense", "contraction"}:
+        return _base()
+    if value.get("confidence") != "unknown":
+        return _base()
+    raw_triggers = value.get("triggers", [])
+    if not isinstance(raw_triggers, list):
+        return _base()
+    triggers = []
+    for raw in raw_triggers:
+        if not isinstance(raw, dict) or set(raw) - {"id", "status", "value", "threshold"}:
+            return _base()
+        if not isinstance(raw.get("id"), str) or not raw.get("id"):
+            return _base()
+        if raw.get("status") not in {"pass", "fail", "unknown", "not_applicable", "pending_data", "pending_llm"}:
+            return _base()
+        trigger = {
+            "id": raw["id"],
+            "status": raw["status"],
+            "value": _json_value(raw.get("value")),
+            "threshold": _json_value(raw.get("threshold")),
+        }
+        for key in ("value", "threshold"):
+            item = trigger[key]
+            if item is not None and not isinstance(item, (str, int, float, bool)):
+                return _base()
+            if isinstance(item, float) and not np.isfinite(item):
+                return _base()
+        triggers.append(trigger)
+    defense_pass = any(
+        trigger["id"] in {
+            "limit_down_defense_leg",
+            "iv_percentile_defense_leg",
+        }
+        and trigger["status"] == "pass"
+        for trigger in triggers
+    )
+    contraction_pass = any(
+        trigger["id"] == "limit_up_height_contraction_leg"
+        and trigger["status"] == "pass"
+        for trigger in triggers
+    )
+    if status == "unknown":
+        return _unknown_market_regime(triggers)
+    if status == "defense" and (not defense_pass or contraction_pass):
+        return _base()
+    if status == "contraction" and not contraction_pass:
+        return _base()
+    if not any(
+        trigger["id"] == "limit_up_index_defense_leg"
+        and trigger["status"] == "unknown"
+        and trigger["value"] is None
+        and trigger["threshold"] == "drop>3%"
+        for trigger in triggers
+    ):
+        return _base()
+    expected = _market_regime_policy(status)
+    if expected is None:
+        return _base()
+    for key, expected_value in expected.items():
+        supplied = value.get(key)
+        if expected_value is None:
+            if supplied is not None:
+                return _base()
+            continue
+        if isinstance(supplied, bool) or not isinstance(supplied, (int, float)):
+            return _base()
+        if not np.isfinite(float(supplied)) or not np.isclose(float(supplied), expected_value):
+            return _base()
+    return {
+        "status": status,
+        "confidence": "unknown",
+        **expected,
+        "triggers": triggers,
+    }
+
+
+def market_environment(trade_dates, stats_df, *, all_daily=None, df_stocks=None,
+                       suspended_set=None, iv_projection=None, return_facts=False):
     northbound_facts = _northbound_provider_facts(None, trade_dates)
     try:
         requested_trade_dates = _canonical_moneyflow_dates(trade_dates)
@@ -7406,6 +7835,17 @@ def market_environment(trade_dates, stats_df, *, return_facts=False):
     margin_overheat_facts["predicate_facts"] = margin_overheat_predicate_facts
     env.append(_margin_overheat_environment_line(margin_overheat_facts))
     env.append("全市场风险提示：请结合当日政策新闻判断")
+    full_market_breadth, previous_market_breadth = _build_full_market_breadth_observation(
+        trade_dates,
+        all_daily=all_daily,
+        df_stocks=df_stocks,
+        suspended_set=suspended_set,
+    )
+    market_regime = derive_v14_2_market_regime(
+        full_market_breadth,
+        previous_market_breadth,
+        iv_projection,
+    )
     facts_csi300_ret = (
         float(csi300_ret)
         if (isinstance(csi300_ret, (int, float, np.number))
@@ -7418,6 +7858,8 @@ def market_environment(trade_dates, stats_df, *, return_facts=False):
         "margin_overheat": margin_overheat_facts,
         "csi300_pct_change_window": facts_csi300_ret,
         "csi300_window": _csi300_window_metadata(trade_dates),
+        "full_market_breadth": full_market_breadth,
+        "market_regime": market_regime,
     }
     rendered = "\n".join(env)
     return (rendered, facts) if return_facts else rendered
@@ -7706,7 +8148,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
     )
     df_l5_scored, _pre_selector_top = score_l5(df_l4, sw_map)
     _pre_admission_top15 = select_profile_watch_pool(
-        watch_pool_eligible_frame(df_l5_scored), top_n=15
+        watch_pool_eligible_frame(df_l5_scored), top_n=CONF["watch_n"]
     )
     _pre_admission_watch = select_profile_watch_pool(
         watch_pool_eligible_frame(df_l5_scored), top_n=CONF["watch_n"]
@@ -7786,7 +8228,13 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
     if cninfo_warning is not None:
         data_health_warnings.append(cninfo_warning)
     env_report, market_context_facts = market_environment(
-        trade_dates, stats_df, return_facts=True
+        trade_dates,
+        stats_df,
+        all_daily=all_daily,
+        df_stocks=df_stocks,
+        suspended_set=suspended_set,
+        iv_projection=iv_projection,
+        return_facts=True,
     )
 
     # ── 计算 entry_flag ────────────────────────────────────────────────────────

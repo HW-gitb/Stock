@@ -169,11 +169,6 @@
     "market_context.margin_coverage.row_count",
     "market_context.margin_coverage.status",
     "market_context.margin_coverage.universe_size",
-    "market_context.market_regime.confidence",
-    "market_context.market_regime.triggers[].id",
-    "market_context.market_regime.triggers[].status",
-    "market_context.market_regime.triggers[].threshold",
-    "market_context.market_regime.triggers[].value",
     "market_context.moneyflow_coverage.coverage_complete",
     "market_context.moneyflow_coverage.observed_trade_dates[]",
     "market_context.moneyflow_coverage.reference_date",
@@ -923,19 +918,19 @@
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.breadth.full_market_limit_down_count": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.breadth.full_market_limit_up_count": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.margin_coverage.invalid_numeric_row_count": {
       "category": "duplicate_or_display_audit",
@@ -1013,79 +1008,127 @@
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.market_breadth_source.effective_date": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.market_breadth_source.eligible_stock_count": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.market_breadth_source.limit_source": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.market_breadth_source.limit_up_index_unavailable_reason": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.market_breadth_source.observed_trade_dates[]": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.market_breadth_source.price_basis": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.market_breadth_source.requested_trade_dates[]": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.market_breadth_source.status": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.market_breadth_source.unavailable_reason": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.market_breadth_source.universe_name": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.market_breadth_source.usable_stock_count": {
       "category": "duplicate_or_display_audit",
       "consumer_ref": "runners/a_short_weekly_pipeline.py::_build_market_breadth_audit -> weekly.market_breadth_audit",
       "terminal_surface": "weekly.market_breadth_audit (display only; production_effect_enabled=false)",
-      "mutation_evidence": "changing it changes only the weekly audit block; no sizing, veto or M6.7 price reads it. Item 16 promotes these to a decision input when the regime state machine lands."
+      "mutation_evidence": "changing it changes only the weekly audit block; EGS generates market_regime.status from the same observation before serialization, and the audit block remains display-only with no sizing, veto or M6.7 price reader."
     },
     "market_context.market_regime.status": {
       "category": "m67_main_decision",
-      "consumer_ref": "runners/a_short_weekly_pipeline.py::_market_regime",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::resolve_market_regime -> runners/a_short_phase5_engine.py",
       "terminal_surface": "weekly market regime and operation impact",
       "mutation_evidence": "positive mutation changes market-regime action"
+    },
+    "market_context.market_regime.confidence": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::resolve_market_regime (status only) -> runners/a_short_phase5_engine.py",
+      "terminal_surface": "weekly market-regime audit echo",
+      "mutation_evidence": "changing this echo does not change Phase5; only market_regime.status selects the existing runtime policy"
+    },
+    "market_context.market_regime.position_cap_single_pct": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::resolve_market_regime (status only) -> runners/a_short_phase5_engine.py",
+      "terminal_surface": "weekly market-regime audit echo",
+      "mutation_evidence": "changing this echo does not change Phase5; the runtime policy remains the sole single-cap source"
+    },
+    "market_context.market_regime.position_cap_total_pct": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::resolve_market_regime (status only) -> runners/a_short_phase5_engine.py",
+      "terminal_surface": "weekly market-regime audit echo",
+      "mutation_evidence": "changing this echo does not change Phase5; the runtime policy remains the sole total-cap source"
+    },
+    "market_context.market_regime.min_reward_risk": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::resolve_market_regime (status only) -> runners/a_short_phase5_engine.py",
+      "terminal_surface": "weekly market-regime audit echo",
+      "mutation_evidence": "changing this echo does not change Phase5; the runtime policy remains the sole reward-risk source"
+    },
+    "market_context.market_regime.triggers[].id": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::resolve_market_regime (status only) -> runners/a_short_phase5_engine.py",
+      "terminal_surface": "weekly market-regime audit echo",
+      "mutation_evidence": "changing this trigger label does not change Phase5 status selection, sizing, veto or scoring"
+    },
+    "market_context.market_regime.triggers[].status": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::resolve_market_regime (status only) -> runners/a_short_phase5_engine.py",
+      "terminal_surface": "weekly market-regime audit echo",
+      "mutation_evidence": "changing this trigger status does not change Phase5 status selection, sizing, veto or scoring"
+    },
+    "market_context.market_regime.triggers[].value": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::resolve_market_regime (status only) -> runners/a_short_phase5_engine.py",
+      "terminal_surface": "weekly market-regime audit echo",
+      "mutation_evidence": "changing this trigger value does not change Phase5 status selection, sizing, veto or scoring"
+    },
+    "market_context.market_regime.triggers[].threshold": {
+      "category": "duplicate_or_display_audit",
+      "consumer_ref": "runners/a_short_weekly_pipeline.py::resolve_market_regime (status only) -> runners/a_short_phase5_engine.py",
+      "terminal_surface": "weekly market-regime audit echo",
+      "mutation_evidence": "changing this trigger threshold does not change Phase5 status selection, sizing, veto or scoring"
     },
     "market_context.moneyflow_coverage.effective_ref_date": {
       "category": "m67_main_decision",

@@ -227,5 +227,307 @@ class EgsAnalysisInputNorthboundWiringTest(unittest.TestCase):
         )
 
 
+class EgsMarketBreadthWiringTest(unittest.TestCase):
+    TRADE_DATES = [f"202608{day:02d}" for day in range(11, 0, -1)]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.egs_main = _load_egs_module()
+
+    def _limit_panel(self):
+        return pd.DataFrame([
+            {
+                "ts_code": code,
+                "trade_date": trade_date,
+                "up_limit": 11.0,
+                "down_limit": 9.0,
+            }
+            for trade_date in self.TRADE_DATES
+            for code in ("600000.SH", "000001.SZ")
+        ])
+
+    def test_stk_limit_window_requests_exactly_eleven_sessions_and_caches_complete_panel(self):
+        calls = []
+        endpoint = object()
+
+        def fake_safe_api(actual_endpoint, **kwargs):
+            calls.append((actual_endpoint, kwargs))
+            trade_date = kwargs["trade_date"]
+            return self._limit_panel()[self._limit_panel()["trade_date"] == trade_date]
+
+        with patch.object(self.egs_main.pro, "stk_limit", endpoint), \
+                patch.object(self.egs_main, "safe_api", side_effect=fake_safe_api), \
+                patch.object(self.egs_main, "load_cache", return_value=None), \
+                patch.object(self.egs_main, "save_cache") as save_cache:
+            # The production helper only requires a callable endpoint; the mock
+            # safe_api receives and records it without invoking it.
+            self.egs_main.pro.stk_limit = lambda **_kwargs: None
+            result = self.egs_main.get_full_market_stk_limit_window(self.TRADE_DATES)
+
+        self.assertEqual(len(calls), 11)
+        self.assertEqual(set(call[1]["trade_date"] for call in calls), set(self.TRADE_DATES))
+        self.assertTrue(all(
+            call[1]["fields"] == "ts_code,trade_date,up_limit,down_limit"
+            for call in calls
+        ))
+        self.assertEqual(len(result), 22)
+        save_cache.assert_called_once()
+
+    def test_stk_limit_cache_hit_skips_provider_and_bad_cache_refetches(self):
+        panel = self._limit_panel()
+        with patch.object(self.egs_main, "load_cache", return_value=panel), \
+                patch.object(self.egs_main, "safe_api", side_effect=AssertionError("provider called")):
+            cached = self.egs_main.get_full_market_stk_limit_window(self.TRADE_DATES)
+        self.assertEqual(len(cached), len(panel))
+
+        bad = panel.copy()
+        bad["trade_date"] = "20991231"
+        calls = []
+
+        def fake_safe_api(_endpoint, **kwargs):
+            calls.append(kwargs["trade_date"])
+            return panel[panel["trade_date"] == kwargs["trade_date"]]
+
+        with patch.object(self.egs_main, "load_cache", return_value=bad), \
+                patch.object(self.egs_main, "safe_api", side_effect=fake_safe_api), \
+                patch.object(self.egs_main, "save_cache"):
+            self.egs_main.pro.stk_limit = lambda **_kwargs: None
+            self.egs_main.get_full_market_stk_limit_window(self.TRADE_DATES)
+        self.assertEqual(len(calls), 11)
+
+    def _breadth(self, *, down=None, height=None, status="complete"):
+        return {
+            "full_market_limit_up_count": 0,
+            "full_market_limit_down_count": down,
+            "full_market_consecutive_limit_up_height": height,
+            "coverage": {"status": status},
+        }
+
+    def test_v14_2_regime_legs_are_independent_and_boundaries_stay_unknown(self):
+        iv_unknown = {"iv_feed_status": "not_requested"}
+        defense = self.egs_main.derive_v14_2_market_regime(
+            self._breadth(down=101, height=4),
+            self._breadth(down=0, height=5),
+            iv_unknown,
+        )
+        self.assertEqual(defense["status"], "defense")
+        self.assertEqual(defense["position_cap_total_pct"], 50.0)
+        self.assertEqual(defense["min_reward_risk"], 2.0)
+        self.assertIn(
+            {"id": "limit_up_index_defense_leg", "status": "unknown",
+             "value": None, "threshold": "drop>3%"},
+            defense["triggers"],
+        )
+
+        iv_ready = {
+            "iv_feed_status": "ready",
+            "source_status": "complete",
+            "freshness_status": "aligned",
+            "iv_percentile_252d": 90.0001,
+        }
+        iv_only = self.egs_main.derive_v14_2_market_regime(
+            self._breadth(down=None, height=None, status="unavailable"),
+            self._breadth(down=None, height=None, status="unavailable"),
+            iv_ready,
+        )
+        self.assertEqual(iv_only["status"], "defense")
+
+        contraction = self.egs_main.derive_v14_2_market_regime(
+            self._breadth(down=0, height=3),
+            self._breadth(down=0, height=5),
+            iv_unknown,
+        )
+        self.assertEqual(contraction["status"], "contraction")
+        self.assertEqual(contraction["position_cap_single_pct"], 0.0)
+        self.assertEqual(contraction["position_cap_total_pct"], None)
+
+        boundary = self.egs_main.derive_v14_2_market_regime(
+            self._breadth(down=100, height=4),
+            self._breadth(down=0, height=4),
+            {
+                "iv_feed_status": "ready",
+                "source_status": "complete",
+                "freshness_status": "aligned",
+                "iv_percentile_252d": 90.0,
+            },
+        )
+        self.assertEqual(boundary["status"], "unknown")
+        self.assertIsNone(boundary["position_cap_single_pct"])
+
+    def test_contraction_precedes_defense_when_both_legs_pass(self):
+        regime = self.egs_main.derive_v14_2_market_regime(
+            self._breadth(down=101, height=3),
+            self._breadth(down=0, height=5),
+            {"iv_feed_status": "not_requested"},
+        )
+        self.assertEqual(regime["status"], "contraction")
+
+    def test_iv_and_height_both_pass_still_choose_contraction(self):
+        regime = self.egs_main.derive_v14_2_market_regime(
+            self._breadth(down=0, height=3),
+            self._breadth(down=0, height=5),
+            {
+                "iv_feed_status": "ready",
+                "source_status": "complete",
+                "freshness_status": "aligned",
+                "iv_percentile_252d": 90.01,
+            },
+        )
+        self.assertEqual(regime["status"], "contraction")
+
+    def test_single_defense_or_contraction_leg_keeps_its_status(self):
+        defense = self.egs_main.derive_v14_2_market_regime(
+            self._breadth(down=101, height=4),
+            self._breadth(down=0, height=4),
+            {"iv_feed_status": "not_requested"},
+        )
+        contraction = self.egs_main.derive_v14_2_market_regime(
+            self._breadth(down=0, height=3),
+            self._breadth(down=0, height=5),
+            {"iv_feed_status": "not_requested"},
+        )
+        self.assertEqual(defense["status"], "defense")
+        self.assertEqual(contraction["status"], "contraction")
+
+    def _real_breadth_inputs(self, *, missing_contender=False,
+                             non_contender_missing_date=None):
+        dates = self.TRADE_DATES
+        codes = ("600000.SH", "600001.SH", "600002.SH")
+        stock_basic = pd.DataFrame([
+            {"ts_code": code, "market": "主板", "list_date": "20100101",
+             "delist_date": "", "list_status": "L"}
+            for code in codes
+        ])
+        daily_rows = []
+        limit_rows = []
+        prior_up_dates = {f"202608{day:02d}" for day in range(6, 11)}
+        current_up_dates = {"20260809", "20260810", "20260811"}
+        for trade_date in dates:
+            for code in codes:
+                if (
+                    code == "600002.SH"
+                    and trade_date == (
+                        dates[0]
+                        if non_contender_missing_date is None
+                        else non_contender_missing_date
+                    )
+                ):
+                    continue
+                if missing_contender and code == "600001.SH" and trade_date == "20260809":
+                    continue
+                at_limit = (
+                    code == "600000.SH" and trade_date in prior_up_dates
+                ) or (
+                    code == "600001.SH" and trade_date in current_up_dates
+                )
+                close = 11.0 if at_limit else 10.0
+                daily_rows.append({
+                    "ts_code": code, "trade_date": trade_date,
+                    "close": close, "high": close,
+                })
+                limit_rows.append({
+                    "ts_code": code, "trade_date": trade_date,
+                    "up_limit": 11.0, "down_limit": 9.0,
+                })
+        return (
+            pd.DataFrame(daily_rows),
+            stock_basic,
+            pd.DataFrame(limit_rows),
+        )
+
+    def test_real_breadth_builder_allows_non_contender_halt_for_contraction(self):
+        all_daily, stock_basic, limit_panel = self._real_breadth_inputs()
+        with patch.object(
+            self.egs_main, "get_full_market_stk_limit_window", return_value=limit_panel
+        ):
+            current, previous = self.egs_main._build_full_market_breadth_observation(
+                self.TRADE_DATES,
+                all_daily=all_daily,
+                df_stocks=stock_basic,
+                suspended_set={"600002.SH"},
+            )
+        self.assertEqual(current["coverage"]["status"], "partial")
+        self.assertTrue(current["coverage"]["_current_height_usable"])
+        self.assertTrue(previous["coverage"]["_previous_height_usable"])
+        regime = self.egs_main.derive_v14_2_market_regime(
+            current, previous, {"iv_feed_status": "not_requested"}
+        )
+        self.assertEqual(regime["status"], "contraction")
+
+    def test_real_breadth_builder_blocks_contraction_on_missing_contender_bar(self):
+        all_daily, stock_basic, limit_panel = self._real_breadth_inputs(
+            missing_contender=True
+        )
+        with patch.object(
+            self.egs_main, "get_full_market_stk_limit_window", return_value=limit_panel
+        ):
+            current, previous = self.egs_main._build_full_market_breadth_observation(
+                self.TRADE_DATES,
+                all_daily=all_daily,
+                df_stocks=stock_basic,
+                suspended_set={"600002.SH"},
+            )
+        self.assertIn(
+            "contender_bar_missing_in_window",
+            current["coverage"]["unavailable_reason"],
+        )
+        self.assertFalse(current["coverage"]["_current_height_usable"])
+        self.assertFalse(previous["coverage"]["_previous_height_usable"])
+        regime = self.egs_main.derive_v14_2_market_regime(
+            current, previous, {"iv_feed_status": "not_requested"}
+        )
+        self.assertNotEqual(regime["status"], "contraction")
+
+    def test_real_breadth_builder_allows_previous_partial_height_for_contraction(self):
+        all_daily, stock_basic, limit_panel = self._real_breadth_inputs(
+            non_contender_missing_date=self.TRADE_DATES[1]
+        )
+        with patch.object(
+            self.egs_main, "get_full_market_stk_limit_window", return_value=limit_panel
+        ):
+            current, previous = self.egs_main._build_full_market_breadth_observation(
+                self.TRADE_DATES,
+                all_daily=all_daily,
+                df_stocks=stock_basic,
+                suspended_set=set(),
+            )
+        self.assertEqual(current["coverage"]["status"], "complete")
+        self.assertEqual(previous["coverage"]["status"], "partial")
+        self.assertTrue(current["coverage"]["_current_height_usable"])
+        self.assertTrue(previous["coverage"]["_previous_height_usable"])
+        regime = self.egs_main.derive_v14_2_market_regime(
+            current, previous, {"iv_feed_status": "not_requested"}
+        )
+        self.assertEqual(regime["status"], "contraction")
+
+    def test_breadth_height_usable_rejects_history_reasons_even_with_height(self):
+        for reason in (
+            "incomplete_history_window",
+            "contender_bar_missing_in_window",
+        ):
+            with self.subTest(reason=reason):
+                self.assertFalse(
+                    self.egs_main._breadth_height_usable(
+                        {
+                            "full_market_consecutive_limit_up_height": 5,
+                            "coverage": {
+                                "status": "partial",
+                                "unavailable_reason": reason,
+                            },
+                        }
+                    )
+                )
+
+    def test_run_egs_passes_all_breadth_inputs_to_market_environment(self):
+        source = (ROOT / "A-EGS" / "egs_main.py").read_text(encoding="utf-8")
+        for text in (
+            "all_daily=all_daily",
+            "df_stocks=df_stocks",
+            "suspended_set=suspended_set",
+            "iv_projection=iv_projection",
+        ):
+            self.assertIn(text, source)
+
+
 if __name__ == "__main__":
     unittest.main()
