@@ -253,13 +253,13 @@ class SoftBoostConsumptionTest(SoftBoostFixture, unittest.TestCase):
 
         stale = classify(
             soft_boost_requested=True,
-            soft_boost_run_result=result(),
+            soft_boost_run_result=result(consumption_receipt_path=None),
             consumption_receipt_path=self.paths["consumption"],
             shadow_receipt_path=self.paths["shadow"],
             comparison_ledger_path=self.paths["ledger"],
         )
         self.assertEqual(stale, {
-            "state": "consumption_only", "reason_code": "SOFT_BOOST_COMPARISON_NOT_APPLICABLE",
+            "state": "none", "reason_code": "SOFT_BOOST_COMPARISON_ARTIFACT_INVALID",
         })
         malformed = classify(
             soft_boost_requested=True,

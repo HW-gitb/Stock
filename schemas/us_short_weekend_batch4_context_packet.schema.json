@@ -219,12 +219,26 @@
           "type": "object",
           "additionalProperties": false,
           "required": ["stage_receipt_path", "consumption_receipt_path", "shadow_receipt_path", "comparison_ledger_path", "adjudication_receipt_path"],
+          "oneOf": [
+            {"not": {"required": ["artifact_state"]}},
+            {
+              "required": ["artifact_state"],
+              "properties": {
+                "stage_receipt_path": {"const": null},
+                "consumption_receipt_path": {"const": null},
+                "shadow_receipt_path": {"const": null},
+                "comparison_ledger_path": {"const": null},
+                "adjudication_receipt_path": {"const": null}
+              }
+            }
+          ],
           "properties": {
             "stage_receipt_path": {"type": ["string", "null"]},
             "consumption_receipt_path": {"type": ["string", "null"]},
             "shadow_receipt_path": {"type": ["string", "null"]},
-            "comparison_ledger_path": {"type": ["string", "null"]}
-            ,"adjudication_receipt_path": {"type": ["string", "null"]}
+            "comparison_ledger_path": {"type": ["string", "null"]},
+            "adjudication_receipt_path": {"type": ["string", "null"]},
+            "artifact_state": {"const": "invalid"}
           },
           "description": "Optional §4c receipt references. The report derives its banner by re-reading these receipts; no text is caller-supplied."
         }

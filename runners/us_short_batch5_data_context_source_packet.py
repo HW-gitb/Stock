@@ -32,7 +32,6 @@ from engine.us_short_soft_boost_consumption import (  # noqa: E402
     build_consumption_receipt,
     build_shadow_receipt,
     degrade_soft_boost_consumption,
-    read_frozen_zero_consumption_receipt,
     resolve_soft_boost_consumption,
     write_consumption_receipt,
     write_evidence_bundle,
@@ -1117,18 +1116,7 @@ def run_packet(
                             )
                             soft_consumption_receipt_written = True
                         except Exception:
-                            frozen_zero = read_frozen_zero_consumption_receipt(
-                                paths["soft_boost_consumption_receipt_path"]
-                            )
-                            if frozen_zero is None:
-                                raise
-                            soft_resolution = {
-                                **soft_resolution,
-                                "status": frozen_zero["status"],
-                                "reason_code": frozen_zero["reason_code"],
-                                "effective_enabled": False,
-                            }
-                            soft_consumption_receipt_written = True
+                            pass
                 except Exception:
                     context_components = off_components
                     data_context = off_components["data_context"]

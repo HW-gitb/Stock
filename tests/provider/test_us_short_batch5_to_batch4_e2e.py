@@ -1025,6 +1025,36 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
 
 
 class Problem7Batch4TemplateShapeTest(unittest.TestCase):
+    def test_patched_report_context_accepts_only_null_invalid_shape(self) -> None:
+        template = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+        path_keys = {
+            "stage_receipt_path", "consumption_receipt_path", "shadow_receipt_path",
+            "comparison_ledger_path", "adjudication_receipt_path",
+        }
+        invalid = {**{key: None for key in path_keys}, "artifact_state": "invalid"}
+        patched = e2e._patched_report_context(
+            template["report_context"],
+            run_provenance={"as_of": _DECISION_DATE, "price_basis_date": "2026-06-12"},
+            now_et=datetime(2026, 6, 15, 10, 0, 0),
+            soft_discovery_receipt_paths=invalid,
+        )
+        self.assertEqual(patched["soft_discovery_receipt_paths"], invalid)
+        for name, bad in {
+            "old_path": {**invalid, "consumption_receipt_path": "state/us_short/old.json"},
+            "other_state": {**invalid, "artifact_state": "other"},
+            "unknown_key": {**invalid, "EXTRA": None},
+        }.items():
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(
+                    e2e.Batch5ToBatch4E2EError, "closed-world path object"
+                ):
+                    e2e._patched_report_context(
+                        template["report_context"],
+                        run_provenance={"as_of": _DECISION_DATE, "price_basis_date": "2026-06-12"},
+                        now_et=datetime(2026, 6, 15, 10, 0, 0),
+                        soft_discovery_receipt_paths=bad,
+                    )
+
     def test_bridge_loader_rejects_nested_contexts_before_provider(self) -> None:
         for key in ("report_context", "basket_context", "market_axis_regimes"):
             with self.subTest(key=key), tempfile.TemporaryDirectory() as td:

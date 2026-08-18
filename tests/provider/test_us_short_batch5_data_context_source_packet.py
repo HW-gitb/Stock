@@ -542,10 +542,11 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         self.assertTrue(typed_zero_consumption.is_file())
         self.assertFalse(typed_zero_shadow.exists())
         self.assertFalse(typed_zero_ledger.exists())
+        frozen_zero_bytes = typed_zero_consumption.read_bytes()
 
         # A same-date retry may learn a different typed-zero reason.  The frozen
-        # receipt remains the honest reportable result; a write rejection must
-        # not be swallowed into an unclaimed/invalid K4b result.
+        # receipt remains unchanged, but a rejected current write cannot lend its
+        # path to this run.
         empty_validation = copy.deepcopy(artifact)
         empty_validation["themes"] = []
         empty_validation["summary"]["validated_theme_count"] = 0
@@ -563,18 +564,15 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         _write_json(self.paths["soft_stage"], valid_empty_stage)
         typed_zero_packet["optional_inputs"]["soft_discovery_stage_result"] = valid_empty_stage
         _write_json(self.packet, typed_zero_packet)
-        frozen_zero_retry = run_packet(self.packet, generated_at="2026-07-04T00:00:03Z")
-        self.assertEqual(frozen_zero_retry["soft_boost"]["status"], "zero_upstream_unavailable")
-        self.assertEqual(frozen_zero_retry["soft_boost"]["reason_code"], "CANDIDATE_INPUT_UNAVAILABLE")
-        self.assertEqual(
-            frozen_zero_retry["soft_boost"]["consumption_receipt_path"],
-            _rel(typed_zero_consumption),
-        )
+        fresh_zero_retry = run_packet(self.packet, generated_at="2026-07-04T00:00:03Z")
+        self.assertEqual(fresh_zero_retry["soft_boost"]["status"], "zero_invalid_evidence")
+        self.assertEqual(fresh_zero_retry["soft_boost"]["reason_code"], "K4B_EVIDENCE_REJECTED")
+        self.assertIsNone(fresh_zero_retry["soft_boost"]["consumption_receipt_path"])
         self.assertEqual(
             json.loads(typed_zero_consumption.read_text(encoding="utf-8"))["status"],
             "zero_upstream_unavailable",
         )
-        frozen_zero_bytes = typed_zero_consumption.read_bytes()
+        self.assertEqual(typed_zero_consumption.read_bytes(), frozen_zero_bytes)
         typed_zero_consumption.write_text("{not-json", encoding="utf-8")
         unreadable_zero_retry = run_packet(self.packet, generated_at="2026-07-04T00:00:04Z")
         self.assertEqual(unreadable_zero_retry["soft_boost"]["status"], "zero_invalid_evidence")

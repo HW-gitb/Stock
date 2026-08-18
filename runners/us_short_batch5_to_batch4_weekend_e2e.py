@@ -258,10 +258,25 @@ def _patched_report_context(
             raise Batch5ToBatch4E2EError("forward_policy_comparison_reminder must be a non-blank string or absent")
         report_context["forward_policy_comparison_reminder"] = forward_policy_comparison_reminder.strip()
     if soft_discovery_receipt_paths is not None:
-        if not (isinstance(soft_discovery_receipt_paths, dict) and set(soft_discovery_receipt_paths) == {
+        path_keys = {
             "stage_receipt_path", "consumption_receipt_path", "shadow_receipt_path",
             "comparison_ledger_path", "adjudication_receipt_path"
-        } and all(value is None or isinstance(value, str) for value in soft_discovery_receipt_paths.values())):
+        }
+        normal_shape = (
+            isinstance(soft_discovery_receipt_paths, dict)
+            and set(soft_discovery_receipt_paths) == path_keys
+        )
+        invalid_shape = (
+            isinstance(soft_discovery_receipt_paths, dict)
+            and set(soft_discovery_receipt_paths) == path_keys | {"artifact_state"}
+            and soft_discovery_receipt_paths["artifact_state"] == "invalid"
+            and all(soft_discovery_receipt_paths[key] is None for key in path_keys)
+        )
+        if not ((normal_shape or invalid_shape) and all(
+            value is None or isinstance(value, str)
+            for key, value in soft_discovery_receipt_paths.items()
+            if key != "artifact_state"
+        )):
             raise Batch5ToBatch4E2EError("soft discovery receipt paths must be a closed-world path object")
         report_context["soft_discovery_receipt_paths"] = copy.deepcopy(soft_discovery_receipt_paths)
     return report_context
