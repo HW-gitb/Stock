@@ -3641,3 +3641,48 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 ### 但余量只剩 5.5%
 
 `860 - 812.9 = 47.1s`，低于 `R-USSHORT-LANE-PACK-IS-GREEN-ONLY-BY-4-SECONDS...` 的 ≥15% closure 判据，该条仍 open。**口径提醒**：812.9s 不能跟历史 343.6s 比——那些是 fail-fast 早停、从没跑满 320 个模块；可比的是同为跑满的枚举跑 726.7s。
+
+## 2026-08-18 追加：把上一轮的 Options/Optional 各推进一步（用户令自修自审）
+
+### `--no-failfast` 从「临时改码」变成受控开关
+
+上一轮为了一次列全所有红，我临时改了 runner 的两处 halt 再还原，还因锚串命中两处白跑 316s。现在 `run_parallel_pack` 有 keyword `halt_on_red=True`（fail-closed 默认），CLI 有 `--no-failfast`，开跑先打横幅说明「这不是 lane verdict、绝不可记账」。deadline 那处 halt 不受影响。
+
+**关键防线是「它进不了账本」**：`full_pack_ledger` 调 `run_parallel_pack` 时从不传这个参数，并新增静态用例断言 ledger 源码里既无 `halt_on_red` 也无 `--no-failfast`——**哪天有人把它接进记账路径，测试立刻红**。承重反向控制：把波次那处改回硬编码 `True`，点名用例精确红在 `'SKIPPED' unexpectedly found`，还原哈希回基线。端到端实跑过 `--no-failfast us_short 300 -- ... test_us_short_regime*.py`：横幅出、`COUNT_GATE 61=61`、`PASS`。
+
+### 墙钟那条我只做了测量，没做重构——这是有意的
+
+新增 `SERIAL_TAIL_COST <tail 秒> of <总秒> (<占比>) across <N> modules` 一行，并写明「只有两个杠杆：减少尾巴模块 / 让尾巴模块变快，加 worker 无用」。
+
+**不做重构的三个理由**：① 两个杠杆都要动那 25 个「碰跨进程锁」的模块，而这块基础设施**本 session 已经出过两次回归**，在自修自审轮做这种手术风险不相称；② 抬 860s 按 `AGENTS.md` 是**用户级决定**；③ 这个数字对负载极敏感——同树同码，跑满一次 726.7s、另一次 812.9s，**在把尾巴成本打印出来之前去追百分比就是瞎调**。
+
+给决策用的实测：模块耗时合计 `1261.9s` / 320 模块 vs 墙钟 `812.9s`（8 worker）→ 并行度只有 **1.55 倍**；最贵的三个尾巴模块 `conformance_executable 172.1s`、`market_diagnostic_rehearsal 130.4s`、`conformance_resources 121.9s`。闭合仍需用户在「抬 860s」与「授权把 `LaneGuardRegistryConformance` 拆成独立模块」之间选一条。
+
+### 一条通用的做法
+
+**改验证基础设施（runner/ledger 这类）时，除了它自己的 owner 测试，还要跑一次真实全量证明「记绿这条路没被改坏」**——因为它就是所有绿的产地，坏了会静默作废后面每一次绿。
+
+### 验证命令与结果
+
+固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，全部在 `D:\cnhea\Codex\worktrees\8d8c\Stock` 内跑。
+
+1. **owner 焦点包** `-m unittest tests.test_parallel_lane_runner` → `PASS tests=55 58.0s`。
+2. **承重反向控制**：把波次那处改回硬编码 `True`（脚本 `plant_haltflag.py`，命中数自校验，`count!=1` 就退出 2）→ `test_no_failfast_enumerates_every_red_instead_of_stopping_at_the_first` 精确红在 `AssertionError: 'SKIPPED' unexpectedly found`；还原后 `RESTORED_SHA_MATCH=True`。
+3. **端到端 CLI 冒烟** `parallel_lane_runner.py --no-failfast us_short 300 -- discover ... -p "test_us_short_regime*.py"` → 横幅打出、`SERIAL_TAIL_COST 0.4s of 1.4s (30.7%) across 1 modules`、`COUNT_GATE 61=61`、`RESULT status=PASS`。
+4. **记绿这条路没被改坏**（走 `full_pack_ledger`，`halt_on_red` 走默认）→ **`RESULT status=PASS exit=0 tests=3232 elapsed=321.6s deadline=860s mode=parallel`、`COUNT_GATE discovered=3232 ran=3232 equal=True`**。
+
+第 4 步**本来跑的是 us_short，撞线了**：`RESULT status=TIMEOUT exit=124 elapsed=859.4s deadline=860s`、`COUNT_GATE discovered=6041 ran=6040`（320 个模块只跑完 319 个）。按 rule ⑥ 那是 `UNKNOWN`、不重复等待，于是**缩窄到同一 runner 的 a_short lane**——盘子小得多，但走的是一模一样的 discovery → 并行派发 → count gate → 账本记绿全链路，足以证明本刀没弄坏记绿。
+
+顺带一个活体确认：**a_short 那次没有打印 `SERIAL_TAIL_COST`**——因为该 lane 的串行尾巴为空，正是新增第三个用例断言的「tail 为空就不打这行」。
+
+### 失效的旧结论
+
+- 「lane 余量 47.1s（5.5%）虽薄但够用」——**作废**。同树同码三次跑满分别是 `726.7s / 812.9s / 859.4s`，最后这次直接 TIMEOUT。该条已在 register 从 Optional **升为 P1**。
+- 「要一次列全所有红就临时改 runner 再还原」——**作废**，改用 `--no-failfast`。上一轮正是这种临时改码因锚串命中两处而白跑 316s。
+
+### 下一步注意
+
+- **`TIMEOUT` 不是红**。us_short 全量现在会随机撞 860s；读账本或读别人转述时，`status=TIMEOUT` 要按 `UNKNOWN` 处理，别当成「有测试挂了」去追不存在的 bug。
+- **闭合那条 P1 需要用户拍板**：抬 860s（用户级决定），或授权把 `LaneGuardRegistryConformance` 拆成独立模块、让同文件其余用例回到并行。两条路都要动那 25 个碰跨进程锁的模块，本 session 这块已出过两次回归，别顺手改。
+- **脚本改文件一律按行号定位，或自校验命中数**；调用方必须查 `$LASTEXITCODE` 再往下走——上一轮就是锚串命中两处、脚本退 2 而 PowerShell 继续往下跑，白烧一次全量。
+- **主树正在回跑 a_short 真实周**（用户 2026-08-18 通知）：期间**本刀只提交、不 merge**；也别在主树跑大超集。本轮那次 a_short 全量跑在 8d8c、`state/` 逐树隔离，已于 321.6s 跑完。

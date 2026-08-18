@@ -511,6 +511,18 @@ def _report(lane: str, outcomes: list[ModuleOutcome], skipped: list[str], discov
             f"({share:.1f}%) is one module: {floor.module}. More workers cannot go below it; "
             f"only that module getting faster can. Deadline {deadline_seconds}s."
         )
+    # The tail runs one module at a time, so its seconds add to the wall clock one for one -- that is the
+    # lever the deadline-headroom risk is actually about.  Printing it here means the next person targets
+    # the tail with a measured number instead of re-deriving it by hand from the per-module lines.
+    if tail:
+        tail_set = set(tail)
+        tail_cost = sum(o.elapsed_seconds for o in outcomes if o.module in tail_set)
+        tail_share = 100.0 * tail_cost / elapsed if elapsed > 0 else 0.0
+        lines.append(
+            f"[parallel-lane] SERIAL_TAIL_COST {tail_cost:.1f}s of {elapsed:.1f}s ({tail_share:.1f}%) "
+            f"across {len(tail)} modules that run one at a time. Fewer tail modules or faster tail "
+            f"modules are the only two levers; more workers cannot help here."
+        )
     lines.append(
         f"[parallel-lane] COUNT_GATE discovered={discovered_total} ran={observed_total} "
         f"equal={discovered_total == observed_total}"
@@ -532,8 +544,15 @@ def run_parallel_pack(
     runs_dir: Path = RUNS_DIR,
     durations_path: Path = DURATIONS_PATH,
     cwd: Path = ROOT,
+    halt_on_red: bool = True,
 ) -> tuple[Result, dict]:
-    """Run the lane's discovered modules concurrently and aggregate one verdict."""
+    """Run the lane's discovered modules concurrently and aggregate one verdict.
+
+    ``halt_on_red=False`` is a DIAGNOSTIC-only mode: dispatch keeps going after a red module so one run
+    enumerates EVERY red instead of the first one.  It stays a keyword with a fail-closed default and
+    `full_pack_ledger` never passes it, so a diagnostic run can never be recorded as a lane green -- the
+    deadline halt is unaffected either way.
+    """
     if workers < 1:
         raise ValueError("parallel full-pack needs at least one worker")
     started = time.monotonic()
@@ -590,7 +609,7 @@ def run_parallel_pack(
                     # Module-granularity failfast: stop dispatching, let the
                     # workers already running finish.  That only ever runs more
                     # modules than the serial `-f` would, never fewer.
-                    halt_dispatch = True
+                    halt_dispatch = halt_on_red
 
     # The tail runs after the wave and one at a time: these modules contend on
     # a lock the wave would have held against them.
@@ -605,7 +624,7 @@ def run_parallel_pack(
         )
         outcomes.append(outcome)
         if outcome.status != "PASS":
-            halt_dispatch = True
+            halt_dispatch = halt_on_red
 
     skipped = list(pending) + list(tail_pending)
     observed_total = sum(outcome.tests or 0 for outcome in outcomes)
@@ -665,18 +684,31 @@ def run_parallel_pack(
     return Result("PASS", 0, observed_total, elapsed, output), summary
 
 
+_USAGE = ("usage: parallel_lane_runner.py [--no-failfast] <lane> <timeout-seconds> "
+          "-- <discovery args>")
+
+
 def main(argv: list[str]) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    halt_on_red = True
+    if argv and argv[0] == "--no-failfast":
+        halt_on_red = False
+        argv = argv[1:]
     if "--" not in argv or len(argv) < 4:
-        print("usage: parallel_lane_runner.py <lane> <timeout-seconds> -- <discovery args>")
+        print(_USAGE)
         return 2
     split = argv.index("--")
     if split != 2:
-        print("usage: parallel_lane_runner.py <lane> <timeout-seconds> -- <discovery args>")
+        print(_USAGE)
         return 2
+    if not halt_on_red:
+        print("[parallel-lane] DIAGNOSTIC no-failfast: dispatch continues past a red module so this run "
+              "enumerates EVERY red. It is NOT a lane verdict and must never be recorded as a green; "
+              "`full_pack_ledger` cannot reach this mode.")
     try:
-        result, _summary = run_parallel_pack(argv[0], argv[split + 1:], int(argv[1]))
+        result, _summary = run_parallel_pack(
+            argv[0], argv[split + 1:], int(argv[1]), halt_on_red=halt_on_red)
     except (ValueError, OSError) as exc:
         print(f"[parallel-lane] REFUSED - {exc}")
         return 2
