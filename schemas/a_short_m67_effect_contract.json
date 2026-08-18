@@ -830,7 +830,7 @@
       "source_prefixes": [
         "candidates[].data_quality"
       ],
-      "source_paths_sha256": "680077c4ac6515e5d1a4ac342c6c08bfe66186497725923458b33aed34e44d7b",
+      "source_paths_sha256": "e1a82aeafca1701a9999257646cb9e5d41caed1f068ece5a651391ceba4f418e",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
@@ -838,9 +838,12 @@
       ],
       "runtime_handler": "data_quality_shadow",
       "proven_consumer_paths": [
+        "candidates[].data_quality.candidate_output_deferred[]",
         "candidates[].data_quality.completeness_score",
         "candidates[].data_quality.missing_fields[]",
+        "candidates[].data_quality.paid_source_declined[]",
         "candidates[].data_quality.pending_fields[]",
+        "candidates[].data_quality.permanently_unavailable[]",
         "candidates[].data_quality.rule11_required"
       ],
       "consumer_proof_ref": "engine/a_short_data_quality_shadow.py::classify_data_quality_shadow; runners/a_short_weekly_pipeline.py::build_weekly_report",
@@ -1609,7 +1612,7 @@
       "id": "candidate_data_quality_shadow",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_data_quality_shadow.schema.json",
-      "schema_sha256": "ef5e43a5b92d371fb6254a4a3af4c827c3dc24efe5c2f301d341d8dd00e9ca3a",
+      "schema_sha256": "0f3bc697904afac5a3e7b5865706ab04be065738fdfa6214c091c6f576c137b0",
       "reason": "12A formal shadow comparison observes candidate data-quality block/degrade/warn distribution. Until threshold review and explicit activation, it cannot change Phase5 action, shares, cash allocation, veto, or production policy.",
       "owner": "engine/a_short_data_quality_shadow.py + runners/a_short_weekly_pipeline.py",
       "review_ref": "desktop ashort_r1.md Knife 12A; shadow-only pending activation",
@@ -2364,9 +2367,12 @@
     "candidates[].catalyst.theme_taxonomy.taxonomy_schema_version",
     "candidates[].catalyst.theme_taxonomy.unavailable_reason",
     "candidates[].catalyst.time_window",
+    "candidates[].data_quality.candidate_output_deferred[]",
     "candidates[].data_quality.completeness_score",
     "candidates[].data_quality.missing_fields[]",
+    "candidates[].data_quality.paid_source_declined[]",
     "candidates[].data_quality.pending_fields[]",
+    "candidates[].data_quality.permanently_unavailable[]",
     "candidates[].data_quality.rule11_required",
     "candidates[].derived_flags.chasing_high",
     "candidates[].derived_flags.hard_veto",

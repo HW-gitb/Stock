@@ -169,6 +169,15 @@ M3.2 技术快照的 MA/RSI/MACD/ATR 使用固定 qfq 口径；候选 ATR 为固
 | M6.7 操作建议 | 输入字段已覆盖；最终表属于 `deterministic_report.schema.json` | 已覆盖输入，不在本 schema 输出 |
 | M6.8 隔离协议 | `state_refs.veto_log`, `derived_flags.hard_veto` | 已覆盖 |
 
+## 7.1 unavailable 分类与当前版本边界（2026-08-18）
+
+- 当前 EGS exporter 输出 `analysis_input` schema `1.6.0`，`EGS_VERSION=v7.15`；`data_quality.completeness_score` 仍按既有 `core_quality_fields` 23 项计算，分类数组只解释缺失原因，不改变分母或分数。
+- 当前全局不可用分类固定为三个互不重叠的 field-path 数组：`permanently_unavailable=["capital_flow.northbound"]`、`paid_source_declined=["analyst.target_price_mean"]`、`candidate_output_deferred=["capital_flow.block_trade"]`。三者并集恰为 3 个全局 unavailable 字段，且都保留在 `missing_fields`。
+- `capital_flow.block_trade` 的 Rule6 `get_rule6_block_trades()` / `evaluate_block_trade_discount()` 仍然接通；但候选摘要的三个 block-trade 叶仍是 null/unmaterialized，输出语义尚未决定，因此不从 `missing_fields` 移除，也不把 Rule6 metrics 推入候选摘要。
+- `capital_flow.northbound` 仍是逐股源永久不可用；`analyst.target_price_mean` 仍是付费源未采购；技术四项已由 6.1 接通，短历史技术 null 只属于候选自身缺失，不进入上述三类。
+- `data_quality_shadow` producer 与独立 schema 已升至 `1.1.0`，weekly 只原样 passthrough；shadow 仍 `comparison_only=true`、`production_effect_enabled=false`、`activation=disabled_pending_shadow_review`，不改变 Phase5 动作。
+- 本工作树没有可供本轮重读的当前 official `analysis_input.json`；上述状态以当前 producer/schema/consumer 闭合和已有真实产物记录为依据，真实周 artifact 仍须在后续获授权后复核，不把本轮 offline focused/full lane 当成真实周证明。
+
 ## Phase 2 待办
 
 - rank 回测必须专门统计 Rule 6 各项的历史预测力

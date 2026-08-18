@@ -253,6 +253,16 @@ class AShortConsumerProbeTests(unittest.TestCase):
         })
         validate_consumer_probe(payload)
 
+    def test_classified_quality_leaves_are_read_by_the_real_shadow_consumer(self):
+        source = (Path(__file__).resolve().parents[1]
+                  / "engine" / "a_short_data_quality_shadow.py").read_text(encoding="utf-8")
+        for field in (
+            "permanently_unavailable",
+            "paid_source_declined",
+            "candidate_output_deferred",
+        ):
+            self.assertIn(f'payload.get("{field}")', source)
+
     def test_negative_control_removing_crash_veto_consumer_fails(self):
         from pathlib import Path
 

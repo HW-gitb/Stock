@@ -9273,3 +9273,43 @@ call .tools\run_unittest_with_repo_pythonpath.cmd tests.phase6.test_egs_main_dai
 - **如实记一枪没跑成**：我本想再打「MACD 柱换成 `2*(dif-dea)`」看有没有测试守，锚点字符串没匹配上、该枪未跑，因此柱口径是否被测试守住**本轮无结论**。行为本身我已直接验过是 `dif-dea` 且与 `ewm(adjust=False)` 逐位一致，schema description 也钉住了这条，所以不阻断——但下轮谁碰 MACD，请把这枪补上。
 - **冻结规格偏离的处理是对的**：v14.2 §3.2 的除权识别 / ATR20 延窗 / M6.5 提示本刀主动不实现，且按方案要求在 register、`analysis_input_coverage.md:151`、本 handoff `:9240` **三处同时记录**。这比"用字段名糊过去"强得多——`ex_rights_adjusted=true` 现在的语义被 schema description 明确限定为「输入价格已做除权调整」，不是「窗口内检测到除权事件」。
 - **本轮未做/未验**：按 rule 8 未起对抗 agent（无 provider/secret/新 fail-closed 授权门，且改动是纯计算 + 传输链）；暖根真实周候选差异仍 `NOT_RUN`。
+
+## 2026-08-18 追加：Codex 执行 A-short 7.1 unavailable 分类（509e；repaired / `OPEN-NOT-VERIFIED`）
+
+本节只记录当前 509e 工作树按 Desktop `3a_testrun0816.md` §7.1 的最小修复；不承接其他工作树、其他线程或历史 handoff 的旧问题和修复结论。Codex 是 executor/fixer，Claude Code 是独立 reviewer/committer；Codex 不 stage/commit/push/merge，不修改 `docs/CURRENT.md`。
+
+### 方案边界与最小改动
+
+- 既有 producer/consumer 链为 `weekly_screening.ps1 → A-EGS/egs_main.py::run_egs() → export_analysis_input() → _candidate_from_row() → candidates[].data_quality → analysis_input → runners/a_short_weekly_pipeline.py 的 dict passthrough → engine/a_short_data_quality_shadow.py → weekly shadow rows → effect contract`。本轮只补 unavailable 原因分类和其 shadow/effect-contract 闭合。
+- `A-EGS/egs_main.py` 删除 active code 中混合三类原因的 `remaining_unavailable_fields` 概念，改为三个固定数组：`permanently_unavailable=["capital_flow.northbound"]`、`paid_source_declined=["analyst.target_price_mean"]`、`candidate_output_deferred=["capital_flow.block_trade"]`。三者继续并入 `missing_fields`，并集恰为 3 个全局 unavailable field paths，互不重叠。
+- `completeness_score` 仍只按既有 `core_quality_fields` 23 项和原公式计算；新数组只解释 `missing_fields`，不计入分母，不改变候选选择、评分、Tier、TopN、selection、sizing 或 action。
+- analysis-input schema `$id`/current version 从 `1.5.0` 升为 `1.6.0`，保留所有旧 enum 版本；三个分类属性均 optional，旧 1.5/legacy payload 不要求它们。`EGS_VERSION` 从 `v7.14` 升为 `v7.15`。
+- shadow producer 与 `schemas/a_short_data_quality_shadow.schema.json` 从 `1.0.0` 升为 `1.1.0`，每个 shadow candidate 原样/既有 `_field_list` 归一化带出三数组；分类不参与 block/degrade/warn/clean 计算，`comparison_only=true`、`production_effect_enabled=false`、`activation=disabled_pending_shadow_review` 保持不变。weekly report schema 中同一内嵌 shadow 版本只同步为 `1.1.0`，weekly 生产代码未改。
+
+### Rule6、消费者、schema/source-binding 与负向控制
+
+- `capital_flow.block_trade` 的 Rule6 `get_rule6_block_trades()` / `evaluate_block_trade_discount()` 仍按原链路计算并进入 `event_risk.rule6_checks`；候选摘要 `capital_flow.block_trade.discount_trade_count_10d` / `avg_discount_pct` / `amount_10d` 仍为 null/unmaterialized，不能把 Rule6 pass/metrics 推入摘要，也不能从 `missing_fields` 删除，故分类为 `candidate_output_deferred`。
+- northbound 仍是逐股 `hk_hold` 2024-08 停发后的永久不可用；analyst target price 仍是未采购付费源；6.1 已接通的技术四项不进入三类，全/短技术缺失继续按候选自身 `missing_fields` 处理。
+- `candidate_data_quality` effect group 的七个 proven paths 与 analysis schema leaf 列表同步；使用既有 `_hash()` 计算，data-quality group `source_paths_sha256=e1a82aeafca1701a9999257646cb9e5d41caed1f068ece5a651391ceba4f418e`；shadow comparison track schema hash=`0f3bc697904afac5a3e7b5865706ab04be065738fdfa6214c091c6f576c137b0`。不改 legacy migration snapshots。
+- 既有测试加入真实 reader/proof：EGS exporter 1/1/1 分类与 23 分母、Rule6 pass 不解除 deferred、1.6 schema 与旧版本兼容、shadow 1.1.0/三数组且 action/shares 不变、weekly passthrough、effect contract 三叶 reader/proven path/hash/schema-hash 负控。
+
+### 旧代码必红、修复态 focused 与当前 artifact 边界
+
+- 先补测试后运行方案指定 7 模块 focused：固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / Python `3.13.8`；旧代码原始终态 `Ran 737`、`FAILED (failures=3, errors=3)`，失败集中在缺 1.6/分类数组、shadow reader 和 effect proof。
+- 修复态同一精确命令：`Ran 737 tests in 114.611s`、`OK`、`exit=0`，launcher receipt=`receipt:3730b746c20bb2ed40a29a18`。此前一次并行包装只保留 hash 输出、未保留测试句柄，未作为证据重复计入；本条只记录可审计的单独重跑终态。
+- 固定 Python 只读重算：data-quality leaf path 列表为 `candidate_output_deferred[]`、`completeness_score`、`missing_fields[]`、`paid_source_declined[]`、`pending_fields[]`、`permanently_unavailable[]`、`rule11_required`；group hash 与上项一致；shadow schema hash 与上项一致。
+- 本工作树没有可供本轮重读的当前 official `result/a_short/<date>/analysis_input.json`；仓内只存在 schema/example/minimal fixture，不能用手写夹具冒充当前官方产物。当前结论来自 producer/schema/weekly/shadow/effect 真链闭合与既有真实产物记录；真实周复核须后续获明确授权后执行。
+
+### A-F 自审、下一门与交接
+
+- A producer→consumer：唯一 EGS exporter 产出三数组；weekly 只 passthrough；shadow 只观察；effect contract 逐叶证明。B ripple：1.5/legacy compatibility、weekly schema、shadow 1.1、Rule6 candidate-summary 分离、技术四项不误归类。C reverse-failure：旧分类名残留、分类不在 missing、Rule6 pass 删除 deferred、shadow reader/proof/hash/schema hash 移除均由测试/契约门拦截。D schema/source-binding：analysis_input 1.6、shadow 1.1、effect paths/hash 已同步。E cache/provider/write/action boundary：未改 provider/cache/state/writer/Phase5/selection/sizing/account/order/V14.3。F 版本、固定 Python、原始终态、artifact 缺失边界已记录。
+- focused、preflight、文档门和 full lane 均已通过，但仍不是独立 review、commit、merge 或 ship。固定 Python preflight `status=pass`、`python_ok=true`、依赖缺失 `[]`、timezone=`Asia/Shanghai`；py_compile exit 0；`git diff --check` exit 0（仅 LF→CRLF warning）；文档门 `Ran 85 tests`、`OK`、`exit=0`，`verify_doc_process` `Ran 68 tests`、`OK`、`exit=0`。唯一 full lane 原始终态：`STATIC status=PASS diff_check=PASS py_compile=9`；`discovered=3232 ran=3232 equal=True`；`Ran 3232 tests in 120.826s`；`RESULT status=PASS exit=0 tests=3232 elapsed=120.8s deadline=860s mode=parallel`；fingerprint=`c47a0d883f4b`；sidecar=`.tools\\state\\runs\\20260818T210326_a_short_parallel.jsonl`。full lane 后未再改行为代码、测试或 schema。
+- **交接给 Claude Code**：独立复审 7.1 三类分类的 1/1/1 与 23 项 completeness 不变、Rule6 pass 不解除 candidate block-trade deferred、真 EGS→weekly→shadow reader 闭合、effect-contract 三叶 proof/hash/schema-hash 负控、weekly schema companion sync，以及上述 full-lane 原始终态；不得运行 provider/live，不得把本轮 offline 证据表述成真实周或 ship。PASS 后由 reviewer/committer 提交，Codex 不 stage/commit/push/merge。
+
+## 2026-08-18 追加：Claude Code 独立审查 A-short 7.1（PASS，已提交并合入 master）——过程与方法学
+
+- **「分类字段」这类改动，唯一有实质风险的方向只有一个：它会不会反过来改判**。字段名怎么分、数组怎么摆都只是文字；真正会伤人的是有人顺手写一句「已归类为永久不可用的就别算缺失了」，于是 shadow 从 degrade 变 clean、周报看起来健康了。我因此把主力探针放在这一格：同一份 `data_quality` 加/不加三数组各跑一遍，逐格比 shadow 结论（`degrade/degrade`、`degrade/degrade`、`block/block` 全同），再用 **P4** 植入把这句话真的写进 shadow（从 missing 里剔掉 permanently_unavailable）→ 三条用例转红。**「只展示不改判」这条边界是被机器守住的，不是靠承诺。**
+- **第二个该打的是「并集不变式」**：三类并集必须等于全局未供给集且全在 `missing_fields` 里。P2 把 `block_trade` 从 `candidate_output_deferred` 删掉（只留在 missing），`test_export_classifies_global_unavailable_fields_without_changing_completeness` 精确转红；P3 反方向把 6.1 接通的 `technical.rsi_14` 误塞进 `permanently_unavailable`，同一条用例外加 6.1 的 merge 用例双双转红。**一条不变式要打两枪——少一项和多一项各一枪**，只打一边容易漏掉「往里塞」这个方向。
+- **版本链这次值得表扬，也值得作为样板**：`ANALYSIS_INPUT_SCHEMA_VERSION 1.5.0→1.6.0` 是从 6.1 落地后的当前值 +1 minor，而不是照方案里写死的数字；同时 `schemas/analysis_input.schema.json` 的两条 `allOf`（margin、moneyflow）与 `engine/data/analysis_input_contract.py` 的两处 Python 门**都把新版本加了进去**。我从 4.1 起每轮都盯这一条，因为「新版本悄悄绕过旧 PIT 要求」是 schema 演进里最典型的一种回归。
+- **Rule6 已判 pass ≠ 候选摘要已接线**：方案特意保留 `block_trade` 在 `missing_fields` 而不是删掉，理由是 Rule6 的窄 evaluator 有结论，但候选公开摘要的三个叶（折价笔数/均折价率/金额口径）仍未 materialize。**这是「有上游原料」和「有对外输出」的区别**，删了就是假健康——`candidate_output_deferred` 这个名字也刻意不承诺「公式已定、随时可接」。
+- **本轮未做/未验**：按 rule 8 未起对抗 agent（分类接线，无 provider/secret/新 fail-closed 门，且唯一实质风险方向已被 P4 直接堵住）；主树暖根真实周产物尚未按 `1.6.0` 重跑，`NOT_RUN`。

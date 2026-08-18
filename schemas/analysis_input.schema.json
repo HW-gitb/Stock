@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/analysis_input/1.5.0/schema.json",
+  "$id": "https://stock.local/schemas/analysis_input/1.6.0/schema.json",
   "title": "Stock Analysis Input",
   "description": "Contract file passed from screening/ranking into the deterministic analyzer and analysis Skill.",
   "type": "object",
@@ -28,7 +28,8 @@
         "1.2.0",
         "1.3.0",
         "1.4.0",
-        "1.5.0"
+        "1.5.0",
+        "1.6.0"
       ],
       "description": "Semantic version of this schema contract. Unknown versions fail closed until their source and PIT rules are reviewed."
     },
@@ -985,16 +986,16 @@
   },
   "allOf": [
     {
-      "description": "Margin source coverage is mandatory for newly emitted 1.3.0 through 1.5.0 A-short inputs.",
+      "description": "Margin source coverage is mandatory for newly emitted 1.3.0 through 1.6.0 A-short inputs.",
       "if": {
-        "properties": {"schema_version": {"enum": ["1.3.0", "1.4.0", "1.5.0"]}},
+        "properties": {"schema_version": {"enum": ["1.3.0", "1.4.0", "1.5.0", "1.6.0"]}},
         "required": ["schema_version"]
       },
       "then": {"properties": {"market_context": {"required": ["margin_coverage"]}}}
     },
     {
-      "description": "Moneyflow source coverage is mandatory for newly emitted 1.4.0 and 1.5.0 A-short inputs.",
-      "if": {"properties": {"schema_version": {"enum": ["1.4.0", "1.5.0"]}}, "required": ["schema_version"]},
+      "description": "Moneyflow source coverage is mandatory for newly emitted 1.4.0 through 1.6.0 A-short inputs.",
+      "if": {"properties": {"schema_version": {"enum": ["1.4.0", "1.5.0", "1.6.0"]}}, "required": ["schema_version"]},
       "then": {"properties": {"market_context": {"required": ["moneyflow_coverage"]}}}
     },
     {
@@ -2710,6 +2711,27 @@
             },
             "rule11_required": {
               "type": "boolean"
+            },
+            "permanently_unavailable": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Subset of missing_fields for fields that are permanently unavailable; classification only and does not change completeness_score."
+            },
+            "paid_source_declined": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Subset of missing_fields for fields whose paid source was declined; classification only and does not change completeness_score."
+            },
+            "candidate_output_deferred": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Subset of missing_fields for candidate-output fields whose semantics remain unresolved; this does not mean the field is immediately computable."
             }
           }
         }

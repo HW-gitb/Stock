@@ -3020,7 +3020,7 @@
           "const": "a_short_data_quality_shadow"
         },
         "schema_version": {
-          "const": "1.0.0"
+          "const": "1.1.0"
         },
         "as_of": {
           "type": "string",
