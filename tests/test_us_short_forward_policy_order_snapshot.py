@@ -93,7 +93,7 @@ def _candidate_price_inputs() -> dict:
                 "close": 100.0,
                 "indicators": {
                     "effective_support": 90.0,
-                    "effective_resistance": 100.0,
+                    "effective_resistance": 110.0,
                     "atr": 2.0,
                     "support_quality": "strong",
                     "resistance_quality": "strong",
