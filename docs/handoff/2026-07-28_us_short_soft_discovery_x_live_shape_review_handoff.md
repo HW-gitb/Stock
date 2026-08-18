@@ -3310,3 +3310,11 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **验证**：serial-tail 回归 `1 OK`；受影响 executable/resource 两模块 `11 OK`；官方全量 `status=PASS exit=0 tests=5993 elapsed=343.6s deadline=860s`、`COUNT_GATE 5993=5993`、`serial_tail=24`；`py_compile=2`、`git diff --check` pass；未联网、未调 provider、未用真实凭证。
 - **当前状态**：`repaired / OPEN-NOT-VERIFIED`，只改 conformance 测试入口和 serial-tail owner test，等待 Claude 独立复审；不提交、不执行第五刀 provider。
 - **下一步**：Claude Code：独立复审 `R-USSHORT-CONFORMANCE-EXECUTABLE-RED-ONLY-IN-THE-PARALLEL-PACK`。
+
+## 2026-08-18 追加：Claude Code 复审 registry 嵌套 suite 加锁 —— PASS，但墙钟余量掉到 10.6%
+
+- **根因**：`LaneGuardRegistryConformance` 在进程内跑一个嵌套 unittest suite，那个 suite 会走到共享私有根 helper。单进程恒绿，八 worker 并行时 helper 开始拒绝，外层把它读成 `(1,1) != (1,0)` 的红。`.tools/parallel_lane_runner.py` 的 docstring 早写过这个失效模式——**下次看到「单跑绿、并行红」，先去看这个模块有没有碰共享锁**。
+- **修法与连带**：嵌套那一跑包进 `hold_test_root_lock(ROOT)`。串行尾巴是从源码递归推导的，所以基类加锁后 `..._executable` / `..._resources` 自动进尾巴；`tests/test_parallel_lane_runner.py` 加两条断言钉住落位。
+- **验证结果（合并态主树）**：`status=PASS exit=0 tests=5993 elapsed=768.8s deadline=860s`、`COUNT_GATE 5993=5993`、无 REFUSED。红消失，绿也记上了。
+- **代价要记住**：同一条 lane 改动前两次是 `345.4s`、`473.5s`，本次 `768.8s`，余量只剩 91 秒（10.6%）。老条目 `R-USSHORT-LANE-PACK-IS-GREEN-ONLY-BY-4-SECONDS...` 的 closure 判据是 ≥15% 余量，因此**它回到 open**。下一刀再加几十秒就会撞 860s，而 TIMEOUT 和真红在账面上难分。
+- **下一步注意**：真正该动的是「为什么整模块都得串行」——尾巴是按**模块**判定的。若只有 `LaneGuardRegistryConformance` 需要锁，把它拆成单独模块，同文件其余用例就能回并行，这是唯一能把那 420 秒要回来的方向。`conformance_resources` 已砍过一次空间有限，`conformance_executable` 明确不许为墙钟牺牲，抬 860s 属用户级决定。
