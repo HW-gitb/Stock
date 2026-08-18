@@ -5251,3 +5251,33 @@ TTL 边界 90/91 天、正向观测永不跳过、脏缓存五形状、残差二
 ### 下一步
 
 用户：下次周跑可验证第二周缓存命中（该腿应从 9 次调用 / 104 秒降到 0）。
+
+## 2026-08-18 追加：桌面 `2us_testrun0816.md` §9.2 yfinance 评级一刀修复（Codex executor/fixer，888d，OPEN-NOT-VERIFIED）
+
+### 实施
+
+- 实际生效链为 `runners/us_short_yfinance_grades_fetch.py::_fetch_one` → `_normalized_source_rows` → `engine/us_short_yfinance_analyst_grades.py::resolve_yfinance_grade_actions`；本轮没有修改退役 FMP 评级路径。
+- 从现有 yfinance consumer 的 `_classify_grade_record` 抽出唯一日期 helper，并由 consumer 与 parser 同时调用；`source_as_of` 沿 `_fetch_one` 传入 parser。纯目标价行（`ToGrade` 空、`priceTargetAction` 非空）跳过；历史/未来不完整行跳过；窗口内不完整行保留 `partial/ok`，既有 consumer gate 继续排除；完整行和去重口径不变。
+- raw 写入条件改为 `raw_rows is not None`；parser 失败但拿到 provider 表时留 raw，无 payload 的 fetch/rate-limit 不制造空文件。仅把 parser-only status 分为 `completed_with_parser_errors`，其他状态组合不变；summary schema 只补该枚举。
+
+### 一个验收门
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 跑 provider + consumer focused tests：`31 tests / OK / 2.826s`。
+- 验收 fixture 覆盖 MSFT `929` 总行保留 `928`、窗口内真缺口 `partial/ok` 且 consumer 排除、AAPL `969/967` 去重形状、空表、坏日期/坏结构、raw 留证、无 payload 不写 raw、parser-only status；3 个 Python 文件 `py_compile` 通过，`git diff --check` 通过。
+
+### 边界与下一步
+
+- 未联网、未调用 provider/live、未生成 receipt、未跑 full lane；未新增 retry/fallback/state/summary/persistence count。未修改桌面文档、主树或 `docs/CURRENT.md`，未提交、未 merge。
+- 当前结论为 `repaired / OPEN-NOT-VERIFIED`。下一步：Claude Code 独立审查当前 §9.2 diff；PASS 后按 reviewer/committer 流程提交，merge 仍由用户决定。
+
+## 2026-08-18 Claude Code 独立审查：yfinance 评级行级跳过 — PASS
+
+桌面 9.2 三步方案全做到：坏行跳过不再放弃整只票；按"坏行是否落在时效窗口内"决定 coverage（窗口外 `full`、
+窗口内 `partial`），因此消费端 `full+ok` 双条件门无需放宽而真缺口仍被排除；纯目标价行单独识别。
+联网实测 `MSFT 929→923 full/ok`、`ORCL 648→646`、`SAP 164→162`（修前均 kept=0），
+对照 `AAPL 969→967` 与修前逐值一致。反向控制 30/30，细目见 `docs/system_risk_register.md` 同日节。
+不阻断 `O-YF-GRADES-1`：不可解析日期仍整只票丢弃，同类只关一半（对消费端行为等价）。
+
+### 下一步
+
+用户：桌面 `2us_testrun0816.md` §9.2 可标已修复；下次周跑该 9 只应恢复真实评级信号。

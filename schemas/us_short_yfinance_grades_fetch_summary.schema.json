@@ -56,6 +56,7 @@
           "enum": [
             "completed",
             "completed_with_fetch_errors",
+            "completed_with_parser_errors",
             "halted_rate_limit_or_crumb_failure",
             "dependency_missing",
             "resolver_rejected_neutralized",

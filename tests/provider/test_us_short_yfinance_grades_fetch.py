@@ -329,6 +329,7 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
         self.assertEqual(stderr.getvalue(), "")
         self.assertEqual(summary["scope"]["status"], "completed_with_fetch_errors")
         self.assertEqual(summary["execution"]["fetch_error_count"], 3)
+        self.assertEqual(list(self.paths["raw_root"].glob("*.json")), [])
         summary_text = self.paths["summary"].read_text(encoding="utf-8")
         self.assertEqual([], _leaked_provider_noise(summary_text))
 
@@ -516,13 +517,102 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
             }
         )
         summary = self._run(client=client, confirm_user_authorization=True)
-        self.assertEqual(summary["scope"]["status"], "completed_with_fetch_errors")
+        self.assertEqual(summary["scope"]["status"], "completed_with_parser_errors")
         self.assertEqual(summary["execution"]["parser_failed_symbol_count"], 1)
+        self.assertTrue((self.paths["raw_root"] / "AAPL.json").exists())
+        self.assertTrue(summary["scope"]["raw_payload_storage_performed"])
         resolved = _read_json(self.paths["resolved"])
         self.assertNotIn("AAPL", resolved["signals"])
         self.assertIn("AAPL", resolved["excluded"])
         self.assertIn("MSFT", resolved["signals"])
         self.assertIn("JPM", resolved["checked"])
+
+    def test_window_aware_normalization_skips_old_bad_rows_but_keeps_in_window_gap_partial(self):
+        rows = [
+            _grade_row(firm=f"Bank{index}")
+            for index in range(927)
+        ]
+        rows.append(_grade_row(grade_date="2012-11-27", firm="HistoricalBank"))
+        rows.append({
+            "GradeDate": "2012-11-28",
+            "Action": "main",
+            "Firm": "Nomura",
+            "ToGrade": "",
+            "FromGrade": "",
+            "priceTargetAction": "Maintains",
+        })
+
+        attempt, raw_rows = runner._fetch_one(
+            _FakeYFinanceClient({"MSFT": rows}),
+            "MSFT",
+            source_as_of="2026-07-10",
+        )
+        self.assertEqual(len(attempt["records"]), 928)
+        self.assertEqual((attempt["coverage"], attempt["parser"]), ("full", "ok"))
+        self.assertEqual(len(raw_rows), 929)
+        self.assertIn("2012-11-27", {row["GradeDate"] for row in attempt["records"]})
+
+        in_window_gap = {
+            **_grade_row(grade_date="2026-07-01", firm="MissingGrade"),
+            "ToGrade": "",
+            "priceTargetAction": "",
+        }
+        attempt, _ = runner._fetch_one(
+            _FakeYFinanceClient({"MSFT": [_grade_row(firm="ValidBank"), in_window_gap]}),
+            "MSFT",
+            source_as_of="2026-07-10",
+        )
+        self.assertEqual(len(attempt["records"]), 1)
+        self.assertEqual((attempt["coverage"], attempt["parser"]), ("partial", "ok"))
+        resolved = runner.resolve_yfinance_grade_actions(
+            as_of="2026-07-10",
+            grades_by_ticker={
+                "MSFT": {
+                    "records": attempt["records"],
+                    "provenance": {
+                        "provider_id": "yfinance",
+                        "endpoint_or_filing_type": "upgrades_downgrades",
+                        "source_as_of": "2026-07-10",
+                        "observed_at": "2026-07-10T08:00:00-04:00",
+                        "coverage_status": attempt["coverage"],
+                        "parser_status": attempt["parser"],
+                        "lineage_ref": "yfinance:upgrades_downgrades:2026-07-10#msftyfinancegrades",
+                    },
+                }
+            },
+        )
+        self.assertIn("MSFT", resolved["excluded"])
+
+    def test_normalization_regressions_keep_aapl_shape_empty_table_and_fail_closed_edges(self):
+        fields = ["Action", "Firm", "ToGrade", "FromGrade", "GradeDate"]
+        aapl_rows = [
+            _grade_row(firm=f"Bank{index}")
+            for index in range(967)
+        ] + [
+            _grade_row(firm="Bank0"),
+            _grade_row(firm="Bank1"),
+        ]
+        normalized, coverage, parser = runner._normalized_source_rows(
+            "AAPL", fields, aapl_rows, source_as_of="2026-07-10"
+        )
+        self.assertEqual(len(normalized), 967)
+        self.assertEqual((coverage, parser), ("full", "ok"))
+
+        self.assertEqual(
+            runner._normalized_source_rows("AAPL", fields, [], source_as_of="2026-07-10"),
+            ([], "full", "ok"),
+        )
+        invalid_date = _grade_row(grade_date="not-a-date")
+        self.assertEqual(
+            runner._normalized_source_rows("AAPL", fields, [invalid_date], source_as_of="2026-07-10")[1:],
+            ("partial", "failed"),
+        )
+        self.assertEqual(
+            runner._normalized_source_rows(
+                "AAPL", ["Action", "Firm", "ToGrade", "GradeDate"], [_grade_row()], source_as_of="2026-07-10"
+            )[1:],
+            ("partial", "failed"),
+        )
 
     def test_summary_schema_rejects_emit_gate_or_scope_drift(self):
         client = _FakeYFinanceClient({"AAPL": [], "MSFT": [], "JPM": []})

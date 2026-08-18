@@ -35,6 +35,8 @@ if str(ROOT) not in sys.path:
 from engine.us_short_yfinance_analyst_grades import (  # noqa: E402
     ENDPOINT,
     PROVIDER_ID,
+    _RECENCY_WINDOW_DAYS,
+    _grade_date_disposition,
     YFinanceGradesError,
     resolve_yfinance_grade_actions,
 )
@@ -366,7 +368,13 @@ def _date_value(value: Any) -> str | None:
         return None
 
 
-def _normalized_source_rows(symbol: str, fields: list[str], rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str, str]:
+def _normalized_source_rows(
+    symbol: str,
+    fields: list[str],
+    rows: list[dict[str, Any]],
+    *,
+    source_as_of: str,
+) -> tuple[list[dict[str, Any]], str, str]:
     if not rows:
         return [], "full", "ok"
     date_field = next((field for field in ("GradeDate", "Date", "Datetime", "date", "datetime", "index") if field in fields), None)
@@ -375,13 +383,21 @@ def _normalized_source_rows(symbol: str, fields: list[str], rows: list[dict[str,
         return [], "partial", "failed"
     out: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str, str, str]] = set()
+    incomplete_in_window = False
     for row in rows:
+        to_grade = row.get("ToGrade")
+        price_target_action = row.get("priceTargetAction")
+        if (
+            not (type(to_grade) is str and to_grade.strip())
+            and type(price_target_action) is str
+            and price_target_action.strip()
+        ):
+            continue
         grade_date = _date_value(row.get(date_field))
         if grade_date is None:
             return [], "partial", "failed"
         action = row.get("Action")
         firm = row.get("Firm")
-        to_grade = row.get("ToGrade")
         from_grade = row.get("FromGrade")
         if not (
             type(action) is str
@@ -392,7 +408,15 @@ def _normalized_source_rows(symbol: str, fields: list[str], rows: list[dict[str,
             and to_grade.strip()
             and type(from_grade) is str
         ):
-            return [], "partial", "failed"
+            if _grade_date_disposition(
+                grade_date,
+                as_of=source_as_of,
+                observed_date=source_as_of,
+                window=_RECENCY_WINDOW_DAYS,
+            ) in {"future", "stale"}:
+                continue
+            incomplete_in_window = True
+            continue
         identity = (
             grade_date,
             " ".join(firm.split()).casefold(),
@@ -411,7 +435,7 @@ def _normalized_source_rows(symbol: str, fields: list[str], rows: list[dict[str,
             "ToGrade": to_grade,
             "FromGrade": from_grade,
         })
-    return out, "full", "ok"
+    return out, ("partial" if incomplete_in_window else "full"), "ok"
 
 
 def _error_category(exc: Exception) -> str:
@@ -421,7 +445,12 @@ def _error_category(exc: Exception) -> str:
     return "fetch_error"
 
 
-def _fetch_one(client: Any, symbol: str) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
+def _fetch_one(
+    client: Any,
+    symbol: str,
+    *,
+    source_as_of: str,
+) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
     # yfinance can write provider response text directly to the process console.  It is advisory-only here, so keep
     # that raw text out of both operator output and our hygienic aggregate summary; the structured status below is
     # the only retained outcome.
@@ -430,7 +459,12 @@ def _fetch_one(client: Any, symbol: str) -> tuple[dict[str, Any], list[dict[str,
         with redirect_stdout(provider_console), redirect_stderr(provider_console):
             ticker = client.ticker(symbol)
             fields, raw_rows = _table_rows(ticker.upgrades_downgrades)
-            rows, coverage, parser = _normalized_source_rows(symbol, fields, raw_rows)
+            rows, coverage, parser = _normalized_source_rows(
+                symbol,
+                fields,
+                raw_rows,
+                source_as_of=source_as_of,
+            )
     except Exception as exc:
         return {"status": _error_category(exc), "records": [], "coverage": "missing", "parser": "failed"}, None
     status = "ok" if parser == "ok" else "parser_failed"
@@ -504,8 +538,10 @@ def _summary_status(
         return "dependency_missing", "down"
     if rate_failures:
         return "halted_rate_limit_or_crumb_failure", "down"
-    if fetch_errors or parser_failures:
+    if fetch_errors:
         return "completed_with_fetch_errors", "ok"
+    if parser_failures:
+        return "completed_with_parser_errors", "ok"
     return "completed", "ok"
 
 
@@ -569,7 +605,7 @@ def _build_summary(
         resolver_rejection=resolver_rejection,
         advisory_failure=advisory_failure,
     )
-    raw_written = successful > 0
+    raw_written = successful > 0 or parser_failures > 0
     return {
         "schema_name": "us_short_yfinance_grades_fetch_summary",
         "schema_version": "1.1.0",
@@ -801,10 +837,10 @@ def _run_post_structural_gate(
     if yf_client is not None:
         raw_root.mkdir(parents=True, exist_ok=True)
         for index, symbol in enumerate(target_symbols, start=1):
-            attempt, raw_rows = _fetch_one(yf_client, symbol)
+            attempt, raw_rows = _fetch_one(yf_client, symbol, source_as_of=source_as_of)
             attempts.append(attempt)
             attempts_by_symbol[symbol] = attempt
-            if raw_rows is not None and attempt["status"] == "ok":
+            if raw_rows is not None:
                 _write_json_atomic({"ticker": symbol, "upgrades_downgrades": raw_rows}, raw_root / f"{symbol}.json")
             if attempt["status"] == "rate_limit_or_crumb_failure":
                 break
