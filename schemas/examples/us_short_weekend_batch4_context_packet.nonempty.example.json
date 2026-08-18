@@ -300,9 +300,7 @@
       "session_scope": "RTH",
       "decision_date": "20260615"
     },
-    "coverage_inputs": [],
-    "core_conclusion": "nonempty 占位：单候选 AAPL，无持仓",
-    "risk_downgrade_note": "无"
+    "coverage_inputs": []
   },
   "eligibility_governance_path": "presets/us_short_eligibility_governance_20260624.json",
   "calendar_path": "presets/us_short_market_calendar_2026_2027.json",

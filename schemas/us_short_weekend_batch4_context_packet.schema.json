@@ -182,7 +182,7 @@
     "report_context": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["price_clock", "coverage_inputs", "core_conclusion", "risk_downgrade_note"],
+      "required": ["price_clock", "coverage_inputs"],
       "properties": {
         "price_clock": {
           "type": "object",
@@ -196,8 +196,6 @@
           }
         },
         "coverage_inputs": {"type": "array", "items": {"type": "object"}},
-        "core_conclusion": {"type": "string"},
-          "risk_downgrade_note": {"type": "string"},
         "forward_policy_comparison_reminder": {
           "type": "string",
           "minLength": 1,

@@ -5425,3 +5425,62 @@ Codex：类B 第二刀（问题2 sub_mode 路由 + paper stop-limit），bucket 
 
 用户：A/B 两类已全部落地合入。下次真实周跑将同时检验——市场轴真值、breakout 路由与建仓价位、
 以及此前四项修复（市值缓存/价差先验/评级解析/破产口径）。
+
+## 2026-08-18 追加：桌面 `2us_testrun0816.md:610-703` 类C第一刀——报告事实同源化与横幅⑦治理提醒（Codex executor/fixer，888d，OPEN-NOT-VERIFIED）
+
+### 逐行实施
+
+- **1.A 模板去回填**：`report_context` 删除 `core_conclusion` / `risk_downgrade_note`，Batch4 context schema、空/非空 examples、bridge loader 同步收紧；`additionalProperties=false` 保持，旧模板键 fail-closed；删除 `us_short_run_origin.py` 的 §4/§10 exact-mark guard，不新增自然语言 denylist。
+- **1.B §4**：`canonical_core_conclusion(flat_rows)` 复用 `report_row_groups()`，从最终 machine rows 精确生成候选/建仓/观察/持仓数量和冻结 observe reason 顺序；不再复制名字、分数、价格或 risk tag。
+- **1.C §10**：`canonical_risk_downgrade_section(flat_rows)` 从最终观察原因和 validated machine/action rows 生成逐票原因与风险标签涉及票数；同一 ticker/tag 只计一次，冻结原因/字典序固定，空 rows 为两条“逐票…无”。
+- **1.D 写入门**：`_reconcile_official_source_facts` 在任何官方文件写入前 exact-compare report §4/§10 与 canonical machine-row projection；协调修改 report_data 与 markdown 仍拒写。
+- **1.E 横幅⑦**：`theme_producer_pending_reminder` 改为 `theme_producer_governance_reminder`，只在 LIVE/实盘显示固定治理提醒；同步 weekly-report preset/schema、direct tests、设计 §10/§11.2；不再显示“当前未建/缺免费源”，且不改变 selection/sizing。
+
+### 一个验收门（本刀已执行的范围）
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`：报告/private writer/orchestrator/context builder/contract/bridge 聚焦 `222 tests / OK`；正式离线 capstone→bridge→machine→report→private write `7 tests / OK`；route-doc + doc-governance `56 tests / OK`；受影响 Python `py_compile` 通过；`git diff --check` 通过（仅 LF→CRLF 警告）。
+- 已覆盖：旧模板键 schema/bridge/report-context fail-closed；§4/§10 正向 canonical projection；≥2 observe reason 与重复/不同 risk tag 的直接计数控制；private writer §4/§10 反向篡改拒写；mixed-source 正向治理横幅、offline 不出现、旧“待建/缺免费”不出现。
+
+### Required / Optional、边界与下一步
+
+- `R-USSHORT-CLASS-C-REPORT-TEMPLATE-FACTS-AND-BANNER-DRIFT`（Required）已按类C第一刀修复，状态 `repaired / OPEN-NOT-VERIFIED`；Optional=无。类C第二刀问题6未执行，不得声称类C整体关闭。
+- 未联网、未调用 provider/API/live、未跑 full lane；未改 selection/price/sizing/provider/model-paper；未生成新 receipt/hash/state/artifact；未改主树、桌面文档或 `docs/CURRENT.md`；未提交、未 merge。
+- 下一步：Claude Code 独立审查本刀；PASS 后由 reviewer/committer 提交，问题6第二刀另行按桌面方案执行。
+
+## 2026-08-18 Claude Code 独立审查：类C 第一刀 — FAIL（一条 Required）
+
+方案本体（模板入口删除、canonical §4/§10、写入边界对账、横幅⑦治理化）全部实现正确并已逐项核对；
+但随 editorial 守卫一并删除的两个 run_origin 常量被 `test_us_short_run_origin_research_mode` 正当消费
+（守 §11/§13 永不含运营权威话术的另一条不变式），该模块现 ImportError。修法=保留两常量、只删守卫本体；
+已核对为正确的部分列在 register 同日节，修复轮免重审。
+
+### 下一步
+
+ Codex：按 register 修 Required（预计一行 import 级改动 + 恢复两常量定义）。
+
+## 2026-08-18 Codex 修复类 C 第一刀审查 Required（888d，OPEN-NOT-VERIFIED）
+
+### 修复
+
+- 仅恢复 `engine/us_short_run_origin.py` 中 `PROVIDER_AUTHORITATIVE_CLEAN_MARK` 与 `NO_UNCLEAN_CLAIM_MARK` 两个仍被 research-mode §11/§13 测试导入的常量。
+- `_EDITORIAL_SECTIONS`、`_section_text` 和 §4/§10 editorial 守卫循环继续删除；没有恢复旧 editorial 守卫，也没有改其他类 C 逻辑。
+
+### 一个验收门
+
+- 固定 Python313 点名运行 `tests.test_us_short_run_origin_research_mode`：`12 tests / OK`。
+
+### Required / Optional、边界与下一步
+
+- `R-USSHORT-C1-DELETED-MARKS-BREAK-A-LIVE-TEST-MODULE` 已修，当前为 `repaired / OPEN-NOT-VERIFIED`；Optional=无。类 C 第二刀问题 6 未执行。
+- 未联网、未调用 provider/live、未跑 full lane、未提交、未 merge；下一步由 Claude Code 独立复审，PASS 后按 reviewer/committer 流程提交。
+
+## 2026-08-18 Claude Code 独立审查：类C 第一刀复修轮 — PASS
+
+上轮 Required 按建议修法闭合：两个禁用话术常量保留为单一来源，只删 editorial 守卫本体；
+复现探针通过、超集 263 全绿（含 research-mode 模块）。§4/§10 由 machine rows canonical 生成并在
+私密写入边界强制对账，横幅⑦治理化。按方案边界：本刀只完成「§4/§10 及横幅⑦同源化」，
+问题6（§9）关闭须待第二刀 + 总验收门。
+
+### 下一步
+
+Codex：类C 第二刀（§9 从真实 Pass1+Pass2+Top15 生成范围与数量；注意 2.A 禁止把 reason_distribution 加总当票数）。

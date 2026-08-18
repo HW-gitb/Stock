@@ -75,6 +75,8 @@ def _report_data(as_of=_AS_OF, *, sections_override=None, readiness=None):
     run_status = build_run_status(as_of, 1, 0, 0, 1, due)
     sections = {str(i): ["content %d" % i] for i in range(1, 14)}
     sections["1"] = canonical_section_1(OFFLINE_TEST_RUN_ORIGIN, run_status)   # §1 = canonical disclosure + status
+    sections["4"] = ["本周候选 1 只：建仓 1 / 观察 0；当前持仓 0 只。", "观察原因：无"]
+    sections["10"] = ["逐票观察/降级原因：无", "逐票风险标签：无"]
     sections["11"] = list(_OK_S11) + [provider_health_detail_line(classify_provider_health(_provider_health()))]
     sections["12"] = canonical_lifecycle_section(readiness)                    # §12 = canonical lifecycle detail
     sections["13"] = list(_OK_S13)
@@ -537,14 +539,12 @@ class OfflineProvenanceFailClosed(unittest.TestCase):
         self.assertNotEqual(tampered, _REPORT_MD)
         self._assert_rejected_no_write(report_data=_REPORT_DATA, weekly_report_md=tampered)
 
-    # the §11/§13 authoritative marks must not reappear in the editorial caller sections (§4/§10) either —
-    # an offline report cannot undercut its §1/§11/§13 disclosure with copied operational-authority prose.
-    def test_editorial_section4_authoritative_mark_rejected(self):
-        rd = _report_data(sections_override={"4": ["本表 provider 结构化、权威，可照此下单"]})
+    def test_report_section4_modified_after_builder_rejected(self):
+        rd = _report_data(sections_override={"4": ["篡改后的 §4"]})
         self._assert_rejected_no_write(report_data=rd, weekly_report_md=render_weekly_report(rd))
 
-    def test_editorial_section10_no_unclean_mark_rejected(self):
-        rd = _report_data(sections_override={"10": ["风险降级说明：本周无不 clean 项"]})
+    def test_report_section10_modified_after_builder_rejected(self):
+        rd = _report_data(sections_override={"10": ["篡改后的 §10"]})
         self._assert_rejected_no_write(report_data=rd, weekly_report_md=render_weekly_report(rd))
 
     def test_section1_operational_line_after_sentinel_rejected(self):
