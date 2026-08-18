@@ -61,6 +61,20 @@ class ReconstructSeriesFromGroupedTest(unittest.TestCase):
         out = reconstruct_series_from_grouped(grouped, **self._base_kwargs())
         self.assertEqual(out["AAPL"]["points"], [{"date": "2026-07-01", "close": -1.0}])
 
+    def test_ticker_with_no_volume_on_any_row_stays_in_momentum_series(self):
+        grouped = [
+            _session("2026-07-01", [{"ticker": "AAPL", "close": 10.0}]),
+            _session("2026-07-02", [{"ticker": "AAPL", "close": 11.0}]),
+        ]
+        out = reconstruct_series_from_grouped(grouped, **self._base_kwargs())
+        self.assertEqual(
+            out["AAPL"]["points"],
+            [
+                {"date": "2026-07-01", "close": 10.0},
+                {"date": "2026-07-02", "close": 11.0},
+            ],
+        )
+
     def test_missing_close_is_omitted_as_a_gap(self):
         grouped = [
             _session("2026-07-01", [{"ticker": "AAPL", "close": 10.0}]),
@@ -149,21 +163,25 @@ class ReconstructOhlcvSeriesFromGroupedTest(unittest.TestCase):
     def test_raw_ohlcv_passes_through_unvalidated_engine_owns_cleaning(self):
         # non-positive close / high<low are NOT rejected here (the overextension engine's _parse_ohlcv_series owns
         # that); they pass through unchanged.
-        grouped = [_session("2026-07-01", [{"ticker": "AAPL", "high": 1.0, "low": 2.0, "close": -1.0}])]
+        grouped = [_session("2026-07-01", [{"ticker": "AAPL", "high": 1.0, "low": 2.0, "close": -1.0,
+                                              "volume": 100.0}])]
         out = reconstruct_ohlcv_series_from_grouped(grouped, **self._base_kwargs())
-        self.assertEqual(out["AAPL"]["points"], [{"date": "2026-07-01", "high": 1.0, "low": 2.0, "close": -1.0}])
+        self.assertEqual(out["AAPL"]["points"], [{"date": "2026-07-01", "high": 1.0, "low": 2.0,
+                                                   "close": -1.0, "volume": 100.0}])
 
     def test_missing_high_low_or_close_is_omitted_as_a_gap(self):
         grouped = [
-            _session("2026-07-01", [{"ticker": "AAPL", "high": 10.5, "low": 9.5, "close": 10.0}]),
-            _session("2026-07-02", [{"ticker": "AAPL", "low": 10.5, "close": 11.0}]),   # no high -> gap
-            _session("2026-07-03", [{"ticker": "AAPL", "high": 12.5, "close": 12.0}]),  # no low  -> gap
-            _session("2026-07-04", [{"ticker": "AAPL", "high": 13.5, "low": 12.5}]),    # no close -> gap
-            _session("2026-07-05", [{"ticker": "AAPL", "high": 14.5, "low": 13.5, "close": 14.0}]),
+            _session("2026-07-01", [{"ticker": "AAPL", "high": 10.5, "low": 9.5, "close": 10.0,
+                                      "volume": 100.0}]),
+            _session("2026-07-02", [{"ticker": "AAPL", "low": 10.5, "close": 11.0, "volume": 110.0}]),   # no high -> gap
+            _session("2026-07-03", [{"ticker": "AAPL", "high": 12.5, "close": 12.0, "volume": 120.0}]),  # no low  -> gap
+            _session("2026-07-04", [{"ticker": "AAPL", "high": 13.5, "low": 12.5, "volume": 130.0}]),    # no close -> gap
+            _session("2026-07-05", [{"ticker": "AAPL", "high": 14.5, "low": 13.5, "close": 14.0,
+                                      "volume": 140.0}]),
         ]
         out = reconstruct_ohlcv_series_from_grouped(grouped, **self._base_kwargs())
         self.assertEqual([p["date"] for p in out["AAPL"]["points"]], ["2026-07-01", "2026-07-05"])
-        self.assertNotIn("volume", out["AAPL"]["points"][0])   # volume omitted when absent
+        self.assertEqual(out["AAPL"]["points"][0]["volume"], 100.0)
 
     def test_shares_the_fail_closed_envelope_with_momentum(self):
         # the OHLCV reconstruct goes through the SAME _reconstruct_from_grouped walk, so the ascending-axis /

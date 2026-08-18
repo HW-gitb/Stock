@@ -172,7 +172,7 @@ def reconstruct_ohlcv_series_from_grouped(
     """Reshape an ascending grouped-daily window into per-ticker `{date,high,low,close,volume}` OHLCV series for
     the §4.3 overextension producer (cut 2b-iii). Identical MECHANICAL group-by as the momentum reconstruct but
     RETAINS high/low (ATR needs them); raw values pass through (the overextension engine is the single PIT/clean
-    authority). A row missing high/low/close on a date → that date is a gap (omitted)."""
+    authority). A row missing high/low/close/volume on a date → that date is a gap (omitted)."""
     return _reconstruct_from_grouped(
         grouped_sessions, tickers=tickers, as_of=as_of, session=session,
         adjustment_mode=adjustment_mode, point_builder=_ohlcv_point_fields)

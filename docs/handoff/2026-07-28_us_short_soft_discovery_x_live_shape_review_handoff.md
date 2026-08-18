@@ -3549,3 +3549,20 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **教训（我的，值得下次照用）**：给 closure 写断言时，把「断言发生那一刻现场必须有什么」一起写死。上一轮我只写了「断言 `_growth` 为空」，执行方照字面实现，结果那个断言落在一个**空目录**上，恒真且看不出来。这次补的就是那半句。
 - **本轮为什么没跑合并态全量**：carve-out (b) 形式上成立（`7c57be74..a8ce703a` 带回 13 文件 595 行），但那批正是 `R-USSHORT-SPREAD-SLICE-MADE-VOLUME-MANDATORY-AND-LEFT-ITS-OWN-TESTS-RED`(P1) 那条确定性红的来源，现在跑必然红在同一处，与本刀无关，按 rule 7(e) 不重复确认；等 P1 修完那次全量一并记绿。
 - **下一步**：只剩那条 P1 —— 先裁决「缺 volume 该整根丢还是保留 high/low/close」，再同步它自己模块那两条用例，然后合并态全量一次到 `PASS` 且 `COUNT_GATE discovered==ran`。
+
+## 2026-08-18 追加：Codex 修复 spread slice volume Required（待 Claude 独立复审；8d8c）
+
+- **裁决已落地**：执行成本 OHLCV bar 缺 `volume` 就是 gap；momentum 的独立 builder 仍保留无 `volume` 的 ticker。
+- **最小改动**：只同步 `tests/test_us_short_momentum_grouped_reconstruct.py` 的两条 OHLCV fixture 和断言，新增一条全段缺 volume 的 momentum 回归用例，并把重构器 docstring 补成四字段必填；没有改生产判定。
+- **验证**：固定 Python313 聚焦 `44/44 OK`。修复前点名模块 `12 tests / 2 errors`，修复后全绿。
+- **全量结果**：按方案尝试一次合并态全量，`320` modules / `6025` discovered；先失败于无关 `provider.test_us_short_forward_policy_corporate_action_fetch`，`364` 已运行、`COUNT_GATE` 不相等，P1 模块未派发。该无关模块相关套件单跑 `17 tests / 7 failures`；不扩大本刀修复范围。
+- **状态**：`repaired / OPEN-NOT-VERIFIED`，未提交、未联网、未调 provider。
+- **下一步**：Claude Code：独立复审 spread slice Required；不要把 corporate-action 红并入本刀。
+
+## 2026-08-18 追加：Claude Code 复审 volume 必填裁决 —— PASS（已提交并合入 master）
+
+- **我核的是「收紧到底落在哪条路」，不是测试绿不绿**：整读两个 point builder——`_momentum_point_fields`（`:127-133`）只要 `close`，`volume` 仍是可选透传；`_ohlcv_point_fields`（`:152-162`）要求四字段齐全、缺一即 gap。**所以我上一轮定 P1 的那条理由（票会从动量打分里消失）在代码层面本来就不成立**——消失只可能发生在 OHLCV 那条路，而它唯一的生产消费方是 `us_short_batch5_full_universe_momentum_fetch.py:609` 产的 opt-in OHLCV packet。engine 本轮只改 1 行 docstring 把契约写成与行为一致，这是对的收口方式。
+- **植入对照打在承重点**：把 `_momentum_point_fields` 也改成要求 `volume` → 新增的 `test_ticker_with_no_volume_on_any_row_stays_in_momentum_series` 精确转红（同族两条 volume-less fixture 亦红），还原 `RESTORED_SHA_MATCH=True`。**选点的道理**：这一刀真正需要被钉住的不变式是「动量不因缺 volume 掉票」，所以枪要打在动量那条 builder 上，而不是打在被收紧的 OHLCV 那条上。
+- **我自己的定级更正**：这条当初定 P1 的依据（选股面影响）站不住，实际影响面只到过热 producer 的输入。定级错了就更正，不硬撑。
+- **lane 仍不绿，红换了第三个主人**：我亲跑 `tests.provider.test_us_short_forward_policy_corporate_action_fetch` 单模块 `FAIL exit=1 tests=10 11.1s`，两条点名失败（`'data_degraded_whole_week_no_count' != 'ready_for_outcome'`、`False is not true`）。该模块自身文件最近改动是更早的 `e2ead1dd`，所以红大概率来自它**消费的引擎**在近期某次合并里变了行为——归属我没继续钉（超出本刀），已开 `R-USSHORT-FORWARD-POLICY-CORPORATE-ACTION-FETCH-IS-RED-ON-MASTER`(P1) 并写明「别直接改用例迁就当前行为」。
+- **验证**：焦点超集 4 模块 `PASS tests=58 8.4s receipt:094b7c2c1d22ca8a164ae2ec`；`full_pack_ledger check us_short` 对本代码态无缓存绿，合并态全量留给下一条 P1 修完一起记。
