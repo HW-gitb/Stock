@@ -68,6 +68,14 @@ Phase 1a 目标：先定义 `analysis_input.json` 的稳定输入合同，再让
 - 筛选评分：`l1_score`, `l2_flags`, `esp_raw`, `esp_score`, `cat_score`, `l4_score`, `egs_base`, `final_score`
 - 风险标记：`reduce_deduct`, `reduce_penalty`, `has_crash_veto`, `chasing_high`, `overheat_flag`, `is_lock`, `is_breakout`
 
+### TTM 扣非净利润语义
+
+`candidates[].fundamental.profitability.ttm_profit_dedt` 保持 CNY nullable，且不改变 `analysis_input` 的 schema 版本或字段形状：
+
+- 当最新可用 `q0` 为年度累计期（`YYYY1231`）时，TTM 直接取该期 `profit_dedt`。
+- 当 `q0` 为非年度累计期时，TTM = `q0` 累计值 + 上一年度全年累计值 - 上一年度同期累计值；三项任一缺失、非数字或非有限值时输出 `null`，不使用旧四期重叠求和或 `fillna(0)` 回退。
+- 每个 `ts_code/quarter` 只采用决策日（`ann_date <= decision_date`）前最新公告；不读取未来公告，也不改变现有来源、批量拆分重试和缓存身份边界。
+
 ### 有意不可用的兼容字段（不是数据缺口）
 
 - `candidates[].fundamental.profitability.q0_net_income` 保留为 nullable 兼容字段，但 A-short 当前不取逐票 `income`，因此有意为空；它不是实时决策输入，也不应被当作“全表漏算”的因子。

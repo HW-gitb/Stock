@@ -1914,7 +1914,7 @@
                 },
                 "ttm_profit_dedt": {
                   "$ref": "#/$defs/numberNullable",
-                  "description": "Unit: CNY."
+                  "description": "Unit: CNY. Trailing-twelve-month non-recurring-excluded profit. For an annual q0, use q0 cumulative profit directly; for a non-annual q0, use q0 cumulative profit + prior-year full-year cumulative profit - prior-year same-period cumulative profit. The source rows are point-in-time bound to the latest announcement on or before the decision date for the same ts_code and quarter. Any missing, non-numeric, or non-finite component is null (fail-closed)."
                 }
               }
             },

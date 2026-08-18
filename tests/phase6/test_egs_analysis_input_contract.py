@@ -308,6 +308,45 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             self.assertTrue(out_path.exists())
             self.assertNotIn("overlay_adjudication", weekly)
 
+    def test_ttm_profit_dedt_output_and_missing_path_preserve_contract(self) -> None:
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            _analysis_path, _snapshot_path, _candidates_path, missing_payload = self._export(
+                tmp,
+                latest_td="20260522",
+                row_overrides={"ttm_profit_dedt": None},
+            )
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            _analysis_path, _snapshot_path, _candidates_path, present_payload = self._export(
+                tmp,
+                latest_td="20260522",
+                row_overrides={"ttm_profit_dedt": 130.0},
+            )
+
+        validate_analysis_input_contract(missing_payload)
+        validate_analysis_input_contract(present_payload)
+        missing_candidate = missing_payload["candidates"][0]
+        present_candidate = present_payload["candidates"][0]
+        self.assertIn(
+            "fundamental.profitability.ttm_profit_dedt",
+            missing_candidate["data_quality"]["missing_fields"],
+        )
+        self.assertNotIn(
+            "fundamental.ttm_profit_dedt",
+            missing_candidate["data_quality"]["missing_fields"],
+        )
+        self.assertNotIn(
+            "fundamental.profitability.ttm_profit_dedt",
+            present_candidate["data_quality"]["missing_fields"],
+        )
+        self.assertEqual(
+            missing_candidate["data_quality"]["completeness_score"],
+            present_candidate["data_quality"]["completeness_score"],
+        )
+        self.assertEqual(
+            present_candidate["fundamental"]["profitability"]["ttm_profit_dedt"],
+            130.0,
+        )
+
     def _export(
         self,
         output_root: str,
@@ -316,8 +355,9 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
         l0_excluded_counts=None,
         unlock_set=None,
         red_dict=None,
+        row_overrides=None,
     ):
-        df = pd.DataFrame([{
+        row = {
             "ts_code": "600000.SH",
             "name": "Probe",
             "close": 10.0,
@@ -329,7 +369,9 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             "tier": "Tier1",
             "entry_flag": "可直接观察",
             "l2_name": "一般零售",
-        }])
+        }
+        row.update(row_overrides or {})
+        df = pd.DataFrame([row])
         with patch.object(
             self.egs_main,
             "_LAST_UNLOCK_DETAILS",

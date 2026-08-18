@@ -803,7 +803,13 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
         "capital_flow.block_trade",
         "analyst.target_price_mean",
     ]
-    missing_fields = actual_missing_fields + planned_unavailable_fields
+    ttm_profit_dedt = _json_float(_row_get(row, "ttm_profit_dedt"))
+    if ttm_profit_dedt is None or not np.isfinite(ttm_profit_dedt):
+        missing_fields = actual_missing_fields + planned_unavailable_fields + [
+            "fundamental.profitability.ttm_profit_dedt",
+        ]
+    else:
+        missing_fields = actual_missing_fields + planned_unavailable_fields
     present_count = len(core_quality_fields) - len(actual_missing_fields)
     completeness_score = round((present_count / len(core_quality_fields)) * 100, 2)
     pending_fields = [
@@ -908,7 +914,7 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
                 "q1_dt_yoy": _json_float(_row_get(row, "q1_dt_yoy")),
                 "q0_profit_dedt": _json_float(_row_get(row, "q0_profit_dedt")),
                 "q0_net_income": _json_float(_row_get(row, "q0_net_income")),
-                "ttm_profit_dedt": _json_float(_row_get(row, "ttm_profit_dedt")),
+                "ttm_profit_dedt": ttm_profit_dedt,
             },
             "quality": {
                 "ttm_ocf_ratio": _json_float(_row_get(row, "ttm_ocf_ratio")),
@@ -1834,7 +1840,7 @@ class MoneyflowObservation:
 
 
 FINANCIAL_CACHE_SEMANTICS_VERSION = "financial_v2"
-FINANCIAL_FETCH_QUARTERS = 4
+FINANCIAL_FETCH_QUARTERS = 5
 FINANCIAL_FINA_INDICATOR_FIELDS = (
     "ts_code", "ann_date", "end_date", "dt_netprofit_yoy", "tr_yoy",
     "ocf_to_profit", "profit_dedt", "dtprofit_to_profit", "roe",
@@ -4403,7 +4409,9 @@ def get_financial_data(ts_codes):
 
     q0, q1 = quarters[0], (quarters[1] if len(quarters) > 1 else None)
     uniq      = sorted(set(df_fi["ts_code"].tolist()))
-    df_merged = pd.DataFrame({"ts_code": uniq})
+    df_merged = pd.DataFrame({
+        "ts_code": pd.Series(uniq, dtype=df_fi["ts_code"].dtype),
+    })
 
     fi0_cols = ["ts_code", "ann_date", "end_date", "dt_netprofit_yoy", "tr_yoy",
                 "profit_dedt", "dtprofit_to_profit", "roe"]
@@ -4430,11 +4438,34 @@ def get_financial_data(ts_codes):
         if column not in df_merged.columns:
             df_merged[column] = np.nan
 
-    # TTM 扣非净利润（fina_indicator 批量可用）
-    fi_4q = df_fi[df_fi["quarter"].isin(quarters[:4])].copy()
-    fi_4q["profit_dedt"] = pd.to_numeric(fi_4q["profit_dedt"], errors="coerce")
-    ttm_dedt = fi_4q.groupby("ts_code")["profit_dedt"].sum().reset_index()
-    ttm_dedt.columns = ["ts_code","ttm_profit_dedt"]
+    # TTM 扣非净利润：年度累计值直接作为 TTM；非年度累计值按
+    # 本期累计 + 上年全年累计 - 上年同期累计，缺任一项即保持 NaN。
+    profit_frame = df_fi.copy()
+    profit_frame["profit_dedt"] = pd.to_numeric(profit_frame["profit_dedt"], errors="coerce")
+    profit_frame.loc[~np.isfinite(profit_frame["profit_dedt"]), "profit_dedt"] = np.nan
+    if str(q0).endswith("1231"):
+        ttm_dedt = profit_frame[profit_frame["quarter"] == q0][
+            ["ts_code", "profit_dedt"]
+        ].rename(columns={"profit_dedt": "ttm_profit_dedt"})
+    else:
+        prior_year = str(int(str(q0)[:4]) - 1)
+        prior_year_fy = f"{prior_year}1231"
+        prior_same_period = f"{prior_year}{str(q0)[4:]}"
+        required_periods = [q0, prior_year_fy, prior_same_period]
+        profit_pivot = profit_frame[
+            profit_frame["quarter"].isin(required_periods)
+        ].pivot_table(
+            index="ts_code",
+            columns="quarter",
+            values="profit_dedt",
+            aggfunc="first",
+        ).reindex(columns=required_periods)
+        ttm_dedt = pd.DataFrame({"ts_code": profit_pivot.index})
+        ttm_dedt["ttm_profit_dedt"] = (
+            profit_pivot[q0]
+            + profit_pivot[prior_year_fy]
+            - profit_pivot[prior_same_period]
+        ).to_numpy()
     df_merged = df_merged.merge(ttm_dedt, on="ts_code", how="left")
 
     # income 接口不支持批量；q0/TTM 净利润字段故意保留为兼容性空值，不是实时决策因子。
@@ -6335,7 +6366,7 @@ def score_l2(df, mg_df, trade_dates, global_ind_med, exclusion_reasons=None,
         # OCF 质量检查：用 ttm_profit_dedt 作为规模代理（替代不可用的 ttm_net_income）
         ttm_dt  = pd.to_numeric(row.get("ttm_profit_dedt", np.nan), errors="coerce")
         ttm_ocf = pd.to_numeric(row.get("ttm_ocf_ratio",   np.nan), errors="coerce")
-        if not pd.isna(ttm_ocf) and not pd.isna(ttm_dt):
+        if not pd.isna(ttm_ocf):
             threshold = 0 if abs(ttm_dt) <= 100 else 0.7
             if ttm_ocf < threshold and "ESP-Q" not in flags:
                 flags.append("ESP-Q")
