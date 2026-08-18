@@ -3318,3 +3318,12 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **验证结果（合并态主树）**：`status=PASS exit=0 tests=5993 elapsed=768.8s deadline=860s`、`COUNT_GATE 5993=5993`、无 REFUSED。红消失，绿也记上了。
 - **代价要记住（已自纠）**：主树本次 `768.8s`、余量只剩 91 秒（10.6%）是真的；但我原先拿来对比的 `345.4s`/`473.5s` 是 **8d8c** 的数、`768.8s` 是**主树**的数，跨树比无效，那句「这刀多花了 420 秒」作废——8d8c 用同一份修复只跑了 `343.6s`。同树可比的是主树自己：`432.9s` → `768.8s`。**教训：墙钟只能同树比，跨树波动能到一倍以上。**老条目 `R-USSHORT-LANE-PACK-IS-GREEN-ONLY-BY-4-SECONDS...` 的 closure 判据是 ≥15% 余量，因此**它回到 open**。下一刀再加几十秒就会撞 860s，而 TIMEOUT 和真红在账面上难分。
 - **下一步注意**：真正该动的是「为什么整模块都得串行」——尾巴是按**模块**判定的。若只有 `LaneGuardRegistryConformance` 需要锁，把它拆成单独模块，同文件其余用例就能回并行，这是唯一能把那 420 秒要回来的方向。`conformance_resources` 已砍过一次空间有限，`conformance_executable` 明确不许为墙钟牺牲，抬 860s 属用户级决定。
+
+## 2026-08-18 追加：Claude Code 审查第五刀阶段 B（付费执行）—— 边界守住，FAIL 成立，但下一枪前有两条要闭
+
+- **这一枪到底发生了什么**：请求 `deepseek-chat`，服务返回 `deepseek-v4-flash`。第一刀的严格身份门在解析任何内容之前就拒了，所以 `transport_verdict=FAIL`。**请求侧契约其实是被接受并遵守的**——冻结原文是合法 JSON、恰好 4 个主题、`finish_reason=stop`、usage `4558/822/5380` 齐全。失败点只有身份这一个。
+- **边界（reviewer 亲验 + §6a 独立对抗 agent 判 BOUNDARY HELD）**：账本 1 reservation / 1 dispatch / 0 retry / 0 unknown / 0 recovery、`{tavily:0, deepseek:1, xai:0}`；raw sha256 用仓库自己的 helper 独立复算，与摘要、与文件名三方一致；正式 0815 的 discovery / receipt / parent-plan / X 全部 mtime 停在 08-15 12:29–12:32，未被 08-18 11:11 那次执行动过；诊断产物恰 4 个文件、无 tmp/partial 残留；tracked 文档零 secret / 凭证 / 请求 URL / 响应正文。
+- **必须在下一次付费前闭的两条**（正文只在 register）：`R-USSHORT-K5-SMOKE-CLIENT-KEEPS-THE-SDK-DEFAULT-RETRIES`(P1) —— 客户端没传 `max_retries`，取 SDK 默认 2，所以账本证明的是「一次逻辑派发」而不是「一次计费请求」，超时重发不会在任何产物里留痕；`R-USSHORT-K5-SMOKE-SUMMARY-REPORTS-UNEVALUATED-AS-FAILED`(P2) —— 摘要把没评估的契约记成 failed、错误只存异常类名、调用计数是硬编码字面量。
+- **对下游的实际影响（实测）**：直调 `replay._validate_transport_summary` 得 `not a PASS for this packet`，5b 被挡住，5b → 第六刀这条链现在是断的。
+- **下一枪要解决的不只是模型名**：那 4 个主题**一个 `semantic_assertions` 都没有**，成员数 `[0,1,1,0]`，而 live prompt 实测确实要求了这些字段。也就是说即使模型身份对上，这份原文也过不了第三刀语义门、够不着 5b「至少一条真实正例」的下限。一个正面事实：模型引用的 6 个 source id 全在那 10 条之内，没有编造来源。
+- **不要做的事**：不许重跑本 packet（一次性门已因两个诊断根非空而锁上，这是对的）。要再验必须新方案、新 packet、用户重新授权。
