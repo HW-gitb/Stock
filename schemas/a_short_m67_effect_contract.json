@@ -1304,6 +1304,7 @@
       "thresholds.final_n",
       "thresholds.min_avg_amount",
       "thresholds.momentum_std_threshold",
+      "thresholds.ocf_quality_min_pct",
       "thresholds.overheat_20d",
       "thresholds.overheat_5d",
       "thresholds.suspend_daily_min_coverage",
@@ -1363,7 +1364,7 @@
       "source_prefixes": [
         "thresholds"
       ],
-      "source_paths_sha256": "e84c2eaa2a14d33fb280fdf127006407516e7b1934e109c07ea755fb791cf08d",
+      "source_paths_sha256": "951e2953c750d4394110963d7486492d8ccc873a41195d43fd36f088d2193ee2",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "analysis_input candidate selection",
@@ -2687,6 +2688,7 @@
       "thresholds.final_n",
       "thresholds.min_avg_amount",
       "thresholds.momentum_std_threshold",
+      "thresholds.ocf_quality_min_pct",
       "thresholds.overheat_20d",
       "thresholds.overheat_5d",
       "thresholds.suspend_daily_min_coverage",
@@ -2766,6 +2768,10 @@
       "thresholds.momentum_std_threshold": [
         "engine/a_short_runtime_config.py::_validate_screening.raw[\"momentum_std_threshold\"]",
         "A-EGS/egs_main.py::CONF[\"momentum_std_threshold\"]"
+      ],
+      "thresholds.ocf_quality_min_pct": [
+        "engine/a_short_runtime_config.py::_validate_screening.raw[\"ocf_quality_min_pct\"]",
+        "A-EGS/egs_main.py::CONF[\"ocf_quality_min_pct\"]"
       ],
       "thresholds.overheat_20d": [
         "engine/a_short_runtime_config.py::_validate_screening.raw[\"overheat_20d\"]",

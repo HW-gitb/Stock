@@ -57,6 +57,30 @@ class AShortScreeningRuntimePolicyTests(unittest.TestCase):
         self.assertEqual(loaded["screening"], self._artifact()["thresholds"])
         self.assertEqual(len(loaded["lineage"]["policies"]), 2)
 
+    def test_ocf_quality_threshold_is_required_and_has_no_size_exemption_key(self) -> None:
+        from jsonschema import Draft7Validator
+
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        thresholds = schema["properties"]["thresholds"]
+        self.assertIn("ocf_quality_min_pct", thresholds["required"])
+        self.assertEqual(
+            thresholds["properties"]["ocf_quality_min_pct"],
+            {"type": "number", "minimum": 0, "maximum": 100},
+        )
+        self.assertNotIn("ocf_small_profit_cutoff_cny", thresholds["properties"])
+
+        for label, mutate in {
+            "missing": lambda item: item.pop("ocf_quality_min_pct"),
+            "extra_size_key": lambda item: item.__setitem__("ocf_small_profit_cutoff_cny", 100.0),
+            "bool": lambda item: item.__setitem__("ocf_quality_min_pct", True),
+            "negative": lambda item: item.__setitem__("ocf_quality_min_pct", -1.0),
+            "over": lambda item: item.__setitem__("ocf_quality_min_pct", 100.1),
+        }.items():
+            with self.subTest(label=label):
+                mutated = copy.deepcopy(self._artifact())
+                mutate(mutated["thresholds"])
+                self.assertTrue(list(Draft7Validator(schema).iter_errors(mutated)))
+
     def test_temp_json_change_is_loaded_and_egs_has_no_threshold_fallback(self) -> None:
         temp, root = self._temporary_root(
             lambda screening, _m67: screening["thresholds"].__setitem__("final_n", 3)
@@ -75,6 +99,12 @@ class AShortScreeningRuntimePolicyTests(unittest.TestCase):
             "bool": lambda screening, _m67: screening["thresholds"].__setitem__("watch_n", True),
             "nan": lambda screening, _m67: screening["thresholds"].__setitem__("watch_n", float("nan")),
             "bad_order": lambda screening, _m67: screening["thresholds"].update({"final_n": 51, "watch_n": 15}),
+            "ocf_missing": lambda screening, _m67: screening["thresholds"].pop("ocf_quality_min_pct", None),
+            "ocf_extra_size_key": lambda screening, _m67: screening["thresholds"].__setitem__("ocf_small_profit_cutoff_cny", 100.0),
+            "ocf_bool": lambda screening, _m67: screening["thresholds"].__setitem__("ocf_quality_min_pct", True),
+            "ocf_nan": lambda screening, _m67: screening["thresholds"].__setitem__("ocf_quality_min_pct", float("nan")),
+            "ocf_negative": lambda screening, _m67: screening["thresholds"].__setitem__("ocf_quality_min_pct", -1.0),
+            "ocf_over": lambda screening, _m67: screening["thresholds"].__setitem__("ocf_quality_min_pct", 100.1),
         }
         for label, mutate in cases.items():
             with self.subTest(label=label):

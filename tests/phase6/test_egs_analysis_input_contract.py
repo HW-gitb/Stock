@@ -347,6 +347,19 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             130.0,
         )
 
+    def test_ttm_ocf_ratio_preserves_tushare_percentage_points_through_schema(self) -> None:
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            _analysis_path, _snapshot_path, _candidates_path, payload = self._export(
+                tmp,
+                latest_td="20260522",
+                row_overrides={"ttm_ocf_ratio": 52.505},
+            )
+        validate_analysis_input_contract(payload)
+        self.assertEqual(
+            payload["candidates"][0]["fundamental"]["quality"]["ttm_ocf_ratio"],
+            52.505,
+        )
+
     def _export(
         self,
         output_root: str,

@@ -6363,13 +6363,11 @@ def score_l2(df, mg_df, trade_dates, global_ind_med, exclusion_reasons=None,
             if dt_ratio_norm < 0.80 and "ESP-Q" not in flags:
                 flags.append("ESP-Q")
 
-        # OCF 质量检查：用 ttm_profit_dedt 作为规模代理（替代不可用的 ttm_net_income）
-        ttm_dt  = pd.to_numeric(row.get("ttm_profit_dedt", np.nan), errors="coerce")
-        ttm_ocf = pd.to_numeric(row.get("ttm_ocf_ratio",   np.nan), errors="coerce")
-        if not pd.isna(ttm_ocf):
-            threshold = 0 if abs(ttm_dt) <= 100 else 0.7
-            if ttm_ocf < threshold and "ESP-Q" not in flags:
-                flags.append("ESP-Q")
+        # OCF 质量检查：Tushare ttm_ocf_ratio 是百分数点，直接比较治理百分数点阈值。
+        ttm_ocf_pct = pd.to_numeric(row.get("ttm_ocf_ratio", np.nan), errors="coerce")
+        threshold_pct = CONF["ocf_quality_min_pct"]
+        if not pd.isna(ttm_ocf_pct) and ttm_ocf_pct < threshold_pct and "ESP-Q" not in flags:
+            flags.append("ESP-Q")
 
         return raw, flags
 

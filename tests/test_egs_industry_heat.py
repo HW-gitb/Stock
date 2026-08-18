@@ -286,8 +286,14 @@ class ProfileWatchPoolTests(unittest.TestCase):
 
     def test_egs_uses_the_same_selector_for_top_pool_and_production_watch(self):
         source = (ROOT / "A-EGS" / "egs_main.py").read_text(encoding="utf-8")
-        self.assertIn('top_df = select_profile_watch_pool(df, top_n=CONF["top_n"])', source)
-        self.assertIn("watch_df  = select_profile_watch_pool(df_full, top_n=watch_n)", source)
+        self.assertIn(
+            'top_df = select_profile_watch_pool(watch_pool_eligible_frame(df), top_n=CONF["top_n"])',
+            source,
+        )
+        self.assertIn(
+            "watch_df  = select_profile_watch_pool(watch_pool_eligible_frame(df_full), top_n=watch_n)",
+            source,
+        )
 
     def test_active_balanced_profile_pool_matches_the_formal_watch_pool(self):
         df = _universe()
