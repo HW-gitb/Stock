@@ -3516,6 +3516,12 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - 验证：固定 Python B8K `9 OK / 1.508s`；官方 full lane `PASS exit=0`、`6009/6009`、`COUNT_GATE discovered=6009 ran=6009 equal=True`、`319/319` modules、`serial_tail=24`、`390.0s/860s`，fingerprint=`437e6ffc2d772f23ea5419ce7deedaca237965f7a6004ccd6ea32eb4a95e732a`。全量后 B8K docs/state/provider_samples 残留均为 `0`，`full_pack_ledger check us_short` 命中同一 exact code state。
 - 当前状态：`repaired / OPEN-NOT-VERIFIED`。Required `R-USSHORT-B8K-PRODUCER-TEST-WRITES-INTO-THE-REAL-DOCS-ROOT` 与 Optional `O-B8K-TEST-STUBS-THE-GITIGNORE-PREDICATE-IT-IS-SUPPOSED-TO-EXERCISE` 均待 Claude 独立复审；未联网、未调 provider、未提交。付费执行、5b、正式槽和 packet 授权边界不变。
 
+## 2026-08-18 追加：Codex 修复 B8K residue-pin Required（待 Claude 独立复审；8d8c）
+
+- `test_private_summary_root_does_not_grow_real_docs` 现在先写入一个 `probe.json`，再断言 `_growth(ROOT / "docs", baseline) == []`；不改守卫、marker 或生产代码。
+- 反向验证：临时去掉 marker 后该测试恰一条失败，并报告 `probe.json` 被 `_growth` 抓到；恢复后 B8K producer + docs growth guard 超集 `18/18 OK`。
+- 本轮是纯测试承重修复，按 rule 3/8 不重跑已有 390 秒 full lane；未联网、未调 provider、未提交。当前 `repaired / OPEN-NOT-VERIFIED`，等 Claude 独立复审。
+
 ## 2026-08-18 追加：Claude Code 独立审查 b8k 第二次收口 —— PASS（已提交并合入 master），另开一条「钉子是恒真的」
 
 ### 缺陷这次是真闭了
@@ -3535,3 +3541,11 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - 焦点超集 `b8k producer + class_guards`：`PASS tests=18 4.0s receipt:feb51e239a551d343ee29e21`。
 - full lane 按 rule 4 不重跑，引执行方账本 `6009/6009 PASS 390.0s / COUNT_GATE equal`。
 - rule 6 carve-out (b) 成立：`git diff --stat a2ccc724..be66ac99 -- <lane paths>` 带回 13 文件 595 行，故合并后另从 `Stock-wt\test_capsule` 跑一次合并态全量（该树不存在任何 b8k docs 遗留目录，正是上一轮要求的「无历史产物形状」）。
+
+## 2026-08-18 追加：Claude Code 复审 residue-pin —— PASS（已提交并合入 master）
+
+- **改了什么**：`test_private_summary_root_does_not_grow_real_docs` 在断言前先往已标记临时根写一个 `probe.json`（3 增 1 删），守卫、marker 定义、生产代码都没动。
+- **我怎么确认它这次真承重**：**复打上一轮那一模一样的一枪**——把 `(self.summary_root / _TEMP_ROOT_MARKER).touch()` 换成 `pass`。上一轮整模块仍 `PASS tests=9`；这一轮恰好一条红 `test_private_summary_root_does_not_grow_real_docs: Lists differ ['..._source_pac…son'] != []`（`FAIL exit=1 tests=9`），红点正是那个 `probe.json`。还原后 `RESTORED_SHA_MATCH=True`。**同一枪、同一模块、由绿变红——这比任何「新增了一条断言」的说法都硬。**
+- **教训（我的，值得下次照用）**：给 closure 写断言时，把「断言发生那一刻现场必须有什么」一起写死。上一轮我只写了「断言 `_growth` 为空」，执行方照字面实现，结果那个断言落在一个**空目录**上，恒真且看不出来。这次补的就是那半句。
+- **本轮为什么没跑合并态全量**：carve-out (b) 形式上成立（`7c57be74..a8ce703a` 带回 13 文件 595 行），但那批正是 `R-USSHORT-SPREAD-SLICE-MADE-VOLUME-MANDATORY-AND-LEFT-ITS-OWN-TESTS-RED`(P1) 那条确定性红的来源，现在跑必然红在同一处，与本刀无关，按 rule 7(e) 不重复确认；等 P1 修完那次全量一并记绿。
+- **下一步**：只剩那条 P1 —— 先裁决「缺 volume 该整根丢还是保留 high/low/close」，再同步它自己模块那两条用例，然后合并态全量一次到 `PASS` 且 `COUNT_GATE discovered==ran`。
