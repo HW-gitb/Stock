@@ -400,6 +400,8 @@ class ParallelLaneRunnerTests(unittest.TestCase):
         self.assertEqual(driver.serial_tail_modules(a_short, a_paths), set())
         us_tail = driver.serial_tail_modules(us_short, us_paths)
         self.assertIn("provider.test_us_short_weekly_capstone", us_tail)
+        self.assertIn("test_us_short_discovery_conformance_executable", us_tail)
+        self.assertIn("test_us_short_discovery_conformance_resources", us_tail)
         self.assertNotIn("provider.test_us_short_universe_fetch", us_tail)
 
     def test_the_serial_tail_runs_after_the_wave_and_counts_toward_the_same_gate(self):

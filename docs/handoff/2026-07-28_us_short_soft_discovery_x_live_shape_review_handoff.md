@@ -3302,3 +3302,11 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **改了什么 / 为什么**：拒绝判据由递归的 `snapshot_private_test_dirs()`（`rglob("*")`，会看到所有层级）换成新增的 `snapshot_private_test_root_children()`（`parent.iterdir()`，只看 protected root 的顶层子目录）。清理路径仍用递归版，行为未动。这正好切掉我上一轮抓到的误拒：`provider_samples/us_short_batch5_*/20260615` 是既有 root 下的日期分区，不是新残留。
 - **验证命令与结果（reviewer 亲跑）**：`tests.test_full_pack_ledger` `32 OK`。三格探针直驱 `run_full_pack`（patch 执行与依赖检查、临时 protected root、无真实 pack）：新增顶层子目录 → `rc=2` 拒；已有子目录下新增 `20260615` → `rc=0` 放行；无新增 → `rc=0`。植入对照：把 `iterdir()` 改回 `rglob("*")` → 新用例精确转红、顶层用例仍绿，还原后 sha256 回基线 `d5c62539…`。
 - **教训（值得留给下一个人）**：上一轮我在 8d8c 上「真跑过一次全量没误拒」就判了 PASS，而那棵树早有那些日期目录，天然看不到这一格。**验一个「跑完不许留下东西」的门，必须在没有历史产物的形状上验**——要么找干净树，要么像这次一样用临时 protected root 直驱函数把三格都摆出来。后者更快也更可复算。
+
+## 2026-08-18 追加：Codex 最小修复 P2 并行 conformance 红（待 Claude 独立复审；8d8c）
+
+- **根因**：conformance executable 的嵌套测试通过字符串加载私有根测试，和并行 worker 同时抢同一 US-short 私有根锁；结果把资源竞争显示成 `conformance_executable` 的嵌套断言红。
+- **修复**：在现有 `LaneGuardRegistryConformance._run()` 入口复用 `hold_test_root_lock(ROOT)`；串行尾派生器沿真实 import 依赖识别 conformance executable/resources，相关模块不再和并行波次重叠。未改生产代码、锁实现、断言正文或 D 轴规则。
+- **验证**：serial-tail 回归 `1 OK`；受影响 executable/resource 两模块 `11 OK`；官方全量 `status=PASS exit=0 tests=5993 elapsed=343.6s deadline=860s`、`COUNT_GATE 5993=5993`、`serial_tail=24`；`py_compile=2`、`git diff --check` pass；未联网、未调 provider、未用真实凭证。
+- **当前状态**：`repaired / OPEN-NOT-VERIFIED`，只改 conformance 测试入口和 serial-tail owner test，等待 Claude 独立复审；不提交、不执行第五刀 provider。
+- **下一步**：Claude Code：独立复审 `R-USSHORT-CONFORMANCE-EXECUTABLE-RED-ONLY-IN-THE-PARALLEL-PACK`。

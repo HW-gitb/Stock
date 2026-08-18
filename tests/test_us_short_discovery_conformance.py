@@ -39,6 +39,7 @@ import unittest
 from pathlib import Path
 from typing import Any
 from unittest import mock
+from tests.provider.us_short_private_test_root import hold_test_root_lock
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -1986,7 +1987,8 @@ class LaneGuardRegistryConformance(unittest.TestCase):
             for case in flattened
         )
         stream = io.StringIO()
-        result = unittest.TextTestRunner(verbosity=0, buffer=True, stream=stream).run(suite)
+        with hold_test_root_lock(ROOT):
+            result = unittest.TextTestRunner(verbosity=0, buffer=True, stream=stream).run(suite)
         return result.testsRun, len(result.failures) + len(result.errors), resolved, stream.getvalue()
 
     def test_the_registry_covers_every_public_term_of_its_shared_modules(self):
