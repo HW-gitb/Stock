@@ -63,6 +63,17 @@ class DataQualityShadowTests(unittest.TestCase):
         self.assertFalse(blocked["data_quality_shadow"]["production_effect_enabled"])
         validate_data_quality_shadow(blocked["data_quality_shadow"], expected_as_of=AS_OF)
 
+    def test_complete_technical_quality_no_longer_blocks_but_shadow_stays_disabled(self):
+        shadow = build_data_quality_shadow(
+            [{"ts_code": "600000.SH", "data_quality": self._quality()}],
+            AS_OF,
+        )
+        self.assertEqual(shadow["verdict"]["observed_outcome"], "clean_observed")
+        self.assertEqual(shadow["policy"]["activation"], "disabled_pending_shadow_review")
+        self.assertTrue(shadow["comparison_only"])
+        self.assertFalse(shadow["production_effect_enabled"])
+        validate_data_quality_shadow(shadow, expected_as_of=AS_OF)
+
     def test_warn_and_degrade_are_visible_without_production_effect(self):
         base = self._weekly(self._quality())
         degraded = self._weekly(self._quality(completeness_score=0.9))

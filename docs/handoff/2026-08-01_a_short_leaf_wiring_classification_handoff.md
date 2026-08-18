@@ -9221,3 +9221,55 @@ call .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1300 tests.t
 - **full-lane 的处置与理由**：执行方如实写 `full-lane=NOT_RUN`；我独立重算当前指纹 `3ae6dedb…` 与账本 `6ab226bc…`（上一轮 3218 OK）不符，因此**没有把它引为绿**。判定不 escalate 的依据是 rule 3 触发面本轮一个都没碰（生产代码零改动）+ rule 8；rule 6 的 escalation 条件是「证据不可得或不一致」，而这里是**被明确声明为未跑**，性质不同。**声明未跑 ≠ 谎报绿，两者处置不一样，这条区分值得记住。**
 - **如实留下的残余**：新用例在并行全量下的隔离性未验。下次因别的原因跑 a_short 全量时若这几条偶发红，先查临时目录/state 残留再怀疑逻辑。
 - **本轮未做**：未跑全量（理由如上）；按 rule 8 未起对抗 agent（tests-only）；暖根真实周仍 `NOT_RUN`。
+
+## 2026-08-18 追加：Codex 执行 A-short 6.1 技术四字段接线（509e；repaired / `OPEN-NOT-VERIFIED`）
+
+本节只记录当前 509e 工作树按 Desktop `3a_testrun0816.md` §6.1 完成的最小修复；不承接其他工作树、其他线程或历史 handoff 的旧问题和修复结论。Codex 是 executor/fixer，Claude Code 是独立 reviewer/committer；Codex 不 stage/commit/push/merge，不修改 `docs/CURRENT.md`。
+
+### 方案范围与最小改动
+
+- 既有调用链为 `all_daily` → 65 日 settled qfq OHLC → `precompute_stock_stats()` → `stats_df` → `build_master()` → `_candidate_from_row()` → `export_analysis_input()`；本轮只接通已有 qfq producer 的 `technical.atr.atr_14`、`technical.moving_averages`、`technical.rsi_14`、`technical.macd`。
+- `A-EGS/egs_main.py` 只增加一个本地 `_candidate_technical_snapshot()`、把四组 stats 列带过 merge、在既有 exporter schema 位置输出并按实际缺失更新 missing fields；`EGS_VERSION` 从 v7.13 升至 v7.14。评分、Tier、TopN、loss gate、width/regime、Phase5、ATR_MULT/RR/position/action 未改。
+- 使用精确 qfq SMA5/10/20/60；14-change arithmetic RSI（最近 15 个 qfq close，avg_loss=0 → 100）；14 个 qfq TR 的 ATR14（最近 15 根 qfq high/low/close，ATR=0 合法，`atr_window=14`、`ex_rights_adjusted=true`）；qfq close 完整序列的递归 EMA(12/26/9)，`hist=dif-dea`，至少 34 个连续 close 才输出完整 MACD。
+- finite、非 bool、正价格及 item-local null/fail-closed 规则保留；不使用 0、dropna 或更早替代。MA 子项局部可算值保留，但任一子项缺失时 `technical.moving_averages` 作为 group 计缺失；completeness core 分母/算法不变。
+
+### 调用链、消费者、schema/source-binding
+
+- producer→merge→export 的真闭合已经测试；weekly 的 `source_technical`、data-quality shadow、report unknown/data-missing 和既有 Phase5 comparison-only technical consumer 读取同一导出字段。weekly 只消费既有结果，不自行重算优先级；Phase5 官方 `price_series`/PIT price clock 仍独立。
+- `schemas/analysis_input.schema.json` 只改字段 descriptions，无 shape/version bump；`schemas/analysis_input_coverage.md` 增加稳定 qfq ATR14/四字段说明。effect contract 未改。
+- v14.2 ATR20/M6.5 ex-rights event extension 本轮未实现；固定 qfq ATR14 是 §6.1 明确的实现，Phase5 仍独立，不能把本轮结果表述为已实现 ATR20/M6.5 event 语义。
+
+### 缓存、provider、写盘与 fail-closed
+
+- 复用既有 65 日 qfq panel、settled trade-date/source binding、cache 和 official writer；没有新增 provider/API/cache/state/receipt/fingerprint/writer，没有 provider/live call 或真实周跑。`data_quality_shadow` 仍为 `activation=disabled_pending_shadow_review`、`comparison_only=true`、`production_effect_enabled=false`。
+- 未改 `engine/a_short_market_breadth.py`、Phase5 生产代码/参数、analysis-input shape/schema version、effect contract、provider/cache/stk_limit、V14.3 comparison-only classifier。
+- 短/坏/缺 qfq data 只使对应技术 item null；不把缺失升级成 0 或删除候选。ATR=0 仍是合法值；report/data-quality 只按字段完整性显示，不改变评分/Tier/动作。
+
+### 测试、负控与原始终态
+
+- 只补既有测试模块：`tests/phase6/test_egs_main_daily_stats_guard.py`、`tests/phase6/test_egs_main_qfq_price_basis.py`、`tests/phase6/test_egs_analysis_input_contract.py`、`tests/test_a_short_data_quality_shadow.py`、`tests/skill/test_run_analysis_report.py`；未新建测试模块。
+- 先补测试后旧代码 `Ran 65`、`FAILED (failures=2, errors=7)`。承重负控全部先打红再恢复：移除 producer helper 为 `Ran 2`（1 failure+1 error）；raw 替换 qfq 为 `Ran 1` 且 `ma60` 不同；删除 `ma5` merge 列为 `ma5 not found`；exporter MA 全置空为 `None != 10.0`；短历史 null 改 0 为 3 个 fail-closed 子例失败。
+- 精确 focused 命令：
+
+```text
+call .tools\run_unittest_with_repo_pythonpath.cmd tests.phase6.test_egs_main_daily_stats_guard tests.phase6.test_egs_main_qfq_price_basis tests.phase6.test_egs_analysis_input_contract tests.test_a_short_data_quality_shadow tests.test_a_short_weekly_pipeline tests.test_a_short_effect_contract tests.test_a_short_phase5_engine tests.skill.test_run_analysis_report
+```
+
+- 原始 focused：固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / Python `3.13.8`；`Ran 865 tests in 104.566s`、`OK`、`exit=0`、receipt=`receipt:294f2b47fc44d6d8161a6b80`。测试未产生额外未跟踪工作树产物。
+- 原始 preflight：`status=pass`、`python_ok=true`、`dependencies.missing=[]`、timezone=`Asia/Shanghai`；固定 Python `-m py_compile A-EGS\egs_main.py` exit 0；`git diff --check` exit 0，仅 LF→CRLF warnings；项目文档总门 `Ran 68 tests`、`OK`、`exit=0`。
+- 唯一 full lane 原始终态：固定 Python `-X utf8 .tools\full_pack_ledger.py run a_short 'A-EGS candidate technical snapshot wiring from existing qfq daily panel changed' 860 -- discover -s tests -p 'test_a_short*.py'`；`STATIC status=PASS diff_check=PASS py_compile=6`；`discovered=3228 ran=3228 equal=True`；`Ran 3228 tests in 132.441s`；`RESULT status=PASS exit=0 tests=3228 elapsed=132.4s deadline=860s mode=parallel`；fingerprint=`276e577f49bc`；sidecar=`.tools\\state\\runs\\20260818T201350_a_short_parallel.jsonl`。full lane 后未再改行为代码、测试或 schema，未启动第二次 lane；未做 provider/live、测试胶囊、真实 weekly/warm-root 或 reviewer sub-agent。
+
+### A-F 自审与交接
+
+- A producer/consumer：确认唯一 producer→stats→merge→export 闭合；B ripple：weekly/shadow/report/Phase5 comparison-only 消费者；C negative：raw/qfq、merge、partial、short/bad/zero、shadow disabled；D schema/source-binding；E cache/provider/write boundary；F 精确测试、固定 Python、原始终态、文档门和 reviewer/committer 边界均已记录。
+- 当前状态为 `repaired / OPEN-NOT-VERIFIED`，focused/preflight/compile/diff-check PASS 不等于独立 review、commit、merge 或 ship。文档门后请按方案只跑一次 A-short full lane，记录 `discovered==ran`、原始 `Ran N`、PASS/exit0、fingerprint、sidecar/deadline；之后交 Claude Code 独立审查，PASS 后由 reviewer/committer 提交。
+
+## 2026-08-18 追加：Claude Code 独立审查 A-short 6.1（PASS，已提交并合入 master）——过程与方法学
+
+- **这刀的第一风险不是算错，是算反**：`all_daily` 在 `:4183` 是按 `trade_date` **降序**排的，helper 里 `grp.iloc[::-1]` 把它翻成旧→新之后再取尾窗。方向一旦反了，所有均线/RSI/ATR/MACD 都会用**最旧**的 N 根算，而且**数值仍然完全合理**——不会崩、不会 null、不会有任何异常信号。我造 70 根递增序列实测 `ma5=167.0`（最新五根）而非 `102.0`（最旧五根），才把这条钉死。**指标类接线的第一枪永远应该是「用一个单调序列证明方向」，因为方向错是唯一一种「看起来全对」的错。**
+- **第二风险是「窗口不足时偷偷凑」**：30 根面板下 `ma5/ma10/ma20` 有值而 `ma60` 为 null（没拿短均线冒充长均线）；尾窗里插一个 NaN 时 `ma5`/`rsi` 直接作废而不是跳过坏行把更早的 bar 顶上来。这两格都是「宁可 null 不可近似」的正面证据。
+- **RSI 的验法值得复用**：方案要求「精确复用 Phase5 口径」。我没有去比对公式文本，而是**直接 import `runners.a_short_phase5_engine` 拿同一序列跑两遍**，得到 `78.7878787879` 对 `78.7878787879`。**「同口径」这种要求应该用两个实现跑同一输入来证，不是读代码比对。**
+- **植入两枪分别打不同的腿**：P1 删 `st_cols` 白名单里的 `atr_14`（方案 §五.1 item 4 点名要求的控制）→ 导出用例精确红，证明「算出来了但没 merge 到候选」这条路被守住；P2 去掉方向翻转 → 两条用例红。**P1 这枪特别值得记：指标类改动最容易漏的不是算法，是算完之后那一段传输链。**
+- **如实记一枪没跑成**：我本想再打「MACD 柱换成 `2*(dif-dea)`」看有没有测试守，锚点字符串没匹配上、该枪未跑，因此柱口径是否被测试守住**本轮无结论**。行为本身我已直接验过是 `dif-dea` 且与 `ewm(adjust=False)` 逐位一致，schema description 也钉住了这条，所以不阻断——但下轮谁碰 MACD，请把这枪补上。
+- **冻结规格偏离的处理是对的**：v14.2 §3.2 的除权识别 / ATR20 延窗 / M6.5 提示本刀主动不实现，且按方案要求在 register、`analysis_input_coverage.md:151`、本 handoff `:9240` **三处同时记录**。这比"用字段名糊过去"强得多——`ex_rights_adjusted=true` 现在的语义被 schema description 明确限定为「输入价格已做除权调整」，不是「窗口内检测到除权事件」。
+- **本轮未做/未验**：按 rule 8 未起对抗 agent（无 provider/secret/新 fail-closed 授权门，且改动是纯计算 + 传输链）；暖根真实周候选差异仍 `NOT_RUN`。

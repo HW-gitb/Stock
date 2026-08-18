@@ -31,6 +31,29 @@ def _load_egs_module():
         sys.argv = old_argv
 
 
+def _technical_rows(code: str, n: int = 61) -> pd.DataFrame:
+    rows = []
+    for i in range(n):
+        close = 10.0 + (n - 1 - i)
+        rows.append({
+            "ts_code": code,
+            "trade_date": (pd.Timestamp("2026-05-22") - pd.Timedelta(days=i)).strftime("%Y%m%d"),
+            "open": close,
+            "high": close + 1.0,
+            "low": close - 1.0,
+            "close": close,
+            "qfq_open": close,
+            "qfq_high": close + 1.0,
+            "qfq_low": close - 1.0,
+            "qfq_close": close,
+            "pre_close": close - 1.0,
+            "pct_chg": 1.0,
+            "vol": 1000.0,
+            "amount": 200000.0,
+        })
+    return pd.DataFrame(rows)
+
+
 class EgsMainAnalysisInputContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -361,6 +384,127 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             payload["candidates"][0]["fundamental"]["quality"]["ttm_ocf_ratio"],
             52.505,
         )
+
+    def test_real_stats_merge_reaches_exported_candidate_technical_snapshot(self) -> None:
+        old_min_rows = self.egs_main.CONF["daily_stats_min_rows"]
+        self.egs_main.CONF["daily_stats_min_rows"] = 1
+        try:
+            stats = self.egs_main.precompute_stock_stats(
+                {"600000.SH"}, _technical_rows("600000.SH")
+            )
+        finally:
+            self.egs_main.CONF["daily_stats_min_rows"] = old_min_rows
+
+        df_l0 = pd.DataFrame([{
+            "ts_code": "600000.SH",
+            "name": "Probe",
+            "pct_20d": 1.0,
+            "final_score": 80.0,
+            "egs_base": 70.0,
+            "esp_score": 50.0,
+            "cat_score": 60.0,
+            "l4_score": 100.0,
+            "tier": "Tier1",
+            "entry_flag": "可直接观察",
+        }])
+        df_db = pd.DataFrame([{
+            "ts_code": "600000.SH",
+            "close": 999.0,
+            "pe": 10.0,
+            "pe_ttm": 10.0,
+            "pb": 1.0,
+            "roe": 10.0,
+            "turnover_rate": 1.0,
+            "total_mv": 1e8,
+            "circ_mv": 1e8,
+            "source_trade_date": "20260522",
+        }])
+        master = self.egs_main.build_master(
+            df_l0,
+            stats,
+            df_db,
+            pd.DataFrame(),
+            {"600000.SH": {
+                "l1_name": "L1",
+                "l2_name": "L2",
+                "l1_code": "L1",
+                "l2_code": "L2",
+            }},
+            {},
+        )
+        technical_columns = (
+            "ma5", "ma10", "ma20", "ma60", "rsi_14", "atr_14",
+            "atr_window", "atr_ex_rights_adjusted", "macd_dif", "macd_dea", "macd_hist",
+        )
+        for column in technical_columns:
+            self.assertIn(column, master.columns, column)
+
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            _analysis_path, _snapshot_path, _candidates_path, payload = self.egs_main.export_analysis_input(
+                df_full=master,
+                watch_df=master,
+                tier1_final=master,
+                latest_td="20260522",
+                trade_dates=["20260522"],
+                unlock_set=set(),
+                suspended_set=set(),
+                relisted_set=set(),
+                red_dict={},
+                tier1_csv_path=Path(tmp) / "tier1.csv",
+                full_csv_path=Path(tmp) / "full.csv",
+                output_root=tmp,
+                trade_calendar_context={
+                    "decision_as_of": "20260522",
+                    "next_trade_date": None,
+                    "is_pre_holiday_window": False,
+                    "holiday_days_ahead": 0,
+                    "calendar_source": "tushare.trade_cal",
+                },
+            )
+
+        candidate = payload["candidates"][0]
+        technical = candidate["technical"]
+        self.assertIsNotNone(technical["atr"]["atr_14"])
+        self.assertEqual(technical["atr"]["atr_window"], 14)
+        self.assertTrue(technical["atr"]["ex_rights_adjusted"])
+        self.assertTrue(all(value is not None for value in technical["moving_averages"].values()))
+        self.assertIsNotNone(technical["rsi_14"])
+        self.assertTrue(all(value is not None for value in technical["macd"].values()))
+        for field in (
+            "technical.atr.atr_14",
+            "technical.moving_averages",
+            "technical.rsi_14",
+            "technical.macd",
+        ):
+            self.assertNotIn(field, candidate["data_quality"]["missing_fields"])
+
+    def test_export_keeps_partial_technical_values_and_reports_group_missing(self) -> None:
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            _analysis_path, _snapshot_path, _candidates_path, payload = self._export(
+                tmp,
+                latest_td="20260522",
+                row_overrides={
+                    "ma5": 10.0,
+                    "ma10": 10.0,
+                    "ma20": 10.0,
+                    "ma60": None,
+                    "rsi_14": None,
+                    "atr_14": None,
+                    "atr_window": None,
+                    "atr_ex_rights_adjusted": None,
+                    "macd_dif": None,
+                    "macd_dea": None,
+                    "macd_hist": None,
+                },
+            )
+
+        candidate = payload["candidates"][0]
+        self.assertEqual(candidate["technical"]["moving_averages"]["ma5"], 10.0)
+        self.assertIsNone(candidate["technical"]["moving_averages"]["ma60"])
+        self.assertIn("technical.moving_averages", candidate["data_quality"]["missing_fields"])
+        self.assertIn("technical.atr.atr_14", candidate["data_quality"]["missing_fields"])
+        self.assertIn("technical.rsi_14", candidate["data_quality"]["missing_fields"])
+        self.assertIn("technical.macd", candidate["data_quality"]["missing_fields"])
 
     def test_export_uses_supplied_regime_and_rejects_policy_mismatch_fail_closed(self) -> None:
         breadth = {
