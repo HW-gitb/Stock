@@ -3450,3 +3450,7 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 
 - 代码同步主树后，仍需**用户对 packet `us_short_web_regroup_engineering_smoke_20260815_chunk1_v2` 的精确授权**才可开枪；失败不补枪。
 - 开枪前把 `R-USSHORT-K5-SMOKE-CLIENT-KEEPS-THE-SDK-DEFAULT-RETRIES` 的结论记在心上——`max_retries=0` 已落地并有构造参数用例，所以「一次逻辑派发」现在也等于「一次计费请求」。
+
+### 合并态全量的实际结果（补记，别把上面那句读成绿）
+
+合并进 master（`6a3deefe`）后我在 `Stock-wt\test_capsule`（已 ff）跑了 carve-out (b) 要求的那一次，**是红的**：`status=FAIL exit=1 tests=895 elapsed=180.4s`、`COUNT_GATE discovered=6008 ran=895`。唯一红点与第五刀无关——`LaneResidueConformance.test_private_roots_do_not_grow_during_the_pack (root='docs')` 抓到 `docs/test_b8kprod_14184_..._consumer_summary.json`，源头是 `tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py:127-133` 把两个 summary 直接写进真实 `ROOT/docs`（同 setUp 里 state 与 provider_samples 都走了临时根，唯独 docs 没走）。已开 `R-USSHORT-B8K-PRODUCER-TEST-WRITES-INTO-THE-REAL-DOCS-ROOT`(P2)。**第五刀本刀的 PASS 不受影响**，但 master 在这条修好之前记不上 us_short 的绿。
