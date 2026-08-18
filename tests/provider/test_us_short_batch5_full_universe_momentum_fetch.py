@@ -340,7 +340,16 @@ class FullUniverseMomentumFetchTest(unittest.TestCase):
 
 
     def test_opt_in_ohlcv_writes_separate_eligible_only_packet_and_feeds_overextension_producer(self):
-        summary = self._run(grouped_fetch=_fake_grouped_ohlcv(), ohlcv_series_packet_path=self.ohlcv_packet)
+        base = _fake_grouped_ohlcv()
+
+        def flat_chl(date_iso: str):
+            rows = base(date_iso)
+            for row in rows:
+                if row["T"] == "AAPL":
+                    row.update({"c": 100.0, "h": 100.5, "l": 99.5})
+            return rows
+
+        summary = self._run(grouped_fetch=flat_chl, ohlcv_series_packet_path=self.ohlcv_packet)
 
         # the momentum packet is still written and its frozen {date,close,volume} point contract is BYTE-IDENTICAL
         # (no high/low leaked in despite line-244 now retaining them upstream).
@@ -359,6 +368,13 @@ class FullUniverseMomentumFetchTest(unittest.TestCase):
         self.assertNotIn("ZZZA", ohlcv_packet["series_by_ticker"])   # whole-market noise still discarded
         self.assertEqual(
             set(ohlcv_packet["series_by_ticker"]["AAPL"]["points"][0]), {"date", "high", "low", "close", "volume"})
+        from engine.us_short_execution_cost_prior import build_execution_cost_prior
+        self.assertEqual(
+            build_execution_cost_prior(
+                ohlcv_packet["series_by_ticker"]["AAPL"]["points"], adv_usd=100_000_000.0
+            )["spread_source"],
+            "modeled_chl_winsor_v1",
+        )
         from jsonschema import Draft7Validator
         self.assertEqual(
             list(Draft7Validator(_read_json(_fetch().OHLCV_PACKET_SCHEMA_PATH)).iter_errors(ohlcv_packet)), [])
@@ -378,6 +394,24 @@ class FullUniverseMomentumFetchTest(unittest.TestCase):
         )
         self.assertEqual(producer_summary["projection_contract"]["target_count"], len(_ALL_ELIGIBLE))
         self.assertGreater(producer_summary["projection_contract"]["overextension_scored_count"], 0)
+
+    def test_ohlcv_execution_bars_do_not_drop_volume(self):
+        base = _fake_grouped_ohlcv()
+
+        def missing_volume_once(date_iso: str):
+            rows = base(date_iso)
+            if date_iso == "2026-06-12":
+                for row in rows:
+                    if row["T"] == "AAPL":
+                        row.pop("v")
+                        break
+            return rows
+
+        self._run(grouped_fetch=missing_volume_once, ohlcv_series_packet_path=self.ohlcv_packet)
+        packet = _read_json(self.ohlcv_packet)
+        aapl_points = packet["series_by_ticker"]["AAPL"]["points"]
+        self.assertLess(len(aapl_points), len(packet["series_by_ticker"]["MSFT"]["points"]))
+        self.assertTrue(all("volume" in point for point in aapl_points))
 
     def test_default_no_ohlcv_path_writes_only_the_momentum_packet(self):
         summary = self._run()   # opt-out: no ohlcv_series_packet_path

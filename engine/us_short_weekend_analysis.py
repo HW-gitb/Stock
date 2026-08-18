@@ -229,6 +229,8 @@ def _analyze_one(row, regime):
         "risk_downgrade": risk_dg,   # §4.2 typed penalty (points + components), None for an unscored holding
         "selection_record": sel_rec,
         "theme_context": dict(theme_context) if theme_context is not None else None,
+        **({"execution_cost_prior": row["execution_cost_prior"]}
+           if "execution_cost_prior" in row else {}),
         # Cut4 source-bound row facts are not re-derived here.  They carry the exact Batch5 coverage, catalyst
         # availability, and permitted price input onward to the final reducer/machine/report surfaces.
         **({

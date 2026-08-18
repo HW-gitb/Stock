@@ -150,15 +150,15 @@ def reconstruct_series_from_grouped(
 
 
 def _ohlcv_point_fields(row: dict[str, Any]) -> dict[str, Any] | None:
-    # Need high/low/close ALL present to form a valid §4.3 OHLCV bar (ATR needs high/low); any missing → a gap,
+    # Need high/low/close/volume ALL present to form the execution-cost OHLCV bar; any missing → a gap,
     # omit (never zero-fill). Raw values pass through — engine/us_short_overextension.py::_parse_ohlcv_series owns
     # finiteness / positivity / high>=low cleaning + the PIT cut.
-    if row.get("close") is None or row.get("high") is None or row.get("low") is None:
+    if (row.get("close") is None or row.get("high") is None or row.get("low") is None
+            or row.get("volume") is None):
         return None
-    fields: dict[str, Any] = {"high": row["high"], "low": row["low"], "close": row["close"]}
-    if "volume" in row and row["volume"] is not None:
-        fields["volume"] = row["volume"]
-    return fields
+    return {
+        "high": row["high"], "low": row["low"], "close": row["close"], "volume": row["volume"]
+    }
 
 
 def reconstruct_ohlcv_series_from_grouped(
@@ -169,7 +169,7 @@ def reconstruct_ohlcv_series_from_grouped(
     session: str,
     adjustment_mode: str,
 ) -> dict[str, dict[str, Any]]:
-    """Reshape an ascending grouped-daily window into per-ticker `{date,high,low,close,volume?}` OHLCV series for
+    """Reshape an ascending grouped-daily window into per-ticker `{date,high,low,close,volume}` OHLCV series for
     the §4.3 overextension producer (cut 2b-iii). Identical MECHANICAL group-by as the momentum reconstruct but
     RETAINS high/low (ATR needs them); raw values pass through (the overextension engine is the single PIT/clean
     authority). A row missing high/low/close on a date → that date is a gap (omitted)."""

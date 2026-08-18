@@ -16,6 +16,7 @@ from pathlib import Path
 
 from engine.us_short_cost_floor import apply_cost_floor
 from engine.us_short_eligibility_gate import canonical_us_ticker
+from engine.us_short_execution_cost_prior import ExecutionCostPriorError, dollar_costs
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE_FILENAME = "holding_action_state.json"
@@ -193,6 +194,19 @@ def attach_holding_action_context(rows, contexts, *, price_basis_date):
         ticker = canonical_us_ticker(row.get("ticker"))
         ctx = dict(contexts.get(ticker, {"status": "untrusted"}))
         ci = row.get("holding_action_cost_input")
+        if ci is None and ctx.get("status") in ("ready", "seed_required"):
+            shares = ctx.get("shares")
+            reduce_shares = (int(shares * TP1_REDUCE_FRACTION)
+                             if isinstance(shares, int) and not isinstance(shares, bool) else 0)
+            try:
+                if reduce_shares >= 1:
+                    ci = dollar_costs(
+                        row.get("execution_cost_prior"),
+                        shares=reduce_shares,
+                        reference_price=ctx.get("avg_cost_usd"),
+                    )
+            except ExecutionCostPriorError:
+                ci = None
         ctx.update({"price_basis_date": price_basis_date, "price_session": "RTH",
                     "price_adjustment": "split_adjusted", "cost_input": ci})
         out.append({**row, "holding_action_context": ctx})

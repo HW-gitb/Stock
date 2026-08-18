@@ -46,7 +46,14 @@ def _record(decision: str, action: str) -> dict:
         "take_profit_reduce_price": 11.0, "take_profit_exit_price": 12.0,
         "event_clear_reference_price": None,
     }
-    return {"as_of": decision, "rows": [{"ticker": "ABC", "final_action": action, "price": {"action_fields": fields}, "sizing": {"desired_model_shares": 100}}]}
+    return {"as_of": decision, "rows": [{
+        "ticker": "ABC", "final_action": action, "price": {"action_fields": fields},
+        "sizing": {"desired_model_shares": 100},
+        "execution_cost_prior": {
+            "round_trip_spread_fraction": 0.001,
+            "spread_source": "adv_bucket_v1",
+        } if action == "建仓" else None,
+    }]}
 
 
 class ModelPaperCapstoneWiringTest(unittest.TestCase):
