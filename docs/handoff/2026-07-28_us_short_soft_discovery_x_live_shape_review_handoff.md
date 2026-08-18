@@ -3472,3 +3472,66 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **b8k 那条 Required 没修，但不是执行方漏了**：审查树 `8d8c` 停在 `9f974e3e`，**落后 master 6 个提交**，而 `R-USSHORT-B8K-PRODUCER-TEST-WRITES-INTO-THE-REAL-DOCS-ROOT` 只写在 master 的 `382509d0` 里——执行方从它的 baseline 上根本看不见这条，所以它 entry 里那句「没有 Required 留下」对自己为真、对 master 为假。**第 0 步 `git merge --ff-only master` 不是形式主义**：两棵树 register 不同步时，这类「对仓库状态的断言」会带着 stale baseline 漂进文档，读起来还完全像已核实的事实。
 - **合并处理**：register 与本 handoff 各有一处冲突，都按「两边都留、按时序排」解——register 里执行方 entry 在上、我的 b8k 在下；本 handoff 我的 PASS 节在前、执行方节在后。无内容丢失。
 - **下一步**：先修 b8k（把那两个 summary 路径挪进临时根，别动守卫），修完在合并态跑一次 `status=PASS` 且 `COUNT_GATE discovered==ran`；第五刀付费仍等用户对 `us_short_web_regroup_engineering_smoke_20260815_chunk1_v2` 的精确授权。
+
+## 2026-08-18 追加：Codex 修复 `R-USSHORT-B8K-PRODUCER-TEST-WRITES-INTO-THE-REAL-DOCS-ROOT`（待 Claude 独立复审；8d8c）
+
+- 8d8c 已先 `git merge --ff-only master` 同步到 master；本轮只修 B8K P2，不改生产 runner 或 `LaneResidueConformance` 守卫。
+- `tests/provider/test_us_short_batch5_bankruptcy_8k_source_packet_producer.py` 新增 docs 临时根；producer 与 source-packet consumer 共用该根的 `DOCS_DIR` 和测试 gitignore 判定，两个 summary 不再写真实 `ROOT/docs`。
+- 点名测试 `8 OK / 0.9s`；合并态 full lane `PASS 6008/6008`、`COUNT_GATE 6008=6008`、`319/319` modules、`serial_tail=24`、`342.9s/860s`，fingerprint=`caf23b273fa46477f805836c3c9507a4a433beb61563345441ab4c85521ea466`。
+- 运行后 docs B8K 文件、`state/us_short`、`provider_samples` 均为 `0`；当前状态 `repaired / OPEN-NOT-VERIFIED`。未联网、未调 provider、未提交。
+
+### Pre-Codex self-review
+
+`matrix=docs summary path + producer/consumer DOCS_DIR + private gitignore override + cleanup; register=updated; handoff=updated; focused=8 OK; full-lane=6008/6008 PASS/342.9s/COUNT_GATE equal; door=route/doc governance after this entry; diff-check=PASS; provider/network=not_used; independent-review=not_used; commit=not_performed`
+
+## 2026-08-18 追加：Claude Code 独立审查 b8k docs-root 收口 —— FAIL（未提交、未合入）
+
+### 为什么方向对却没闭合
+
+`_growth()` 数的是 `docs` 下的**文件**，只排除位于带 `TEMP_ROOT_MARKER=".us_short_test_temp_root_owned"` 目录下的那些。而 `temporary_us_short_directory` 只给**内层 tempdir** 打这个 marker（`us_short_private_test_root.py:101`）；它**新建的外层父目录**打的是另一个名字 `_OWNERSHIP_MARKER=".us_short_test_private_root_owned"`（`:92`）。所以 summary 文件确实被排除了，**那个外层 marker 文件自己没人排除**。瞬态文件从 `docs/test_b8kprod_<pid>_*.json` 变成 `docs/<summaries 目录>/.us_short_test_private_root_owned`，窗口还从「测试体内」拉长到「整个 setUp→cleanup」。
+
+### 那次绿是怎么来的（这一段最值得记）
+
+`docs/us_short_batch5_..._summaries_20260705` 在 **8d8c 里已经存在**（未 tracked，`git ls-files` 空），父目录不用新建 → 外层 marker 不写 → 守卫什么都看不见。**master 和 test_capsule 都没有这个目录。** 我把这个遗留空目录删掉（删后与那两棵树一致）再跑同一个探针，立刻 `parent pre-exists: False` → `GUARD SEES GROWTH: ['..._summaries_20260705/.us_short_test_private_root_owned']`；而且 CM 退出会把该目录整个删掉，所以**每次 pack 都重新开窗**，不是只有第一次。
+
+**这正是我两轮前写进 register 的同一课复发**：验一个「跑完不许留下东西」的门，必须在**没有历史产物的形状**上验。上次是残留网在 8d8c 上看不到日期子目录，这次是 b8k 在 8d8c 上多了一个空目录。**下次遇到这类门，先问一句「我这棵树上是不是已经有它了」，再决定这个绿算不算数。**
+
+### 还有一条不阻断的（和上面一起决定怎么修）
+
+测试把 `producer._git_ignored` / `source_packet_runner._git_ignored` 换成了假谓词（state 恒 True、summary 恒 False）。我实测**真 git 的答案相反**——helper 会往内层 tempdir 塞 `.gitignore: *`（`:102`），所以 summary 路径在真 `git check-ignore` 下是 ignored。于是生产那道「tracked summary 不得落在 gitignored 路径」的检查在本模块里由 stub 作答、不再被真实验证。走哪条 closure 决定它是否还需要留着，别分两轮修。
+
+### 验证命令与结果（reviewer 亲跑）
+
+- 焦点超集 `tests.provider.test_us_short_batch5_bankruptcy_8k_source_packet_producer + tests.test_us_short_discovery_class_guards`：`PASS tests=17 2.4s receipt:d32379afba26fda5ea3307e0`。**绿，但它证不了并行竞态**——bounded 焦点包是单进程串行，这个红只在并行 pack 里才可能出现，所以本轮的判据来自上面那个直驱 `_growth()` 的探针，不是测试包。
+- 未跑 full lane：FAIL 已由探针坐实，按 rule 3(③) 先出结论；执行方的 `6008/6008` 不采信为闭合依据（见上一段原因）。
+
+### 下一步
+
+按 register 里两条 closure 选一路一次改完，**并在没有那个 docs 目录的树上验**：先确认目标树不存在 `docs/us_short_batch5_..._summaries_20260705`，再跑合并态 full lane 到 `status=PASS` 且 `COUNT_GATE discovered==ran`，另补一条「跑完该模块后 `_growth(ROOT/'docs', 基线)` 为空」的点名用例把它钉死。
+
+## 2026-08-18 追加：Codex 修复 B8K docs-root Required/Optional（待 Claude 独立复审；8d8c）
+
+- 选择不新建 `docs/` 外层父目录：summary 临时目录直接建在既有 `docs/` 下，写入守卫已识别的 `.us_short_test_temp_root_owned`；退出后目录清理。producer 与 source-packet consumer 的 `DOCS_DIR` 只在测试中切到该根，生产代码和 docs 残留守卫未改。
+- 删除两个 `_git_ignored` mock；临时 summary 根不写 `.gitignore`，所以生产 writer 现在真实调用 `git check-ignore`。新增点名测试复用 `_growth(ROOT / "docs", baseline)`，并用模块别名避免守卫测试重复收集。
+- 验证：固定 Python B8K `9 OK / 1.508s`；官方 full lane `PASS exit=0`、`6009/6009`、`COUNT_GATE discovered=6009 ran=6009 equal=True`、`319/319` modules、`serial_tail=24`、`390.0s/860s`，fingerprint=`437e6ffc2d772f23ea5419ce7deedaca237965f7a6004ccd6ea32eb4a95e732a`。全量后 B8K docs/state/provider_samples 残留均为 `0`，`full_pack_ledger check us_short` 命中同一 exact code state。
+- 当前状态：`repaired / OPEN-NOT-VERIFIED`。Required `R-USSHORT-B8K-PRODUCER-TEST-WRITES-INTO-THE-REAL-DOCS-ROOT` 与 Optional `O-B8K-TEST-STUBS-THE-GITIGNORE-PREDICATE-IT-IS-SUPPOSED-TO-EXERCISE` 均待 Claude 独立复审；未联网、未调 provider、未提交。付费执行、5b、正式槽和 packet 授权边界不变。
+
+## 2026-08-18 追加：Claude Code 独立审查 b8k 第二次收口 —— PASS（已提交并合入 master），另开一条「钉子是恒真的」
+
+### 缺陷这次是真闭了
+
+改法绕开了上一轮的坑：不再用 `temporary_us_short_directory`（它新建外层父目录、打的是守卫**不认**的 `_OWNERSHIP_MARKER`，还往内层塞 `.gitignore: *`），改成直接 `tempfile.TemporaryDirectory(dir=ROOT/"docs")` 再只打守卫认的 `_TEMP_ROOT_MARKER`，而且常量是从守卫模块 import 的、不是抄字符串。顺序也对：先建空目录再 touch marker，所以目录里的第一个文件就是 marker 自己，窗口里没有一刻是「有文件但没 marker」。
+
+**我验的是 marker 承重，不是测试绿**：在 `docs/` 下按同形状建临时根 + 写一个 `x_producer_summary.json`——带 marker `_growth` 返回 `[]`，不带 marker 返回 `['...summaries_7gzv985d/x_producer_summary.json']`。上一轮那个红形状确实被挡住了，而且这次不依赖任何遗留目录（那个 `..._summaries_20260705` 已经不存在，现在用随机 tmp 名）。
+
+### 但新加的那条防复发用例是恒真的（新 Required）
+
+`test_private_summary_root_does_not_grow_real_docs` 断言 `_growth(...)==[]` 时，临时根里**只有 marker 一个文件**——该用例自己不写 summary。所以把 marker 那行删掉之后临时根变成空目录，断言照样成立：**我把 `(self.summary_root / _TEMP_ROOT_MARKER).touch()` 换成 `pass`，整模块仍 `PASS tests=9`**，还原后 `RESTORED_SHA_MATCH=True`。
+
+**这半锅是我的**：我上一轮 closure 写的是「补一条『跑完该模块后 `_growth` 为空』的点名用例」，执行方照字面做了。缺的那半句是「**在临时根里确实有一个 summary 文件的前提下**」。**给 closure 写断言时，要连『断言发生时现场必须是什么样』一起写死**，否则它可能在一个空现场上求值——恒真且看不出来。
+
+### 验证命令与结果（reviewer 亲跑）
+
+- 焦点超集 `b8k producer + class_guards`：`PASS tests=18 4.0s receipt:feb51e239a551d343ee29e21`。
+- full lane 按 rule 4 不重跑，引执行方账本 `6009/6009 PASS 390.0s / COUNT_GATE equal`。
+- rule 6 carve-out (b) 成立：`git diff --stat a2ccc724..be66ac99 -- <lane paths>` 带回 13 文件 595 行，故合并后另从 `Stock-wt\test_capsule` 跑一次合并态全量（该树不存在任何 b8k docs 遗留目录，正是上一轮要求的「无历史产物形状」）。
