@@ -12,10 +12,10 @@ paper_track simulates fills on DAILY OHLC only, by the §12.1 WRITTEN, REPRODUCI
 single-session logic); the order is judged on the one regular session; not filled at the close → ``not_filled``
 (no carry-over). The deterministic order:
 
-  * Step 0 — ``open`` NOT in ``[valid_entry_low, valid_entry_high]`` → ``not_filled`` (cash, no return);
-  * Step 1 (open in band, by order_type) — ``pullback_limit``: ``low <= limit_order_price`` → fill @
-    ``limit_order_price``; ``breakout_stop_limit``: ``high >= breakout_entry_price`` → fill @
-    ``min(max(open, breakout_entry_price), valid_entry_high)``; else ``not_filled``;
+  * Step 0 / Step 1 (by order_type) — ``pullback_limit`` keeps the open-in-band gate, then
+    ``low <= limit_order_price`` → fill @ ``limit_order_price``; ``breakout_stop_limit`` first requires
+    ``breakout_entry_price`` inside the valid band, then ``open > valid_entry_high`` or
+    ``high < breakout_entry_price`` → ``not_filled``, otherwise fill @ ``max(open, breakout_entry_price)``;
   * same-day conservative exit (daily bars can't see intraday order, so we under-count, never inflate): if filled
     AND ``low <= stop_clear_price`` → entered-then-STOPPED (do NOT assume it survived the day); else if
     ``high >= take_profit_exit_price`` → tp exit. STOP takes priority when both same-day triggers fire (§12.1 ②).
@@ -120,12 +120,10 @@ def simulate_fill(order, day_bar) -> dict:
     def _result(status, fill_price=None, exit_price=None, exit_reason=None, reason=None):
         return {"status": status, "fill_price": fill_price, "exit_price": exit_price, "exit_reason": exit_reason, "reason": reason}
 
-    # --- Step 0: open must be inside the valid entry band ---
-    if not elo <= o <= ehi:
-        return _result("not_filled", reason="open_out_of_band")
-
-    # --- Step 1: fill by order_type (deterministic) ---
     if ot == "pullback_limit":
+        # --- Step 0 / Step 1: pullback keeps the existing open-in-band contract ---
+        if not elo <= o <= ehi:
+            return _result("not_filled", reason="open_out_of_band")
         limit = _price(order, "limit_order_price", "order")
         if not (elo <= limit <= ehi):  # a pullback limit MUST sit inside the valid entry band (else fill out-of-zone)
             raise PaperFillError("pullback limit_order_price %s must be inside the valid entry band [%s, %s]" % (limit, elo, ehi))
@@ -134,9 +132,17 @@ def simulate_fill(order, day_bar) -> dict:
         else:
             return _result("not_filled", reason="pullback_not_reached")
     else:  # breakout_stop_limit
+        # --- Step 0 / Step 1: a stop-limit may open below its trigger; only a gap over the chase cap is refused ---
         bp = _price(order, "breakout_entry_price", "order")
+        if not elo <= bp <= ehi:
+            raise PaperFillError(
+                "breakout breakout_entry_price %s must be inside the valid entry band [%s, %s]"
+                % (bp, elo, ehi)
+            )
+        if o > ehi:
+            return _result("not_filled", reason="open_above_chase_cap")
         if h >= bp:
-            fill = min(max(o, bp), ehi)  # can't fill below the open; never chase above valid_entry_high
+            fill = max(o, bp)  # open may be below trigger; bp is inside the band, so fill <= valid_entry_high
         else:
             return _result("not_filled", reason="breakout_not_reached")
 

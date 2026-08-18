@@ -16,6 +16,7 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -729,6 +730,10 @@ class SelectionRecordThreaded(unittest.TestCase):
             self.assertEqual(rec["selection_rank"], 1)                   # AAPL is the top (only) Top15 name
             self.assertEqual(rec["selection_bucket"], "overlap")        # top in both core + theme rank → overlap
             self.assertEqual(rec["core_score"], 50.0)
+            self.assertEqual(
+                out["machine_record"]["rows"][0]["price"]["action_fields"]["price_sub_mode"],
+                "breakout",
+            )
 
     def test_divergent_selection_vs_analysis_core_fails_closed(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
@@ -755,13 +760,71 @@ class SelectionRecordThreaded(unittest.TestCase):
             self.assertIsNone(out["machine_record"]["rows"][0]["selection_record"])
 
 
+class SelectionBucketSubModeRouting(unittest.TestCase):
+    @staticmethod
+    def _selection(bucket):
+        return {
+            "admitted": ["AAA"],
+            "holdings": [],
+            "selection_details": [{
+                "ticker": "AAA", "selection_rank": 1, "selection_bucket": bucket,
+                "core_score": 50.0, "theme_momentum_score": 50.0, "theme_selection": {},
+            }],
+        }
+
+    @staticmethod
+    def _row(**overrides):
+        row = {"ticker": "AAA", "row_source": "top15_candidate", "signals": {}}
+        row.update(overrides)
+        return row
+
+    def test_current_four_selection_buckets_map_to_existing_modes(self):
+        expected = {
+            "theme_momentum": "breakout",
+            "overlap": "breakout",
+            "core_top": "pullback",
+            "core_backfill": "pullback",
+        }
+        for bucket, mode in expected.items():
+            with self.subTest(bucket=bucket):
+                rows = orch._build_analysis_rows(self._selection(bucket), {"AAA": self._row()})
+                self.assertEqual(rows[0]["sub_mode"], mode)
+
+    def test_selection_bucket_outside_mapping_fails_before_analysis(self):
+        with self.assertRaisesRegex(orch.WeekendOrchestratorError, "无 sub_mode 映射"):
+            orch._build_analysis_rows(self._selection("future_bucket"), {"AAA": self._row()})
+
+    def test_explicit_sub_mode_remains_authoritative(self):
+        rows = orch._build_analysis_rows(
+            self._selection("theme_momentum"), {"AAA": self._row(sub_mode="pullback")})
+        self.assertEqual(rows[0]["sub_mode"], "pullback")
+
+    def test_table_out_bucket_stops_formal_pipeline_before_analysis(self):
+        selection = self._selection("future_bucket")
+        selection.update({
+            "decision_date": _DD, "price_basis_date": _PRICE_BASIS, "run_date": "20260613",
+            "out_of_window": False,
+        })
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            pc = _pipeline_context(
+                reg, rr, wr, universe=[_univ_row("AAA")], pass2={"AAA": {}},
+                per_ticker_analysis={"AAA": self._row()},
+            )
+            with mock.patch.object(orch, "run_selection", return_value=selection), self.assertRaisesRegex(
+                orch.WeekendOrchestratorError, "无 sub_mode 映射"
+            ):
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+
+
 class SeamPayloadIdentity(unittest.TestCase):
     """R-USSHORT-BATCH4-O-SELECTION-ANALYSIS-PAYLOAD-ID-GAP: key-only coverage must not let a per_ticker_analysis
     key carry a payload row for a DIFFERENT ticker — each payload's own canonical ticker must equal its key."""
 
     @staticmethod
     def _row(ticker, row_source="top15_candidate"):
-        return {"ticker": ticker, "row_source": row_source, "signals": {}}
+        return {"ticker": ticker, "row_source": row_source, "signals": {}, "sub_mode": "pullback"}
 
     def test_candidate_key_with_other_ticker_payload_rejected(self):
         with self.assertRaises(orch.WeekendOrchestratorError):
@@ -798,7 +861,7 @@ class SeamSelectionMembership(unittest.TestCase):
 
     @staticmethod
     def _row(ticker, row_source):
-        return {"ticker": ticker, "row_source": row_source, "signals": {}}
+        return {"ticker": ticker, "row_source": row_source, "signals": {}, "sub_mode": "pullback"}
 
     @staticmethod
     def _hld(ticker):
