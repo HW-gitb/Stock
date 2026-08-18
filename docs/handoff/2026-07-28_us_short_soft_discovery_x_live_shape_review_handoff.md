@@ -3288,3 +3288,17 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **误拒问题有实测答案**：账本 `5989 OK / recorded_at=21:28:00 / parallel workers=8 / elapsed=345.4s / deadline=860s`，我独立复算当前工作树指纹为同一个 `b17479570e…`，所以这条绿就是带着新拒绝腿跑出来的。
 - **一处自纠（值得记，省下次一轮）**：我一度以为「改了 `.tools/full_pack_ledger.py` 却还 CACHED GREEN」= 指纹不覆盖这个工具、是个洞。实读 `.tools/verification_receipt.py` 后作废——`fingerprint()` 只封 `@` 开头的键，而 `@CODE_CONTENT` 本就是全部代码内容的 sha；per-path 条目只决定 bundle 要求。命中缓存是因为执行方在 21:28 用这个状态真跑过。**下次看到「改了代码还命中缓存」，先算一遍当前指纹跟账本比，再下结论。**
 - **顺带补做**：上一轮 5b（`2ac052e6`）因主树 `.git/index.lock` 挂了 2.5 小时没能合并，本轮锁已释放，一并合入。
+
+## 2026-08-18 追加：Codex 最小修复残留网 Required（待 Claude 独立复审；8d8c）
+
+- **根因**：旧残留门递归比较 protected root 全部目录，把 existing root 下正常新日期目录误判为泄漏。
+- **修复**：保留递归快照给清理逻辑；拒绝门改为只比较 protected roots 的顶层新增目录。普通顶层新目录仍拒绝；既有 root 下新日期子目录放行；不删除普通目录。
+- **验证**：`tests.test_full_pack_ledger` `32 OK`；官方全量 `status=PASS exit=0 tests=5989 elapsed=541.7s deadline=860s`、`COUNT_GATE 5989=5989`、`319 PASS/0 FAIL/0 SKIPPED`；`git diff --check`、`py_compile=2` pass；未联网、未调 provider、未用真实凭证。
+- **当前状态**：`repaired / OPEN-NOT-VERIFIED`，只改 `.tools/full_pack_ledger.py` 和其 owner test，等待 Claude 独立复审；不提交、不执行第五刀 provider。
+- **下一步**：Claude Code：独立复审 `R-USSHORT-RESIDUE-NET-REFUSES-ORDINARY-DATED-SUBDIRS`。
+
+## 2026-08-18 追加：Claude Code 复审残留网收窄 —— PASS
+
+- **改了什么 / 为什么**：拒绝判据由递归的 `snapshot_private_test_dirs()`（`rglob("*")`，会看到所有层级）换成新增的 `snapshot_private_test_root_children()`（`parent.iterdir()`，只看 protected root 的顶层子目录）。清理路径仍用递归版，行为未动。这正好切掉我上一轮抓到的误拒：`provider_samples/us_short_batch5_*/20260615` 是既有 root 下的日期分区，不是新残留。
+- **验证命令与结果（reviewer 亲跑）**：`tests.test_full_pack_ledger` `32 OK`。三格探针直驱 `run_full_pack`（patch 执行与依赖检查、临时 protected root、无真实 pack）：新增顶层子目录 → `rc=2` 拒；已有子目录下新增 `20260615` → `rc=0` 放行；无新增 → `rc=0`。植入对照：把 `iterdir()` 改回 `rglob("*")` → 新用例精确转红、顶层用例仍绿，还原后 sha256 回基线 `d5c62539…`。
+- **教训（值得留给下一个人）**：上一轮我在 8d8c 上「真跑过一次全量没误拒」就判了 PASS，而那棵树早有那些日期目录，天然看不到这一格。**验一个「跑完不许留下东西」的门，必须在没有历史产物的形状上验**——要么找干净树，要么像这次一样用临时 protected root 直驱函数把三格都摆出来。后者更快也更可复算。

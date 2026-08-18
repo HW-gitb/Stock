@@ -116,6 +116,20 @@ def snapshot_private_test_dirs(
     return frozenset(snapshot)
 
 
+def snapshot_private_test_root_children(
+    roots: tuple[Path, ...] = PRIVATE_TEST_ROOTS,
+) -> frozenset[Path]:
+    """Capture only protected-root children for the pack-level residue gate."""
+    snapshot: set[Path] = set()
+    for parent in roots:
+        parent = parent.resolve()
+        if parent.is_dir():
+            snapshot.update(
+                path.resolve() for path in parent.iterdir() if path.is_dir()
+            )
+    return frozenset(snapshot)
+
+
 def cleanup_new_private_test_roots(
     before: frozenset[Path],
     roots: tuple[Path, ...] = PRIVATE_TEST_ROOTS,
@@ -319,6 +333,7 @@ def run_full_pack(
         flush=True,
     )
     private_dirs_before = snapshot_private_test_dirs(PRIVATE_TEST_ROOTS)
+    private_root_children_before = snapshot_private_test_root_children(PRIVATE_TEST_ROOTS)
     leaked_marked_roots: tuple[Path, ...] = ()
     new_private_dirs: tuple[Path, ...] = ()
     try:
@@ -337,7 +352,8 @@ def run_full_pack(
             )
         if lane == "us_short":
             new_private_dirs = tuple(sorted(
-                snapshot_private_test_dirs(PRIVATE_TEST_ROOTS) - private_dirs_before
+                snapshot_private_test_root_children(PRIVATE_TEST_ROOTS)
+                - private_root_children_before
             ))
     if result.output:
         output = result.output
