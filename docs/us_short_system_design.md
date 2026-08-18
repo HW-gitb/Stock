@@ -228,12 +228,12 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 ## 6. 价格引擎 + 交易质量（v1 只 2 个真引擎）
 - **2 个真引擎**：`support_atr_engine`（新建/加仓默认）、`holding_exit_engine`（持仓止损/止盈/跟踪）。非引擎但必须：`hard_veto` gate、`data_degraded_policy`。只登记不实现（挂 §13 #6）：`ema_trailing_engine`、`earnings_gap_engine`。
 - **`support_atr_engine` 内拆两子模式**（仍 2 引擎、不加第三个；强赛道多突破型），字段 `price_sub_mode ∈ {pullback, breakout}`：
-  - `pullback_mode`（回踩）：有效支撑 + ATR 定入场/止损。
-  - `breakout_mode`（突破）：`breakout_entry_price` 入场 + 追价上限 = `valid_entry_high`（不追飞）+ **突破失效线 = 止损**（取突破位/近期盘整下沿，不用远端结构支撑——否则止损太远 RR 不够、强势突破被过早误转观察）+ tp 用 ATR 倍数兜底。参数 = prior（§13 #20/#33）。
-  - 两模式都仍过 `min_rr_gate` + tick 取整 + 取整后 RR 复校。
+  - `pullback_mode`（回踩）：`valid_entry_low = max(effective_support, close − PULLBACK_BAND_ATR×ATR)`、`valid_entry_high = close`；止损 = `valid_entry_low − ATR_MULT[regime]×ATR`。TP1 必须是严格高于入场上沿的有效压力，缺失/空间不足即观察，不由 RR 门槛反推 TP1。
+  - `breakout_mode`（突破）：`trigger_raw = effective_resistance`，`breakout_entry_price = max(close, trigger_raw)`，追价上限 `valid_entry_high = trigger_raw + BREAKOUT_CHASE_ATR×ATR`（超过即观察）；**突破失效线 = 止损** = `trigger_raw − BREAKOUT_FAIL_ATR×ATR`（不用远端结构支撑）+ TP1 = `trigger_raw + BREAKOUT_TP_ATR×ATR`。参数 = prior（§13 #20/#33），缺有效压力不出 breakout 几何。
+  - 两模式都仍过 `min_rr_gate` + tick 取整 + 取整后 RR 复校；RR 一律按最不利可接受成交价 `valid_entry_high` 计算。
 - **优先级链**：① hard_veto（new→否决/不建；holding→强制减/清/重评）② data_degraded（holding→只风控/不伪造价；new→观察/restricted）③ holding→`holding_exit_engine` ④ new→`support_atr_engine`。**加仓**：持仓+触发加仓 → `support_atr_engine` 算加仓入场、`holding_exit_engine` 管原仓，两者并存。
 - **有效支撑/压力去插针**（美股无涨跌停、长影线更夸张）：`effective_support / effective_resistance / structure_quality / structure_adjustment_reason`；单日极值比**最近的非并列值**远 >1×ATR（prior §13 #24）判插针、取该非并列值（US-short 刻意比 A 股 phase5「取单一次值」更稳健：美股长影更夸张、可多根并列同极值，单一次值会漏判并列长影；§13 #24 倍数不变）；止损/入场/止盈/RR 全用**有效**值算；结构差 → 降观察/降仓。
-- **`min_rr_gate`**：`risk_reward_ratio =（盈一−入场）/（入场−止损）`；RR < gate → 不建仓、转观察（prior，突破型可更高）。突破票无上方阻力时用 `breakout_mode` 的 ATR 兜底 tp1 再过 RR 闸，不因"无阻力"把突破票直接转观察；trace 标结构 tp 还是 ATR 兜底。
+- **`min_rr_gate`**：`risk = valid_entry_high − stop`、`risk_reward_ratio =（盈一−valid_entry_high）/risk`；RR < gate → 不建仓、转观察（prior，突破型可更高）。`t2 = max(tp1 + ATR_MULT[regime]×ATR, valid_entry_high + TP2_RISK_MULT×risk)`；pullback trace 标结构 TP，breakout trace 标 `trigger_raw` 锚定的 ATR TP，不从 RR 门槛反推 TP1。
 - **tick 取整 + 取整后 RR 复校**：算理论价 → 按方向取整可执行价（美股 $0.01，留 sub-penny/低价例外）→ 用取整后真实价**重算 RR**，破了降观察；字段 `execution_tick / rounded_price_used / post_round_rr_status`。
 - 缺可靠 ATR/支撑压力/财报日期/持仓成本 → 降级观察或只风控。
 
@@ -415,7 +415,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 17. S-3 / offering recency / materiality
 18. 纸面成交成本（佣金/滑点/spread）
 19. universe 上限 / 候选集大小 / FMP 调用预算
-20. 突破 tp ATR 倍数 k
+20. 突破 tp ATR 倍数 k（`trigger_raw + k×ATR`）
 21. `catalyst_recall_lane` 判据/数量
 22. 组合熔断阈值（连续止损/回撤）+ 各状态档
 23. 单票冷静期长度 + 恢复条件

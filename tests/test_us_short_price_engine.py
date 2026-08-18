@@ -123,7 +123,7 @@ class SupportAtrEngineTests(unittest.TestCase):
         self.assertEqual(f["price_sub_mode"], "pullback")
         self.assertEqual(f["order_type"], "pullback_limit")
         self.assertEqual(f["order_expiry"], "first_regular_session_only")
-        self.assertEqual(f["stop_clear_price"], 95.5)            # 98 - 1.25*2
+        self.assertEqual(f["stop_clear_price"], 96.5)            # valid_low 99 - 1.25*2
         self.assertEqual(f["take_profit_reduce_price"], 110.0)   # structural resistance
         self.assertEqual(f["take_profit_exit_price"], 112.5)     # max(110+2.5, 100+9)
         self.assertEqual((f["valid_entry_low"], f["valid_entry_high"]), (99.0, 100.0))
@@ -132,9 +132,9 @@ class SupportAtrEngineTests(unittest.TestCase):
         self.assertEqual(f["min_rr_gate_status"], "pass")
         self.assertEqual(f["post_round_rr_status"], "ok")
         self.assertEqual(f["structure_quality"], "strong")
-        self.assertAlmostEqual(f["risk_reward_ratio"], 2.222, places=3)
+        self.assertAlmostEqual(f["risk_reward_ratio"], 2.857, places=3)
 
-    def test_breakout_happy_path_uses_atr_fallback_tp(self):
+    def test_breakout_happy_path_uses_trigger_anchored_tp(self):
         r = pe.support_atr_engine({"close": 100.0, "indicators": _ind(90.0, 100.0, 2.0)}, "进攻", "breakout")
         f = r["action_fields"]
         self.assertTrue(r["executable"])
@@ -146,7 +146,85 @@ class SupportAtrEngineTests(unittest.TestCase):
         self.assertIsNone(f["pullback_entry_price"])
         self.assertEqual(f["valid_entry_high"], 101.0)           # chase cap: 100 + 0.5*2
         self.assertEqual(f["limit_order_price"], 101.0)
-        self.assertEqual(r["trace"]["t1_basis"], "breakout_atr_fallback")
+        self.assertEqual(r["trace"]["t1_basis"], "breakout_trigger_atr")
+        self.assertEqual(r["trace"]["rr_reference"], 2.5)
+
+    def test_breakout_below_trigger_uses_trigger_not_current_close_for_geometry(self):
+        r = pe.support_atr_engine({"close": 99.0, "indicators": _ind(90.0, 100.0, 2.0)}, "进攻", "breakout")
+        f = r["action_fields"]
+        self.assertTrue(r["executable"])
+        self.assertEqual(f["breakout_entry_price"], 100.0)
+        self.assertEqual(f["valid_entry_high"], 101.0)
+        self.assertEqual(f["stop_clear_price"], 99.0)
+        self.assertEqual(f["take_profit_reduce_price"], 106.0)
+        self.assertEqual(f["risk_reward_ratio"], 2.5)
+        self.assertEqual(r["trace"]["t1_basis"], "breakout_trigger_atr")
+
+    def test_mode_boundary_has_no_shared_resistance_or_rr_fallback_branch(self):
+        for close, res in ((99.99, 100.0), (100.0, 100.0), (100.01, 100.0)):
+            with self.subTest(close=close, res=res):
+                breakout = pe.support_atr_engine(
+                    {"close": close, "indicators": _ind(90.0, res, 2.0)}, "进攻", "breakout"
+                )
+                self.assertTrue(breakout["executable"])
+                self.assertEqual(breakout["action_fields"]["take_profit_reduce_price"], 106.0)
+                self.assertEqual(breakout["trace"]["t1_basis"], "breakout_trigger_atr")
+
+        for res in (99.99, 100.0):
+            with self.subTest(pullback_res=res):
+                pullback = pe.support_atr_engine(
+                    {"close": 100.0, "indicators": _ind(98.0, res, 2.0)}, "震荡", "pullback"
+                )
+                self.assertFalse(pullback["executable"])
+                self.assertIn("上方结构", pullback["reject_reason"])
+
+    def test_pullback_worst_case_entry_high_blocks_when_lower_edge_would_pass(self):
+        # At 99.0 the RR is 1.6, but the permitted upper fill 100.0 is only 0.857.
+        r = pe.support_atr_engine({"close": 100.0, "indicators": _ind(98.0, 103.0, 2.0)}, "震荡", "pullback")
+        lower_rr = (103.0 - 99.0) / (99.0 - 96.5)
+        upper_rr = (103.0 - 100.0) / (100.0 - 96.5)
+        self.assertGreaterEqual(lower_rr, pe.RR_FLOOR["震荡"])
+        self.assertLess(upper_rr, pe.RR_FLOOR["震荡"])
+        self.assertFalse(r["executable"])
+        self.assertEqual(r["action_fields"]["min_rr_gate_status"], "fail_below_floor")
+        self.assertIsNone(r["action_fields"]["stop_clear_price"])
+
+    def test_problem1_15_row_dual_mode_replay(self):
+        # The desktop problem-1 table's 15 price rows: force both modes and inspect every row.
+        rows = (
+            ("NBIS", 277.68, 145.80, 278.66, 27.68), ("ABNB", 184.06, 135.72, 187.12, 6.72),
+            ("SMWB", 8.89, 5.95, 9.09, 0.46), ("TEAM", 162.22, 80.00, 167.75, 9.91),
+            ("ZETA", 29.05, 19.07, 29.89, 1.72), ("SHOP", 154.32, 111.06, 158.87, 7.94),
+            ("ERIE", 255.99, 209.38, 261.36, 11.30), ("LIFE", 34.02, 17.57, 35.69, 2.79),
+            ("WDAY", 198.68, 127.11, 208.00, 13.30), ("RCAT", 11.13, 6.71, 11.76, 0.84),
+            ("PATH", 16.01, 10.16, 16.82, 0.90), ("BWIN", 31.51, 24.66, 32.57, 1.61),
+            ("APPN", 35.41, 21.94, 37.66, 2.47), ("BLZE", 19.02, 10.98, 20.91, 2.09),
+            ("GSHD", 66.29, 48.19, 70.88, 3.73),
+        )
+        self.assertEqual(len(rows), 15)
+        for ticker, close, sup, res, atr_value in rows:
+            with self.subTest(ticker=ticker):
+                pullback = pe.support_atr_engine(
+                    {"close": close, "indicators": _ind(sup, res, atr_value)}, "进攻", "pullback"
+                )
+                breakout = pe.support_atr_engine(
+                    {"close": close, "indicators": _ind(sup, res, atr_value)}, "进攻", "breakout"
+                )
+                self.assertFalse(pullback["executable"])
+                self.assertEqual(pullback["action_fields"]["min_rr_gate_status"], "fail_below_floor")
+                self.assertIn("RR", pullback["reject_reason"])
+                self.assertTrue(breakout["executable"])
+                fields = breakout["action_fields"]
+                self.assertEqual(fields["breakout_entry_price"], pe.tick_up(res, pe.tick_size_for(close)))
+                self.assertEqual(fields["valid_entry_high"], pe.tick_down(res + pe.BREAKOUT_CHASE_ATR * atr_value,
+                                                                            pe.tick_size_for(close)))
+                self.assertEqual(fields["stop_clear_price"], pe.tick_up(res - pe.BREAKOUT_FAIL_ATR * atr_value,
+                                                                          pe.tick_size_for(close)))
+                self.assertEqual(fields["take_profit_reduce_price"], pe.tick_down(
+                    res + pe.BREAKOUT_TP_ATR * atr_value, pe.tick_size_for(close)))
+                self.assertEqual(breakout["trace"]["rr_reference"], 2.5)
+                self.assertGreaterEqual(fields["risk_reward_ratio"], 2.0)
+                self.assertEqual(breakout["trace"]["t1_basis"], "breakout_trigger_atr")
 
     def test_rr_gate_blocks_when_reward_too_small(self):
         r = pe.support_atr_engine({"close": 100.0, "indicators": _ind(99.0, 100.5, 2.0)}, "震荡", "pullback")
@@ -286,8 +364,8 @@ class ContractConformanceTests(unittest.TestCase):
 
 class SupportAtrRaiseRrGateTests(unittest.TestCase):
     def test_raise_rr_gate_makes_a_borderline_rr_observe(self):
-        # RR 1.636 passes the 进攻 base RR floor 1.5 but fails the §4.3 warning-raised floor 2.0 (+WARNING_RR_BONUS).
-        inp = {"close": 100.0, "indicators": _ind(98.0, 109.0, 2.0)}
+        # RR 1.667 passes the 进攻 base RR floor 1.5 but fails the §4.3 warning-raised floor 2.0 (+WARNING_RR_BONUS).
+        inp = {"close": 100.0, "indicators": _ind(98.0, 107.5, 2.0)}
         base = pe.support_atr_engine(inp, "进攻", "pullback")
         self.assertTrue(base["executable"])
         self.assertEqual(base["action_fields"]["min_rr_gate_status"], "pass")
@@ -297,7 +375,7 @@ class SupportAtrRaiseRrGateTests(unittest.TestCase):
 
     def test_raise_rr_gate_non_true_leaves_the_floor_unchanged(self):
         # STRICTER only: only a real True adds the bonus; False / None / 1 / str leave the base floor (still executable).
-        inp = {"close": 100.0, "indicators": _ind(98.0, 109.0, 2.0)}
+        inp = {"close": 100.0, "indicators": _ind(98.0, 107.5, 2.0)}
         for val in (False, None, 1, "yes"):
             self.assertTrue(pe.support_atr_engine(inp, "进攻", "pullback", raise_rr_gate=val)["executable"])
 

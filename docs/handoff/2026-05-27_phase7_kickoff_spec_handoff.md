@@ -5329,3 +5329,34 @@ TTL 边界 90/91 天、正向观测永不跳过、脏缓存五形状、残差二
 ### 下一步
 
 用户：下次周跑可一并验证两件事——市值缓存腿降为 0 调用、`spread_source` 出现 `modeled_chl_winsor_v1`。
+
+## 2026-08-18 追加：桌面 `2us_testrun0816.md:130` 类A（问题1+问题3）严格逐行修复（Codex executor/fixer，888d，OPEN-NOT-VERIFIED）
+
+### 逐行实施
+
+- 只改 `engine/us_short_price_engine.py::support_atr_engine` 的新建仓几何、直接设计文字和聚焦测试；不把问题2的 `sub_mode` producer 混入类A，不动 holding、sizing、regime、成本或 model-paper。
+- pullback：`valid_low_raw=max(effective_support, close−PULLBACK_BAND_ATR×ATR)`、`valid_high_raw=close`、`stop_raw=valid_low_raw−ATR_MULT[regime]×ATR`；缺失或不高于入场上沿的有效压力直接观察；删除 `rr_floor_fallback`。
+- breakout：`trigger_raw=effective_resistance`；`valid_low_raw=max(close,trigger_raw)`；`valid_high_raw=trigger_raw+BREAKOUT_CHASE_ATR×ATR`；超追价上限观察；`stop_raw=trigger_raw−BREAKOUT_FAIL_ATR×ATR`；`t1_raw=trigger_raw+BREAKOUT_TP_ATR×ATR`。
+- 共用：`entry_ref_raw=valid_high_raw`；理论/取整后 RR、TP2 和最不利成交价复校均按 `valid_entry_high`；不新增票数配额或 12% 波动率硬否决。
+
+### 一个验收门
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`：价格引擎 `40 tests / OK`（含桌面问题1表 15 行双模式回放）；价格/分析/决策/仓位/成本/输出与 Batch5→Batch4 `423 tests / OK`；正式离线 `run_e2e` 断言新默认 pullback 几何写入 `machine_record.json` / `action_table.csv`；capstone bridge 回归 `1 test / OK`。
+- 未联网、未调用 provider/API/live、未跑 full lane；15 行按桌面问题1已记录的结构参数离线回放，未重新取真实 provider bars，故不作 live-week/production 结论。
+
+### 边界与下一步
+
+- 未修改问题2 producer、holding、sizing、regime、成本、model-paper、主树、桌面文档或 `docs/CURRENT.md`；未提交、未 merge。
+- 当前结论：`repaired / OPEN-NOT-VERIFIED`。下一步：Claude Code 独立审查；breakout 正式生产可达性仍按桌面文档执行顺序留给问题2。
+
+## 2026-08-18 Claude Code 独立审查：类A 价格几何（问题1+问题3）— PASS
+
+四道验收门全过：共用分支与倒推分支 grep=0；RR 双道按 `valid_entry_high`；审查者亲跑真实 15 只双模式回放
+（pullback 15/15 诚实拒绝 RR 0.016–0.548、breakout 15/15 价位自洽——止损=触发位下 0.5×ATR、TP1=触发位+3×ATR、
+最不利价 RR≈2.5）；悬崖连续性扫描证实压力位两侧均不再自动通过；e2e 直达 machine_record 钉死默认 pullback
+精确价位。零参数值改动，设计 §6/§13 #20 同刀同步。按方案边界，breakout 生产可达性证据留给问题2。
+
+### 下一步
+
+Codex：类B 第一刀（问题5 市场轴）；随后第二刀（问题2 sub_mode 路由 + paper stop-limit），
+注意审阅意见中的映射全覆盖 fail-closed 要求。
