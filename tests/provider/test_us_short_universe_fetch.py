@@ -646,6 +646,35 @@ class TestFetchMassiveTickerOverview(unittest.TestCase):
 
         self.assertEqual(out, {})
 
+    def test_records_type_observation_without_persisting_raw_response(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            observation_path = Path(tmp) / "massive_instrument_type_observations.json"
+
+            with patch.object(
+                _mod, "_massive_ticker_overview_for_date",
+                return_value={"ticker": "UNITX", "type": "UNIT"},
+            ):
+                out = _mod.fetch_massive_ticker_overview(
+                    ["UNITX"], "20260807", "key", sleep_func=lambda _: None,
+                    observation_path=observation_path,
+                )
+
+            self.assertEqual(out, {})
+            self.assertEqual(json.loads(observation_path.read_text(encoding="utf-8")), {
+                "UNITX": {"type": "UNIT", "has_market_cap": False, "observed_on": "20260807"},
+            })
+
+    def test_observation_ttl_requeries_after_90_days(self):
+        observations = {
+            "FRESH": {"type": "FUND", "has_market_cap": False, "observed_on": "20260520"},
+            "STALE": {"type": "PFD", "has_market_cap": False, "observed_on": "20260519"},
+        }
+        targets, skipped = _mod._massive_overview_targets(
+            ["FRESH", "STALE"], observations, "20260818",
+        )
+        self.assertEqual(skipped, ["FRESH"])
+        self.assertEqual(targets, ["STALE"])
+
     def test_non_429_failures_stay_unresolved_but_physical_calls_are_observable(self):
         stats = {}
         with patch.object(_mod, "_massive_ticker_overview_for_date", side_effect=RuntimeError("offline failure")):
@@ -679,6 +708,23 @@ class TestApplyPass1(unittest.TestCase):
         rows = self._rows(sec, shares, {"S": _md(5.0, 50_000_000.0)})
         self.assertFalse(rows[0]["eligible"])
         self.assertIn("market_cap_usd_below_floor", rows[0]["reasons"])
+
+    def test_non_common_reason_changes_only_reason_not_keep_drop(self):
+        sec = {"PFDX": {"cik": 5, "exchange": "NYSE"}}
+        market_data = {"PFDX": _md(50.0, 20_000_000.0)}
+        plain = self._rows(sec, {}, market_data)[0]
+        typed = self._rows(sec, {}, market_data, instrument_types={"PFDX": "PFD"})[0]
+        self.assertEqual(plain["eligible"], typed["eligible"])
+        self.assertEqual(plain["reasons"], ["market_cap_usd_unknown_or_invalid"])
+        self.assertEqual(typed["reasons"], [_mod.NON_COMMON_EQUITY_INSTRUMENT_REASON])
+        self.assertEqual(typed["lineage"]["instrument_type"], "PFD")
+
+    def test_non_common_reason_remains_in_market_cap_residual(self):
+        rows = self._rows(
+            {"UNITX": {"cik": 5, "exchange": "NYSE"}}, {},
+            {"UNITX": _md(50.0, 20_000_000.0)}, instrument_types={"UNITX": "UNIT"},
+        )
+        self.assertEqual(_mod.summarize_rows(rows)["needs_market_cap"], ["UNITX"])
 
     def test_adv_below_floor(self):
         sec = {"T": {"cik": 3, "exchange": "NYSE"}}
@@ -1426,6 +1472,27 @@ class TestProblem7MarketCapChain(unittest.TestCase):
                 yfinance_attempted_count=0, massive_overview_attempted_count=0,
             )
 
+    def test_completion_conserves_cached_skip_and_physical_call_counts(self):
+        completion = _mod.build_market_cap_completion(
+            initial_needs=["FRESH", "LIVE"],
+            after_companyfacts_needs=["FRESH", "LIVE"],
+            after_yfinance_needs=["FRESH", "LIVE"],
+            final_needs=["FRESH"],
+            sec_companyfacts_target_count=0,
+            sec_companyfacts_request_count=0,
+            yfinance_attempted_count=0,
+            massive_overview_attempted_count=1,
+            massive_overview_skipped_by_cache_count=1,
+            massive_overview_physical_call_count=1,
+        )
+        self.assertEqual(completion["massive_overview_skipped_by_cache_count"], 1)
+        self.assertEqual(completion["massive_overview_physical_call_count"], 1)
+        self.assertEqual(
+            completion["massive_overview_skipped_by_cache_count"]
+            + completion["massive_overview_physical_call_count"],
+            2,
+        )
+
 
 class TestGuards(unittest.TestCase):
     def setUp(self):
@@ -1533,7 +1600,8 @@ class TestRunFetchE2E(unittest.TestCase):
                 stats_out["actual_request_count"] = len({cik for cik in ciks if type(cik) is int and cik > 0})
             return {}
 
-        def no_massive_overview(tickers, price_basis_date, key, *, stats_out=None, sleep_func=None):
+        def no_massive_overview(tickers, price_basis_date, key, *, stats_out=None, sleep_func=None,
+                                observation_path=None):
             if stats_out is not None:
                 stats_out["actual_request_count"] = len(tickers)
             return {}
@@ -1720,7 +1788,8 @@ class TestRunFetchE2E(unittest.TestCase):
                 stats_out["actual_request_count"] = 1
             return {}
 
-        def fake_overview(tickers, price_basis_date, key, *, stats_out=None, sleep_func=None):
+        def fake_overview(tickers, price_basis_date, key, *, stats_out=None, sleep_func=None,
+                          observation_path=None):
             self.assertEqual(tickers, ["COIN"])
             self.assertEqual(price_basis_date, "20260626")
             if stats_out is not None:
@@ -1779,6 +1848,54 @@ class TestRunFetchE2E(unittest.TestCase):
         self.assertEqual(massive_observation["rescued_count"], 1)
         self.assertEqual(massive_observation["final_unresolved_count"], 0)
         self.assertEqual(massive_observation["outcome"], "all_targets_rescued")
+
+    def test_run_fetch_fresh_non_common_cache_skips_overview_without_changing_pass1(self):
+        sec_map = {"PFDX": {"cik": 17299, "exchange": "NASDAQ"}}
+
+        def fake_grouped(date, key):
+            return [{"T": "PFDX", "c": 200.0, "v": 50_000_000}]
+
+        cand = self.state_root / "candidate_universe_20260629.json"
+        cand.unlink(missing_ok=True)
+        self.addCleanup(cand.unlink, missing_ok=True)
+        self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
+        observation_path = self.state_root / _mod.MASSIVE_INSTRUMENT_OBSERVATIONS_FILENAME
+        observation_path.write_text(json.dumps({
+            "PFDX": {"type": "PFD", "has_market_cap": False, "observed_on": "20260626"},
+        }), encoding="utf-8")
+        self.addCleanup(observation_path.unlink, missing_ok=True)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            with patch.dict(os.environ, {
+                "SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": "",
+            }), patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value={}), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod, "fetch_nasdaq_trade_halt_feed", return_value={
+                     "observed": True, "observed_at": "2026-06-29T12:00:00+00:00", "halted_symbols": [],
+                 }), patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"), \
+                 patch.object(_mod, "fetch_massive_ticker_overview") as overview:
+                summary = _mod.run_fetch(
+                    now_et=datetime(2026, 6, 29, 8, 0, 0), summary_path=tmpp / "sum.json",
+                    raw_root=tmpp / "raw", candidate_list_path=cand,
+                    generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                )
+
+        overview.assert_not_called()
+        artifact = json.loads(cand.read_text(encoding="utf-8"))
+        row = artifact["rows"][0]
+        self.assertFalse(row["eligible"])
+        self.assertEqual(row["reasons"], [_mod.NON_COMMON_EQUITY_INSTRUMENT_REASON])
+        completion = summary["market_cap_completion"]
+        self.assertEqual(completion["massive_overview_skipped_by_cache_count"], 1)
+        self.assertEqual(completion["massive_overview_attempted_count"], 0)
+        self.assertEqual(completion["massive_overview_physical_call_count"], 0)
+        massive_observation = summary["market_cap_fallback_observability"]["massive_ticker_overview"]
+        self.assertEqual(massive_observation["target_count"], 0)
+        self.assertEqual(massive_observation["skipped_by_cache_count"], 1)
+        self.assertEqual(massive_observation["outcome"], "cache_skipped")
 
     def test_run_fetch_preserves_frames_over_conflicting_companyfacts_record(self):
         sec_map = {
@@ -1864,7 +1981,8 @@ class TestRunFetchE2E(unittest.TestCase):
                 stats_out.update({"logical_ticker_attempt_count": len(targets), "rescued_count": 0})
             return {}
 
-        def fake_overview(targets, price_basis_date, key, *, stats_out=None, sleep_func=None):
+        def fake_overview(targets, price_basis_date, key, *, stats_out=None, sleep_func=None,
+                          observation_path=None):
             massive_seen.append(list(targets))
             self.assertEqual(price_basis_date, "20260626")
             if stats_out is not None:
