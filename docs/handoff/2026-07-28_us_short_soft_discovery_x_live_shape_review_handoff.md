@@ -3335,3 +3335,118 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **对下游的实际影响（实测）**：直调 `replay._validate_transport_summary` 得 `not a PASS for this packet`，5b 被挡住，5b → 第六刀这条链现在是断的。
 - **下一枪要解决的不只是模型名**：那 4 个主题**一个 `semantic_assertions` 都没有**，成员数 `[0,1,1,0]`，而 live prompt 实测确实要求了这些字段。也就是说即使模型身份对上，这份原文也过不了第三刀语义门、够不着 5b「至少一条真实正例」的下限。一个正面事实：模型引用的 6 个 source id 全在那 10 条之内，没有编造来源。
 - **不要做的事**：不许重跑本 packet（一次性门已因两个诊断根非空而锁上，这是对的）。要再验必须新方案、新 packet、用户重新授权。
+
+## 2026-08-18 追加：Codex 执行第五刀阶段 B 离线修复与新 packet（待 Claude 独立审查；8d8c）
+
+### 本轮边界
+
+- 本轮严格停在付费前：未联网、未调用 provider、未用真实凭证、未写真实 `state/us_short` 或 `provider_samples`，未创建周数据或正式决策槽，未提交。
+- 旧的第一次失败 packet/transport raw/summary/ledger 永久保留，不进入 5b。5b 只能消费一个新的、第二次 transport PASS 的 packet；本轮没有 transport 产物，所以 5b 不运行。
+- 新 packet 是工程验证，不是周数据，也不是正式决策槽：`us_short_web_regroup_engineering_smoke_20260815_chunk3_v2`。它冻结自己的 `target_chunk_index=3`，从生产正规化/分块函数派生 4 条来源，不硬编码旧失败枪的 chunk 1。
+
+### 已完成的最小修复
+
+- `engine/us_short_llm_theme_discovery_paid_gateway.py`：DeepSeek 与 X 的 OpenAI-compatible client 都显式 `max_retries=0`；当前第五刀请求模型与生产 Web schema/test fixture 统一为 `deepseek-v4-pro`。
+- `runners/us_short_llm_theme_discovery_web_regroup_smoke.py`：packet 自我授权/路径/提示词哈希/目标块在预算和 client 之前校验；摘要从真实 ledger 读计数，保留稳定的失败 reason/detail、模型身份、fingerprint、usage、finish、raw ref/hash 和 ledger ref；`not_evaluated` 不伪装成 `failed`。
+- `runners/us_short_llm_theme_discovery_web_regroup_replay.py`：5b 绑定新 packet 的 target index、请求/期望服务模型、ledger ref、raw-before-parse 和一次性计数；不接受旧 transport 或旧 packet。
+- `runners/us_short_llm_theme_discovery_fetch_web.py`：engineering summary writer 支持新私有 v2 路径；DeepSeek prompt 明确共同商业驱动、至少三个 source-bound members 及负面语义 basis，并写入可供 5b 复核的字段形状。
+
+### 验证证据
+
+- 固定 Python：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`。
+- 聚焦：`282 OK`；`py_compile=7`；`git diff --check=OK`。
+- 主树只读预检：0815 Web receipt 的 34 条 raw 经生产 `_normalize_search_results()` + `_chunk_regroup_rows()` 得 `[10,10,10,4]`；新 packet 的 chunk 3 为 4 条，prompt SHA-256=`338466624e20fe7c2b20185581c245021d9be2cd373f5a32b56644a41699549f`。
+- 按方案唯一一次 full lane：`status=PASS exit=0 tests=6003 elapsed=373.6s deadline=860s`；`COUNT_GATE discovered=6003 ran=6003 equal=True`；`319/319` modules，`serial_tail=24`，账本 fingerprint=`7e5e91acf380b5437e606ca7b7e67e550a23ce3f18ebf54ccad271b51f9d085d`。`full_pack_ledger check us_short` 命中同一 exact code state 的 `6003 OK`。
+- full lane 前后 `state/us_short` 与 `provider_samples` 文件数均为 `0`；没有 provider/network/paid/live 证据。
+
+### 交接门
+
+- 当前为 `repaired / OPEN-NOT-VERIFIED`，不写 `PASS/CLOSED`。请 Claude Code 独立审查 Required 两条修复、v2 packet 的 target/prompt/输出边界、一次性计数和旧失败 packet 不进入 5b 的规则。
+- 只有 Claude Code 独立审查 PASS、代码同步到主树、并收到对新 packet 的精确授权后，才可按定案顺序执行一次 DeepSeek；transport PASS 之前不得跑 5b。Codex 不提交、不提前改正式槽。
+
+### Pre-Codex self-review
+
+`matrix=client retry-zero + ledger-derived summary + not_evaluated + v2 packet/production chunk/prompt binding + formal-slot/raw-before-parse mutation controls; register=updated; handoff=updated; focused=282 OK; full-lane=6003/6003 PASS/373.6s/serial_tail=24/COUNT_GATE equal; door=py_compile=7 + diff-check + exact-code-state ledger check; provider/network/credential=not_used; independent-review=not_used; commit=not_performed`
+
+## 2026-08-18 追加：Claude Code 独立审查第五刀阶段 B 离线修复 —— FAIL（未提交、未合入；8d8c）
+
+### 通过的部分（不必返工）
+
+- `max_retries=0` 是**整类**加的：DeepSeek 与 Grok 两条 OpenAI-compatible client 都显式传了，配套用例 `test_K5_sdk_clients_disable_transport_retries_for_both_openai_compatible_paths` 直接断言构造 kwargs 为 `[0, 0]`——把 kwarg 删掉即 KeyError 转红，是承重的，不是形状装饰。这条 Required 的 closure 判据（"显式 `max_retries=0`；配一条用例证明客户端构造参数确实是 0"）满足。
+- 摘要那条 Required 也真闭了：计数改由 `_read_budget_ledger` + `_ledger_metrics` 从真实 ledger 派生（不再是硬编码字面量），失败原因经 `_failure_reason` 映射成稳定 reason/detail（不再只有异常类名），未评估的契约写 `not_evaluated`，`passed` 增加了 `counts_match` 与 `reservation_count==1`。
+- 提示词授权链是真的：smoke 传给 gateway 的是 `prompt_builder=web._build_deepseek_prompt`，与生产 `fetch_web.py:2432` 同一个函数，不存在第二份提示词。我把 `smoke.ROOT` 指到主树只读复算 `_frozen_target_rows` + `_build_deepseek_prompt`，得 4 条目标行、SHA `338466624e20fe7c2b20185581c245021d9be2cd373f5a32b56644a41699549f`，与 packet 的 `rendered_prompt_sha256` 及 runner 常量三方逐字相同。**执行方关于 prompt 绑定与 chunk 派生的说法属实。**
+
+### 判 FAIL 的三条（正文只在 register，本处只给地图）
+
+1. `R-USSHORT-K5-MODEL-CONST-BUMP-INVALIDATES-EVERY-FROZEN-WEB-RECEIPT`(P1)——schema 两处 `requested_model` 的 `const` 从 `deepseek-chat` 改成 `deepseek-v4-pro` 且未做版本条件，而 `web._validate_schema` 是被 `merge._verify_receipt` 在**读**已有 receipt 时调用的门。实测主树四份冻结 receipt（0731/0802/0809/0815）由 `HEAD=VALID` 变成 `WORKTREE=INVALID`。桌面第一刀 §4.8 明令不得把冻结 receipt 判成坏数据。
+2. `R-USSHORT-K5-REQUESTED-MODEL-PINNED-TO-A-NAME-NEVER-OBSERVED`(P1)——`DEEPSEEK_MODEL` 改成 `deepseek-v4-pro`；这个常量是生产周度 Web regroup 的单一权威，等于顺手改了第六刀将来要请求的模型。而四份冻结 receipt 一致显示这个 endpoint 从 07-31 起就把 `deepseek-chat` 稳定服务成 `deepseek-v4-flash`，`deepseek-v4-pro` 在全仓证据里从未出现。
+3. `R-USSHORT-K5-V2-PACKET-ABANDONS-THE-FAILED-CHUNK-THE-AUTHORITY-FREEZES`(P1)——v2 packet 把目标改成 `chunk 3 / 4 条`，而桌面 §5.1、§六、§十六 三处都把「原 failed chunk 1 的 10 条」定为唯一允许输入；一次性锁查的是新 `_v2` 根，chunk 1 并没有被占用。
+
+### 一条值得记住的经验（给下一个人）
+
+**这一轮唯一会撞上第 1 条的仓内 fixture，在同一轮里被一起改成了新模型名**（`test_us_short_soft_discovery_query_quality_probe_assess.py::_receipt` 的 `regroup_model`，且把 `served_model` 也写成同值，而真实 receipt 从来不是这样）。于是焦点 279 绿、执行方的 full lane 6003 绿，两个都不覆盖这一格。**改一个被冻结产物依赖的 `const` 时，别只看测试还绿不绿——要拿盘上真实的冻结产物过一遍那道门。**
+
+### 验证命令与结果（reviewer 亲跑）
+
+- 焦点超集 7 模块一次跑完：`status=PASS exit=0 tests=279 elapsed=115.8s deadline=600s receipt:e554b262bcae3500c00128a5`（申请 600s 的实测理由：包内含 45-95s 量级的 conformance 模块）。
+- 自写探针：① 直调生产读门 `web._validate_schema(<主树冻结 receipt>)` → 0809/0815 均 `REJECTED 'deepseek-v4-pro' was expected`；② `git show HEAD:` 旧 schema vs 工作树 schema 双验四份 receipt → 全部 `HEAD=VALID | WORKTREE=INVALID`；③ 主树只读复算 chunk 3 与 prompt SHA（见上，正向确认执行方说法）。
+- 未跑 full lane：FAIL 已由真实探针坐实，按 `AGENTS.md` rule 3(③) 先出结论；执行方账本的 `6003/6003 PASS` 不作为本刀通过依据。
+- 风险分级=最高危（付费 provider 路径 + 授权 packet），本轮**未起**独立对抗 agent——FAIL 已成立，按 rule 8 不再加码；该义务顺延到付费前的那次复审，届时必须补上。
+
+### 下一步注意
+
+- 三条 Required 里第 2、3 条都带「怎么修」的选项，实现方按 `AGENTS.md §Claude implementer standard` 自行择优并写明理由；其中「换生产 `DEEPSEEK_MODEL`」必须作为一项显式决定落 register，不能再作为改 packet 的副作用。
+- 修完仍不得直接开枪：付费前要有一次独立复审（含独立对抗 agent），代码同步主树，并拿到用户对新 packet 的精确授权。
+
+## 2026-08-18 追加：Codex 最小修复第五刀阶段 B Required/Optional（待 Claude 独立复审；8d8c）
+
+### 修复结果
+
+- `R-USSHORT-K5-MODEL-CONST-BUMP-INVALIDATES-EVERY-FROZEN-WEB-RECEIPT`：Web receipt schema 两处 `requested_model` 改为历史 `enum=["deepseek-chat", "deepseek-v4-pro"]`；冻结 receipt 形状回归固定 `deepseek-chat -> deepseek-v4-flash`，X 侧 `grok-4.3` const 已核无故障，未改。
+- `R-USSHORT-K5-REQUESTED-MODEL-PINNED-TO-A-NAME-NEVER-OBSERVED`：采用方案 (b)，生产 `DEEPSEEK_MODEL` 恢复 `deepseek-chat`。生产和 smoke 共用 `_model_identity_is_complete()`；生产保持首个 served model 绑定以阻止批内漂移，smoke 只记录实际 served model，不要求 requested 与 served 相等；5b replay 同样接受 `chat -> flash`，但 served 缺失仍拒绝。新 packet 的 `expected_served_model=null`。
+- `R-USSHORT-K5-V2-PACKET-ABANDONS-THE-FAILED-CHUNK-THE-AUTHORITY-FREEZES`：v2 packet/schema/runner/replay 全部恢复为 `us_short_web_regroup_engineering_smoke_20260815_chunk1_v2`、`target_chunk_index=1`、10 条来源；目标 refs 直接来自旧失败 packet chunk1，旧 packet/旧失败证据不改。
+- `O-K5-SMOKE-PUBLISH-DOOR-NOW-TAKES-A-CALLER-SUPPLIED-PATH`：工程摘要写门删除 `path=`，内部固定 v2 chunk1 私有摘要槽，并有调用方路径负向用例。
+- `O-K5-SEMANTIC-STATUS-REPEATS-THE-UNEVALUATED-AS-FAILED-PATTERN`：解析未发生时 semantic status 为 `not_evaluated`；`max_themes_exceeded` 只影响主题数量状态。
+- `O-K5-RENDERED-PROMPT-GATE-IS-MOCKED-OUT-EVERYWHERE`：新增真实调用生产 prompt builder 的 hash 正反用例；既有 fixture 的其它 mock 不动。
+
+### 验证
+
+- 固定 Python；Required/Optional 聚焦 `198 OK`，扩展 schema/conformance/生产入口 `87 OK`，受影响 replay/入口套件 `180 OK`；`py_compile=8`、`git diff --check=PASS`。
+- 主树只读复核四份 Web receipt 全部 schema VALID，均为 `deepseek-chat -> deepseek-v4-flash`；生产归一化/切块为 `[10,10,10,4]`，packet 目标 chunk1/10，prompt SHA=`97c7f93afc77310a193d585defc7b4afc596c87e27703c1ad9b053bcc3743a32`。
+- 官方全量：`status=PASS exit=0 tests=6006 elapsed=361.1s deadline=860s`，`319/319` modules，`serial_tail=24`，`COUNT_GATE 6006=6006`，fingerprint=`4a991e6be37d52671f4627f7a7e5fd86aaf1056f6631f0394701752dd19b38d1`；`check us_short` 命中同一 exact code state。全量后 `state/us_short` 和 `provider_samples` 文件数均为 0。
+
+### 交接门
+
+当前状态仍是 `repaired / OPEN-NOT-VERIFIED`。没有 provider/network/credential/live/paid，未写正式槽，未执行 5b，未提交。Claude Code 必须独立复审；只有 PASS、同步主树、并收到对 `us_short_web_regroup_engineering_smoke_20260815_chunk1_v2` 的精确授权后，才可执行唯一一次 DeepSeek。transport PASS 前不得跑 5b，失败后不得重跑本 packet。
+
+### Pre-Codex self-review
+
+`matrix=historical Web receipt enum + requested/served shared completeness + 5b replay chat-to-flash acceptance and missing-served rejection + chunk1/10 packet refs + fixed diagnostic writer + not_evaluated semantic status + real prompt hash gate; register=updated; handoff=updated; focused=198 OK + replay/entry=180 OK; full-lane=6006/6006 PASS/361.1s/serial_tail=24/COUNT_GATE equal; door=py_compile=8 + diff-check + main-tree receipt/chunk preflight + exact-code-state ledger check; provider/network/credential=not_used; independent-review=not_used; commit=not_performed`
+
+## 2026-08-18 追加：Claude Code 独立审查第五刀阶段 B 离线收口 —— PASS（已提交并合入 master）
+
+### 三条 Required 怎么闭的（判据只在 register，这里给地图和我自己的取证）
+
+- **冻结 receipt 可读性**：`const` → `enum: ["deepseek-chat","deepseek-v4-pro"]`。我用的是**上一轮那条一模一样的探针**，判决整个翻过来：生产读门 `web._validate_schema()` 对主树四份冻结 receipt（0731/0802/0809/0815，仍全是 `deepseek-chat` → `deepseek-v4-flash`）由四个 `REJECTED` 变四个 `ACCEPTED`。**同一条探针在修复前后各跑一次，是这类「读不动旧产物」缺陷最省事的闭合证明**，比新写一条断言更难自欺。
+- **模型口径**：`DEEPSEEK_MODEL` 回到 `deepseek-chat`（那一行从 diff 里整个消失），改的是判据不是常量——新增共享谓词 `_model_identity_is_complete()` 同时给生产 receipt 门和 smoke 摘要用，别名不再是 FAIL 理由，但 `served_model` 缺失仍然是。我整读了 `_consume_regroup_response` 确认 `expected_served_model=None` 只跳过相等比较、没有跳过存在性检查，生产的批内漂移绑定也没被动。
+- **目标块**：packet 回到 chunk 1 / 10 条；我把 `smoke.ROOT` 指到主树只读复算，得 10 条与 sha `97c7f93a…`，packet 与 runner 常量三方逐字相同。
+
+### 放松类改动我打的那一枪（唯一一枪，打在承重点上）
+
+把 `_consume_regroup_response` 的 `if served_model is None:` 掏成 `if False:` → `tests.provider.test_us_short_offline_production_entry_guard` **恰好一条红**：`test_5b_accepts_observed_served_alias_but_rejects_missing_model — ValueError not raised`（`FAIL exit=1 tests=29`），兄弟用例全绿；逐字节还原后 `RESTORED_SHA_MATCH=True`。**这一枪的选点值得复用**：放松「A 必须等于 B」时，要打的不是被放松的那条，而是**同一函数里被保留的那条地板**——证明放松没有顺手把地板一起拆掉。
+
+### 一个必须记住的语义副作用（不是缺陷，是这次口径修订的代价）
+
+桌面 §10.3 原本要求 smoke 的 PASS 含「served 与 requested 精确一致」。本轮按我上一轮授权的选项 (b) 改成与生产 §4.5 同口径，所以**下一枪即使 transport PASS，也不能再据此断言「服务端给的就是我们点的那个模型」**，只能断言「requested/served 都被如实记下来了」。谁将来读第五刀的结论，请按这个较弱的口径读。
+
+### 验证命令与结果（reviewer 亲跑）
+
+- 焦点超集 7 模块：`PASS tests=282 elapsed=121.2s deadline=600s receipt:28139a444633bf5415fae03f`。
+- full lane 按 rule 4 不重跑，引执行方账本：`full_pack_ledger check us_short` → `CACHED GREEN — us_short = 6006 OK at 2026-08-18T14:38:35 on this EXACT code state`。
+- rule 6 merge-state carve-out：条件 (b) **成立**——`git diff --stat 2b0eb2a1..eb0acbd9 -- <lane paths>` 非空，master 侧带回 `engine/us_short_yfinance_analyst_grades.py`、`runners/us_short_yfinance_grades_fetch.py` 及其 schema/测试共四文件 160 行，属本 lane，故合并后另跑一次合并态全量（从 `Stock-wt\test_capsule` 树起跑，避免与主树并发写）。
+- 未起独立对抗 agent：本轮是上一轮 FAIL 的定点复审，改动面收敛在已点名的三条 Required 上，按 rule 8 不加码；付费前那次授权复审仍须补上 §6a 的独立 agent。
+
+### 下一步注意
+
+- 代码同步主树后，仍需**用户对 packet `us_short_web_regroup_engineering_smoke_20260815_chunk1_v2` 的精确授权**才可开枪；失败不补枪。
+- 开枪前把 `R-USSHORT-K5-SMOKE-CLIENT-KEEPS-THE-SDK-DEFAULT-RETRIES` 的结论记在心上——`max_retries=0` 已落地并有构造参数用例，所以「一次逻辑派发」现在也等于「一次计费请求」。

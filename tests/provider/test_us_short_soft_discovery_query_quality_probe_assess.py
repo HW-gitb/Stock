@@ -155,7 +155,7 @@ def _receipt(lane: str, discovery: dict, queries: list[str]) -> dict:
             "lifecycle_actions_enabled": False,
             "regroup_model": {
                 "requested_model": "deepseek-chat",
-                "served_model": "deepseek-chat",
+                "served_model": "deepseek-v4-flash",
                 "system_fingerprints": [],
             },
         }
@@ -372,6 +372,13 @@ class QueryQualityProbeAssessmentTest(unittest.TestCase):
         }
         for path, payload in payloads.items():
             _write_json(path, payload)
+
+    def test_historical_web_receipt_model_identity_remains_schema_valid(self):
+        schema = json.loads(web.SCHEMA_PATH.read_text(encoding="utf-8"))
+        model_rule = schema["properties"]["fetch_contract"]["properties"]["regroup_model"]["properties"]["requested_model"]
+        self.assertEqual(model_rule["enum"], ["deepseek-chat", "deepseek-v4-pro"])
+        discovery = _discovery("web")
+        web._validate_schema(_receipt("web", discovery, self.queries))
 
     def _packet_and_input_slot_paths(self) -> dict[str, Path]:
         return {

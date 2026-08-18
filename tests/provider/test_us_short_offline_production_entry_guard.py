@@ -936,9 +936,11 @@ class WebRegroupReplayTests(unittest.TestCase):
             for row in result["semantic_results"]
         ))
 
-    def test_5b_served_model_is_checked_against_requested_model(self):
-        with self.assertRaisesRegex(ValueError, "regroup_model_identity_changed"):
-            self._run_fixture(served_model="deepseek-v4-flash")
+    def test_5b_accepts_observed_served_alias_but_rejects_missing_model(self):
+        result, _saved = self._run_fixture(served_model="deepseek-v4-flash")
+        self.assertEqual(result["served_model"], "deepseek-v4-flash")
+        with self.assertRaisesRegex(ValueError, "regroup_model_identity_missing"):
+            self._run_fixture(served_model=None)
 
     def test_5b_partial_semantic_coverage_does_not_issue_readiness(self):
         positive, _saved = self._run_fixture(include_negative=False)

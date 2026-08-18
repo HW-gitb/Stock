@@ -178,7 +178,10 @@ class DeepSeekClient:
         api_key = _require_credential(api_key, marker="sk-", label="DEEPSEEK_API_KEY")
         try:
             from openai import OpenAI
-            client = OpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL, timeout=timeout)
+            client = OpenAI(
+                api_key=api_key, base_url=DEEPSEEK_BASE_URL, timeout=timeout,
+                max_retries=0,
+            )
         except BaseException as exc:
             if plan_budget.is_control_error(exc):
                 raise
@@ -288,7 +291,10 @@ class GrokXSearchClient:
         api_key = _require_credential(api_key, marker="xai-", label="XAI_API_KEY")
         try:
             from openai import OpenAI
-            self.client = OpenAI(api_key=api_key, base_url=XAI_BASE_URL, timeout=timeout)
+            self.client = OpenAI(
+                api_key=api_key, base_url=XAI_BASE_URL, timeout=timeout,
+                max_retries=0,
+            )
         except BaseException as exc:
             if plan_budget.is_control_error(exc):
                 raise
