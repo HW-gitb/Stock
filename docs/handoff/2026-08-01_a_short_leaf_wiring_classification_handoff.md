@@ -8948,3 +8948,61 @@ focused：`Ran 762 tests in 127.955s — OK`，receipt `receipt:e5cdac8c5bd6f98e
 - **对「我说别修但执行方修了」的处置**：`O-ASHORT-EMPTY-DF-FI-CRASHES-AT-THE-PREEXISTING-Q0-MERGE` 我上一轮明写「不在本刀修」，执行方判断后仍一并修了。按 Optional 可一并修的既有约定接受，但**接受的前提是我重新按新代码审了一遍**：3 行纯 dtype 继承、非空路径逐字不变、有回归用例、C6 植入能把它精确打红。**「我说过别做」不是自动 FAIL 的理由，也不构成免审——判据只能是改动本身。**
 - **账本核验的一个坑（值得记）**：`egs_main.py` 的 mtime（`11:22:14Z`）晚于本次全量记账（`recorded_at 11:14:22Z`），单看 mtime 会误判成「跑完又改了码」。真相是我自己做植入对照时按原字节写回，mtime 被刷新而内容未变。**判据要用内容指纹不要用 mtime**：独立重算 `4bf264c7…003d` 与账本逐字相同，且当前文件 sha256 与植入前基线 `e9d59416…bcaa` 相同，两条合起来才排除「跑后改码」。
 - **本轮未做/未验**：主树暖根真实周候选差异（方案 §七 逐只列 Top15/Top5 进出）仍 `NOT_RUN`；未跑 provider/live；按 rule 8 未起独立对抗 agent；3.1 OCF 阈值/单位与 4.1 亏损门仍未实现。PASS 只覆盖离线正确性与工程闭环，不是真实周产物已核。
+
+## 2026-08-18 — A-short 3.1 统一 OCF 70% 百分数点质量门（509e）
+
+### 终态与边界
+
+- **执行者/工作树**：Codex；唯一工作树绝对路径为 `D:\cnhea\Codex\worktrees\509e\Stock`。执行前 Git 原始状态为 clean；本轮未访问或修改主树/其他工作树，未 stage、commit、push、merge。
+- **固定解释器**：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，`Python 3.13.8`。所有测试、preflight、py_compile、full lane 均显式使用该解释器；没有使用 PATH python/python3、bundled Python 或其他解释器。
+- **原始问题**：`score_l2()` 读取 CNY 单位 `ttm_profit_dedt` 作为规模选择器，并用 `abs(ttm_dt) <= 100` 选择阈值；实际元值使小规模分支失效。同时 Tushare `fina_indicator.ocf_to_profit` / `ttm_ocf_ratio` 是百分数点，却与 `0.7` 比较，原质量门实际只对负 OCF 稳定生效；TTM 非空前置又把 OCF 门绑定到 2.1 的 TTM 产物。
+- **用户裁决 A / Required**：删除小规模 0% 分支；所有公司统一 `ocf_quality_min_pct=70.0` 百分数点门；删除 `ttm_profit_dedt` / `ttm_dt` 读取和 TTM 非空守卫；不新增 `ocf_small_profit_cutoff_cny`；OCF 缺失继续保持现有“不执行 OCF 检查”行为。
+
+### 最小改动、调用链与消费者
+
+- `presets/a_short_screening_threshold_governance_20260602.json`：既有 policy 增加且只增加 `thresholds.ocf_quality_min_pct=70.0`，policy version 更新为 `2.1.0`，未改 `presets/a_short.yaml` 路由。
+- `schemas/a_short_screening_threshold_governance.schema.json`：既有 closed-world schema 的 required/properties 增加该叶，限定为 finite non-bool number `0..100`；未创建 schema 家族。
+- `engine/a_short_runtime_config.py`：只加入 `_SCREENING_KEYS`、`_validate_screening()` 和准确 `2.1.0` policy version；复用既有 missing/extra/bool/finite/range fail-closed，无 Python fallback。
+- `schemas/a_short_m67_effect_contract.json`：新增一个 policy leaf 及两个真实 readers；source-path binding 更新为 `951e2953c750d4394110963d7486492d8ccc873a41195d43fd36f088d2193ee2`；没有新增 effect group、comparison track 或 freeze layer。
+- `A-EGS/egs_main.py::score_l2()`：局部读取 `ttm_ocf_pct`，保留原始百分数点，不写回 DataFrame，直接执行 `threshold_pct = CONF["ocf_quality_min_pct"]` 和现有 ESP-Q append；删除规模分支、TTM 读取及 TTM guard。PE/PEG、`l2_espq_valuation_veto`、ESP-Q 去重和最终分数 `×0.7` 未改。
+- `schemas/analysis_input.schema.json`、`schemas/analysis_input_coverage.md`：只澄清 `ttm_ocf_ratio` 为 Tushare percentage points，`52.505` 表示 `52.505%`；字段路径、nullable 形状、analysis_input schema version 和数值未改。
+- 真实链路为：weekly screening → A-EGS entry → existing financial `ocf_to_profit` fetch/merge → `build_master()` → `score_l2()` → `l2_flags=ESP-Q` → existing triple veto / exclusion reason 或 final-score `×0.7` → analysis_input → weekly/Phase5 advisory consumers。
+- 接口和落盘边界未扩展：无 provider/live 调用、无新 API、无缓存/state/sidecar/receipt/SHA 层、无新 writer 或目录；沿既有 EGS/analysis_input/weekly output。2.1 的 TTM 公式/window/PIT/cache、4.1 loss gate、dt_ratio heuristic、PE/PEG、权重和其他任务均未修改。
+
+### 负向控制、自审与精确证据
+
+- 先补的承重测试在旧代码上产生原始红：`tests.test_a_short_egs_financial_quality` 为 `Ran 5 tests`、`FAILED (9 failures)`；修复后同一模块 `Ran 5 tests`、`OK`。
+- 精确焦点命令（固定 Python 等价执行；项目 launcher 在本环境无法发现固定解释器，未改用其他解释器）：
+
+```powershell
+$env:PYTHONPATH='D:\cnhea\Codex\worktrees\509e\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_egs_financial_quality tests.schema.test_a_short_screening_threshold_governance_schema tests.test_a_short_runtime_configuration tests.test_a_short_effect_contract tests.test_egs_industry_heat tests.phase6.test_egs_analysis_input_contract
+```
+
+- 精确焦点原始终态：`Ran 129 tests in 50.061s`、`OK`、exit 0。
+- 矩阵覆盖：43.8/65.5/90.0 百分数点样本；OCF negative；TTM profit 为负、0、小正、大正、缺失；高 PE + PEG hard veto 及去掉任一条件的正向控制；ESP-Q 单次 `×0.7`、无第二扣罚；policy missing/extra size key/bool/NaN/negative/>100；runtime reader、policy fingerprint、effect-contract leaf/真实 readers、裸常量和缺 reader 反向控制；analysis_input 原始值 schema-through；当前两个 profile selector 的既有测试断言按实际 source call 对齐。
+- preflight 原始终态：`{"status":"pass","python_executable":"C:\\Users\\cnhea\\AppData\\Local\\Programs\\Python\\Python313\\python.exe","python_version":"3.13.8","python_ok":true,"dependencies":{"missing":[],"status":"pass"},"timezone_capability":{"status":"pass","timezone":"Asia/Shanghai"}}`。
+- 自审静态终态：固定 Python `py_compile` exit 0；`git diff --check` exit 0（仅报告 LF→CRLF 和全局 git ignore permission warnings，无 whitespace error）；未发现 score_l2 中 `ttm_dt`/`abs(ttm_dt)`/`ocf_small_profit_cutoff_cny` 残留，保留的其他 `0.7` 属于既有 final-score/dt heuristic 边界。
+- 唯一 full lane 命令：
+
+```powershell
+$env:PYTHONPATH='D:\cnhea\Codex\worktrees\509e\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' 'D:\cnhea\Codex\worktrees\509e\Stock\.tools\full_pack_ledger.py' run a_short 'OCF quality gate uses governed 70 percent threshold without TTM guard' 860 -- discover -s tests -p 'test_a_short*.py'
+```
+
+- full lane 原始终态：`STATIC status=PASS diff_check=PASS py_compile=8`；`discovered_cases=3194`；`COUNT_GATE discovered=3194 ran=3194 equal=True`；`Ran 3194 tests in 132.868s`；`RESULT status=PASS exit=0 tests=3194 elapsed=132.9s deadline=860s mode=parallel`；sidecar=`.tools\\state\\runs\\20260818T102657_a_short_parallel.jsonl`。未重复运行 full lane。
+
+### 文档、当前 Git 状态与交接边界
+
+- 已同步 `docs/system_risk_register.md` 顶部当前 3.1 entry，并把历史 3.1 的“重定小规模常量/保留规模分支” Required/closure wording 标为被用户裁决 A supersede；已 prepend 本条 `docs/SESSION_LOG.md` entry；文档门 `tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard` 为 `Ran 56 tests`、`OK`。未修改 `docs/CURRENT.md`，未把 pending review/commit 写入 durable current state。
+- 当前 Git 状态为本轮 15 个既有文件 modified + 新增 `tests/test_a_short_egs_financial_quality.py`；没有其他未授权产物进入工作树。
+- 未运行 provider/live、真实暖根候选差异、full capsule 或 sub-agent/reviewer。暖根验收写 `NOT_RUN / NOT_VERIFIED`，必须由用户单独授权；未取得 Claude Code 独立 PASS 前不能宣称 closed/merged/ship。
+- **Reviewer/committer 边界**：Codex 仅实现、修复、测试和交接，不提交；下一步交 Claude Code 做独立 review。只有 reviewer PASS 后由 reviewer/committer 在该工作树提交；push/merge 仍由用户控制。
+- **Optional/Options**：本轮无额外 Optional 代码改动；暖根真实差异是独立授权验证，不通过离线 full lane 代替。
+
+## 2026-08-18 追加：Claude Code 独立审查 A-short 3.1（PASS，已提交并合入 master）——过程与方法学
+
+- **先确认「配置叶真的接到线上」再谈行为**：本刀是典型的「加一个治理阈值」形态，最容易的假通过是——preset 加了键、schema 加了键、测试也绿，但生产读的还是裸常量。所以我第一件事不是跑测试，而是读 `A-EGS/egs_main.py:179-191` 看 `CONF` 到底怎么构造：它是 `**_SCREENING_THRESHOLDS` 整包 splat，不是逐键字面量，因此新键自动进 `CONF`、本刀不改 `CONF` 也不会 KeyError。**这个结论只能读出来，不能从 diff 推**——diff 里 `CONF` 一行没动，光看 diff 反而会误判成漏接线。
+- **五枪植入分别打的是不同的腿，不是同一件事重复五遍**：P1 打「治理值是否承重」（70.0→0.7）；P2 打「是否真读 policy 而不是裸常量」；P3 打「上一刀修掉的旧规模分支能不能悄悄回来」；P4 打「loader 的 exact-key 集合是不是真的 fail-closed」（结果是 import 期硬失败、`tests=UNKNOWN`，这正是想要的形态）；P5 打「effect-contract 里那个 `source_paths_sha256` 是被强制的绑定还是可随便填的字段」。**配置类改动的植入对照要按「值 / 读法 / 回归 / 校验 / 绑定」分腿设计**，只打其中一枪会漏掉另外四种假通过。
+- **对「执行方绕过强制 launcher」的处置方式**：handoff 如实写了用裸 `python -m unittest` 而非 `.tools\run_unittest_with_repo_pythonpath.cmd`。我没有据此直接判 Required，而是**先问这条规则实际在防什么**——它替你验那一次 `jsonschema`，缺了它 schema 测试会静默 skip 还报 OK，而本刀正好改了两个 schema。于是我用 launcher 原样重跑同一组六模块，拿到 `129 OK` 与其自报逐字相同，**静默 skip 这个具体风险被实测排除**，才降为 Optional。规则违反的严重性取决于它防的那个后果有没有真的发生，不取决于违反本身。
+- **PASS 不等于「什么都没变」，这次必须在结论里说**：阈值 `0.7 → 70.0` 是 100 倍口径修正，按 register 记录的本周真实 `ttm_ocf_ratio`，新门会让 43.8 / 65.535 / 38.1135 三只**新打 `ESP-Q`**，进而吃 `×0.7`，下次真实周的排名与 Top15/Top5 一定会动。三重否决会不会真踢票，离线证不了（缺该周逐票 PE/PEG）。**审查结论要把「代码对」和「产物会变」分开讲**，否则用户会把 PASS 读成「跑起来跟以前一样」。
+- **顺带记一个文档面的漂移**：按方案改写历史 3.1 条目时，被删的 closure test ④ 里那句「若有票因 `l2_espq_valuation_veto` 新被踢出必须单独提请用户确认、不得静默改变候选池」一并没了，只剩桌面方案里有。桌面文档不是仓库权威，下一个 LLM 未必看得到——已登记 Optional，并在 register 的 resolved 条目正文里把后果补写回来。
+- **本轮未做/未验**：主树暖根真实周候选差异 `NOT_RUN`；未跑 provider/live；按 rule 8 未起独立对抗 agent（改动是既有函数内一处条件收敛 + 一个治理叶接线，无 provider/secret/新授权门）。4.1 亏损股硬排除仍未实现。

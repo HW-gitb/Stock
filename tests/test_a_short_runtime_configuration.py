@@ -11,11 +11,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import pandas as pd
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from engine.a_short_runtime_config import load_runtime_configuration  # noqa: E402
+from engine.a_short_runtime_config import RuntimeConfigError, load_runtime_configuration  # noqa: E402
 from engine import a_short_portfolio_risk as baseline_portfolio  # noqa: E402
 from runners import a_short_phase5_engine as baseline_phase5  # noqa: E402
 from runners import a_short_weekly_pipeline as baseline_weekly  # noqa: E402
@@ -34,6 +36,15 @@ def _load_with_policy(relative_path: str, configuration: dict):
     with patch("engine.a_short_runtime_config.load_runtime_configuration", return_value=configuration):
         spec.loader.exec_module(module)
     return module
+
+
+def _load_egs_with_policy(configuration: dict):
+    old_argv = sys.argv[:]
+    sys.argv = [str(ROOT / "A-EGS" / "egs_main.py"), "--help"]
+    try:
+        return _load_with_policy("A-EGS/egs_main.py", configuration)
+    finally:
+        sys.argv = old_argv
 
 
 def _constant_string_subscript_path(node: ast.AST) -> tuple[str, tuple[str, ...]] | None:
@@ -56,7 +67,6 @@ def _runtime_policy_literal_reads(configuration: dict) -> list[tuple[str, int, t
     of relying on a manually curated key list.  A deleted preset key therefore turns
     red even when a consumer was omitted from an ordinary repair grep.
     """
-    del configuration  # The signature makes the paired validator's input explicit.
     reads: list[tuple[str, int, tuple[str, ...]]] = []
     for directory in ("A-EGS", "engine", "runners"):
         for path in sorted((ROOT / directory).glob("*.py")):
@@ -84,6 +94,10 @@ def _runtime_policy_literal_reads(configuration: dict) -> list[tuple[str, int, t
                 elif root in aliases:
                     full_path = aliases[root] + parts
                 else:
+                    if (root == "CONF" and len(parts) == 1
+                            and parts[0] in (configuration.get("screening") or {})):
+                        reads.append((path.relative_to(ROOT).as_posix(), node.lineno,
+                                      ("screening", parts[0])))
                     continue
                 if full_path:
                     reads.append((path.relative_to(ROOT).as_posix(), node.lineno, full_path))
@@ -105,6 +119,36 @@ def _missing_runtime_policy_literal_reads(configuration: dict) -> list[str]:
 class RuntimeConfigurationBehaviorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.configuration = load_runtime_configuration()
+
+    def _temporary_root(self, mutate=None):
+        temp = tempfile.TemporaryDirectory()
+        root = Path(temp.name)
+        preset_dir = root / "presets"
+        preset_dir.mkdir()
+        screening_path = ROOT / "presets" / "a_short_screening_threshold_governance_20260602.json"
+        m67_path = ROOT / "presets" / "a_short_m67_runtime_policy_20260715.json"
+        screening = json.loads(screening_path.read_text(encoding="utf-8"))
+        m67 = json.loads(m67_path.read_text(encoding="utf-8"))
+        if mutate:
+            mutate(screening, m67)
+        (preset_dir / screening_path.name).write_text(
+            json.dumps(screening, ensure_ascii=False), encoding="utf-8"
+        )
+        (preset_dir / m67_path.name).write_text(
+            json.dumps(m67, ensure_ascii=False), encoding="utf-8"
+        )
+        (preset_dir / "a_short.yaml").write_text(
+            "screening_threshold_governance:\n"
+            "  schema_ref: schemas/a_short_screening_threshold_governance.schema.json\n"
+            f"  artifact_ref: presets/{screening_path.name}\n"
+            "  status: runtime_json_authority\n\n"
+            "m67_runtime_policy:\n"
+            "  schema_ref: schemas/a_short_m67_runtime_policy.schema.json\n"
+            f"  artifact_ref: presets/{m67_path.name}\n"
+            "  status: runtime_json_authority\n",
+            encoding="utf-8",
+        )
+        return temp, root
 
     def test_iv_nobuild_json_change_changes_m67_action(self) -> None:
         baseline = baseline_phase5.build_m67_report(_good_input(), AS_OF, "t")
@@ -150,6 +194,29 @@ class RuntimeConfigurationBehaviorTests(unittest.TestCase):
         result = configured._upcoming_events([("600000.SH", "测试")], AS_OF, provider)
         self.assertEqual(result["events"], [])
 
+    def test_ocf_policy_json_change_changes_score_l2(self) -> None:
+        baseline = _load_egs_with_policy(self.configuration)
+        changed_configuration = copy.deepcopy(self.configuration)
+        changed_configuration["screening"]["ocf_quality_min_pct"] = 40.0
+        changed = _load_egs_with_policy(changed_configuration)
+        row = {
+            "ts_code": "600000.SH", "l2_name": "test", "q0_dt_yoy": 10.0,
+            "q1_dt_yoy": 10.0, "pe": 10.0, "pb": 1.0, "roe": 10.0,
+            "q0_dt_profit_ratio": 100.0, "ttm_ocf_ratio": 50.0,
+            "ttm_profit_dedt": None, "pct_20d_n": 0.0,
+            "reduce_deduct": 0.0, "avg_amount_5d": 1.0, "avg_amount_20d": 1.0,
+        }
+
+        def flags(module):
+            output = module.score_l2(
+                pd.DataFrame([row]), pd.DataFrame(), [], {"test": 5.0},
+                margin_observation=None,
+            )
+            return output.iloc[0]["l2_flags"]
+
+        self.assertIn("ESP-Q", flags(baseline))
+        self.assertNotIn("ESP-Q", flags(changed))
+
     def test_weekly_json_and_markdown_carry_and_validate_the_same_fingerprint(self) -> None:
         weekly = baseline_weekly.build_weekly_report([_normalized()], AS_OF, GEN)
         lineage = weekly["run_lineage"]["runtime_configuration"]
@@ -192,6 +259,25 @@ class RuntimeConfigurationBehaviorTests(unittest.TestCase):
         missing = _missing_runtime_policy_literal_reads(changed)
         self.assertTrue(any(item.endswith(":m67.portfolio_risk.margin_threshold_pct") for item in missing),
                         missing)
+
+        temp, root = self._temporary_root(
+            lambda screening, _m67: screening["thresholds"].pop("ocf_quality_min_pct")
+        )
+        with temp:
+            with self.assertRaises(RuntimeConfigError):
+                load_runtime_configuration(root=root)
+
+    def test_ocf_policy_value_changes_runtime_configuration_fingerprint(self) -> None:
+        temp, root = self._temporary_root(
+            lambda screening, _m67: screening["thresholds"].__setitem__("ocf_quality_min_pct", 75.0)
+        )
+        with temp:
+            changed = load_runtime_configuration(root=root)
+        self.assertEqual(changed["screening"]["ocf_quality_min_pct"], 75.0)
+        self.assertNotEqual(
+            changed["lineage"]["configuration_fingerprint"],
+            self.configuration["lineage"]["configuration_fingerprint"],
+        )
 
     def test_historical_weekly_artifact_uses_legacy_contract_compat_but_new_builder_requires_fact_fetch(self) -> None:
         historic = json.loads((ROOT / "research" / "results" / "a_short" / "20260727" / "weekly_m67.json").read_text(encoding="utf-8"))

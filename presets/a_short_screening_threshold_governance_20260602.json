@@ -1,7 +1,7 @@
 {
   "schema_name": "a_short_screening_runtime_policy",
-  "schema_version": "2.0.0",
-  "policy_id": "a_short_screening_runtime_policy_20260715",
+  "schema_version": "2.1.0",
+  "policy_id": "a_short_screening_runtime_policy_20260818",
   "runtime_authority": true,
   "thresholds": {
     "min_avg_amount": 150000000.0,
@@ -15,6 +15,7 @@
     "momentum_std_threshold": 8.0,
     "overheat_5d": 8.0,
     "overheat_20d": 22.0,
+    "ocf_quality_min_pct": 70.0,
     "esp_raw_cap": 200.0
   }
 }

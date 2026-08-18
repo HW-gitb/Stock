@@ -64,7 +64,7 @@ Phase 1a 目标：先定义 `analysis_input.json` 的稳定输入合同，再让
 - 基础行情：`close`, `pct_20d`, `pct_20d_n`, `pct_5d`, `pct_5d_n`, `pct_60d`, `high_20d`, `low_20d`, `drawdown_20d`
 - 行业：`l1_name`, `l2_name`, `l1_code`, `l2_code`
 - 流动性：`avg_amount_5d`, `avg_amount_20d`, `turnover_rate`
-- 估值/财务：`pe`, `pe_ttm`, `pb`, `roe`, `q0_dt_yoy`, `q1_dt_yoy`, `q0_profit_dedt`, `ttm_profit_dedt`, `ttm_ocf_ratio`, `q0_dt_profit_ratio`
+- 估值/财务：`pe`, `pe_ttm`, `pb`, `roe`, `q0_dt_yoy`, `q1_dt_yoy`, `q0_profit_dedt`, `ttm_profit_dedt`, `ttm_ocf_ratio`（Tushare 百分数点；52.505 表示 52.505%）, `q0_dt_profit_ratio`
 - 筛选评分：`l1_score`, `l2_flags`, `esp_raw`, `esp_score`, `cat_score`, `l4_score`, `egs_base`, `final_score`
 - 风险标记：`reduce_deduct`, `reduce_penalty`, `has_crash_veto`, `chasing_high`, `overheat_flag`, `is_lock`, `is_breakout`
 
@@ -80,7 +80,7 @@ Phase 1a 目标：先定义 `analysis_input.json` 的稳定输入合同，再让
 
 - `candidates[].fundamental.profitability.q0_net_income` 保留为 nullable 兼容字段，但 A-short 当前不取逐票 `income`，因此有意为空；它不是实时决策输入，也不应被当作“全表漏算”的因子。
 - producer 内部的 `ttm_net_income` 同样是兼容性空值，且不发布为 `analysis_input` 叶字段。
-- 这是用途替代，不是数值等价替代：非经常性损益质量检查读取 `q0_dt_profit_ratio`，OCF 质量检查读取 `ttm_profit_dedt` 和 `ttm_ocf_ratio`；`q0_profit_dedt` 是批量派生的伴随输出，不是 `q0_net_income` 的数值替代。
+- 这是用途替代，不是数值等价替代：非经常性损益质量检查读取 `q0_dt_profit_ratio`，OCF 质量检查读取 `ttm_ocf_ratio`（Tushare 百分数点；52.505 表示 52.505%）；`q0_profit_dedt` 是批量派生的伴随输出，不是 `q0_net_income` 的数值替代。
 
 ## EGS 字段到 schema 字段映射
 

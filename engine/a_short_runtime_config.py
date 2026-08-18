@@ -22,7 +22,7 @@ _SCREENING_KEYS = (
     "min_avg_amount", "unlock_ratio", "top_n", "watch_n", "final_n",
     "suspend_lookback", "suspend_daily_min_coverage", "daily_stats_min_rows",
     "momentum_std_threshold", "overheat_5d",
-    "overheat_20d", "esp_raw_cap",
+    "overheat_20d", "ocf_quality_min_pct", "esp_raw_cap",
 )
 _PHASE5_KEYS = (
     "atr_mult", "rr_floor", "single_cap_pct", "iv_halve_pct", "iv_nobuild_pct",
@@ -164,6 +164,7 @@ def _validate_screening(payload: dict) -> dict:
         "momentum_std_threshold": _number(raw["momentum_std_threshold"], "screening.momentum_std_threshold", minimum=0.0),
         "overheat_5d": _number(raw["overheat_5d"], "screening.overheat_5d", minimum=0.0),
         "overheat_20d": _number(raw["overheat_20d"], "screening.overheat_20d", minimum=0.0),
+        "ocf_quality_min_pct": _number(raw["ocf_quality_min_pct"], "screening.ocf_quality_min_pct", minimum=0.0, maximum=100.0),
         "esp_raw_cap": _number(raw["esp_raw_cap"], "screening.esp_raw_cap", minimum=0.0),
     }
     if not out["final_n"] <= out["watch_n"] <= out["top_n"]:
@@ -242,7 +243,7 @@ def load_runtime_configuration(*, root: Path | str | None = None) -> dict:
     m67_path, _ = _route(root_path, "m67_runtime_policy",
                           "schemas/a_short_m67_runtime_policy.schema.json")
     screening_payload, screening_sha = _load_json_policy(
-        screening_path, "a_short_screening_runtime_policy", "2.0.0")
+        screening_path, "a_short_screening_runtime_policy", "2.1.0")
     m67_payload, m67_sha = _load_json_policy(m67_path, "a_short_m67_runtime_policy", "1.0.0")
     policies = [
         {"policy_id": screening_payload["policy_id"], "schema_name": screening_payload["schema_name"],

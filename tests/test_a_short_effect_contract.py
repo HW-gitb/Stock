@@ -398,6 +398,44 @@ class EffectContractStaticTests(unittest.TestCase):
             self.contract, inventory=static_inventory(runtime_policy_overrides={rel: policy}))
         self.assertIsNone(error)
 
+    def test_ocf_policy_leaf_has_loader_and_conf_readers(self):
+        rel = "presets/a_short_screening_threshold_governance_20260602.json"
+        path = "thresholds.ocf_quality_min_pct"
+        inventory = static_inventory()
+        self.assertIn(path, inventory["runtime_policy_paths"][rel])
+        self.assertEqual(
+            inventory["runtime_policy_leaf_readers"][rel][path],
+            [
+                'engine/a_short_runtime_config.py::_validate_screening.raw["ocf_quality_min_pct"]',
+                'A-EGS/egs_main.py::CONF["ocf_quality_min_pct"]',
+            ],
+        )
+        self.assertIsNone(static_contract_error(self.contract, inventory=inventory))
+
+    def test_ocf_policy_missing_contract_leaf_is_rejected(self):
+        rel = "presets/a_short_screening_threshold_governance_20260602.json"
+        path = "thresholds.ocf_quality_min_pct"
+        contract = copy.deepcopy(self.contract)
+        contract["runtime_policy_schema_paths"][
+            "schemas/a_short_screening_threshold_governance.schema.json"
+        ].remove(path)
+        contract["runtime_policy_leaf_readers"][rel].pop(path)
+        self.assertIn(
+            "runtime policy schema changed without effect contract update",
+            static_contract_error(contract, inventory=static_inventory()) or "",
+        )
+
+    def test_ocf_policy_naked_constant_is_rejected_as_unread_leaf(self):
+        rel = "A-EGS/egs_main.py"
+        source = (ROOT / rel).read_text(encoding="utf-8").replace(
+            'threshold_pct = CONF["ocf_quality_min_pct"]',
+            "threshold_pct = 70.0",
+            1,
+        )
+        inventory = static_inventory(source_overrides={rel: source})
+        error = static_contract_error(self.contract, inventory=inventory) or ""
+        self.assertIn("no actual result reader", error)
+
     def test_governed_threshold_literal_cannot_return_to_python(self):
         rel = "engine/a_short_portfolio_risk.py"
         source = (ROOT / rel).read_text(encoding="utf-8") + "\nSAME_SW_L2_THRESHOLD_PCT = 41.0\n"
