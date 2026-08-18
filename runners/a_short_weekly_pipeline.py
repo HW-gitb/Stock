@@ -1962,11 +1962,11 @@ _LIMIT_UP_INDEX_UNAVAILABLE_REASON = "no_reachable_published_index"
 def _build_market_breadth_audit(source: dict | None) -> dict:
     """Display-only market breadth block for the weekly report.
 
-    Deliberately audit-only: item 14 wires the numbers and shows them, item 16
-    decides whether they may move anything.  Publishing them as a decision input
-    now would be the "fake production consumer" that hides a dangling leaf --
-    the counts are registered as `duplicate_or_display_audit` for exactly that
-    reason, and no sizing, veto or price on any M6.7 row reads this block.
+    Deliberately audit-only: EGS derives the production ``market_regime.status``
+    upstream from the same observation before serialization.  This block only
+    shows the breadth/source audit; its counts are registered as
+    ``duplicate_or_display_audit``, and no sizing, veto or price on any M6.7 row
+    reads this block.
     """
     facts = dict((source or {}).get("breadth") or {})
     binding = dict((source or {}).get("market_breadth_source") or {})

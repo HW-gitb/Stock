@@ -203,7 +203,7 @@ class RankUniverseReconciliationTest(unittest.TestCase):
         source = EGS_SCRIPT.read_text(encoding="utf-8")
         self.assertIn(
             "_pre_admission_top15 = select_profile_watch_pool(\n"
-            "        watch_pool_eligible_frame(df_l5_scored), top_n=15\n"
+            "        watch_pool_eligible_frame(df_l5_scored), top_n=CONF[\"watch_n\"]\n"
             "    )",
             source,
         )

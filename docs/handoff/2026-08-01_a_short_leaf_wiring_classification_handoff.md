@@ -9085,3 +9085,139 @@ $env:PYTHONPATH='D:\cnhea\Codex\worktrees\509e\Stock'; & 'C:\Users\cnhea\AppData
 - **口径决策我认可并已核**：`df_full` / `egs_full` / `universe_summary.full_count` / `data_health.metrics.full_count` 统一为**准入前**完整 L5 rank，准入后 active 走 `ranked_count`，排除单列 `rank_exclusion_counts.loss_making_admission`。这与方案 §五.2 原文相反，但保住了 adapter / 持仓风险分类 / crash tracker / backtest 机会集四个既有消费者的语义，理由成立；三处取值我逐个核过一致。
 - **仍开的两条 Optional（不阻断，但别忘）**：`_pre_admission_top15` 仍写死 `top_n=15` 与治理值 `CONF["watch_n"]` 并存；以及**观察池不递补**这个用户可见变化，我 grep 过现有 handoff 与 register，**一处都没写**，目前只活在代码注释里，应在下次周报或交接里明说。
 - **本轮未做/未验**：未跑全量（按 rule 4 引执行方账本 + 独立重算指纹）；按 rule 8 未起 agent（生产侧净 7 加 3 删）；暖根真实周候选差异仍 `NOT_RUN`。
+
+## 2026-08-18 追加：Codex 修复 A-short 5.1 + 4.1 Optional（509e；repaired / `OPEN-NOT-VERIFIED`）
+
+本节只记录当前 509e 工作树按 Desktop `3a_testrun0816.md` §5.1 的执行与 4.1 Optional 最小修复。复审方案判断正确，未承接其他工作树、其他线程或历史 handoff 的旧问题与结论。
+
+### 问题、根因与最小改动
+
+- §5.1 的 pure `compute_full_market_breadth()` 已存在，但生产 `market_environment()` 没有把真实 `daily`、suspend、`stk_limit` 接到它；exporter 仍把 `market_regime` 固定成 `unknown`，因此 breadth leaf 不能驱动既有 V14.2 regime/Phase5 消费者。
+- 只在 `A-EGS/egs_main.py` 增加既有链路所需的 `stk_limit` 11 settled-session 获取/校验/缓存、当前/前一窗口观察、V14.2 regime 推导、`market_environment` 接线与 exporter 的窄归一化；复用既有 `safe_api`、`load_cache/save_cache`、`compute_full_market_breadth`，没有新增 provider、schema、缓存层、runner 或防御框架。
+- 4.1 Optional `_pre_admission_top15` 的字面 `top_n=15` 改为 `top_n=CONF["watch_n"]`，并同步既有源码守卫；不改列名、不复制 selector、不改变 selector 集合语义。
+- 门前 selector 后按准入 code 过滤的既有修法保留：被门排除的席位不递补，观察池/top50 可以短；这不是本轮新增行为，现已在本交接中显式记录，未为递补而重跑非单调 selector。
+
+### 调用链、消费者、schema 与 source-binding
+
+`run_egs()` → `market_environment(trade_dates, stats_df, all_daily, df_stocks, suspended_set, iv_projection)` → `get_full_market_stk_limit_window()` → 当前/前一窗口的 `compute_full_market_breadth()` → `derive_v14_2_market_regime()` → `export_analysis_input()` → `runners/a_short_weekly_pipeline.py::resolve_market_regime()` → 既有 Phase5。weekly breadth audit 仍只显示 observation/source；effect contract 明确只有 `market_regime.status` 是 live consumer，进入既有 Phase5，confidence、policy、trigger、breadth/source 是 audit echo。
+
+未修改 `schemas/analysis_input.schema.json` 或任何 schema 版本；`decision_as_of`/settled trade-date 绑定、原始未复权 price clock、既有 official output transaction、weekly fallback 与 Phase5 policy map 均保留。没有引入 V14.3 classifier、comparison track、第二个 regime source 或由 weekly/candidates 反推 regime。
+
+### 缓存、写盘边界与 fail-closed
+
+- 请求窗口固定为当前 `trade_dates[:10]` 与前一窗口 `trade_dates[1:11]`，每个窗口使用对应 settled `as_of`；`stk_limit` 每个日期最多一个 `safe_api` 请求，缓存 key 使用既有 cache root 的 11-date/version 形状。
+- cache/response 必须有精确日期集合、非重复 `(trade_date, ts_code)`、非空代码、有限正值 `up_limit/down_limit`；不完整或无效结果不升级 breadth，不写完整缓存。测试只在当前工作树测试临时目录/既有 cache seam 内运行，没有真实 provider/live 写盘。
+- 当前日缺失只有在所有缺失 code 都能由既有 validated `suspended_set` 解释时才可 partial usable；未知缺口、历史缺口、日期不足、provider/cache/contract 错误、invalid IV、policy mismatch 均返回 `unknown`/unavailable，保留 weekly fallback。
+- `defense` 只由 `limit_down > 100` 或独立 verified IV percentile `> 90` 触发；`contraction` 只由前窗口 height `>=5` 且当前 `<=3` 触发；边界不触发；不产生 `shock/attack`，`limit_up_index_defense_leg` 固定为 `unknown` trigger。exporter 只发 schema 允许的归一化 regime shape，缺失/畸形/策略不一致不越过 unknown。
+
+### 4.1 Optional 状态与 A-F 自审
+
+- `O-ASHORT-41-TOP15-COLUMN-PINS-A-LITERAL-15-WHILE-THE-PUBLISHED-POOL-FOLLOWS-WATCH-N`：resolved；生产与守卫均使用 `CONF["watch_n"]`。
+- `O-ASHORT-41-WATCH-POOL-NOW-SHRINKS-INSTEAD-OF-BACKFILLING`：非阻断、行为保持；已明确告知“门排除 2 只时观察池可为 13 而非 15，top50 同理”，没有暗中递补。
+- A-F 已检查：A producer/consumer；B ripple（`market_environment`、exporter、weekly、Phase5、effect contract）；C reverse-failure（invalid cache、unexplained absent、bad IV、policy mismatch、threshold boundaries、no shock/attack、unknown trigger）；D schema/source-binding；E cache/official write boundary；F exact tests/raw terminal state。未改 `docs/CURRENT.md`。
+
+### 精确命令与原始终态
+
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，版本 `Python 3.13.8`；未使用 PATH、`python`、`python3`、bundled Python 或其他解释器。
+- focused：`.tools\run_unittest_with_repo_pythonpath.cmd tests.test_a_short_market_breadth tests.test_a_short_egs_market_environment tests.phase6.test_egs_analysis_input_contract tests.test_a_short_weekly_pipeline tests.test_a_short_phase5_engine tests.test_a_short_effect_contract` → 最终 `Ran 849 tests in 145.138s`、`OK`、`exit=0`、`receipt:ca73d9e38dc70268f16a06d3`。首次失败只由 effect-contract pending baseline 未同步造成，按规则收缩已分类 baseline 后以同一 exact focused 取得最终 PASS；未放宽断言。
+- preflight：固定 Python 3.13.8、依赖缺失 `[]`、timezone PASS；`git diff --check` PASS（仅 line-ending warning）。文档门最终：`tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard` → `Ran 56 tests in 1.220s`、`OK`、`receipt:fdb332ea4388fcd0dfa4dc5b`。
+- 唯一 full lane：`discovered=3210 ran=3210 equal=True`、`Ran 3210 tests in 148.168s`、`RESULT status=PASS exit=0 tests=3210 elapsed=148.2s deadline=860s mode=parallel`、fingerprint `e6b44f6252d8`。full lane 后未再改代码，未启动第二次 lane。
+- 未运行 provider/live、真实 weekly/warm-root、测试胶囊或 reviewer sub-agent；未 stage/commit/push/merge。当前结论仍 `repaired / OPEN-NOT-VERIFIED`，full/focused PASS 不等于独立 review、commit、merge 或 ship。
+
+### 交接
+
+Codex 是本轮 executor/fixer；Claude Code 是独立 reviewer/committer。请 reviewer 只按 §5.1 复核 producer→真 writer/exporter→weekly/Phase5 的接缝、11-date cache/source binding、fail-closed 与 Optional 状态；PASS 后由 reviewer/committer 按项目 pre-commit 规则提交。Codex 不 stage/commit，用户控制 push/merge。
+
+## 2026-08-18 追加：Claude Code 独立审查 A-short 5.1 宽度接线（FAIL，未提交）——过程与方法学
+
+- **单点看全是对的，两点之间的关系是错的**：取数校验、缓存、PIT、fail-closed、阈值边界、作用域守卫——我逐项反向控制过，**全部 OK**（阈值 100/101、90.0/90.01、4-4/5-3/5-4 逐个对；篡改 index 腿三种全被打回 unknown；unavailable 与 unexplained_daily_absent 均归 unknown）。两条 P1 都不在任何单个函数里，而在**两个东西的关系**上：防御腿与收缩腿的优先级、以及当日窗口与前一日窗口的可用性判据。**这类缺陷靠「逐个函数验」永远验不出来。**
+- **第一条的形状：短路顺序 = 隐式优先级**。`status = defense if A or B else contraction if C else unknown` 读起来像一个普通三分支，实际上钉死了「A/B 命中就永远不看 C」。而 C（收缩期）在下游是**更严的**那个（`phase5:773-774` 市场级禁新建仓），A/B（防御期）不是。于是短路顺序把「更宽松的赢」写进了代码。**审这类表达式要问的不是「分支覆盖全不全」，而是「分支之间谁压过谁，跟下游的严格程度顺序一致吗」。**
+- **第二条的形状：相邻两段各写各的判据**。当日用 `status in {"complete","partial"}`，前一日用 `status == "complete"`——两行相隔二十行。我第一遍读到这处不对称时**注意到了但没追**（当时判断是「前窗要求更严，保守，无妨」）；agent 追下去发现 `market_breadth.py:278-279` 只要有一只停牌股就把 coverage 打成非 complete，而真实 A 股每天都有停牌，于是更严的那条腿**在生产里永远点不着**。**教训：看到相邻两段用了不同判据，不能用「更严的那个更保守」搪塞过去——要去问「更严的那个在真实数据上还点得着吗」。**
+- **agent 这次的增量正是我省掉的那一步**：我用合成 coverage 直接喂 `derive_v14_2_market_regime`（把 `_previous_height_usable` 手动置 True），所以我的探针里收缩期能点着；agent 走的是真 `_build_full_market_breadth_observation`，把停牌股的影响一路带进来才看见它点不着。**手工构造中间态会把上游的真实约束抹掉——凡是要判「这条路在生产里通不通」，必须从真 producer 起跑。**
+- **agent 还纠正了我一个先入之见**：我按 register「第 3 步会解除全场 observe_only」去找闸门，agent 实测 `phase5:1920` 把 `observe_only` 记为「观察项(不改动作)」、动作阶梯根本不读它。真正会变的是**仓位大小**（防御期比 unknown 回退多买 24%）。**register 的执行顺序注写得比实际宽，已登记 Optional 要求改措辞**；我自己也差点照着那句话去定位问题。
+- **未起第二个 agent**：一个已覆盖到取数/缓存/PIT/契约/幂等/穷举，再起会重叠。
+- **本轮未做/未验**：未跑全量（FAIL 已坐实，分级门③）；暖根真实周仍 `NOT_RUN`；agent 全部用合成 payload，真实 Tushare 分页大小、真实停牌数量、ST/新股/一字板行未验；`engine/a_short_market_breadth.py` 本体（`LIMIT_TOL` 标定、BSE 前缀、`stock_basic` 非 PIT）未重审，属既有面。
+
+## 2026-08-18 追加：Codex 修复 A-short 5.1 复审 Required + Optional（509e；repaired / `OPEN-NOT-VERIFIED`）
+
+本节只记录当前 509e 工作树对上一节 A-short 5.1 复审 FAIL 的最小修复；按用户给定方案执行，不承接其他工作树、其他线程或历史 handoff 的旧问题和结论。Codex 是 executor/fixer，Claude Code 是独立 reviewer/committer；Codex 不 stage/commit/push/merge。
+
+### 问题、根因与最小改动
+
+- Required 1 的根因是 `derive_v14_2_market_regime()` 的短路顺序把防御腿放在收缩腿前面；只把既有三分支顺序改为 `contraction` → `defense` → `unknown`，不改阈值、policy、Phase5 或 schema。
+- Required 2 的根因是当前窗口与前一窗口各自维护高度可用性判据，前者允许 `partial`，后者只认 `complete`。只增加本地 `_breadth_height_usable(observation)`，并让 builder 两窗口和 derive 缺 flag fallback 复用它；当前日仍叠加既有 `current_day_usable`，不清理既有私有 coverage flags。
+- Optional 的根因是 `_normalize_market_regime()` 只校验 shape/policy，不验证 known status 与 trigger pass 证据关系。只增加 defense/contraction pass-leg 关系检查；不解析 trigger value、不新增 schema、不把 trigger 变成第二个正向决策源。
+
+### 调用链、消费者、schema/source-binding
+
+`run_egs()` → `market_environment()` → `_build_full_market_breadth_observation()` → 既有 `compute_full_market_breadth()` 当前/前一窗口 → `_breadth_height_usable()` → `derive_v14_2_market_regime()`（EGS 唯一 production regime selector）→ `export_analysis_input()` / `_normalize_market_regime()` → `runners/a_short_weekly_pipeline.py::resolve_market_regime()` → 既有 `REGIME_MAP` 只按 `market_regime.status` 映射 → 既有 Phase5。weekly 不自行重判优先级；V14.3 comparison-only classifier/字段未改、未接入 production selector。
+
+未修改 `engine/a_short_market_breadth.py`、Phase5 生产代码和参数、`schemas/analysis_input.schema.json`、effect contract、provider/cache/stk_limit 代码、source-binding、decision-date/PIT、official writer/transaction 或 `docs/CURRENT.md`。
+
+### fail-closed、缓存/写盘边界与负向控制
+
+- `_breadth_height_usable()` 仅接受 coverage=`complete`/`partial`、非负整数高度，并拒绝 `incomplete_history_window` 与 `contender_bar_missing_in_window`；当前窗口仍要求既有 `current_day_usable`，未知缺口和无效观测继续归 unknown。
+- 真 `_build_full_market_breadth_observation()` 回归覆盖两条接缝：非 contender 停牌导致 partial 但高度完整时 current/previous height usable，contraction 可达；contender bar 缺失时两窗口高度不可用，contraction 不可达。没有手写 `_previous_height_usable=True`。
+- `_normalize_market_regime()` 的两个负控分别把 defense/contraction 的相应 pass trigger 改为非 pass，exporter 输出均回 unknown；双腿同时 pass 进入既有 weekly/Phase5 产生“收缩期禁新建仓” hard veto。没有新增 cache/raw/state root、provider call、writer 或迁移。
+
+### 测试与原始终态
+
+- 先补测试后验证旧代码必红：固定 Python 运行三个既有模块 `Ran 619 tests`、`FAILED (failures=4)`；失败精确为两条双腿优先级断言和两条 exporter known-status 负控，真实 builder 与 Phase5 终点用例未产生伪红。
+- 生产修复后，原六模块 focused 精确命令为：
+
+```text
+call .tools\run_unittest_with_repo_pythonpath.cmd --timeout-seconds 1300 tests.test_a_short_market_breadth tests.test_a_short_egs_market_environment tests.phase6.test_egs_analysis_input_contract tests.test_a_short_weekly_pipeline tests.test_a_short_phase5_engine tests.test_a_short_effect_contract
+```
+
+原始终态：固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` / Python `3.13.8`，`Ran 857 tests in 107.672s`、`OK`、`exit=0`、`deadline=1300s`，receipt=`receipt:96d5f39771c942a55a987ec3`。
+
+- preflight 原始终态：固定 Python `--version`=`Python 3.13.8`；`runners\a_short_preflight.py --json` 返回 `status=pass`、`python_ok=true`、`dependencies.missing=[]`、`timezone_capability.status=pass`；固定 Python `-m py_compile A-EGS\egs_main.py` exit 0；`git diff --check` exit 0，仅有既有 LF→CRLF warnings。
+- 文档门原始终态：`.tools\\verify_doc_process.cmd` 使用固定 Python 返回 `Ran 68 tests`、`OK`、`exit=0`、`DOC_ONLY - acceptance receipt left untouched`。
+- 唯一 A-short full lane 原始终态：固定 Python `-X utf8 .tools\\full_pack_ledger.py run a_short a_short_5_1_contraction_priority_shared_height_closure 860 -- discover -s tests -p test_a_short*.py`；`STATIC status=PASS diff_check=PASS py_compile=7`；`discovered=3218 ran=3218 equal=True`；`Ran 3218 tests in 123.849s`；`RESULT status=PASS exit=0 tests=3218 elapsed=123.8s deadline=860s mode=parallel`；fingerprint=`6ab226bc5e80`；sidecar=`.tools\\state\\runs\\20260818T190100_a_short_parallel.jsonl`。full lane 后未再改行为代码，也未启动第二次 lane。
+- 未运行 provider/live、真实 weekly/warm-root、测试胶囊或 reviewer sub-agent；未修改主树/其他工作树。
+
+### A-F 自审与交接
+
+- A producer/consumer：确认 EGS 只有 `derive_v14_2_market_regime()` 一个 production selector，exporter 是唯一跨产物归一化边界，weekly 只映射 status，Phase5 仍消费既有 action；B ripple：前后窗口、partial/halt、contender 缺 bar、双腿优先级和 known-status fail-closed；C reverse-failure：threshold boundary、unknown/unavailable、缺 pass trigger；D schema/source-binding；E cache/write/provider/live；F 精确测试、原始终态、reviewer/committer 边界。
+- 交接：`Claude Code：独立审查本轮 A-short 5.1 两条 Required + Optional，重点复核 shared height usability、contraction 优先级、exporter pass-leg fail-closed、weekly/Phase5 真消费者和 V14.3 comparison-only 隔离；PASS 后按项目规则提交，Codex 不提交。`
+
+## 2026-08-18 追加：Claude Code 复审 A-short 5.1（FAIL，未提交）——过程与方法学
+
+- **两条代码腿都改对了，我逐格重算过**：优先级五格（两腿同中→contraction、单腿各自、皆无）全对；可用性三格（两窗 partial／各一 partial）都能点着 contraction，而 `incomplete_history_window`、`contender_bar_missing_in_window` 仍归 unknown——**放松的只是「有停牌股」那一格，真坏窗口没被一起放行**，这正是我上一轮担心的过度放松，实测没有发生。
+- **本轮我改了探针的喂法，值得沿用**：上一轮我给 observation 手工塞了 `_current_height_usable` / `_previous_height_usable` 这些私有提示，等于绕过了被审的那段推导，所以我自己没能看见「前窗被停牌击穿」。这轮我**只喂原始 coverage**，逼 `derive_v14_2_market_regime` 走生产的再推导路径。**凡是要验「某条腿在生产里通不通」，探针就不能替被审代码把中间态填好。**
+- **阻断项不是代码，是没人守**：三枪植入里第一枪（优先级打回）精确红两条新用例，后两枪（前窗改回严格 `complete`；共用门 reason 检查改 `and True`）跑三个模块 52 用例**一条都没红**。也就是说本轮修好的第二条腿，任何人都能无声地改回去。我上一轮写的 closure test 第①条（「当天有停牌股但两窗高度都算得出 → contraction 可点着」）没有落地。
+- **判 Required 而不是 Optional 的理由**：按本项目口径，Required 未附承重 closure test 就不算闭合；而这刀本轮恰恰栽在这个 coverage-status 不对称上——同一个洞刚补上就无人看守，是最容易复发的形态。补一条测试的成本远低于再走一轮。
+- **给下一轮的具体做法**：新增/修改一条判据后，**自己先打一枪**把它改回旧形态跑一次目标模块；没红就说明这条修复没被守住，别等审查方来打。本轮第一枪（优先级）就是正面例子——它红了，说明那两条新用例是真承重的。
+- **本轮未做/未验**：未跑全量（FAIL 已坐实，分级门③）；按 rule 8 未再起对抗 agent（上一轮已打穿这一面，本轮生产侧净 +24 行）；上轮两条 Optional 的处置以执行方记录为准，本轮未复验；暖根真实周仍 `NOT_RUN`。
+
+## 2026-08-18 追加：Codex 修复 A-short 5.1 closure-test gap（509e；repaired / `OPEN-NOT-VERIFIED`）
+
+本节只承接最新 Claude Code 复审指出的 Required closure-test gap；本轮不改生产代码，不承接其他工作树、其他线程或历史 handoff 的旧问题和结论。Codex 是 executor/fixer，Claude Code 是 reviewer/committer。
+
+### 最小改动
+
+- 只改既有 `tests/test_a_short_egs_market_environment.py`：增加真实 builder 场景“当前窗 complete、前窗 partial、前窗高度完整”→ `contraction`；将 non-contender 缺失日期参数化以保持原有当前窗 partial 场景不变。
+- 增加 `_breadth_height_usable()` 的两个窄负控，在有效高度存在时分别拒绝 `incomplete_history_window` 与 `contender_bar_missing_in_window`。不改 `A-EGS/egs_main.py`、engine breadth、schema、Phase5、provider/cache、V14.3 或 `docs/CURRENT.md`。
+
+### 承重植入与精确验证
+
+- 固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，目标三模块：`tests.test_a_short_egs_market_environment tests.phase6.test_egs_analysis_input_contract tests.phase6.test_egs_rank_universe_reconciliation`。
+- 修复态：`Ran 54 tests in 6.124s`、`OK`、`exit=0`、`deadline=1300s`、receipt=`receipt:34de9741fd1bb99558c81a31`。
+- 第一枪：临时把前窗 `_previous_height_usable` 恢复为旧 `status == "complete"`，得到 `54 tests / 1 failure`，唯一失败为 previous-partial contraction closure；随后恢复。
+- 第二枪：临时把 shared helper 两个 reason 检查改为 `and True`，得到 `54 tests / 2 failures`，两个 reason 负控均转红；随后恢复。
+- preflight 原始终态：固定 Python `3.13.8`、`python_ok=true`、依赖缺失 `[]`、timezone `Asia/Shanghai` PASS；固定 Python `-m py_compile A-EGS\egs_main.py` exit 0；`git diff --check` exit 0（仅 LF→CRLF warnings）；文档门 `Ran 68 tests`、`OK`、`exit=0`。
+- 本轮未重复上一轮 full lane：这是测试守卫补强，不新增行为代码；未运行 provider/live、warm-root、测试胶囊或 reviewer sub-agent，未 stage/commit/push/merge。
+
+### 自审与交接
+
+- A-F：真实 producer/前窗 partial consumer；shared helper reason/source boundary；旧判据与 reason 放松反向控制；schema/Phase5/provider/cache/write boundary 未变；`docs/CURRENT.md` 未改。
+- 交接：`Claude Code：独立复审本轮 closure test 是否真正守住 previous partial height 与两个 history reason；PASS 后按项目规则提交，Codex 不提交。`
+
+## 2026-08-18 追加：Claude Code 独立审查 A-short 5.1 收口（PASS，已提交并合入 master）——过程与方法学
+
+- **验「补锁轮」的最短路径就三步，本轮照此走完**：①核生产代码**逐字节**未动（sha256 与上轮基线相同）→ 上轮 `733 OK` 超集可继承，不必重跑；②跑改动的那个模块（`54 OK`）；③**把上一轮活下来的那两枪原样再打一遍**。第三步才是这轮唯一有信息量的动作——P2/P3 上轮无人红，这轮分别精确红到 `test_real_breadth_builder_allows_previous_partial_height_for_contraction` 与 `test_breadth_height_usable_rejects_history_reasons_even_with_height`。**同一个脚本、同一组锚点、唯一变量是新增测试**，这是「锁装上了」最干净的证明形式。
+- **新测试的写法值得作为样板**：三条 `test_real_breadth_builder_*` 直接调 `_build_full_market_breadth_observation(... suspended_set=... )`，而不是手工塞 `_previous_height_usable` 这类私有提示。**上一轮我自己的探针正是因为塞了提示而漏掉这个洞**——探针/测试一旦替被审代码把中间态填好，被审的那段推导就没被执行到。
+- **执行方先自打枪，这条应该保持**：其 Verify 记了「旧前窗判据植入 54 tests / 1 failure；reason 检查植入 54 tests / 2 failures」。我上一轮要求「提交前自己打一枪确认会红」，这轮做到了，且与我的独立植入结论一致。**修完一条判据就自己打回旧形态跑一次**，成本极低，能挡掉「加了测试但没守住」这一整类。
+- **full-lane 的处置与理由**：执行方如实写 `full-lane=NOT_RUN`；我独立重算当前指纹 `3ae6dedb…` 与账本 `6ab226bc…`（上一轮 3218 OK）不符，因此**没有把它引为绿**。判定不 escalate 的依据是 rule 3 触发面本轮一个都没碰（生产代码零改动）+ rule 8；rule 6 的 escalation 条件是「证据不可得或不一致」，而这里是**被明确声明为未跑**，性质不同。**声明未跑 ≠ 谎报绿，两者处置不一样，这条区分值得记住。**
+- **如实留下的残余**：新用例在并行全量下的隔离性未验。下次因别的原因跑 a_short 全量时若这几条偶发红，先查临时目录/state 残留再怀疑逻辑。
+- **本轮未做**：未跑全量（理由如上）；按 rule 8 未起对抗 agent（tests-only）；暖根真实周仍 `NOT_RUN`。

@@ -3492,6 +3492,21 @@ class MainWiringTests(unittest.TestCase):
             loaded = json.loads(out.read_text(encoding="utf-8"))
         self.assertEqual(loaded["reports"][0]["m67"]["精简结论区"]["当前环境"], "进攻期")
 
+    def test_contraction_regime_reaches_phase5_flat_candidate_no_new_entry(self):
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH")])
+            ai["market_context"]["market_regime"]["status"] = "contraction"
+            self._write_inputs(td, ai=ai)
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: _series())
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        report = loaded["reports"][0]
+        self.assertIn("收缩期", report["m67"]["精简结论区"]["当前环境"])
+        self.assertIn("收缩期禁新建仓", report["m67"]["精简结论区"]["操作建议"])
+        self.assertEqual(report["machine"]["risk_families"]["market_regime"]["action"], "hard_veto")
+
     def test_unknown_regime_fallback_cannot_be_overridden_by_account(self):
         with tempfile.TemporaryDirectory() as td:
             ai = _analysis_input(candidates=[_ai_candidate("600000.SH")])

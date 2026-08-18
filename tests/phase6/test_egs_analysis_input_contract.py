@@ -362,6 +362,104 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             52.505,
         )
 
+    def test_export_uses_supplied_regime_and_rejects_policy_mismatch_fail_closed(self) -> None:
+        breadth = {
+            "full_market_limit_up_count": 1,
+            "full_market_limit_down_count": 101,
+            "full_market_consecutive_limit_up_height": 2,
+            "coverage": {
+                "status": "complete",
+                "requested_trade_dates": ["20260522"],
+                "observed_trade_dates": ["20260522"],
+                "eligible_stock_count": 1,
+                "usable_stock_count": 1,
+            },
+        }
+        regime = self.egs_main.derive_v14_2_market_regime(
+            breadth,
+            {"coverage": {"status": "unavailable"}},
+            {"iv_feed_status": "not_requested"},
+        )
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            _analysis_path, _snapshot_path, _candidates_path, payload = self._export(
+                tmp,
+                latest_td="20260522",
+                market_context_facts={
+                    "full_market_breadth": breadth,
+                    "market_regime": regime,
+                },
+            )
+        self.assertEqual(payload["market_context"]["market_regime"]["status"], "defense")
+        self.assertEqual(payload["market_context"]["market_regime"]["position_cap_total_pct"], 50.0)
+        validate_analysis_input_contract(payload)
+
+        bad_regime = dict(regime)
+        bad_regime["min_reward_risk"] = 999.0
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            _analysis_path, _snapshot_path, _candidates_path, payload = self._export(
+                tmp,
+                latest_td="20260522",
+                market_context_facts={"market_regime": bad_regime},
+            )
+        self.assertEqual(payload["market_context"]["market_regime"]["status"], "unknown")
+        self.assertIsNone(payload["market_context"]["market_regime"]["min_reward_risk"])
+
+    def test_export_rejects_known_defense_without_a_defense_pass_trigger(self) -> None:
+        regime = self.egs_main.derive_v14_2_market_regime(
+            {
+                "full_market_limit_down_count": 101,
+                "full_market_consecutive_limit_up_height": 4,
+                "coverage": {"status": "complete"},
+            },
+            {
+                "full_market_limit_down_count": 0,
+                "full_market_consecutive_limit_up_height": 4,
+                "coverage": {"status": "complete"},
+            },
+            {"iv_feed_status": "not_requested"},
+        )
+        regime["triggers"] = [
+            {**trigger, "status": "fail"}
+            if trigger["id"] in {
+                "limit_down_defense_leg", "iv_percentile_defense_leg"
+            }
+            else trigger
+            for trigger in regime["triggers"]
+        ]
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            _analysis_path, _snapshot_path, _candidates_path, payload = self._export(
+                tmp, latest_td="20260522",
+                market_context_facts={"market_regime": regime},
+            )
+        self.assertEqual(payload["market_context"]["market_regime"]["status"], "unknown")
+
+    def test_export_rejects_known_contraction_without_a_contraction_pass_trigger(self) -> None:
+        regime = self.egs_main.derive_v14_2_market_regime(
+            {
+                "full_market_limit_down_count": 0,
+                "full_market_consecutive_limit_up_height": 3,
+                "coverage": {"status": "complete"},
+            },
+            {
+                "full_market_limit_down_count": 0,
+                "full_market_consecutive_limit_up_height": 5,
+                "coverage": {"status": "complete"},
+            },
+            {"iv_feed_status": "not_requested"},
+        )
+        regime["triggers"] = [
+            {**trigger, "status": "fail"}
+            if trigger["id"] == "limit_up_height_contraction_leg"
+            else trigger
+            for trigger in regime["triggers"]
+        ]
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            _analysis_path, _snapshot_path, _candidates_path, payload = self._export(
+                tmp, latest_td="20260522",
+                market_context_facts={"market_regime": regime},
+            )
+        self.assertEqual(payload["market_context"]["market_regime"]["status"], "unknown")
+
     def _export(
         self,
         output_root: str,
@@ -371,6 +469,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
         unlock_set=None,
         red_dict=None,
         row_overrides=None,
+        market_context_facts=None,
     ):
         row = {
             "ts_code": "600000.SH",
@@ -407,6 +506,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             output_root=output_root,
             rank_reconciliation=rank_reconciliation,
             l0_excluded_counts=l0_excluded_counts,
+            market_context_facts=market_context_facts,
             trade_calendar_context={
                 "decision_as_of": latest_td,
                 "next_trade_date": None,
