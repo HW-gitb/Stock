@@ -3603,3 +3603,19 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **验证**：焦点超集 4 模块 `PASS tests=31 19.2s receipt:3109c04d01359f4bc88c4856`。
 - **下一红已亲跑坐实并钉了归属**：`schema.test_us_short_lifecycle_calibration_governance_schema` `FAIL exit=1 tests=24`——设计文档 §13.1 的标题被 `ef3dd734` 改成了带 `trigger_raw + k×ATR` 的措辞，而逐字节镜像它的 `presets/us_short_lifecycle_calibration_governance_20260620.json` 停在很早的 `d7d5b581`。**一对被字节对照的东西只改了一边。** 已开 `R-USSHORT-DESIGN-13-1-TITLE-DRIFTED-FROM-ITS-FROZEN-GOVERNANCE-PRESET`(P2)：同步 preset，别改设计、别放宽那条断言。
 - **一个流程观察（值得下次省好几轮）**：`ef3dd734` 落地时带着 red lane，至今连累四处（source_capture 合成 K 线 / corporate_action_fetch / order_snapshot 的 BETA / 本条设计-preset 对照）。**每轮只冒一个，是因为 lane pack 用 fail-fast，第一红一出就停派发。** 下次建议执行方先跑一次**不带 fail-fast** 的 lane 枚举，把剩余红点一次列全再批量修。
+
+## 2026-08-18 追加：Claude 修复 §13.1 标题漂移 —— 「一处」其实是三角
+
+### 别照探针修，照 Required 文本枚举论域
+
+探针只演示了「preset 的 #20 与设计不符」。我按 fix-gate §1 先**机械枚举整个论域**：设计 §13.1 的 39 条 vs preset 的 39 条逐条比对 → **恰 1 条不符**（其余 38 条本就一致，不动）。接着做**全仓 ripple grep**（`grep -rn "突破 tp ATR 倍数 k"`）——这一步才露出真正的类：同一个标题**还被第三处钉着**，`schemas/us_short_lifecycle_calibration_governance.schema.json:116` 的 `const`。
+
+**所以类是 {设计（权威）↔ preset（镜像）↔ schema const（自足校验器）} 三角，不是「一处」。** 只同步 preset 会立刻在 `test_preset_validates` / `test_schema_const_equals_preset` 上炸——正是 `pre_codex_self_review_checklist` A 关 point 5「const-pin 必须落在 schema 本身、不止测试」说的那一格。**下次遇到「preset 与文档不一致」，先 grep 那个字面量：本仓的治理身份通常同时钉在 preset 和 schema 两处。**
+
+### 承重反向控制打在第三条腿上
+
+只把 schema `const` 那行改回旧标题（preset 保持新值）→ `test_preset_validates` ERROR + `test_schema_const_equals_preset` FAIL，还原后 `RESTORED_SHA_MATCH=True`。**枪要打在「我新发现的那条腿」上**，否则等于没证明它需要改。
+
+### 边界
+
+两文件各 `1 增 1 删`、CRLF 未翻、无代码无行为变化。这条只关掉「两边字面漂移」，**不证明 §13.1 #20 的措辞本身对**——那句 `trigger_raw + k×ATR` 是 `ef3dd734` 写进设计的，本轮按「设计是权威」照搬。设计文档一个字未动，byte-faithful 断言也一个字未动。

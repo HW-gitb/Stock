@@ -82,7 +82,7 @@
     },
     {
       "number": 20,
-      "title": "突破 tp ATR 倍数 k"
+      "title": "突破 tp ATR 倍数 k（`trigger_raw + k×ATR`）"
     },
     {
       "number": 21,
