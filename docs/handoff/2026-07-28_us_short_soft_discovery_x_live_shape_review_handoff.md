@@ -3566,3 +3566,25 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **我自己的定级更正**：这条当初定 P1 的依据（选股面影响）站不住，实际影响面只到过热 producer 的输入。定级错了就更正，不硬撑。
 - **lane 仍不绿，红换了第三个主人**：我亲跑 `tests.provider.test_us_short_forward_policy_corporate_action_fetch` 单模块 `FAIL exit=1 tests=10 11.1s`，两条点名失败（`'data_degraded_whole_week_no_count' != 'ready_for_outcome'`、`False is not true`）。该模块自身文件最近改动是更早的 `e2ead1dd`，所以红大概率来自它**消费的引擎**在近期某次合并里变了行为——归属我没继续钉（超出本刀），已开 `R-USSHORT-FORWARD-POLICY-CORPORATE-ACTION-FETCH-IS-RED-ON-MASTER`(P1) 并写明「别直接改用例迁就当前行为」。
 - **验证**：焦点超集 4 模块 `PASS tests=58 8.4s receipt:094b7c2c1d22ca8a164ae2ec`；`full_pack_ledger check us_short` 对本代码态无缓存绿，合并态全量留给下一条 P1 修完一起记。
+
+## 2026-08-18 追加：Claude 自修自审 —— A1 合成 K 线补上真实结构（用户令；同类还剩一格没修）
+
+### 根因是怎么钉出来的（这段方法比结论有用）
+
+`corporate_action_fetch` 只是复用了 `source_capture` 的助手，两个模块同时红。我没有猜，而是**在真实路径上逐层 spy**：① spy `order_snapshot.analyze_rows` → 看见喂进价格引擎的 `price_input` 是**从 OHLCV packet 的 bars 派生**的，而 fixture 是 25 根一模一样的 `high=100/low=98/close=100`；② spy `validate_forward_policy_order_snapshot_packet` → `degradation_reason=common_candidate_order_not_executable`、`non_exec=['ALFA','BETA']`；③ dump 整份 price 判决 → `reject_reason: "缺有效上方结构目标,转观察"`。**三层下去才看到真正的那句话；只看断言消息（`'data_degraded_whole_week_no_count' != 'ready_for_outcome'`）永远指不到根因。**
+
+### 为什么是 fixture 假、不是引擎错
+
+`ef3dd734` 给 pullback 分支加了「没有高于入场带的结构目标就转观察」，并删掉了 `rr_floor_fallback`（旧引擎会用 `close + rr_floor*risk` **凭空造**一个目标）。一条完全平的合成序列在旧引擎下也能"可执行"，正是靠这个 fallback 托着。新引擎拒绝造目标 —— 这是设计意图（同刀还改了 `docs/us_short_system_design.md`），所以该改的是 fixture。
+
+### 三次试错才对，坑在去尖峰
+
+`effective_resistance()`（`us_short_price_engine.py:174-191`）会把「最高价比**次高的严格更低价**高出 > `SR_SPIKE_ATR×ATR`」当上影线剔掉。我先试单根 112 尖峰 → 探针显示阻力退回 100；再试整段 106 台阶 → 支撑被顶到 108、阻力仍 100。最后的形状是「箱体顶 110/109.5 交替、回落段支撑 98/98.5 交替」——**给顶部和底部各配一个近似并列的第二值**，结构才被判 `strong`。**下次给这类引擎造合成数据，先读它的去尖峰规则，别用完美平坦或单根尖峰。**
+
+### 前后对照（同一条探针）
+
+改前 `executable=False / reject_reason=缺有效上方结构目标`；改后 `executable=True / effective_support=98 / effective_resistance=110 / risk_reward_ratio=2.075 / HELPER PASSED`。焦点包 `PASS tests=23 18.0s`。没有改状态判定、没有改 RR 门、没有把断言改成接受降级状态。
+
+### 我明确没修的那一格
+
+`tests.test_us_short_forward_policy_order_snapshot::test_uses_one_regime_and_existing_price_guard_for_every_candidate` 仍红（`KeyError: 'BETA'`）。同类同因：BETA 的 indicators 是 `support=90 / resistance=100` 而 `close=100`——**目标价等于现价、头顶没空间**，防御档又把它从 breakout 掰成 pullback，于是命中同一道新门。我不改，因为给 BETA 一个上方结构会同时改掉它的 breakout 触发价和相邻用例依赖的价位，那是 A1 对比轨自己的 fixture 意图，该由那条线 owner 拍板。已开 `R-USSHORT-A1-ORDER-SNAPSHOT-FIXTURE-HAS-NO-HEADROOM-ABOVE-CLOSE`(P2)。**lane 因此仍不绿。**
