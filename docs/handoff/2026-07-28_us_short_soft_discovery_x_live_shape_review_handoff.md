@@ -3316,5 +3316,5 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **根因**：`LaneGuardRegistryConformance` 在进程内跑一个嵌套 unittest suite，那个 suite 会走到共享私有根 helper。单进程恒绿，八 worker 并行时 helper 开始拒绝，外层把它读成 `(1,1) != (1,0)` 的红。`.tools/parallel_lane_runner.py` 的 docstring 早写过这个失效模式——**下次看到「单跑绿、并行红」，先去看这个模块有没有碰共享锁**。
 - **修法与连带**：嵌套那一跑包进 `hold_test_root_lock(ROOT)`。串行尾巴是从源码递归推导的，所以基类加锁后 `..._executable` / `..._resources` 自动进尾巴；`tests/test_parallel_lane_runner.py` 加两条断言钉住落位。
 - **验证结果（合并态主树）**：`status=PASS exit=0 tests=5993 elapsed=768.8s deadline=860s`、`COUNT_GATE 5993=5993`、无 REFUSED。红消失，绿也记上了。
-- **代价要记住**：同一条 lane 改动前两次是 `345.4s`、`473.5s`，本次 `768.8s`，余量只剩 91 秒（10.6%）。老条目 `R-USSHORT-LANE-PACK-IS-GREEN-ONLY-BY-4-SECONDS...` 的 closure 判据是 ≥15% 余量，因此**它回到 open**。下一刀再加几十秒就会撞 860s，而 TIMEOUT 和真红在账面上难分。
+- **代价要记住（已自纠）**：主树本次 `768.8s`、余量只剩 91 秒（10.6%）是真的；但我原先拿来对比的 `345.4s`/`473.5s` 是 **8d8c** 的数、`768.8s` 是**主树**的数，跨树比无效，那句「这刀多花了 420 秒」作废——8d8c 用同一份修复只跑了 `343.6s`。同树可比的是主树自己：`432.9s` → `768.8s`。**教训：墙钟只能同树比，跨树波动能到一倍以上。**老条目 `R-USSHORT-LANE-PACK-IS-GREEN-ONLY-BY-4-SECONDS...` 的 closure 判据是 ≥15% 余量，因此**它回到 open**。下一刀再加几十秒就会撞 860s，而 TIMEOUT 和真红在账面上难分。
 - **下一步注意**：真正该动的是「为什么整模块都得串行」——尾巴是按**模块**判定的。若只有 `LaneGuardRegistryConformance` 需要锁，把它拆成单独模块，同文件其余用例就能回并行，这是唯一能把那 420 秒要回来的方向。`conformance_resources` 已砍过一次空间有限，`conformance_executable` 明确不许为墙钟牺牲，抬 860s 属用户级决定。
