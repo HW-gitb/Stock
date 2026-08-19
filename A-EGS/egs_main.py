@@ -7606,6 +7606,26 @@ def _breadth_window_frame(frame, dates):
     return frame[frame["trade_date"].astype(str).isin(wanted)].copy()
 
 
+def _breadth_explained_missing_codes_by_date(all_daily, df_stocks, dates):
+    explained = {}
+    # Reuse the existing suspend-source coverage floor; do not invent a height floor.
+    min_coverage = float(CONF["suspend_daily_min_coverage"])
+    for trade_date in dict.fromkeys(str(value) for value in dates):
+        universe = full_market_universe(df_stocks, trade_date)
+        day = _breadth_window_frame(all_daily, [trade_date])
+        observed = (
+            set(day["ts_code"].dropna().astype(str))
+            if isinstance(day, pd.DataFrame) and "ts_code" in day.columns
+            else set()
+        )
+        observed &= universe
+        if universe and len(observed) / len(universe) >= min_coverage:
+            missing = universe - observed
+            if missing:
+                explained[trade_date] = missing
+    return explained
+
+
 def _breadth_valid_int(value):
     if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)):
         return None
@@ -7658,6 +7678,9 @@ def _build_full_market_breadth_observation(trade_dates, all_daily=None, df_stock
         )
 
     try:
+        explained_missing_codes_by_date = _breadth_explained_missing_codes_by_date(
+            all_daily, df_stocks, current_window + previous_window
+        )
         current = compute_full_market_breadth(
             as_of=dates[0],
             daily=_breadth_window_frame(all_daily, current_window),
@@ -7665,6 +7688,7 @@ def _build_full_market_breadth_observation(trade_dates, all_daily=None, df_stock
             stock_basic=df_stocks,
             trading_days=current_window,
             streak_sessions=BREADTH_STREAK_SESSIONS,
+            explained_missing_codes_by_date=explained_missing_codes_by_date,
         )
         previous = compute_full_market_breadth(
             as_of=dates[1],
@@ -7673,6 +7697,7 @@ def _build_full_market_breadth_observation(trade_dates, all_daily=None, df_stock
             stock_basic=df_stocks,
             trading_days=previous_window,
             streak_sessions=BREADTH_STREAK_SESSIONS,
+            explained_missing_codes_by_date=explained_missing_codes_by_date,
         )
         current_universe = full_market_universe(df_stocks, dates[0])
     except MarketBreadthError as exc:

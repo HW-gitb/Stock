@@ -9430,3 +9430,35 @@ call .tools\run_unittest_with_repo_pythonpath.cmd tests.phase6.test_egs_main_dai
 - **正确的判据是「腿有没有真的取到值」**，不是「最终 status 是什么」。按这个看，哨兵刀是明确成功的：`stk_limit_fetch_failed` 消失、`eligible=usable=5539`、涨停 81 / 跌停 6（修复前恒 `None`）、`limit_down_defense_leg` 由 `unknown` 变成 `fail(6, >100)` 的真判定。
 - **教训**：给一把刀定验收判据时，先读那个判据所在函数的**决策规则**，别只看字段名。`status != unknown` 听上去像「功能正常」，其实它是一个**取决于市场行情**的输出——把行情当成代码的验收条件，运气好会假绿，运气不好会假红。**判据要落在「输入是否被正确消费」，而不是「输出恰好是哪个枚举值」。**
 - **修好一个洞会露出下一个**：`stk_limit` 通了之后，`contender_bar_missing_in_window` 才第一次有机会出现——它此前一直被前一个故障挡在后面。逐只查下来是一只停牌复牌即涨停的老票（`603221.SH`，10 天缺 6 天），与哨兵刀无关，但**是同一个缺陷类**（一行可解释的缺失让整个指标归零）。已单开 P2。
+
+## 2026-08-19 追加：Codex 修复 halted-contender height Required（509e；repaired / OPEN-NOT-VERIFIED）
+
+### 根因与最小改动
+
+- 真实缺陷是 `compute_full_market_breadth()` 把 contender 在窗口内任一天缺 bar 一律放进 `holed`，即使同一日 full-market daily 观察覆盖已经达到既有停牌推断门；因此一只停牌后复牌即涨停的票让整条 height 腿归 `None`。
+- 只在既有 A-short builder 里复用 `CONF["suspend_daily_min_coverage"]`（当前治理值 `0.95`），按每个窗口日从 `all_daily` 与 PIT `full_market_universe(stock_basic, date)` 生成 `explained_missing_codes_by_date`，作为可选参数传给既有 breadth engine。engine 的 `holed` 检查只排除这些已解释的 `(date, code)`；`max_limit_streak()` 仍把缺 bar 当断点，所以只取复牌后的连续段，绝不把停牌两侧桥接成连续涨停。
+- 解释缺口通过 coverage `suspension_gap_in_height_window` 留痕；无法达到既有覆盖门的缺口仍保留 `contender_bar_missing_in_window`、height `None`。没有新阈值、补零、递补、fallback、第二套 status 判据或接口清理。
+
+### 调用链、消费者、schema/source-binding 与缓存/写盘边界
+
+- 调用链：既有 `get_daily_all()` → `all_daily` 与 `stock_basic` → `_breadth_explained_missing_codes_by_date()` → `compute_full_market_breadth()` → coverage/height → `_current_height_usable`、`_previous_height_usable` → `derive_v14_2_market_regime()`；weekly/analysis-input 继续消费既有 breadth/regime 结果，不自行重算优先级。
+- 当前日 `suspended_set`、`unexplained_daily_absent`、full-market PIT universe、11-session settled date binding 和 `stk_limit` producer 均保留。未改 `analysis_input` schema/version、effect contract、Phase5 生产代码、V14.3、provider 请求、cache key、正式 writer 或任何新增写盘。
+
+### 测试、负控、自审与原始终态
+
+- 先让旧代码失败：新增真 builder 回归 `Ran 1`，`FAILED (None != 2)`。
+- 修后固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）目标模块 `tests.test_a_short_egs_market_environment tests.test_a_short_market_breadth` 为 `Ran 47 / OK`；81 票 panel 的 `current height=2`、`previous height=5`、`regime=contraction`。既有 3 票低覆盖 contender 缺行负控仍 height `None`；直接 engine 未解释缺行、完整 panel和既有 non-contender halt 回归均通过。
+- 精确 focused 命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\509e\Stock'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -m unittest tests.test_a_short_egs_market_environment tests.test_a_short_market_breadth`。full lane 命令：`Set-Location -LiteralPath 'D:\cnhea\Codex\worktrees\509e\Stock'; $env:GIT_CONFIG_COUNT='1'; $env:GIT_CONFIG_KEY_0='core.whitespace'; $env:GIT_CONFIG_VALUE_0='cr-at-eol'; & 'C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe' -X utf8 '.tools\full_pack_ledger.py' run a_short 'R-ASHORT-BREADTH-ONE-HALTED-CONTENDER-DISABLES-THE-WHOLE-HEIGHT-LEG' 860 -- discover -s tests -p 'test_a_short*.py'`。
+- 静态门：`py_compile`、`git diff --check` PASS。行为代码稳定后按规则仅跑一次 A-short full lane：`discovered=3236 ran=3236 equal=True`、`Ran 3236 tests in 138.048s`、`RESULT status=PASS exit=0 deadline=860s mode=parallel`、fingerprint=`a5cb5a85303c`、sidecar=`.tools\\state\\runs\\20260819T130045_a_short_parallel.jsonl`。
+- 未运行 provider/live、真实周、测试胶囊或 sub-agent；未 stage/commit/push/merge；`docs/CURRENT.md` 未改。focused/full lane 不等于真实数据 closure、独立 review、commit、merge 或 ship。
+
+### 交接
+
+Claude Code：独立复审该 Required 的逐日既有 coverage 门、`holed` 的 `(date, code)` 粒度、缺口断点/不桥接语义、81 票真 builder 正向和低覆盖负控；PASS 后按 reviewer/committer 边界提交，Codex 不提交。
+
+## 2026-08-19 追加：第三把同类刀——把「可解释的缺失」量化到能算敞口
+
+- **同一个类第三次出现，但这次修法有了新东西：一个地板**。前两把（北交所哨兵、停牌 contender）都是「一行可解释的缺失让整个指标归零」。这次的修法不是逐个枚举例外，而是引入判据——**只在当日整体覆盖率达标时，才允许把缺行判为已解释**。覆盖率不达标（喂数被截断）时一个都不赦免。这把「区分单只停牌 vs 整个数据源坏掉」变成了可计算的事。
+- **审查这种地板，光看逻辑不够，要把敞口算出来**。地板 `0.95` 听着挺严，但换算成真实论域是「单日最多赦免 277 只」。所以我去数了北交所：**337 只、占 6.08%**——整块丢失会把覆盖率压到 93.9%，**低于地板、不会被赦免**。没有哪个板块小到能整体钻过去。有了这个数，「地板够不够严」就不再是感觉问题。**建议以后审所有阈值型放宽都补这一步：把阈值换算成最坏情况下能放过多少东西，再看那个数字能不能装下一个真实的故障模式。**
+- **也要核「为什么没用更精确的源」**：仓里明明有 `suspended_set`，看着该用它而不是覆盖率代理。查了 `get_suspend_info(trade_dates)` 才知道它只按 `trade_dates[0]`（as_of）取，是单日扁平集，解释不了窗口中段的洞。**质疑修法之前先读那个「更好的源」到底提供什么形状**，否则会提出一个做不到的 Required。
+- **验收判据这次一开始就写对了**：不是「regime 必须非 unknown」，而是「高度腿有没有从 `unknown` 变成真判定」。真实结果 `fail(prior=4;current=4)` —— 腿活了，而 regime 仍是 `unknown`，因为 4/4 本来就不满足收缩条件。这正是上一轮记下的教训在起作用。
