@@ -3896,3 +3896,19 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - 新 prompt 摘要为 `373b7d51c34eaa91d128083c221cf6296f4d3cf69998f34cc4749010ed0f207b`；目标 source_id 与 v5 冻结 chunk 完全相同；v5/v4/v3/v2 历史 packet 均不再是当前执行身份。
 - 验证：packet/预算 owner `75 OK`、schema version=`6.0.0`、py_compile、git diff --check 通过；未联网、未调用 provider、未付费、未授权执行。
 - 下一步：Claude 独立复审 v6 packet；PASS 后再等用户对 v6 精确 packet 明确授权。
+
+## 2026-08-19 追加：v6 第五枪已按用户授权完成（主树；待 Claude 独立审查）
+
+- 精确 packet=`us_short_web_regroup_engineering_smoke_20260815_chunk1_v6`；主树完成唯一一次 Web Stage-2 DeepSeek 工程调用，`transport_verdict=PASS`。
+- 调用守恒：provider/deepseek=`1/1`；Tavily/XAI/retry/recovery/unknown=`0/0/0/0/0`；served model=`deepseek-v4-pro`；usage=`4866/9667/14533`；`finish_reason=stop`；`parsed_theme_count=3`。
+- raw 先落盘且 hash 重读一致；strict JSON、主题数上限和 semantic fields 均通过。raw 写入 `provider_samples/us_short_llm_theme_discovery_engineering_smoke_v6/`，summary 写入 `state/us_short/runs_private/soft_discovery_engineering_smoke_v6/`；raw hash=`0412fdd5871dfde13244fffd8be6d1d9576a8480f1e4318c6f6e59e2de8b5255`。
+- 正式 decision slots、discovery、receipt、merge、validation、boost、score、replay 全部为 `false`；5b 未执行，`readiness=null`，不接 4diii。
+- 下一步：Claude 独立审查 v6 transport/raw；通过后按方案在 v6 raw 上跑 5b 零付费。未提交、未合并其他代码。
+
+## 2026-08-19 追加：v6 raw 上的 5b 零付费回放完成（主树；待 Claude 独立审查）
+
+- v6 raw 已完成 `offline_replay_completed`；packet=`us_short_web_regroup_engineering_smoke_20260815_chunk1_v6`，transport=`PASS`，provider/network/retry=`0/0/0`。
+- 生产绑定层得到 3 个主题、10 个 member claim，10/10 接受、0 拒绝；语义机检为 2 个 accepted、1 个 rejected。被拒主题 `gamestop_ebay_ma_situation` 的原因为 `fewer_than_3_qualified_members`。
+- SIC 使用既有 2026-08-10 快照，仅作 calibration-only；9 个已接受 ticker 可评价。replay summary 写入 `state/us_short/runs_private/soft_discovery_engineering_smoke_v6/us_short_web_regroup_replay_20260815_chunk1_summary.json`。
+- 正式槽、discovery、receipt、merge、validation、boost、score 全部为 false；`readiness=null`，不能直接接 4diii。
+- 下一步：Claude 独立审查 v6 5b 结果；审查前不再开 provider 枪。v6 回放器仅做了 v5→v6 的最小 packet/schema 身份切换，未提交、未合并。
