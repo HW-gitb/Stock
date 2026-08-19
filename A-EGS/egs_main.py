@@ -1865,6 +1865,7 @@ MONEYFLOW_CACHE_SEMANTICS_VERSION = "moneyflow_v2"
 #: while reaching further back trades a real reference day for a convenient one.
 MONEYFLOW_MAX_LAG_SESSIONS = 1
 MONEYFLOW_FETCH_SESSIONS = 5
+MONEYFLOW_MAX_MISSING_TARGETS_FOR_SCORING = 3
 MONEYFLOW_PROVIDER_FIELDS = (
     "ts_code", "trade_date",
     "buy_elg_amount", "sell_elg_amount",
@@ -2525,6 +2526,20 @@ def validate_data_health_consistency(health):
     target_complete = int(moneyflow.get("target_complete_count") or 0)
     if target_total < 0 or target_complete < 0 or target_complete > target_total:
         raise ValueError("data_health moneyflow target coverage counts are inconsistent")
+    if "missing_target_codes" in moneyflow:
+        missing_target_codes = moneyflow.get("missing_target_codes")
+        if (
+            not isinstance(missing_target_codes, list)
+            or any(
+                not isinstance(code, str)
+                or _canonical_ashare_ts_code(code) != code
+                for code in missing_target_codes
+            )
+            or len(set(missing_target_codes)) != len(missing_target_codes)
+            or len(missing_target_codes) != target_total - target_complete
+            or (moneyflow_status == "complete" and missing_target_codes)
+        ):
+            raise ValueError("data_health moneyflow missing target codes are inconsistent")
     if moneyflow_status == "complete":
         if (
             not isinstance(moneyflow.get("reference_date"), str)
@@ -5175,6 +5190,7 @@ def _default_moneyflow_coverage(reference_date, requested_trade_dates=None, stat
         "universe_size": 0,
         "target_universe_size": 0,
         "target_complete_count": 0,
+        "missing_target_codes": [],
         "coverage_complete": False,
         "status": status,
     }
@@ -5217,6 +5233,7 @@ def _moneyflow_usage_receipt(observation, target_codes):
 
     target_complete_count = sum(code in complete_codes for code in target)
     target_count = len(target)
+    missing_target_codes = sorted(set(target) - complete_codes)
     coverage_complete = (
         observation.status == "complete"
         and observation.coverage_complete is True
@@ -5240,6 +5257,7 @@ def _moneyflow_usage_receipt(observation, target_codes):
         "universe_size": int(observation.universe_size),
         "target_universe_size": target_count,
         "target_complete_count": int(target_complete_count),
+        "missing_target_codes": missing_target_codes,
         "coverage_complete": bool(coverage_complete),
         "status": status,
     }
@@ -6991,13 +7009,33 @@ def score_l4(df, mf_observation, moneyflow_coverage=None):
         df.get("ts_code", pd.Series(dtype=str)).tolist(),
     )
     needed = ["buy_elg_amount", "sell_elg_amount", "buy_lg_amount", "sell_lg_amount", "trade_amount"]
-    if coverage.get("status") == "complete" and coverage.get("coverage_complete") is True:
+    try:
+        target_universe_size = int(coverage.get("target_universe_size"))
+        target_complete_count = int(coverage.get("target_complete_count"))
+        missing_count = target_universe_size - target_complete_count
+    except (TypeError, ValueError):
+        missing_count = None
+    missing_target_codes = coverage.get("missing_target_codes")
+    can_score_moneyflow = (
+        isinstance(mf_observation, MoneyflowObservation)
+        and mf_observation.status == "complete"
+        and mf_observation.coverage_complete is True
+        and coverage.get("status") in {"complete", "incomplete"}
+        and coverage.get("coverage_complete") is (missing_count == 0)
+        and isinstance(missing_target_codes, list)
+        and missing_count is not None
+        and 0 <= missing_count <= MONEYFLOW_MAX_MISSING_TARGETS_FOR_SCORING
+        and len(missing_target_codes) == missing_count
+    )
+    if can_score_moneyflow:
         if not isinstance(mf_observation, MoneyflowObservation):
             raise RuntimeError("complete moneyflow coverage lacks its observation envelope")
         missing = [column for column in needed if column not in mf_observation.frame.columns]
         if missing:
             raise RuntimeError(f"complete moneyflow observation is missing columns: {missing}")
         mf_df = mf_observation.frame.copy()
+        if missing_target_codes:
+            mf_df = mf_df[~mf_df["ts_code"].isin(missing_target_codes)]
         mf_agg = mf_df.groupby("ts_code").agg(
             elg_buy=("buy_elg_amount", "sum"),
             elg_sell=("sell_elg_amount", "sum"),
@@ -7017,10 +7055,12 @@ def score_l4(df, mf_observation, moneyflow_coverage=None):
         df["l4_score"] = df["l4_score"].clip(0, 100)
     else:
         log.warning(
-            "资金流覆盖不完整（status=%s, target=%s/%s），本轮大单流向加分整体跳过",
+            "资金流覆盖不完整（status=%s, target=%s/%s, missing_count=%s, missing_target_codes=%s），本轮大单流向加分整体跳过",
             coverage.get("status"),
             coverage.get("target_complete_count", 0),
             coverage.get("target_universe_size", 0),
+            missing_count,
+            missing_target_codes or [],
         )
 
     # 所有加分完成后再判定 TIER2_FORCED，避免资金流加分后仍被冤枉降级

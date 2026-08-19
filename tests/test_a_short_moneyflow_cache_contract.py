@@ -185,7 +185,7 @@ class MoneyflowCacheContractTests(unittest.TestCase):
         self.assertGreater(before.loc[0, "big_ratio"], 0.15)
         self.assertEqual(float(before.loc[0, "l4_score"]), 55.0)
 
-    def test_missing_target_session_disables_bonus(self):
+    def test_missing_target_session_keeps_complete_rows_and_records_missing_code(self):
         em = self.egs
         observation = self._observation(codes=(self.codes[0],))
         frame = pd.DataFrame({
@@ -197,9 +197,63 @@ class MoneyflowCacheContractTests(unittest.TestCase):
         coverage = em._moneyflow_usage_receipt(observation, list(frame["ts_code"]))
         self.assertEqual(coverage["target_complete_count"], 1)
         self.assertEqual(coverage["target_universe_size"], 2)
+        self.assertEqual(coverage["missing_target_codes"], [self.codes[1]])
         self.assertEqual(coverage["status"], "incomplete")
         result = em.score_l4(frame, observation, coverage)
-        self.assertTrue(result["big_ratio"].isna().all())
+        by_code = result.set_index("ts_code")
+        self.assertGreater(float(by_code.loc[self.codes[0], "big_ratio"]), 0.15)
+        self.assertTrue(pd.isna(by_code.loc[self.codes[1], "big_ratio"]))
+        self.assertEqual(float(by_code.loc[self.codes[0], "l4_score"]), 55.0)
+        self.assertEqual(float(by_code.loc[self.codes[1], "l4_score"]), 0.0)
+
+    def test_three_missing_targets_score_complete_rows_but_four_skip_all(self):
+        em = self.egs
+        complete_code = self.codes[0]
+        for missing_codes in (
+            ("000002.SZ", "000003.SZ", "000004.SZ"),
+            ("000002.SZ", "000003.SZ", "000004.SZ", "000005.SZ"),
+        ):
+            with self.subTest(missing_count=len(missing_codes)):
+                target_codes = (complete_code,) + missing_codes
+                observation = self._observation(codes=(complete_code,))
+                frame = pd.DataFrame({
+                    "ts_code": list(target_codes),
+                    "l2_name": ["industry"] * len(target_codes),
+                    "pct_20d_n": [10.0] + [9.0] * len(missing_codes),
+                    "pct_5d": [2.0] * len(target_codes),
+                })
+                coverage = em._moneyflow_usage_receipt(observation, target_codes)
+                self.assertEqual(
+                    coverage["missing_target_codes"], sorted(missing_codes)
+                )
+                result = em.score_l4(frame, observation, coverage).set_index("ts_code")
+                if len(missing_codes) == 3:
+                    self.assertGreater(float(result.loc[complete_code, "big_ratio"]), 0.15)
+                    self.assertEqual(float(result.loc[complete_code, "l4_score"]), 55.0)
+                    self.assertTrue(result.loc[list(missing_codes), "big_ratio"].isna().all())
+                else:
+                    self.assertTrue(result["big_ratio"].isna().all())
+
+    def test_incomplete_or_invalid_observation_never_enables_partial_target_bonus(self):
+        em = self.egs
+        frame = pd.DataFrame({
+            "ts_code": [self.codes[0], self.codes[1]],
+            "l2_name": ["industry", "industry"],
+            "pct_20d_n": [10.0, 9.0],
+            "pct_5d": [2.0, 2.0],
+        })
+        for status in ("incomplete", "invalid"):
+            with self.subTest(status=status):
+                observation = dataclasses.replace(
+                    self._observation(codes=(self.codes[0],)),
+                    status=status,
+                    coverage_complete=False,
+                )
+                coverage = em._moneyflow_usage_receipt(
+                    observation, list(frame["ts_code"])
+                )
+                result = em.score_l4(frame, observation, coverage)
+                self.assertTrue(result["big_ratio"].isna().all())
 
     def test_invalid_observation_never_enables_bonus(self):
         em = self.egs
@@ -491,6 +545,7 @@ class MoneyflowDualClockTests(unittest.TestCase):
 
     def test_an_unusable_window_reports_no_clock_rather_than_a_confident_zero(self):
         coverage = self.egs._default_moneyflow_coverage("20260731", self.sessions[:5])
+        self.assertEqual(coverage["missing_target_codes"], [])
         self.assertIsNone(coverage["effective_ref_date"])
         self.assertIsNone(coverage["lag_sessions"])
         self.assertFalse(coverage["fallback_applied"])

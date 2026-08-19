@@ -109,6 +109,53 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
 
         validate_analysis_input_contract(payload)
 
+    def test_moneyflow_missing_codes_are_shared_by_analysis_and_data_health_exports(self) -> None:
+        coverage = {
+            "reference_date": "20260522",
+            "effective_ref_date": None,
+            "lag_sessions": None,
+            "fallback_applied": False,
+            "fallback_reason": None,
+            "requested_trade_dates": [
+                "20260522", "20260521", "20260520", "20260519", "20260518",
+            ],
+            "observed_trade_dates": [],
+            "row_count": 0,
+            "universe_size": 0,
+            "target_universe_size": 2,
+            "target_complete_count": 1,
+            "missing_target_codes": ["000002.SZ"],
+            "coverage_complete": False,
+            "status": "incomplete",
+        }
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            analysis_path, snapshot_path, candidates_path, payload = self._export(
+                tmp,
+                latest_td="20260522",
+                moneyflow_coverage=coverage,
+            )
+            self.assertEqual(payload["market_context"]["moneyflow_coverage"], coverage)
+            ranked = pd.DataFrame({
+                "ts_code": ["600000.SH"],
+                "tier": ["Tier1"],
+                "l2_name": ["一般零售"],
+                "close": [10.0],
+            })
+            _health_path, health = self.egs_main.export_data_health(
+                df_full=ranked,
+                watch_df=ranked,
+                tier1_final=ranked,
+                analysis_input=payload,
+                latest_td="20260522",
+                analysis_path=analysis_path,
+                snapshot_path=snapshot_path,
+                candidates_path=candidates_path,
+                tier1_csv_path=str(ROOT / "tier1.csv"),
+                full_csv_path=str(ROOT / "full.csv"),
+                moneyflow_coverage=coverage,
+            )
+        self.assertEqual(health["metrics"]["moneyflow_coverage"], coverage)
+
     def test_official_export_applies_the_same_strict_price_clock_contract(self) -> None:
         with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
             with patch.object(
@@ -653,6 +700,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
         red_dict=None,
         row_overrides=None,
         market_context_facts=None,
+        moneyflow_coverage=None,
     ):
         row = {
             "ts_code": "600000.SH",
@@ -690,6 +738,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             rank_reconciliation=rank_reconciliation,
             l0_excluded_counts=l0_excluded_counts,
             market_context_facts=market_context_facts,
+            moneyflow_coverage=moneyflow_coverage,
             trade_calendar_context={
                 "decision_as_of": latest_td,
                 "next_trade_date": None,

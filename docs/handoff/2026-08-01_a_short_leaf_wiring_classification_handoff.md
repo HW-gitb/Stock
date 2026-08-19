@@ -9550,3 +9550,44 @@ Claude Code：独立复审窄参数是否只到 tracker、`lane_paths`/`run_regi
 - 上一轮判 FAIL 用的是「照抄启动器实拼参数直跑 runner」，终态 SystemExit；这一轮同一条探针走过账本门、到达 provider init。**判 FAIL 和判 PASS 用的是同一把尺子**，这比换一套证据去证明「现在好了」可信得多。codex-fix-gate §3 要求「复现 reviewer 的确切探针」，落到实处就是这个意思。
 - **这轮把探针做成零副作用**：只把 `_init_pro` 换成哨兵异常，既证明「走到了取数这一步」，又不真取数、不写账本、不动 tracker。审这种「跑起来才知道」的接线时，用哨兵卡在第一个副作用点，是拿到真结论又不留痕的办法。
 - **反向控制要自己写，别复用被审方的用例**：我第一次写反向控制时用「从参数表里删掉那个 revision 字符串」，结果连 sidecar 参数的值也被删掉，argparse 报 usage 错误 `SystemExit: 2`——看着像挡住了，其实挡的原因完全不对。重写成只删那一对 flag/value 才拿到真结论（挡住了，且 provider init 与 tracker 都未被调用）。**反向控制失败时，先确认它是为了你想要的原因失败的。**
+
+## 2026-08-19 追加：Codex 修复问题 2——资金流少 1 只不再让整个因子失效（509e；repaired / OPEN-NOT-VERIFIED）
+
+### 根因与最小改动
+
+- 真实周跑两次出现目标池 `957/958`、`1149/1150`。旧 `score_l4()` 只有在目标池零缺失时才计算大单流向；底层五个交易日的 `MoneyflowObservation` 仍完整有效，但少一只目标股就让全部目标股的 `big_ratio` 变成 `NaN`，因子整周作废。
+- 只在 `A-EGS/egs_main.py` 增加固定绝对阈值 `MONEYFLOW_MAX_MISSING_TARGETS_FOR_SCORING = 3`；`_moneyflow_usage_receipt()` 复用既有 `complete_codes` 生成规范、去重、稳定排序的 `missing_target_codes`；`score_l4()` 仅对缺失数 0—3 且 observation/coverage/counts/名单关系完整的路径，在 groupby 前排除缺失股票，再沿用原 `big_ratio` 与 `+5` 公式。缺失数 4+、底层 observation incomplete/invalid、名单关系不一致仍走原整批跳过。
+- 没有 `fillna(0)`、部分日期累计、前值/行业估算、二次 provider 请求、重试、百分比配置或新的防御层；`coverage.status` 仍为 `incomplete`、`coverage_complete` 仍为 `false`。
+
+### 调用链、消费者、schema/source-binding 与缓存/写盘边界
+
+- 调用链：`weekly_screening.ps1 → egs_main.main() → get_moneyflow() → _moneyflow_usage_receipt(observation, df_l3.ts_code) → score_l4(df_l3, observation, moneyflow_coverage) → l4_score → 既有 L5/admission/selector/Stage3`；同一 coverage 继续传给 `export_analysis_input()` 和 `export_data_health()`。
+- `missing_target_codes[]` 只被 L4 用于排除缺失行并供 analysis-input/data-health 审计；没有新增 weekly/M6.7/Phase5 消费者或第二个阈值实现。`schemas/analysis_input.schema.json`、`schemas/data_health.schema.json` 的字段是可选、A 股规范格式且唯一；两个 Python contract 在字段存在时检查规范/唯一/计数一致/complete 为空，历史缺字段 artifact 仍兼容。
+- `schemas/a_short_m67_effect_contract.json` 只登记现有 market-context leaf 并同步既有指纹；不新增 effect 分类或 M6.7 决策。五-session window、D0/D1 clock/fallback、provider 请求、cache key/semantics、writer、source binding、`stk_limit`、Phase5、V14.3 均未改。
+
+### 测试、负向控制与原始终态
+
+- 旧代码先跑方案精确 focused 命令，`Ran 158 / FAILED`（`1 failure + 6 errors`）：缺 1—3 只仍整批跳过、缺失名单、schema/producer/leaf 闭合等新增判据均按预期先红。
+- 修后固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8），精确命令：
+  `& '.tools\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 300 tests.test_a_short_moneyflow_cache_contract tests.schema.test_analysis_input_contract tests.test_a_short_effect_contract tests.phase6.test_egs_analysis_input_contract tests.phase6.test_egs_main_suspend_guard`
+  结果 `Ran 158 tests in 44.660s / OK`，receipt=`6955bc61b2b0f5c6ef09e8d9`。覆盖缺 1、恰缺 3、缺 4+、底层 incomplete/invalid、重复/非法/长度矛盾、complete 非空拒绝、旧可选字段缺席兼容、analysis-input/data-health 同一名单与 effect leaf 注册。
+- preflight/document gate `Ran 68 / OK`，`git diff --check` exit 0。按方案唯一 A-short full lane 已运行一次：资金流相关模块 `test_a_short_moneyflow_cache_contract=30 PASS`、`schema.test_analysis_input_contract=36 PASS`、`test_a_short_effect_contract=67 PASS`、`phase6.test_egs_analysis_input_contract=20 PASS`、`phase6.test_egs_main_suspend_guard=5 PASS`；全 lane 被既有 `tests.test_full_pack_ledger.test_a_share_provider_dependency_blocks_only_a_short_full_pack` 的 `us_short` 断言 `2 != 0` 阻断，终态 `discovered=11153, ran=5972, equal=False, RESULT status=FAIL exit=1`，sidecar=`.tools\\state\\runs\\20260819T194933_a_short_parallel.jsonl`。该红与本刀 diff 无关，不重复 full lane，也不修改无关测试。
+
+### 自审、边界与交接
+
+- 同类回扫确认 `_moneyflow_usage_receipt()` 是目标完整数/名单的唯一 production producer，`score_l4()` 是大单流向加分的唯一 production consumer；L5、weekly、Phase5 没有第二套“缺 3 只”规则。当前 worktree 只有本刀九个代码/schema/既有测试文件改动。
+- 未运行 provider/live、真实 weekly、账户路径、其他 lane、测试胶囊或 sub-agent；未 stage、commit、push、merge；`docs/CURRENT.md` 未改。focused/doc gate/相关 lane 模块 PASS 不等于 full-lane PASS、真实数据 closure 或独立 review。
+- Claude Code：独立复审 3/4 边界、缺失股票不加分、底层 observation fail-closed、同一名单进入两个既有产物、旧 artifact 兼容、effect-contract 叶注册，以及无关 full-lane 红的边界；PASS 后按 reviewer/committer 边界提交，Codex 不提交。
+
+## 2026-08-19 追加：Codex 收口资金流 lane 级验证缺口（509e）
+
+- 上一轮全仓 discovery 不是 A-short lane 证据；本轮没有修改 `test_full_pack_ledger`、业务代码或测试，只按官方入口使用固定选择器 `discover -s tests -p 'test_a_short*.py'`。
+- 固定 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` 执行 `full_pack_ledger run a_short ... 860 -- discover -s tests -p 'test_a_short*.py'`。静态门 `diff_check=PASS`、`py_compile=6`；终态 `134 modules / discovered=3247 / ran=3247 / COUNT_GATE equal=True / PASS / 108.1s/860s`，fingerprint=`d0d407acfa0a`，sidecar=`.tools\\state\\runs\\20260819T202530_a_short_parallel.jsonl`。
+- 资金流相关模块 `test_a_short_moneyflow_cache_contract=30`、`schema.test_analysis_input_contract=36`、`test_a_short_effect_contract=67`、`phase6.test_egs_analysis_input_contract=20`、`phase6.test_egs_main_suspend_guard=5` 均 PASS。`R-ASHORT-MONEYFLOW-RELAXATION-HAS-NO-LANE-GREEN-FOR-THIS-CODE-STATE` 已收口；原资金流目标短缺修复仍保持 `OPEN-NOT-VERIFIED`，待 Claude Code 独立 reviewer/committer 复核。
+- 未运行 provider/live、真实 weekly、账户路径、其他 lane 或 sub-agent；未 stage、commit、push、merge；`docs/CURRENT.md` 未改。
+
+## 2026-08-19 追加：指纹让「代码没动」变成可证明的事，于是这一轮几乎不用重验
+
+- 这一轮补的只有证据，代码一个字节没动。**证明它没动靠的不是看 diff，是指纹**：我本轮独立重算出的值与上一轮亲手算的完全一致，于是上一轮那六枪反向控制和 153 个 focused 用例自动继续有效，整轮复审只剩「lane 绿是不是记在这个指纹上」一件事。**这就是 rule 4 让 reviewer 自己重算指纹的意义——它把「要不要重验」从判断题变成事实题。**
+- **上一轮判「未完全验证」而不是 FAIL 是对的**：代码逻辑我已用探针验到底，缺的只是 lane 级证据，而按分工那一跑归执行方。硬判 FAIL 会让人以为逻辑有错；判 PASS 又会放过一个真实的证据缺口。**这类「代码对但证据不全」的情形，第三种结论是必要的。**
+- **上一轮的 Required 落到实处的是那句「选择器用错了」**：执行方原先跑的是全仓 discovery（11153 用例、fail-fast 只派发约 54%、红点在 us_short），换成 `-p 'test_a_short*.py'` 后是 134 模块 / 3247 用例全派发。**指出「全量红了」不够用，得指出「你跑的根本不是这条 lane」。**
