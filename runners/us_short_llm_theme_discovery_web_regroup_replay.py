@@ -15,17 +15,8 @@ import sys
 from typing import Any, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v2.json"
-PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet_v2.schema.json"
-TRANSPORT_SUMMARY_PATH = (
-    ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke_v2"
-    / "us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json"
-)
-TRANSPORT_RAW_ROOT = ROOT / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke_v2"
-REPLAY_SUMMARY_PATH = (
-    ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke_v2"
-    / "us_short_web_regroup_replay_20260815_chunk1_summary.json"
-)
+PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v3.json"
+PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet_v3.schema.json"
 SIC_SNAPSHOT_PATH = (
     ROOT / "state" / "us_short" / "sec_sic_classification_snapshots"
     / "sec_sic_snapshot_20260810T043853Z_d754ea63c8e39555.json"
@@ -81,6 +72,42 @@ def _safe_repo_file(root: Path, relative_ref: Any, *, prefix: str) -> Path:
     return path
 
 
+def _packet_output_path(packet: Mapping[str, Any], field: str) -> Path:
+    try:
+        relative_ref = packet["output_boundary"][field]
+    except (KeyError, TypeError) as exc:
+        raise WebRegroupReplayError("5b packet output boundary is malformed") from exc
+    if not isinstance(relative_ref, str):
+        raise WebRegroupReplayError("5b packet output boundary reference is malformed")
+    relative_ref = relative_ref.rstrip("/")
+    if not relative_ref or any(part in {"", ".", ".."} for part in Path(relative_ref).parts):
+        raise WebRegroupReplayError("5b packet output boundary escapes its namespace")
+    path = (ROOT / relative_ref).resolve()
+    try:
+        path.relative_to(ROOT.resolve())
+    except ValueError as exc:
+        raise WebRegroupReplayError("5b packet output boundary escapes the repository") from exc
+    return path
+
+
+def _transport_summary_path(packet: Mapping[str, Any]) -> Path:
+    return _packet_output_path(packet, "summary_ref")
+
+
+def _transport_raw_root(packet: Mapping[str, Any]) -> Path:
+    return _packet_output_path(packet, "raw_root")
+
+
+def _replay_summary_path(packet: Mapping[str, Any]) -> Path:
+    diagnostic_root = _packet_output_path(packet, "diagnostic_root")
+    try:
+        decision_date = packet["source_decision_date"]
+        chunk_index = packet["input"]["target_chunk_index"]
+    except (KeyError, TypeError) as exc:
+        raise WebRegroupReplayError("5b packet identity is malformed") from exc
+    return diagnostic_root / f"us_short_web_regroup_replay_{decision_date}_chunk{chunk_index}_summary.json"
+
+
 def _schema_validate(payload: Any, schema_path: Path, *, label: str) -> None:
     try:
         from jsonschema import Draft7Validator
@@ -108,7 +135,7 @@ def _validate_packet() -> dict[str, Any]:
 
 
 def _validate_transport_summary(packet: Mapping[str, Any]) -> dict[str, Any]:
-    summary = _read_json(TRANSPORT_SUMMARY_PATH)
+    summary = _read_json(_transport_summary_path(packet))
     if type(summary) is not dict:
         raise WebRegroupReplayError("fifth-knife transport summary is not an object")
     request = packet.get("paid_boundary", {}).get("request", {})
@@ -217,8 +244,11 @@ def _load_target_inputs(packet: Mapping[str, Any]) -> tuple[list[dict[str, Any]]
     return [dict(row) for row in target], [dict(ref) for ref in target_refs], fetched_at
 
 
-def _load_transport_response(summary: Mapping[str, Any]) -> tuple[dict[str, Any], datetime]:
-    raw_prefix = TRANSPORT_RAW_ROOT.resolve().relative_to(ROOT.resolve()).as_posix() + "/"
+def _load_transport_response(
+    packet: Mapping[str, Any], summary: Mapping[str, Any],
+) -> tuple[dict[str, Any], datetime]:
+    raw_root = _transport_raw_root(packet)
+    raw_prefix = raw_root.relative_to(ROOT.resolve()).as_posix() + "/"
     raw_path = _safe_repo_file(
         ROOT,
         summary.get("raw_provider_response_ref"),
@@ -237,6 +267,223 @@ def _load_transport_response(summary: Mapping[str, Any]) -> tuple[dict[str, Any]
     if not web._gitignored(raw_path):
         raise WebRegroupReplayError("fifth-knife raw response is not in a private ignored root")
     return raw["response"], fetched_at
+
+
+def _load_transport_ledger(packet: Mapping[str, Any]) -> tuple[Path, dict[str, Any]]:
+    ledger_path = _packet_output_path(packet, "budget_ledger_ref")
+    ledger = _read_json(ledger_path)
+    if type(ledger) is not dict:
+        raise WebRegroupReplayError("fifth-knife transport ledger is not an object")
+    dispatch_counts = ledger.get("dispatch_counts")
+    vendor_counts = ledger.get("vendor_dispatch_counts")
+    reservations = ledger.get("query_reservations")
+    if (
+        type(dispatch_counts) is not dict
+        or type(vendor_counts) is not dict
+        or type(reservations) is not list
+        or ledger.get("reservation_attempt_count") != 1
+        or dispatch_counts != {
+            "stage1_dispatch_count": 0,
+            "stage2_dispatch_count": 1,
+            "retry_dispatch_count": 0,
+            "dispatch_count": 1,
+            "unknown_dispatch_count": 0,
+        }
+        or vendor_counts != {"tavily": 0, "deepseek": 1, "xai": 0}
+        or ledger.get("recovery_events") != []
+        or len(reservations) != 1
+        or reservations[0].get("attempt_count") != 1
+        or reservations[0].get("last_status") != "complete"
+    ):
+        raise WebRegroupReplayError("fifth-knife transport ledger is not a single completed DeepSeek attempt")
+    return ledger_path, ledger
+
+
+def _load_single_transport_raw(
+    packet: Mapping[str, Any],
+) -> tuple[Path, dict[str, Any], datetime, str]:
+    raw_root = _transport_raw_root(packet)
+    if not raw_root.is_dir():
+        raise WebRegroupReplayError("fifth-knife raw root is missing")
+    raw_paths = sorted(path for path in raw_root.rglob("*.json") if path.is_file())
+    if len(raw_paths) != 1:
+        raise WebRegroupReplayError("fifth-knife raw root must contain exactly one response")
+    raw_path = raw_paths[0]
+    if not web._gitignored(raw_path):
+        raise WebRegroupReplayError("fifth-knife raw response is not in a private ignored root")
+    raw = _read_json(raw_path)
+    if type(raw) is not dict or raw.get("provider") != "deepseek" or type(raw.get("response")) is not dict:
+        raise WebRegroupReplayError("fifth-knife raw response envelope is malformed")
+    try:
+        fetched_at = web._parse_dt(raw["fetched_at"], field="raw_response.fetched_at")
+    except (KeyError, WebRegroupReplayError) as exc:
+        raise WebRegroupReplayError("fifth-knife raw response clock is malformed") from exc
+    response_sha256 = web._sha256_bytes(web._canonical_json(raw["response"]))
+    reread = _read_json(raw_path)
+    if (
+        type(reread) is not dict
+        or type(reread.get("response")) is not dict
+        or web._sha256_bytes(web._canonical_json(reread["response"])) != response_sha256
+    ):
+        raise WebRegroupReplayError("fifth-knife raw response changed during read")
+    return raw_path, raw, fetched_at, response_sha256
+
+
+def _transport_failure_fields(exc: BaseException) -> tuple[str, str | None]:
+    reason_map = {
+        "regroup_model_identity_changed": "served_model_mismatch",
+        "regroup_model_identity_missing": "served_model_missing",
+        "regroup_response_truncated": "finish_reason_not_stop",
+        "regroup_theme_count_exceeded": "max_themes_exceeded",
+        "regroup_response_invalid": "response_shape_invalid",
+    }
+    reason = getattr(exc, "reason", None)
+    detail = getattr(exc, "detail", None)
+    if isinstance(reason, str):
+        return reason_map.get(reason, reason), detail if isinstance(detail, str) else None
+    return "response_shape_invalid", None
+
+
+def _build_transport_summary_from_raw(
+    packet: Mapping[str, Any], ledger_path: Path, ledger: Mapping[str, Any],
+    raw_path: Path, raw: Mapping[str, Any], fetched_at: datetime,
+    response_sha256: str,
+) -> dict[str, Any]:
+    response = raw["response"]
+    telemetry = web._provider_response_telemetry(response)
+    served_model = telemetry["served_model"]
+    parsed_themes: list[Any] | None = None
+    parse_status = "passed"
+    parse_error_type = None
+    parse_error_reason = None
+    parse_error_detail = None
+    try:
+        _served_model, _fingerprint, parsed_themes = web._consume_regroup_response(
+            response,
+            expected_served_model=packet["paid_boundary"]["request"]["expected_served_model"],
+            chunk_index=packet["input"]["target_chunk_index"],
+        )
+    except Exception as exc:
+        parse_status = "failed"
+        parse_error_type = type(exc).__name__
+        parse_error_reason, parse_error_detail = _transport_failure_fields(exc)
+    request = packet["paid_boundary"]["request"]
+    call_counts = packet["paid_boundary"]["call_counts"]
+    dispatch_counts = ledger["dispatch_counts"]
+    vendor_counts = ledger["vendor_dispatch_counts"]
+    reservation_count = ledger["reservation_attempt_count"]
+    query_reservation_count = len(ledger["query_reservations"])
+    model_identity_complete = web._model_identity_is_complete(request["model"], served_model)
+    model_identity_match = (
+        model_identity_complete and served_model == request["expected_served_model"]
+    )
+    if parsed_themes is None:
+        theme_count_status = "failed" if parse_error_reason == "max_themes_exceeded" else "not_evaluated"
+        semantic_fields_status = "not_evaluated"
+    else:
+        theme_count_status = (
+            "passed" if len(parsed_themes) <= request["max_themes_per_chunk"] else "failed"
+        )
+        semantic_fields_status = (
+            "passed"
+            if all(
+                isinstance(theme, dict)
+                and isinstance(theme.get("semantic_assertions"), list)
+                for theme in parsed_themes
+            )
+            else "failed"
+        )
+    counts_match = (
+        vendor_counts["tavily"] == call_counts["tavily"]
+        and vendor_counts["deepseek"] == call_counts["deepseek"]
+        and vendor_counts["xai"] == call_counts["xai"]
+        and dispatch_counts["retry_dispatch_count"] == call_counts["retry"]
+        and len(ledger["recovery_events"]) == call_counts["recovery"]
+        and dispatch_counts["unknown_dispatch_count"] == call_counts["unknown_sibling"]
+    )
+    passed = (
+        model_identity_match
+        and telemetry["usage"] is not None
+        and telemetry["finish_reason"] == "stop"
+        and parse_status == "passed"
+        and theme_count_status == "passed"
+        and semantic_fields_status == "passed"
+        and counts_match
+        and dispatch_counts["dispatch_count"] == 1
+        and reservation_count == 1
+        and query_reservation_count == 1
+    )
+    raw_ref = raw_path.resolve().relative_to(ROOT.resolve()).as_posix()
+    return {
+        "schema_name": "us_short_web_regroup_engineering_smoke_summary",
+        "schema_version": "2.0.0",
+        "status": "live_authorized_engineering_smoke_response_captured",
+        "transport_verdict": "PASS" if passed else "FAIL",
+        "packet_id": packet["packet_id"],
+        "summary_ref": packet["output_boundary"]["summary_ref"],
+        "source_decision_date": packet["source_decision_date"],
+        "original_chunk_index": packet["input"]["target_chunk_index"],
+        "provider_call_count": dispatch_counts["dispatch_count"],
+        "deepseek_call_count": vendor_counts["deepseek"],
+        "tavily_call_count": vendor_counts["tavily"],
+        "xai_call_count": vendor_counts["xai"],
+        "retry_count": dispatch_counts["retry_dispatch_count"],
+        "recovery_count": len(ledger["recovery_events"]),
+        "unknown_sibling_count": dispatch_counts["unknown_dispatch_count"],
+        "budget_reservation_count": reservation_count,
+        "budget_query_reservation_count": query_reservation_count,
+        "budget_ledger_ref": ledger_path.resolve().relative_to(ROOT.resolve()).as_posix(),
+        "requested_model": request["model"],
+        "expected_served_model": request["expected_served_model"],
+        "served_model": served_model,
+        "system_fingerprint": telemetry["system_fingerprint"],
+        "max_tokens_requested": request["max_tokens"],
+        "strict_json_requested": True,
+        "response_format": request["response_format"],
+        "usage": telemetry["usage"],
+        "finish_reason": telemetry["finish_reason"],
+        "raw_provider_response_ref": raw_ref,
+        "raw_provider_response_sha256": response_sha256,
+        "raw_persisted_before_parse": True,
+        "raw_hash_reread": True,
+        "strict_parse_status": parse_status,
+        "strict_parse_error_type": parse_error_type,
+        "strict_parse_error_reason": parse_error_reason,
+        "strict_parse_error_detail": parse_error_detail,
+        "parsed_theme_count": len(parsed_themes) if parsed_themes is not None else None,
+        "theme_count_status": theme_count_status,
+        "max_four_themes_status": theme_count_status,
+        "semantic_fields_status": semantic_fields_status,
+        "model_identity_complete": model_identity_complete,
+        "model_identity_match": model_identity_match,
+        "formal_decision_slots_occupied": False,
+        "discovery_published": False,
+        "receipt_published": False,
+        "merge_published": False,
+        "validation_published": False,
+        "boost_published": False,
+        "score_effect": False,
+        "replay_permitted": False,
+        "terminal_error_type": None,
+        "terminal_error_reason": None,
+        "terminal_error_detail": None,
+        "executed_at": fetched_at.isoformat(),
+    }
+
+
+def finalize_transport_summary_from_raw() -> dict[str, Any]:
+    """Record the already-paid v3 transport result without reserving or calling anything."""
+    packet = _validate_packet()
+    summary_path = _transport_summary_path(packet)
+    if summary_path.exists():
+        raise WebRegroupReplayError("fifth-knife transport summary already exists")
+    ledger_path, ledger = _load_transport_ledger(packet)
+    raw_path, raw, fetched_at, response_sha256 = _load_single_transport_raw(packet)
+    summary = _build_transport_summary_from_raw(
+        packet, ledger_path, ledger, raw_path, raw, fetched_at, response_sha256,
+    )
+    web.publish_engineering_smoke_diagnostic(summary)
+    return summary
 
 
 def _load_frozen_sic() -> tuple[dict[str, Any], dict[str, str]]:
@@ -299,10 +546,10 @@ def _semantic_results(
     ]
 
 
-def _write_replay_summary(summary: dict[str, Any]) -> None:
+def _write_replay_summary(summary: dict[str, Any], packet: Mapping[str, Any]) -> None:
     try:
         publish_policy._write_mutable_private_json(
-            summary, REPLAY_SUMMARY_PATH,
+            summary, _replay_summary_path(packet),
             root=ROOT, state_dir=ROOT / "state" / "us_short",
             gitignored=web._gitignored,
         )
@@ -314,7 +561,7 @@ def run_replay() -> dict[str, Any]:
     packet = _validate_packet()
     transport_summary = _validate_transport_summary(packet)
     target_rows, target_refs, _source_fetched_at = _load_target_inputs(packet)
-    response, response_fetched_at = _load_transport_response(transport_summary)
+    response, response_fetched_at = _load_transport_response(packet, transport_summary)
     served_model, _fingerprint, themes = web._consume_regroup_response(
         response,
         expected_served_model=None,
@@ -399,7 +646,7 @@ def run_replay() -> dict[str, Any]:
         "score_effect": False,
         "readiness": None,
     }
-    _write_replay_summary(machine_summary)
+    _write_replay_summary(machine_summary, packet)
     return machine_summary
 
 

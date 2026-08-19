@@ -859,7 +859,7 @@ class WebRegroupReplayTests(unittest.TestCase):
             patches = (
                 mock.patch.object(replay, "ROOT", test_root),
                 mock.patch.object(replay, "SIC_SNAPSHOT_PATH", test_root / "frozen_sic_snapshot.json"),
-                mock.patch.object(replay, "REPLAY_SUMMARY_PATH", summary_path),
+                mock.patch.object(replay, "_replay_summary_path", return_value=summary_path),
                 mock.patch.object(replay, "_validate_packet", return_value=packet),
                 mock.patch.object(replay, "_validate_transport_summary", return_value=transport_summary),
                 mock.patch.object(replay, "_load_target_inputs", return_value=(rows, refs, datetime(2026, 8, 15, tzinfo=timezone.utc))),
@@ -877,6 +877,71 @@ class WebRegroupReplayTests(unittest.TestCase):
                         result = replay.run_replay()
             saved = json.loads(summary_path.read_text(encoding="utf-8"))
         return result, saved
+
+    def test_5b_transport_summary_and_raw_follow_the_current_packet_boundary(self):
+        packet = json.loads(
+            (replay.ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v3.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            replay._transport_summary_path(packet),
+            replay.ROOT / packet["output_boundary"]["summary_ref"],
+        )
+        self.assertEqual(
+            replay._transport_raw_root(packet),
+            replay.ROOT / packet["output_boundary"]["raw_root"].rstrip("/"),
+        )
+        self.assertNotIn("engineering_smoke_v2", str(replay._transport_summary_path(packet)))
+        self.assertNotIn("engineering_smoke_v2", str(replay._transport_raw_root(packet)))
+
+    def test_5b_finalize_transport_verdict_is_derived_from_raw(self):
+        packet = json.loads(
+            (replay.ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v3.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        response = {
+            "model": "deepseek-v4-pro",
+            "system_fingerprint": "fp_finalize",
+            "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
+            "choices": [{
+                "message": {"content": json.dumps({"themes": [{"semantic_assertions": []}]} )},
+                "finish_reason": "stop",
+            }],
+        }
+        raw = {"provider": "deepseek", "response": response, "fetched_at": "2026-08-19T08:32:42.977104+00:00"}
+        ledger = {
+            "dispatch_counts": {
+                "stage1_dispatch_count": 0,
+                "stage2_dispatch_count": 1,
+                "retry_dispatch_count": 0,
+                "dispatch_count": 1,
+                "unknown_dispatch_count": 0,
+            },
+            "vendor_dispatch_counts": {"tavily": 0, "deepseek": 1, "xai": 0},
+            "reservation_attempt_count": 1,
+            "query_reservations": [{"attempt_count": 1, "last_status": "complete"}],
+            "recovery_events": [],
+        }
+        raw_path = replay.ROOT / "provider_samples/us_short_llm_theme_discovery_engineering_smoke_v3/provider_responses/20260815/deepseek_test.json"
+        response_sha256 = web._sha256_bytes(web._canonical_json(response))
+        summary = replay._build_transport_summary_from_raw(
+            packet, replay.ROOT / packet["output_boundary"]["budget_ledger_ref"], ledger,
+            raw_path, raw, datetime(2026, 8, 19, 8, 32, 42, 977104, tzinfo=timezone.utc), response_sha256,
+        )
+        self.assertEqual(summary["transport_verdict"], "PASS")
+        self.assertEqual(summary["raw_provider_response_ref"], raw_path.relative_to(replay.ROOT).as_posix())
+        mutated = copy.deepcopy(response)
+        mutated["choices"][0]["finish_reason"] = "length"
+        mutated_raw = {**raw, "response": mutated}
+        mutated_summary = replay._build_transport_summary_from_raw(
+            packet, replay.ROOT / packet["output_boundary"]["budget_ledger_ref"], ledger,
+            raw_path, mutated_raw, datetime(2026, 8, 19, 8, 32, 42, 977104, tzinfo=timezone.utc),
+            web._sha256_bytes(web._canonical_json(mutated)),
+        )
+        self.assertEqual(mutated_summary["transport_verdict"], "FAIL")
+        self.assertEqual(mutated_summary["strict_parse_error_reason"], "finish_reason_not_stop")
 
     def test_5b_replay_uses_real_parser_binding_normalizer_validator_and_keeps_zero_effects(self):
         result, saved = self._run_fixture()

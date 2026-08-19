@@ -3824,3 +3824,11 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 ### 下一步
 
 `用户裁决「补记算不算 replay」→ Codex 闭合 P1 + finalize → 我审查 → Codex 跑 5b → 按 readiness 定第四枪`。
+
+## 2026-08-19 追加：5b 路径修复与第三枪 raw 补记完成（8d8c；待 Claude 独立复审）
+
+- 5b replay runner 已切到第三枪 v3 packet；summary/raw/replay 路径由 packet 的 `output_boundary` / `diagnostic_root` 派生，不再钉 v2。
+- `finalize_transport_summary_from_raw()` 读取主树 v3 raw/ledger，复用生产检查并计算 verdict，写入 v3 `summary_ref`；无 provider、预算、重试、正式发布。
+- 零成本补记完成：v3 summary 为 `PASS`、`deepseek-v4-pro`、`stop`、1 个主题；ledger 未变，provider call 仍为 1，recovery 为 0。
+- 验证：owner `31 OK`；packet/summary/raw 只读复核 PASS；5b replay 尚未执行，未开第四枪，第一枪/第二枪未动。
+- 下一步：Claude 独立复审 → PASS 后 Codex 执行 5b 零付费 replay → readiness / 第四枪决策。
