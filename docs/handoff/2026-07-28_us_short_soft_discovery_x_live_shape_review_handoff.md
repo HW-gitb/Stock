@@ -3785,3 +3785,10 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - runner 的真实主树入口只认 v3；v2 仅保留离线测试临时假包兼容，不接受主树已消费 v2 路径。
 - 离线校验使用主树现有冻结 receipt/raw：schema、receipt/source digest、生产 chunk、prompt digest 全通过；owner 包 `72 OK`。未联网、未调用 provider、未授权、未提交/合并。
 - 下一步严格按顺序：Claude 独立审查 → 合入主树 → 用户对 v3 精确 packet 再次明确付费授权 → 主树只打一枪；transport PASS 才能跑 5b。
+
+## 2026-08-19 追加：v3 packet Required + Optional 已修复（8d8c；待独立复审）
+
+- Required：现有 owner 测试新增真实 v3 packet contract 用例，以及篡改 v3 `target_chunk_index` 后在 budget/client 前拒绝的用例。
+- Optional：删除 legacy 分支恒真的路径比较；保留运行时输出根与 packet 声明不一致即拒绝的真实门。
+- 验证：固定 Python `tests.test_us_short_llm_theme_discovery_plan_budget` = `74 OK`；未联网、未调用 provider、未同步主树、未提交/合并。
+- 下一步：Claude 独立复审；PASS 后按规则提交，再考虑同步主树和 v3 授权。

@@ -142,18 +142,19 @@ class _K5FakeBudget:
 def _k5_smoke_fixture(
     *, response: object | None = None, client_error: BaseException | None = None,
     completion_error: BaseException | None = None, persist_error: BaseException | None = None,
-    publish_error: BaseException | None = None,
+    publish_error: BaseException | None = None, packet_version: int = 2,
 ):
+    version = str(packet_version)
     packet = json.loads(
-        (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v2.json").read_text(
+        (ROOT / f"docs/us_short_web_regroup_engineering_smoke_packet_20260815_v{version}.json").read_text(
             encoding="utf-8"
         )
     )
     with tempfile.TemporaryDirectory(prefix="us_short_k5_") as raw:
         root = Path(raw)
         state_dir = root / "state" / "us_short"
-        private_root = state_dir / "runs_private" / "soft_discovery_engineering_smoke_v2"
-        provider_root = root / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke_v2"
+        private_root = state_dir / "runs_private" / f"soft_discovery_engineering_smoke_v{version}"
+        provider_root = root / "provider_samples" / f"us_short_llm_theme_discovery_engineering_smoke_v{version}"
         parent_plan = {"plan_identity": "p" * 64}
         fake_client = _K5FakeDeepSeek(
             response if response is not None else _k5_response(), error=client_error,
@@ -973,6 +974,26 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         self.assertEqual(envelopes["web"]["retry_max_dispatch_count"], 0)
         self.assertEqual(envelopes["web"]["max_dispatch_count"], 1)
         self.assertEqual(envelopes["xai"]["max_dispatch_count"], 0)
+
+    def test_K5_v3_packet_identity_branch_accepts_tracked_packet(self):
+        packet = json.loads(
+            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v3.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        smoke._assert_packet_contract(packet)
+
+    def test_K5_v3_packet_mutation_stops_before_budget_or_client(self):
+        with _k5_smoke_fixture(packet_version=3) as fixture:
+            forged = json.loads(json.dumps(fixture["packet"]))
+            forged["input"]["target_chunk_index"] = 2
+            with mock.patch.object(smoke, "_validate_packet", return_value=forged):
+                with self.assertRaisesRegex(smoke.EngineeringSmokeError, "target or prompt binding"):
+                    smoke.run_one_shot(
+                        forged, confirm_user_authorization=forged["packet_id"],
+                    )
+            fixture["reserve_mock"].assert_not_called()
+            fixture["client_constructor"].assert_not_called()
 
     def test_K5_requires_exact_packet_confirmation_before_fixed_main_tree_gate(self):
         packet = json.loads(
