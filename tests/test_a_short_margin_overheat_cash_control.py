@@ -1131,6 +1131,22 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
                 root=self.root, daily_cache_document=self.cache,
             )
 
+    def test_unqualified_settlement_still_rejects_a_half_migrated_flat_partial(self):
+        # A date root can carry BOTH a revisions/ container and a stray flat
+        # artifact.  Only the revision-only shape means "this week was captured
+        # under a revision"; a half-migrated root is still a partial flat set,
+        # and the skip must not swallow it.
+        self._capture()
+        (self.root / "weeks" / AS_OF / "revisions" / ("c" * 32)).mkdir(parents=True)
+        (self.root / f"weeks/{AS_OF}/source_receipt.json").unlink()
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError,
+            "partial margin-overheat capture artifact set",
+        ):
+            track.settle_margin_overheat_from_daily_cache(
+                root=self.root, daily_cache_document=self.cache,
+            )
+
     def test_official_revision_partial_capture_still_rejects_missing_artifact(self):
         revision = "b" * 32
         self._capture(run_revision_id=revision)
