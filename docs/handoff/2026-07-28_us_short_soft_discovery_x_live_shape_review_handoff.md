@@ -3792,3 +3792,58 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - Optional：删除 legacy 分支恒真的路径比较；保留运行时输出根与 packet 声明不一致即拒绝的真实门。
 - 验证：固定 Python `tests.test_us_short_llm_theme_discovery_plan_budget` = `74 OK`；未联网、未调用 provider、未同步主树、未提交/合并。
 - 下一步：Claude 独立复审；PASS 后按规则提交，再考虑同步主树和 v3 授权。
+
+## 2026-08-19 追加：第三枪摘要路径最小修复与 v4 packet（8d8c；待独立复审）
+
+- 第三枪 v3 的 raw 已落盘但 summary 写入撞到旧 v2 路径；本轮只修 `fetch_web` writer：从 packet 的 `output_boundary.summary_ref` 派生目标，并保留私有根检查，不开放自由输出路径。
+- v3 已消费，不复用；新建 `docs/us_short_web_regroup_engineering_smoke_packet_20260815_v4.json` 与对应 v4 schema。v4 使用新的诊断/raw/summary 根，仍固定 chunk 1、10 条来源、`deepseek-v4-pro`、1 次调用、零重试，正式输出全禁。
+- 验证：owner `75 OK`；v4 schema/packet `0 errors`；主树既有冻结 receipt/raw 只读交叉校验 PASS；未联网、未调用 provider、未同步主树、未提交/合并。
+- 下一步严格按顺序：Claude 独立复审 → PASS 后提交/同步主树 → 用户对 v4 精确 packet 明确授权 → 才能执行一次；当前不得执行 provider。
+
+## 2026-08-19 交接 Codex：让 5b 够得着第三枪的 raw（零付费判卷前的最后一道工）
+
+### 为什么不是「直接跑 5b」
+
+用户问下一步是否直接跑 5b。**不行**：`runners/us_short_llm_theme_discovery_web_regroup_replay.py` 整个还钉在第一枪上——`_v2` 5 处路径级绑定，且 `_validate_transport_summary()` 要求那份 v2 summary 的 `transport_verdict == "PASS"`，而第一枪是 `FAIL`。**这是「hardcoded v2」这个缺陷类的第三条腿**（前两条：smoke runner 常量、fetch_web 的 summary writer，后者烧掉一枪才修）。
+
+### 交给 Codex 的任务（**等用户裁决第 1 步之后才动手**）
+
+**任务**：闭合 `R-USSHORT-5B-REPLAY-RUNNER-IS-STILL-PINNED-TO-THE-FIRST-SHOT`（P1），并实现 finalize-from-raw。**三条闭合要求与整类扫查范围写在 `docs/system_risk_register.md` 顶部同名节，以那节为准。**
+
+**finalize-from-raw 的硬边界**：
+
+- **零 provider 调用、零预算预约**；只读已落盘的 v3 raw 与其预算账本。
+- **`transport_verdict` 必须从真实 raw 推导**（served model / finish_reason / JSON 可解析性 / 主题数逐项算出来），**绝不允许手工写成 PASS**——这是我复审时会重点打的地方。
+- 落盘位置仍走 packet 声明的 `summary_ref`（v3 那一份），不得另开路径。
+- 第一枪与第二枪的产物逐字节不动。
+
+**顺序**：闭合 P1 + finalize → 产出第三枪 summary → 我审查 → **再**跑 5b（零付费）→ 按 readiness 决定要不要第四枪。
+
+**不许做**：不得为了让 5b 跑通而放宽它的前置门；不得开第四枪；不得改桌面文档。
+
+### 下一步
+
+`用户裁决「补记算不算 replay」→ Codex 闭合 P1 + finalize → 我审查 → Codex 跑 5b → 按 readiness 定第四枪`。
+
+## 2026-08-19 追加：5b 路径修复与第三枪 raw 补记完成（8d8c；待 Claude 独立复审）
+
+- 5b replay runner 已切到第三枪 v3 packet；summary/raw/replay 路径由 packet 的 `output_boundary` / `diagnostic_root` 派生，不再钉 v2。
+- `finalize_transport_summary_from_raw()` 读取主树 v3 raw/ledger，复用生产检查并计算 verdict，写入 v3 `summary_ref`；无 provider、预算、重试、正式发布。
+- 零成本补记完成：v3 summary 为 `PASS`、`deepseek-v4-pro`、`stop`、1 个主题；ledger 未变，provider call 仍为 1，recovery 为 0。
+- 验证：owner `31 OK`；packet/summary/raw 只读复核 PASS；5b replay 尚未执行，未开第四枪，第一枪/第二枪未动。
+- 下一步：Claude 独立复审 → PASS 后 Codex 执行 5b 零付费 replay → readiness / 第四枪决策。
+
+## 2026-08-19 追加：5b 已在第三枪 raw 上执行（8d8c；待 Claude 独立复审）
+
+- 首次 5b 执行在 source digest 门安全停止：raw 没变，但 runner 错把每条 source 的冻结 `fetched_at` 合成最大值；无 provider、预算、重试，也没有写 summary。
+- 已做最小修复：每条 source 用自己的冻结 `fetched_at` 调生产 normalizer，再按生产顺序切块；没有放宽 digest 或正式输出门。owner `32 OK`。
+- 修复后重跑完成：`offline_replay_completed`，`transport_verdict=PASS`、`deepseek-v4-pro`、1 条主题；5 个成员绑定接受、0 个绑定拒绝；语义结果因 `malformed_semantic_assertion` 拒绝，`readiness=null`。
+- replay summary 写入私有 v3 诊断根；provider/network/retry=`0/0/0`，正式决策槽为 false，预算账本未变；第一枪、第二枪和第三枪 transport summary/raw 未动。
+- 下一步：Claude 独立复审本次 per-source 时钟修复与 replay 结果；通过后再按 readiness 决定是否第四枪。
+
+## 2026-08-19 追加：5b 两项 Required 最小修复（8d8c；待独立复审）
+
+- 生产绑定层保留语义断言失败的字段级 detail；5b `semantic_results` 增加按主题的脱敏 `drop_details`，用于区分具体字段/原因，不带模型原文。
+- 新增承重用例：除 `transport_verdict=FAIL` 外 transport summary 字段全部合法时，5b 仍在读取目标输入前拒绝，且不写 replay summary。
+- 验证：5b 专项 `15 OK`、新增守卫 `2 OK`、Web 生产入口 `83 OK`、owner `34 OK`；未联网、未调用 provider、未花费；主树既有第三枪 summary 未改。
+- 下一步：Claude 独立复审本次两项 Required 修复。

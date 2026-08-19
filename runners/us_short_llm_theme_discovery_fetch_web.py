@@ -452,11 +452,22 @@ def publish_budget_abort_diagnostic(
     return path
 
 
-def _engineering_smoke_summary_path() -> Path:
-    return (
-        STATE_DIR / "runs_private" / "soft_discovery_engineering_smoke_v2"
-        / "us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json"
-    )
+def _engineering_smoke_summary_path(summary: Mapping[str, Any]) -> Path:
+    summary_ref = summary.get("summary_ref")
+    state_prefix = "state/us_short/"
+    if (
+        not isinstance(summary_ref, str)
+        or not summary_ref.startswith(
+            state_prefix + "runs_private/soft_discovery_engineering_smoke_"
+        )
+    ):
+        raise WebThemeDiscoveryError("engineering-smoke summary path is not packet-bound")
+    path = (STATE_DIR / summary_ref[len(state_prefix):]).resolve()
+    try:
+        path.relative_to(STATE_DIR.resolve())
+    except ValueError as exc:
+        raise WebThemeDiscoveryError("engineering-smoke summary path is not private") from exc
+    return path
 
 
 def publish_engineering_smoke_diagnostic(summary: dict[str, Any]) -> Path:
@@ -465,7 +476,7 @@ def publish_engineering_smoke_diagnostic(summary: dict[str, Any]) -> Path:
         raise WebThemeDiscoveryError("engineering-smoke summary status is not diagnostic-only")
     if summary.get("formal_decision_slots_occupied") is not False:
         raise WebThemeDiscoveryError("engineering-smoke summary must forbid formal decision output")
-    path = _engineering_smoke_summary_path()
+    path = _engineering_smoke_summary_path(summary)
     if not _gitignored(path) or path.name.startswith("us_short_llm_theme_discovery_web_"):
         raise WebThemeDiscoveryError("engineering-smoke summary path is not a private ignored slot")
     try:
@@ -1489,6 +1500,7 @@ def _llm_to_discovery_input(
     themes: list[dict[str, Any]] = []
     ledger: list[dict[str, Any]] = []
     theme_ledger_groups: list[tuple[dict[str, Any], list[int]]] = []
+    theme_drop_details: dict[str, list[str]] = {}
 
     def set_parent(rows: list[int], status: str, reason: str | None) -> None:
         for row_index in rows:
@@ -1657,7 +1669,10 @@ def _llm_to_discovery_input(
             set_parent(theme_rows, "accepted", None)
             theme_ledger_groups.append((theme, theme_rows))
         except _ProviderItemRejected as exc:
-            drop(exc.reason, f"chunk[{chunk_index}].theme[{theme_index}]")
+            detail = _ledger_safe_detail(exc.detail)
+            drop(exc.reason, f"chunk[{chunk_index}].theme[{theme_index}]:{detail}")
+            if isinstance(theme_id, str):
+                theme_drop_details.setdefault(theme_id, []).append(detail)
             set_parent(theme_rows, "rejected", exc.reason)
         except Exception as exc:
             drop(
@@ -1674,6 +1689,7 @@ def _llm_to_discovery_input(
         "themes": themes,
         "member_binding_ledger": ledger,
         "_theme_ledger_groups": theme_ledger_groups,
+        "_theme_drop_details": theme_drop_details,
     }
 
 

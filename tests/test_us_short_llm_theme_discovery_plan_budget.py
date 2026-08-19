@@ -975,9 +975,18 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         self.assertEqual(envelopes["web"]["max_dispatch_count"], 1)
         self.assertEqual(envelopes["xai"]["max_dispatch_count"], 0)
 
-    def test_K5_v3_packet_identity_branch_accepts_tracked_packet(self):
+    def test_K5_consumed_v3_packet_cannot_reuse_the_v4_runtime(self):
         packet = json.loads(
             (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v3.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        with self.assertRaisesRegex(smoke.EngineeringSmokeError, "runtime output paths"):
+            smoke._assert_packet_contract(packet)
+
+    def test_K5_v4_packet_identity_branch_accepts_tracked_packet(self):
+        packet = json.loads(
+            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v4.json").read_text(
                 encoding="utf-8"
             )
         )
@@ -1019,6 +1028,8 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 web.STATE_DIR = Path(raw)
                 summary = {
                     "status": "live_authorized_engineering_smoke_call_failed",
+                    "packet_id": "us_short_web_regroup_engineering_smoke_20260815_chunk1_v2",
+                    "summary_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v2/us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json",
                     "formal_decision_slots_occupied": False,
                 }
                 with mock.patch.object(web, "_gitignored", return_value=True):
@@ -1027,6 +1038,16 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 self.assertEqual(
                     json.loads(path.read_text(encoding="utf-8"))["status"],
                     summary["status"],
+                )
+                v4_summary_ref = "state/us_short/runs_private/soft_discovery_engineering_smoke_v4/us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json"
+                v4_path = web.publish_engineering_smoke_diagnostic({
+                    **summary,
+                    "packet_id": "us_short_web_regroup_engineering_smoke_20260815_chunk1_v4",
+                    "summary_ref": v4_summary_ref,
+                })
+                self.assertEqual(
+                    v4_path,
+                    Path(raw) / Path(v4_summary_ref).relative_to("state/us_short"),
                 )
                 with self.assertRaises(TypeError):
                     web.publish_engineering_smoke_diagnostic(

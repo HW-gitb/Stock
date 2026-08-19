@@ -10,7 +10,7 @@ import json
 import tempfile
 import uuid
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -757,7 +757,7 @@ class WebRegroupReplayTests(unittest.TestCase):
     @staticmethod
     def _fixture(
         *, include_positive=True, include_negative=True, binding_dead=False,
-        duplicate_theme=False, served_model="deepseek-chat",
+        duplicate_theme=False, served_model="deepseek-chat", malformed_semantic=False,
     ):
         source_ids = ["web:" + format(index, "064x") for index in range(10)]
         refs = [{
@@ -801,6 +801,8 @@ class WebRegroupReplayTests(unittest.TestCase):
                     "common_driver": None,
                     "member_links": [],
                 }
+            if malformed_semantic and basis == "shared_commercial_driver":
+                assertion["member_links"][0]["role"] = "AI chip supplier"
             return {
                 "theme_id": theme_id, "display_name": theme_id,
                 "summary": "Frozen replay fixture", "observed_at": "2026-08-10T12:00:00+00:00",
@@ -859,7 +861,7 @@ class WebRegroupReplayTests(unittest.TestCase):
             patches = (
                 mock.patch.object(replay, "ROOT", test_root),
                 mock.patch.object(replay, "SIC_SNAPSHOT_PATH", test_root / "frozen_sic_snapshot.json"),
-                mock.patch.object(replay, "REPLAY_SUMMARY_PATH", summary_path),
+                mock.patch.object(replay, "_replay_summary_path", return_value=summary_path),
                 mock.patch.object(replay, "_validate_packet", return_value=packet),
                 mock.patch.object(replay, "_validate_transport_summary", return_value=transport_summary),
                 mock.patch.object(replay, "_load_target_inputs", return_value=(rows, refs, datetime(2026, 8, 15, tzinfo=timezone.utc))),
@@ -877,6 +879,71 @@ class WebRegroupReplayTests(unittest.TestCase):
                         result = replay.run_replay()
             saved = json.loads(summary_path.read_text(encoding="utf-8"))
         return result, saved
+
+    def test_5b_transport_summary_and_raw_follow_the_current_packet_boundary(self):
+        packet = json.loads(
+            (replay.ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v3.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            replay._transport_summary_path(packet),
+            replay.ROOT / packet["output_boundary"]["summary_ref"],
+        )
+        self.assertEqual(
+            replay._transport_raw_root(packet),
+            replay.ROOT / packet["output_boundary"]["raw_root"].rstrip("/"),
+        )
+        self.assertNotIn("engineering_smoke_v2", str(replay._transport_summary_path(packet)))
+        self.assertNotIn("engineering_smoke_v2", str(replay._transport_raw_root(packet)))
+
+    def test_5b_finalize_transport_verdict_is_derived_from_raw(self):
+        packet = json.loads(
+            (replay.ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v3.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        response = {
+            "model": "deepseek-v4-pro",
+            "system_fingerprint": "fp_finalize",
+            "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
+            "choices": [{
+                "message": {"content": json.dumps({"themes": [{"semantic_assertions": []}]} )},
+                "finish_reason": "stop",
+            }],
+        }
+        raw = {"provider": "deepseek", "response": response, "fetched_at": "2026-08-19T08:32:42.977104+00:00"}
+        ledger = {
+            "dispatch_counts": {
+                "stage1_dispatch_count": 0,
+                "stage2_dispatch_count": 1,
+                "retry_dispatch_count": 0,
+                "dispatch_count": 1,
+                "unknown_dispatch_count": 0,
+            },
+            "vendor_dispatch_counts": {"tavily": 0, "deepseek": 1, "xai": 0},
+            "reservation_attempt_count": 1,
+            "query_reservations": [{"attempt_count": 1, "last_status": "complete"}],
+            "recovery_events": [],
+        }
+        raw_path = replay.ROOT / "provider_samples/us_short_llm_theme_discovery_engineering_smoke_v3/provider_responses/20260815/deepseek_test.json"
+        response_sha256 = web._sha256_bytes(web._canonical_json(response))
+        summary = replay._build_transport_summary_from_raw(
+            packet, replay.ROOT / packet["output_boundary"]["budget_ledger_ref"], ledger,
+            raw_path, raw, datetime(2026, 8, 19, 8, 32, 42, 977104, tzinfo=timezone.utc), response_sha256,
+        )
+        self.assertEqual(summary["transport_verdict"], "PASS")
+        self.assertEqual(summary["raw_provider_response_ref"], raw_path.relative_to(replay.ROOT).as_posix())
+        mutated = copy.deepcopy(response)
+        mutated["choices"][0]["finish_reason"] = "length"
+        mutated_raw = {**raw, "response": mutated}
+        mutated_summary = replay._build_transport_summary_from_raw(
+            packet, replay.ROOT / packet["output_boundary"]["budget_ledger_ref"], ledger,
+            raw_path, mutated_raw, datetime(2026, 8, 19, 8, 32, 42, 977104, tzinfo=timezone.utc),
+            web._sha256_bytes(web._canonical_json(mutated)),
+        )
+        self.assertEqual(mutated_summary["transport_verdict"], "FAIL")
+        self.assertEqual(mutated_summary["strict_parse_error_reason"], "finish_reason_not_stop")
 
     def test_5b_replay_uses_real_parser_binding_normalizer_validator_and_keeps_zero_effects(self):
         result, saved = self._run_fixture()
@@ -898,6 +965,73 @@ class WebRegroupReplayTests(unittest.TestCase):
         self.assertFalse(result["boost_published"])
         self.assertFalse(result["score_effect"])
         self.assertEqual(saved, result)
+
+    def test_5b_semantic_drop_keeps_sanitized_field_detail(self):
+        result, _saved = self._run_fixture(
+            include_negative=False, malformed_semantic=True,
+        )
+        semantic = result["semantic_results"][0]
+        self.assertEqual(semantic["machine_result"], "not_reached_semantic_gate")
+        self.assertEqual(semantic["drop_reasons"], ["malformed_semantic_assertion"])
+        self.assertEqual(
+            semantic["drop_details"],
+            ["chunk[1].theme[0].semantic_assertions[0].member_links[0].role is invalid"],
+        )
+        self.assertNotIn("AI chip supplier", json.dumps(semantic))
+
+    def test_5b_failed_transport_is_rejected_before_replay_output(self):
+        packet, _rows, _refs, _response, _transport, _snapshot, _sectors = self._fixture()
+        packet = {
+            **packet,
+            "paid_boundary": {"request": {
+                "model": "deepseek-chat",
+                "expected_served_model": "deepseek-chat",
+            }},
+            "output_boundary": {
+                "budget_ledger_ref": "state/us_short/runs_private/budget.json",
+            },
+        }
+        with tempfile.TemporaryDirectory(prefix="us_short_5b_failed_transport_") as temp_root:
+            root = Path(temp_root)
+            transport_path = root / "transport_summary.json"
+            replay_path = root / "replay_summary.json"
+            transport_path.write_text(json.dumps({
+                "packet_id": packet["packet_id"],
+                "source_decision_date": "20260815",
+                "transport_verdict": "FAIL",
+                "status": "live_authorized_engineering_smoke_response_captured",
+                "original_chunk_index": packet["input"]["target_chunk_index"],
+                "requested_model": "deepseek-chat",
+                "expected_served_model": "deepseek-chat",
+                "model_identity_match": True,
+                "budget_ledger_ref": packet["output_boundary"]["budget_ledger_ref"],
+                "provider_call_count": 1,
+                "deepseek_call_count": 1,
+                "tavily_call_count": 0,
+                "xai_call_count": 0,
+                "retry_count": 0,
+                "recovery_count": 0,
+                "unknown_sibling_count": 0,
+                "raw_persisted_before_parse": True,
+                "raw_hash_reread": True,
+                "strict_parse_status": "passed",
+                "formal_decision_slots_occupied": False,
+            }), encoding="utf-8")
+            with (
+                mock.patch.object(replay, "_validate_packet", return_value=packet),
+                mock.patch.object(replay, "_transport_summary_path", return_value=transport_path),
+                mock.patch.object(replay, "_replay_summary_path", return_value=replay_path),
+                mock.patch.object(
+                    replay, "_load_target_inputs",
+                    side_effect=AssertionError("failed transport reached replay input"),
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    replay.WebRegroupReplayError,
+                    "transport summary is not a PASS",
+                ):
+                    replay.run_replay()
+            self.assertFalse(replay_path.exists())
 
     def test_5b_duplicate_theme_rejects_its_member_rows(self):
         result, _saved = self._run_fixture(duplicate_theme=True)
@@ -1045,6 +1179,75 @@ class WebRegroupReplayTests(unittest.TestCase):
                 actual_rows, actual_refs, _actual_fetched_at = replay._load_target_inputs(packet)
             self.assertEqual([row["source_id"] for row in actual_rows], packet["input"]["target_source_ids"])
             self.assertEqual(actual_refs, packet["input"]["target_source_refs"])
+
+    def test_5b_source_digest_keeps_each_frozen_fetched_at(self):
+        with temporary_provider_directory(replay.ROOT) as private_root:
+            root = Path(private_root)
+            raw_dir = root / "provider_samples" / "us_short_llm_theme_discovery_fetch_web" / "raw" / "20260815"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            rows = []
+            fetched_at_by_url = {}
+            for index in range(34):
+                url = f"https://example.test/5b-clock-source-{index:02d}"
+                row = {
+                    "url": url, "title": f"Title {index}", "content": f"Content {index}",
+                    "published_date": "2026-08-10T10:00:00Z",
+                }
+                rows.append(row)
+                fetched_at_by_url[url] = datetime(
+                    2026, 8, 15, 4, 30, tzinfo=timezone.utc,
+                ) + timedelta(minutes=index)
+            normalized_refs = []
+            prompt_rows = []
+            for row in rows:
+                refs, prompts, drops = web._normalize_search_results(
+                    [row], expected_decision_date="20260815",
+                    fetched_at=fetched_at_by_url[row["url"]], raw_root=None,
+                    persist_raw=False,
+                )
+                self.assertFalse(drops)
+                normalized_refs.extend(refs)
+                prompt_rows.extend(prompts)
+            normalized_refs.sort(key=lambda ref: ref["source_id"])
+            prompt_rows.sort(key=lambda row: row["source_id"])
+            chunks = web._chunk_regroup_rows(prompt_rows)
+            ref_by_id = {}
+            for ref in normalized_refs:
+                row = next(row for row in rows if web._source_id(row["url"]) == ref["source_id"])
+                raw = {
+                    "source_id": ref["source_id"], "canonical_locator": row["url"],
+                    "title": row["title"], "content": row["content"],
+                    "published_at": row["published_date"],
+                }
+                raw_path = raw_dir / f"{ref['source_id'].split(':', 1)[1]}.json"
+                raw_path.write_text(json.dumps(raw), encoding="utf-8")
+                ref_by_id[ref["source_id"]] = {
+                    **ref,
+                    "fetched_at": fetched_at_by_url[row["url"]].isoformat(),
+                    "raw_receipt_ref": raw_path.relative_to(root).as_posix(),
+                    "raw_receipt_gitignored": True,
+                }
+            receipt_path = root / "state" / "us_short" / "us_short_llm_theme_discovery_web_20260815_receipt.json"
+            receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            receipt_path.write_text(json.dumps({
+                "decision_clock": {"expected_decision_date": "20260815"},
+                "source_refs": list(reversed([ref_by_id[ref["source_id"]] for ref in normalized_refs])),
+            }), encoding="utf-8")
+            target = chunks[1]
+            packet = {
+                "input": {
+                    "receipt_ref": receipt_path.relative_to(root).as_posix(),
+                    "accepted_source_count": 34,
+                    "target_chunk_index": 1,
+                    "target_source_ids": [row["source_id"] for row in target],
+                    "target_source_refs": [ref_by_id[row["source_id"]] for row in target],
+                },
+            }
+            with mock.patch.object(replay, "ROOT", root):
+                actual_rows, actual_refs, actual_fetched_at = replay._load_target_inputs(packet)
+            self.assertEqual([row["source_id"] for row in actual_rows], packet["input"]["target_source_ids"])
+            self.assertEqual(actual_refs, packet["input"]["target_source_refs"])
+            self.assertEqual(actual_fetched_at, max(fetched_at_by_url.values()))
 
     def test_5b_has_no_free_input_or_paid_entrypoint(self):
         source = Path(replay.__file__).read_text(encoding="utf-8")
