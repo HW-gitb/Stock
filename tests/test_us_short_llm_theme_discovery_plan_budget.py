@@ -1058,7 +1058,7 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         self.assertEqual(summary["strict_parse_error_detail"], "chunk[1]:served_model")
         self.assertEqual(summary["max_four_themes_status"], "not_evaluated")
         self.assertEqual(summary["semantic_fields_status"], "not_evaluated")
-        self.assertEqual(summary["requested_model"], "deepseek-chat")
+        self.assertEqual(summary["requested_model"], "deepseek-v4-pro")
         self.assertIsNone(summary["served_model"])
         self.assertFalse(summary["model_identity_complete"])
         self.assertFalse(summary["model_identity_match"])
@@ -2137,7 +2137,7 @@ class _RecordingDeepSeek:
             def create(**kwargs):
                 outer.paid.append(kwargs.get("model"))
                 return {"choices": [{"message": {"content": '{"themes": []}'}}],
-                        "model": "deepseek-v4-flash", "system_fingerprint": "fp_test"}
+                        "model": "deepseek-v4-pro", "system_fingerprint": "fp_test"}
 
         class _Chat:
             completions = _Completions()

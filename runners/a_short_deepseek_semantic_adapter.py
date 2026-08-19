@@ -1,7 +1,7 @@
 """DeepSeek web_llm 语义判官 adapter(Slice 2,advisory-only,非生产)。
 
 DeepSeek 是**已抓取文本的判官,不是搜索器**:给定一只票 + 一组已抓取的新闻/web 条目,
-让 DeepSeek(deepseek-chat)判断这些文本是否构成针对**该个股**的实质风险/逆风/利好/澄清,
+让 DeepSeek(deepseek-v4-pro)判断这些文本是否构成针对**该个股**的实质风险/逆风/利好/澄清,
 并映射到冻结的 web_llm advisory 契约(`docs/a_short_semantic_risk_contract.md`)。
 
 硬边界(冻结):
@@ -23,7 +23,7 @@ import os
 # 单一来源:web_llm 跨字段不变式校验器(summary / engine / 本 adapter 共用)
 from runners.a_short_semantic_risk_summary import _web_llm_consistency_error
 
-DEEPSEEK_MODEL = "deepseek-chat"
+DEEPSEEK_MODEL = "deepseek-v4-pro"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
 _UNKNOWN = {"status": "unknown", "risk_level": "unknown", "action": "no_action"}

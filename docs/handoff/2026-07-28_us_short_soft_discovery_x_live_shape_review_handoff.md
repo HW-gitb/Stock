@@ -3749,3 +3749,15 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 ### 下一步（顺序不得交换）
 
 `Codex 一刀改完 → 我独立审查 PASS → 用户通知后合并进 master → 用户对改后的 v2 packet 再次明确付费授权 → 主树打第二枪（一次）→ transport PASS 才准跑 5b`。
+
+## 2026-08-19 Codex 执行结果：模型合同一刀完成（8d8c；待 Claude 独立审查）
+
+- `engine/us_short_llm_theme_discovery_paid_gateway.py` 与 `runners/a_short_deepseek_semantic_adapter.py` 的请求模型已统一为 `deepseek-v4-pro`；v2 packet/schema/runner 同步为 `model=expected_served_model=deepseek-v4-pro`。
+- `runners/us_short_llm_theme_discovery_fetch_web.py` 的生产归组已把 `DEEPSEEK_MODEL` 传入 served-model 等值门；Flash、旧 alias、其他模型、空值均在 `_parse_llm_json` 前被拒。A-short adapter 没有可复用的 served-model 检查管道，本刀只改请求模型，不新造机制。
+- 通用 Web receipt schema 同时接受 Pro 与历史 `deepseek-chat`，以保留第一枪历史 receipt 的可读性；第一枪 state/raw/summary、v1 packet、5b replay、4diii、桌面文档未改。v2 无消费痕迹，未另造 v3。
+- v2 prompt SHA 重算与 packet 匹配；owner `214 OK`；US-short full-pack `6044/6044 equal=True PASS 542.0s/860s`；A-short full-pack `3232/3232 equal=True PASS 134.2s/860s`；static `diff-check=PASS`、`py_compile=8`。
+- 本轮未联网、未调 provider、未花钱、未开第二枪、未跑 5b、未合并；具体 closure 证据见 `docs/system_risk_register.md` 顶部新节。
+
+### 下一步（顺序不变）
+
+`Claude Code 独立审查 PASS → 用户通知后合并进 master → 用户对新 v2 packet 明确付费授权 → 主树第二枪一次 → transport PASS 后才跑 5b`。

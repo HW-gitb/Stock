@@ -19,7 +19,7 @@ from typing import Any, Mapping
 ROOT = Path(__file__).resolve().parents[1]
 LIVE_ROOT = Path(r"D:\cnhea\Stock")
 PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v2"
-EXPECTED_MODEL = "deepseek-chat"
+EXPECTED_MODEL = "deepseek-v4-pro"
 EXPECTED_SERVED_MODEL = "deepseek-v4-pro"
 EXPECTED_TARGET_CHUNK_INDEX = 1
 PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v2.json"

@@ -2445,7 +2445,7 @@ def execute_live_web_orchestration(
             persist_response=persist_and_record_regroup_response,
             consume_response=lambda request, response: _consume_regroup_response(
                 response,
-                expected_served_model=model_identity["served_model"],
+                expected_served_model=DEEPSEEK_MODEL,
                 chunk_index=int(request.scope.split(":", 1)[1]),
             ),
         )

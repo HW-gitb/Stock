@@ -37,7 +37,7 @@ class _DeepSeek:
         def create(self, **kwargs):
             self.owner.calls.append(kwargs)
             payload = {
-                "model": "deepseek-v4-flash",
+                "model": "deepseek-v4-pro",
                 "choices": [{"message": {"content": self.owner.text}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
                 "system_fingerprint": "fp_fixture",
@@ -259,7 +259,7 @@ class WebFetchTests(unittest.TestCase):
         self.assertFalse(receipt["fetch_contract"]["network_access_performed"])
         self.assertEqual(receipt["summary"]["accepted_source_count"], 2)
         self.assertEqual(len(receipt["provider_response_refs"]), 1)
-        self.assertEqual(receipt["provider_response_refs"][0]["served_model"], "deepseek-v4-flash")
+        self.assertEqual(receipt["provider_response_refs"][0]["served_model"], "deepseek-v4-pro")
         self.assertEqual(summary["dropped_result_count"], 3)
         self.assertTrue(any(row["reason"] == "published_at_after_decision_open" for row in receipt["drop_ledger"]))
 
@@ -784,7 +784,7 @@ class WebFetchTests(unittest.TestCase):
 
     def test_deepseek_raw_response_is_written_before_consume_and_receipts_telemetry(self):
         response = {
-            "model": "deepseek-v4-flash",
+            "model": "deepseek-v4-pro",
             "choices": [{"message": {"content": '{"themes":[]}'}, "finish_reason": "stop"}],
             "usage": None,
             "system_fingerprint": None,
@@ -821,7 +821,7 @@ class WebFetchTests(unittest.TestCase):
                 self.assertTrue(refs)
                 self.assertTrue((fetch.ROOT / refs[0]["raw_receipt_ref"]).is_file())
                 return fetch._consume_regroup_response(
-                    value, expected_served_model="deepseek-v4-flash", chunk_index=0,
+                    value, expected_served_model="deepseek-v4-pro", chunk_index=0,
                 )
 
             batch = paid_gateway.PaidDispatchGateway(_DispatchBudget()).dispatch_web_regroup_all(
@@ -867,7 +867,7 @@ class WebFetchTests(unittest.TestCase):
             def create(self, **_kwargs):
                 nonlocal calls
                 calls += 1
-                return {"model": "deepseek-v4-flash", "choices": []}
+                return {"model": "deepseek-v4-pro", "choices": []}
 
         def persist(_request, _value):
             raise fetch.WebThemeDiscoveryError("raw write failed")
@@ -888,7 +888,7 @@ class WebFetchTests(unittest.TestCase):
 
     def test_live_writer_emits_1_2_receipt_with_deepseek_refs_and_completed_status(self):
         response = {
-            "model": "deepseek-v4-flash",
+            "model": "deepseek-v4-pro",
             "choices": [{"message": {"content": '{"themes":[]}'}, "finish_reason": "stop"}],
             "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
             "system_fingerprint": "fp_live",
@@ -912,7 +912,7 @@ class WebFetchTests(unittest.TestCase):
                     execution_mode="live_authorized", network_access_performed=True,
                     provider_calls_performed=True, network_call_count=2, provider_call_count=2,
                     _live_transport=transport, _live_ticket=ticket,
-                    regroup_model_identity=fetch._regroup_model_identity(served_model="deepseek-v4-flash"),
+                    regroup_model_identity=fetch._regroup_model_identity(served_model="deepseek-v4-pro"),
                     regroup_attempted=True, regroup_failed=False,
                     regroup_chunk_counts={"attempted": 1, "successful": 1, "failed": 0, "failed_indexes": []},
                     regroup_chunks=[{
@@ -1633,7 +1633,7 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
             return batch
 
     class _DeepSeek:
-        def __init__(self, plan): self.plan, self.prompts = list(plan), []
+        def __init__(self, plan): self.plan, self.prompts, self.models = list(plan), [], []
 
         @property
         def chat(self): return self
@@ -1643,13 +1643,14 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
 
         def create(self, **kwargs):
             self.prompts.append(kwargs["messages"][0]["content"])
+            self.models.append(kwargs["model"])
             item = self.plan.pop(0)
             if isinstance(item, Exception):
                 raise item
             return item
 
     @staticmethod
-    def _response(themes, finish="stop", model="deepseek-v4-flash", fingerprint="fp_x"):
+    def _response(themes, finish="stop", model="deepseek-v4-pro", fingerprint="fp_x"):
         payload = json.dumps({"themes": themes})
         choice = type("C", (), {"message": type("M", (), {"content": payload})(), "finish_reason": finish})()
         response_payload = {
@@ -1752,6 +1753,31 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
         )
         self.assertEqual(transport._snapshot()["deepseek"], 0)
 
+    def test_production_regroup_gate_rejects_non_pro_before_parse(self):
+        for model in ("deepseek-v4-flash", "deepseek-chat", "deepseek-other", None):
+            with self.subTest(model=model):
+                deepseek = self._DeepSeek([self._response([], model=model)])
+                with mock.patch.object(
+                    fetch, "_parse_llm_json", side_effect=AssertionError("parser reached")
+                ) as parser:
+                    outcome = fetch.execute_live_web_orchestration(
+                        queries=["power demand"], expected_decision_date=self.DATE,
+                        tavily=self._Tavily([self.ROWS]), deepseek_client=deepseek,
+                        transport=_OrchestrationTransportProbe("tavily", "deepseek"),
+                        dispatch_budget=_DispatchBudget(),
+                        persist_search_response=_noop_persist,
+                        persist_regroup_response=_noop_persist,
+                        query_records=["power demand"], parent_plan=None,
+                    )
+                parser.assert_not_called()
+                self.assertEqual(deepseek.models, [fetch.DEEPSEEK_MODEL])
+                self.assertTrue(outcome["regroup_failed"])
+                expected_reason = (
+                    "regroup_model_identity_missing"
+                    if model is None else "regroup_model_identity_changed"
+                )
+                self.assertIn(expected_reason, [row["reason"] for row in outcome["query_drops"]])
+
     def test_live_output_clock_is_after_deepseek_persistence(self):
         persisted_at: list[datetime] = []
 
@@ -1818,7 +1844,7 @@ class LiveOrchestrationExecutableTests(unittest.TestCase):
         with mock.patch.object(
             fetch,
             "_consume_regroup_response",
-            return_value=("deepseek-v4-flash", "fp_x", [self._theme("should_not_pass")]),
+            return_value=("deepseek-v4-pro", "fp_x", [self._theme("should_not_pass")]),
         ):
             hollowed, _ = self._run([rows], [valid, truncated])
         self.assertEqual(

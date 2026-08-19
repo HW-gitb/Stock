@@ -163,7 +163,7 @@
       "unknown_sibling": 0
     },
     "request": {
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-pro",
       "expected_served_model": "deepseek-v4-pro",
       "temperature": 0,
       "max_tokens": 16384,
