@@ -254,7 +254,8 @@ def _unavailable(reason: str, as_of: str, requested: list[str], observed: list[s
 
 
 def compute_full_market_breadth(*, as_of, daily, stk_limit, stock_basic,
-                                trading_days, streak_sessions=10):
+                                trading_days, streak_sessions=10,
+                                explained_missing_codes_by_date=None):
     """Full-market limit facts for `as_of`, or an honest `unavailable`.
 
     `trading_days` is the ascending session list the caller believes in; the streak walks
@@ -266,6 +267,7 @@ def compute_full_market_breadth(*, as_of, daily, stk_limit, stock_basic,
         raise MarketBreadthError("trading_days must end at as_of")
     window = sessions[-int(streak_sessions):]
     universe = full_market_universe(stock_basic, as_of)
+    explained_missing_codes_by_date = explained_missing_codes_by_date or {}
     rows = usable_rows(daily, stk_limit)
     # PIT cap, stated rather than assumed: a caller may hand over a wider panel, and
     # a row dated after as_of must not be able to influence anything measured here.
@@ -316,13 +318,25 @@ def compute_full_market_breadth(*, as_of, daily, stk_limit, stock_basic,
         # to be present throughout.
         contenders = up_by_date.get(as_of, set())
         present = {(d, c) for d, c in zip(rows["trade_date"], rows["ts_code"])}
-        holed = sorted(code for code in contenders
-                       for date in window if (date, code) not in present)
+        explained_holes = any(
+            (date, code) not in present
+            and code in explained_missing_codes_by_date.get(date, set())
+            for code in contenders
+            for date in window
+        )
+        holed = sorted(
+            code for code in contenders
+            for date in window
+            if (date, code) not in present
+            and code not in explained_missing_codes_by_date.get(date, set())
+        )
         if holed:
             height, height_reason = None, "contender_bar_missing_in_window"
         else:
             height = max_limit_streak(up_by_date, window)
-            height_reason = None
+            height_reason = (
+                "suspension_gap_in_height_window" if explained_holes else None
+            )
     if height_reason:
         reasons.append(height_reason)
 

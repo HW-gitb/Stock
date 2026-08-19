@@ -533,6 +533,72 @@ class EgsMarketBreadthWiringTest(unittest.TestCase):
             pd.DataFrame(limit_rows),
         )
 
+    def _real_breadth_large_inputs(self, *, missing_codes=()):
+        dates = self.TRADE_DATES
+        codes = ["600000.SH", "600001.SH"] + [
+            f"{600100 + index:06d}.SH" for index in range(79)
+        ]
+        missing_codes = set(missing_codes)
+        stock_basic = pd.DataFrame([
+            {"ts_code": code, "market": "主板", "list_date": "20100101",
+             "delist_date": "", "list_status": "L"}
+            for code in codes
+        ])
+        daily_rows = []
+        limit_rows = []
+        prior_up_dates = {f"202608{day:02d}" for day in range(6, 11)}
+        current_up_dates = {"20260809", "20260810", "20260811"}
+        for trade_date in dates:
+            for code in codes:
+                if code in missing_codes and trade_date == "20260809":
+                    continue
+                at_limit = (
+                    code == "600000.SH" and trade_date in prior_up_dates
+                ) or (
+                    code == "600001.SH" and trade_date in current_up_dates
+                )
+                close = 11.0 if at_limit else 10.0
+                daily_rows.append({
+                    "ts_code": code, "trade_date": trade_date,
+                    "close": close, "high": close,
+                })
+                limit_rows.append({
+                    "ts_code": code, "trade_date": trade_date,
+                    "up_limit": 11.0, "down_limit": 9.0,
+                })
+        return (
+            pd.DataFrame(daily_rows),
+            stock_basic,
+            pd.DataFrame(limit_rows),
+        )
+
+    def test_real_breadth_builder_explains_one_halted_contender_gap(self):
+        all_daily, stock_basic, limit_panel = self._real_breadth_large_inputs(
+            missing_codes={"600001.SH"}
+        )
+        with patch.object(
+            self.egs_main, "get_full_market_stk_limit_window", return_value=limit_panel
+        ):
+            current, previous = self.egs_main._build_full_market_breadth_observation(
+                self.TRADE_DATES,
+                all_daily=all_daily,
+                df_stocks=stock_basic,
+                suspended_set=set(),
+            )
+        self.assertEqual(len(stock_basic), 81)
+        self.assertEqual(current["full_market_consecutive_limit_up_height"], 2)
+        self.assertEqual(previous["full_market_consecutive_limit_up_height"], 5)
+        self.assertIn(
+            "suspension_gap_in_height_window",
+            current["coverage"]["unavailable_reason"],
+        )
+        self.assertTrue(current["coverage"]["_current_height_usable"])
+        self.assertTrue(previous["coverage"]["_previous_height_usable"])
+        regime = self.egs_main.derive_v14_2_market_regime(
+            current, previous, {"iv_feed_status": "not_requested"}
+        )
+        self.assertEqual(regime["status"], "contraction")
+
     def test_real_breadth_builder_allows_non_contender_halt_for_contraction(self):
         all_daily, stock_basic, limit_panel = self._real_breadth_inputs()
         with patch.object(
