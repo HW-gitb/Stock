@@ -9492,3 +9492,61 @@ Claude Code：独立复审该 Required 的逐日既有 coverage 门、`holed` �
 - **它不是审代码审出来的，是全系统真跑撞出来的。** 六轮离线审查、85 个模块测试都绿着，这条路径照样每周失败——因为写和读走了两条不同的目录布局，只有真实的私有根（revision 分层）才踩得到。**与北交所哨兵那刀是同一条教训的第二次印证：合成夹具只能证明「代码按我以为的输入行事」。**
 - **我第一版诊断是错的，纠正它靠的是去读官方指针。** 最初记成「上周留下两个缺 `outcome.json` 的残档把整周判 partial」，据此的处置会是「清理 state」——那会删掉正常证据、完全不碰真因。翻 `official_revision.json` 才发现被选中的官方 revision **恰恰就是完整的那个**，另两个是同日被取代的重跑，代码本来就有守卫跳过它们。**下次遇到「某某周被判残缺」，第一步应是问「官方选的是哪一版」，而不是数目录里少了什么文件。**
 - **复审放宽类改动时，要专门找「新加的条件里，哪一支没有测试」。** 这次新过滤有两个 `or` 子句是为半迁移周（同时有 `revisions/` 和扁平残件）准备的，而三个新测试恰好都没覆盖那个形态——把这两个 `or` 删掉，85 个测试仍然全绿。我用它自己的 fixture 植了这一格，行为是对的，但已记 Optional：**没有测试钉住的守卫，等于下一刀随时可以顺手删掉。**
+
+## 2026-08-19 追加：Codex 修复 regime 对比轨缺少 run revision 参数（509e；repaired / OPEN-NOT-VERIFIED）
+
+### 根因与最小改动
+
+- `weekly_screening.ps1` Stage 5 已把 `--loss-making-rank-csv` 与 `--loss-making-tracker-path` 传给 `a_short_regime_comparison_runner.py`，但漏传 runner 强制要求的 `--run-revision-id`，因此 `regime_daily` 每次 exit 1；这与 M6.7 是否成功无关。
+- 只在同一 `$RegimeArgs` 数组追加 `--run-revision-id`, `$RunRevisionId`。`$RunRevisionId` 已由启动器生成；不改 runner 规则、loss-making tracker、`--sidecar-outcome-run-revision-id`、schema、M6.7、问题 2 或任何 producer/cache/writer。
+
+### 调用链、消费者与边界
+
+- 调用链：`weekly_screening.ps1 Stage 5 → $RegimeArgs → a_short_regime_comparison_runner.py argparse → loss-making tracking validation → regime_daily sidecar`。`--sidecar-outcome-run-revision-id` 仍是 sidecar outcome 的独立参数，不能替代 runner 的 `--run-revision-id`。
+- 消费者只增加 runner 已有的 revision 参数消费；analysis-input schema、effect contract、source binding、cache、正式写盘边界、M6.7 和对比轨 non-blocking 语义均未改。问题 2 未处理。
+
+### 测试、负控、自审与原始终态
+
+- 先用旧代码跑新增接线守卫：`Ran 1 / FAILED (1 failure)`，失败点正是缺少 `--run-revision-id`；修后目标回归 `1 OK`，既有 `tests.phase6.test_weekly_screening_guardrails` 为 `26 OK`。`py_compile` 与 `git diff --check` PASS。
+- 固定解释器为 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。行为稳定后仅跑一次 A-short full lane：`discovered=3241`, `ran=3241`, `COUNT_GATE equal=True`, `PASS`, `122.458s/860s`, fingerprint=`fe668d7a246360a7f0a4e85e6799bc4a5440c426f73388af24e728e7b51cb9f7`, sidecar=`.tools\\state\\runs\\20260819T183729_a_short_parallel.jsonl`。
+- 未运行 provider/live、真实 weekly、测试胶囊或 sub-agent；未 stage/commit/push/merge；`docs/CURRENT.md` 未改。原始终态为 `repaired / OPEN-NOT-VERIFIED`，等待独立 reviewer；full lane 不等于真实数据 closure、独立 review、commit、merge 或 ship。
+
+### 交接
+
+Claude Code：独立复审 Stage 5 参数接线、`$RunRevisionId` 来源、runner 的 `--run-revision-id` 消费、sidecar 参数区分和 issue 2 未改；PASS 后按 reviewer/committer 边界提交，Codex 不提交。
+
+## 2026-08-19 追加：一次「测试全绿但生产必挂」的 FAIL——绿的是文本断言
+
+- **74 个测试全绿，生产路径却每次必挂。** 新增的守卫测试只对 `weekly_screening.ps1` 做**文本断言**（断言参数在场），没有任何测试拿启动器实际拼出的参数组合去跑一次 runner。于是「参数加上了」被证明了，「加上之后还能不能跑」没有被证明。
+- **抓到它靠的是照抄启动器的确切参数直跑一次 runner**，终态 `no existing regime ledger`。**审启动器类改动，别只看参数拼没拼上；要把拼出来的那串真喂给被调方跑一次。**
+- **根因是一个参数身兼两职**：通用 revision 参数既是亏损股 tracker 的来源绑定，又是 regime 证据轨的身份——一传，`lane_paths()` 就把 ledger/records/panel/action/candidate_effect 六类产物整体搬进 revision 分层目录，既有 298 行账本读不到。**改动前先问「这个参数在被调方还管着什么」，比问「传了没」重要得多。**
+- **还有个跨文件死锁**：启动器判断要不要补 bootstrap 时查的是**共享**账本路径，而 runner 改去 revision 目录找——两边看的不是同一个文件，所以不会自愈。**两个程序共用一个「文件在不在」判据时，要核它们指的是不是同一个文件。**
+- **落盘教训**：本轮写 register 踩了一次 CRLF 全文件 churn（26278/26252），按字节归一成 LF 后回到 +26。写这类大文档前后都要核 `git diff --numstat` 的量级。
+
+## 2026-08-19 追加：Codex 修复 regime 证据轨被通用 revision 参数分叉（509e；repaired / OPEN-NOT-VERIFIED）
+
+### 根因与最小改动
+
+- 上一刀把通用 `--run-revision-id $RunRevisionId` 加进 Stage 5 `$RegimeArgs`。runner 用这个参数调用 `lane_paths()`，于是 regime 的 ledger/records/panel/action/candidate-effect 统一切到 revision 分层目录；既有共享 ledger 不在该目录，runner 仍以 `no existing regime ledger — first run must be --bootstrap` exit 1。启动器 bootstrap 判定仍看共享路径，不能自愈。
+- 最小修复是新增窄参数 `--loss-making-run-revision-id`：Stage 5 只传该参数；runner 仅将它传给 `update_loss_making_exclusion_tracker()`。通用 `args.run_revision_id` 保持 `None`，`lane_paths()`/`run_regime_step()` 继续使用共享 evidence lane。
+
+### 调用链、消费者与边界
+
+- 调用链：`weekly_screening.ps1 Stage 5 → --loss-making-run-revision-id → a_short_regime_comparison_runner.py argparse → update_loss_making_exclusion_tracker()`；regime 主链仍为 `lane_paths(run_revision_id=None) → load_ledger → run_regime_step(run_revision_id=None)`。
+- `--sidecar-outcome-run-revision-id` 仍只绑定 sidecar outcome，不参与 evidence-lane 选择。未改 regime ledger/records/panel/action/candidate-effect schema、已有 298 行共享账本、bootstrap 判定、M6.7、问题 2、provider/cache/writer 或任何迁移/补录逻辑。
+
+### 测试、负控、自审与原始终态
+
+- 先在旧代码跑新增两条 runner closure/反控和 Stage 5 guardrail：`2 failures + 1 error`；修后 `3 OK`。正向用 `main()` 实际消费与启动器一致的 sidecar/loss-making 参数组合，断言 `lane_paths` 与 `run_regime_step` 的 `run_revision_id` 都为 `None`，tracker 收到窄参数 revision；反向断言缺窄 revision 在 provider 与 tracker writer 前 fail-closed。
+- 固定解释器 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）；focused `tests.test_a_short_regime_comparison_runner tests.phase6.test_weekly_screening_guardrails` 为 `76 OK`；`py_compile`、`git diff --check` PASS；A-short full lane `discovered=3243`, `ran=3243`, `COUNT_GATE equal=True`, `PASS`, `119.845s/860s`, fingerprint=`7f27111f33473d5a55a5160b21aa2553f00df831df7bf98edeaf0282b1ccbe3c`, sidecar=`.tools\\state\\runs\\20260819T190544_a_short_parallel.jsonl`。
+- 未运行 provider/live、真实 weekly、测试胶囊或 sub-agent；未 stage/commit/push/merge；`docs/CURRENT.md` 未改。原始终态为 `repaired / OPEN-NOT-VERIFIED`，full lane 不等于独立 review、真实周跑、commit、merge 或 ship。
+
+### 交接
+
+Claude Code：独立复审窄参数是否只到 tracker、`lane_paths`/`run_regime_step` 是否保持共享轨 `None`、真实 CLI closure 与缺 revision 反控，以及旧 P2 通用参数记录已被本 P1 方案取代；PASS 后按 reviewer/committer 边界提交，Codex 不提交。
+
+## 2026-08-19 追加：同一条探针，两轮给出相反结论——这就是它该有的样子
+
+- 上一轮判 FAIL 用的是「照抄启动器实拼参数直跑 runner」，终态 SystemExit；这一轮同一条探针走过账本门、到达 provider init。**判 FAIL 和判 PASS 用的是同一把尺子**，这比换一套证据去证明「现在好了」可信得多。codex-fix-gate §3 要求「复现 reviewer 的确切探针」，落到实处就是这个意思。
+- **这轮把探针做成零副作用**：只把 `_init_pro` 换成哨兵异常，既证明「走到了取数这一步」，又不真取数、不写账本、不动 tracker。审这种「跑起来才知道」的接线时，用哨兵卡在第一个副作用点，是拿到真结论又不留痕的办法。
+- **反向控制要自己写，别复用被审方的用例**：我第一次写反向控制时用「从参数表里删掉那个 revision 字符串」，结果连 sidecar 参数的值也被删掉，argparse 报 usage 错误 `SystemExit: 2`——看着像挡住了，其实挡的原因完全不对。重写成只删那一对 flag/value 才拿到真结论（挡住了，且 provider init 与 tracker 都未被调用）。**反向控制失败时，先确认它是为了你想要的原因失败的。**

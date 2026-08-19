@@ -1085,6 +1085,8 @@ def main(argv=None) -> int:
                     help="official revision-bound rank reconciliation for the exclusion tracker")
     ap.add_argument("--loss-making-tracker-path", default=None,
                     help="cumulative loss-making exclusion tracker artifact path")
+    ap.add_argument("--loss-making-run-revision-id", default=None,
+                    help="revision id used only to bind the loss-making exclusion tracker")
     ap.add_argument("--confirm-fetch-authorized", action="store_true",
                     help="required to perform any real Tushare fetch")
     args = ap.parse_args(argv)
@@ -1108,8 +1110,15 @@ def main(argv=None) -> int:
         )
     except ValueError as exc:
         raise SystemExit(f"--sidecar-outcome-run-revision-id is invalid: {exc}") from exc
-    if args.loss_making_rank_csv and args.run_revision_id is None:
-        raise SystemExit("loss-making exclusion tracking requires --run-revision-id")
+    try:
+        args.loss_making_run_revision_id = (
+            validate_run_revision_id(args.loss_making_run_revision_id)
+            if args.loss_making_run_revision_id is not None else None
+        )
+    except ValueError as exc:
+        raise SystemExit(f"--loss-making-run-revision-id is invalid: {exc}") from exc
+    if args.loss_making_rank_csv and args.loss_making_run_revision_id is None:
+        raise SystemExit("loss-making exclusion tracking requires --loss-making-run-revision-id")
     paths = lane_paths(decision_as_of=as_of, run_revision_id=args.run_revision_id)
     ledger0 = load_ledger(paths["ledger"])
     has_ledger = bool(ledger0.get("rows"))
@@ -1170,7 +1179,7 @@ def main(argv=None) -> int:
             args.loss_making_tracker_path,
             official_rank_csv_path=args.loss_making_rank_csv,
             as_of=as_of,
-            run_revision_id=args.run_revision_id,
+            run_revision_id=args.loss_making_run_revision_id,
             csi1000=csi1000,
             as_of_now=effective_as_of,
             project_root=ROOT,
