@@ -2048,9 +2048,10 @@ def _rank_reconciliation_not_observed():
 def build_watch_pool_reconciliation(actual_count, eligible_count, target_count):
     """Account for a short watch pool without treating a target cap as a minimum.
 
-    Production exports every eligible Tier1 row up to ``target_count``.  A pool
-    below the target is therefore healthy when the eligible pool itself is
-    exhausted; only an unexplained export count mismatch is a data-health error.
+    ``eligible_count`` is the caller's already-selected exportable pool, after
+    any admission partition and without backfill.  A pool below the target is
+    healthy when every row in that pool was exported; only an unexplained export
+    count mismatch is a data-health error.
     """
     actual_count = max(int(actual_count), 0)
     eligible_count = max(int(eligible_count), 0)
