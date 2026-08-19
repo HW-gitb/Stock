@@ -882,7 +882,7 @@ class WebRegroupReplayTests(unittest.TestCase):
 
     def test_5b_transport_summary_and_raw_follow_the_current_packet_boundary(self):
         packet = json.loads(
-            (replay.ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v3.json").read_text(
+            (replay.ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v6.json").read_text(
                 encoding="utf-8"
             )
         )
@@ -899,7 +899,7 @@ class WebRegroupReplayTests(unittest.TestCase):
 
     def test_5b_finalize_transport_verdict_is_derived_from_raw(self):
         packet = json.loads(
-            (replay.ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v3.json").read_text(
+            (replay.ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v6.json").read_text(
                 encoding="utf-8"
             )
         )
@@ -926,7 +926,7 @@ class WebRegroupReplayTests(unittest.TestCase):
             "query_reservations": [{"attempt_count": 1, "last_status": "complete"}],
             "recovery_events": [],
         }
-        raw_path = replay.ROOT / "provider_samples/us_short_llm_theme_discovery_engineering_smoke_v3/provider_responses/20260815/deepseek_test.json"
+        raw_path = replay.ROOT / "provider_samples/us_short_llm_theme_discovery_engineering_smoke_v6/provider_responses/20260815/deepseek_test.json"
         response_sha256 = web._sha256_bytes(web._canonical_json(response))
         summary = replay._build_transport_summary_from_raw(
             packet, replay.ROOT / packet["output_boundary"]["budget_ledger_ref"], ledger,

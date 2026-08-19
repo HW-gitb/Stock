@@ -269,12 +269,18 @@ def _provider_response_is_safe(response: dict[str, Any]) -> bool:
 
 SEMANTIC_ASSERTION_PROMPT = (
     "Every theme must include semantic_assertions. Each assertion must use basis "
-    "shared_commercial_driver or one of the explicit negative bases shared_event_bucket, "
-    "market_wide_move, issuer_specific_collection, insufficient_evidence. For "
+    "shared_commercial_driver or one of the explicit negative bases category_trend_membership, "
+    "shared_event_bucket, market_wide_move, issuer_specific_collection, insufficient_evidence. "
+    "category_trend_membership means companies are merely members of the same category, trend, "
+    "or stock list and the source does not show a concrete business driver transmitting to each member; "
+    "if the source proves a cross-industry causal chain, the candidate may still be positive. For "
     "shared_commercial_driver provide basis_explanation, common_driver "
     "{driver_statement, transmission_mechanism, source_urls}, and at least three "
-    "member_links {ticker, role, link_statement, source_urls}. Use only URLs from this "
-    "response. Do not use a theme name or a keyword list as the semantic decision."
+    "member_links {ticker, role, link_statement, source_urls}. The transmission_mechanism "
+    "must name the concrete commercial driver, explain how it transmits through demand, supply, "
+    "infrastructure, or a value chain, and explain each member's distinct role; members need not "
+    "transact directly. Merely saying that members benefit from the same trend is not sufficient. "
+    "Use only URLs from this response. Do not use a theme name or a keyword list as the semantic decision."
 )
 
 

@@ -749,6 +749,49 @@ class WebFetchTests(unittest.TestCase):
                 self.assertIn(role, prompt)
         self.assertIn('"role":"beneficiary"', prompt)
 
+    def test_regroup_prompt_teaches_every_semantic_basis_value(self):
+        prompt = fetch._build_deepseek_prompt("20260727", [])
+        for basis in discovery.SEMANTIC_BASIS_VALUES:
+            with self.subTest(basis=basis):
+                self.assertIn(basis, prompt)
+        self.assertIn(
+            "category_trend_membership means companies are merely members of the same category",
+            prompt,
+        )
+        self.assertIn(
+            "Merely saying that members benefit from the same trend is not sufficient.",
+            prompt,
+        )
+
+    def test_category_trend_membership_is_a_valid_negative_basis(self):
+        source_id = fetch._source_id("https://example.com/category")
+        refs = [{
+            "source_id": source_id,
+            "source_type": "web",
+            "observed_at": "2026-07-24T10:00:00Z",
+        }]
+        payload = {"themes": [{
+            "theme_id": "category_membership",
+            "display_name": "Category membership",
+            "summary": "Category membership control",
+            "observed_at": "2026-07-24T10:00:00Z",
+            "source_ref_ids": [source_id],
+            "members": [{"ticker": "AAPL", "source_ref_ids": [source_id]}],
+            "semantic_assertions": [{
+                "basis": "category_trend_membership",
+                "basis_explanation": "The source groups the company in a category list without a transmitted driver.",
+                "common_driver": None,
+                "member_links": [],
+            }],
+        }]}
+        parsed = fetch._llm_to_discovery_input(
+            payload, refs, generated_at=datetime(2026, 7, 25, tzinfo=timezone.utc),
+        )
+        assertion = parsed["themes"][0]["semantic_assertions"][0]
+        self.assertEqual(assertion["basis"], "category_trend_membership")
+        self.assertIsNone(assertion["common_driver"])
+        self.assertEqual(assertion["member_links"], [])
+
     def test_regroup_prompt_requires_explicit_negative_candidates(self):
         prompt = fetch._build_deepseek_prompt("20260727", [])
         self.assertIn("MUST emit an explicit negative candidate", prompt)

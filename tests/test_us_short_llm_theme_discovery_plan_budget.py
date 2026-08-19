@@ -975,18 +975,18 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         self.assertEqual(envelopes["web"]["max_dispatch_count"], 1)
         self.assertEqual(envelopes["xai"]["max_dispatch_count"], 0)
 
-    def test_K6_consumed_v5_packet_cannot_reuse_the_v6_runtime(self):
+    def test_K7_consumed_v6_packet_cannot_reuse_the_v7_runtime(self):
         packet = json.loads(
-            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v5.json").read_text(
+            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v6.json").read_text(
                 encoding="utf-8"
             )
         )
         with self.assertRaisesRegex(smoke.EngineeringSmokeError, "runtime output paths"):
             smoke._assert_packet_contract(packet)
 
-    def test_K6_v6_packet_identity_branch_accepts_tracked_packet(self):
+    def test_K7_v7_packet_identity_branch_accepts_tracked_packet(self):
         packet = json.loads(
-            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v6.json").read_text(
+            (ROOT / "docs/us_short_web_regroup_engineering_smoke_packet_20260815_v7.json").read_text(
                 encoding="utf-8"
             )
         )

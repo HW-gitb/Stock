@@ -15,8 +15,8 @@ import sys
 from typing import Any, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v3.json"
-PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet_v3.schema.json"
+PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v6.json"
+PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet_v6.schema.json"
 SIC_SNAPSHOT_PATH = (
     ROOT / "state" / "us_short" / "sec_sic_classification_snapshots"
     / "sec_sic_snapshot_20260810T043853Z_d754ea63c8e39555.json"
@@ -483,7 +483,7 @@ def _build_transport_summary_from_raw(
 
 
 def finalize_transport_summary_from_raw() -> dict[str, Any]:
-    """Record the already-paid v3 transport result without reserving or calling anything."""
+    """Record an already-paid transport result without reserving or calling anything."""
     packet = _validate_packet()
     summary_path = _transport_summary_path(packet)
     if summary_path.exists():

@@ -3912,3 +3912,11 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - SIC 使用既有 2026-08-10 快照，仅作 calibration-only；9 个已接受 ticker 可评价。replay summary 写入 `state/us_short/runs_private/soft_discovery_engineering_smoke_v6/us_short_web_regroup_replay_20260815_chunk1_summary.json`。
 - 正式槽、discovery、receipt、merge、validation、boost、score 全部为 false；`readiness=null`，不能直接接 4diii。
 - 下一步：Claude 独立审查 v6 5b 结果；审查前不再开 provider 枪。v6 回放器仅做了 v5→v6 的最小 packet/schema 身份切换，未提交、未合并。
+
+## 2026-08-19 追加：漏洞1已最小修复并铸造 v7 packet（主树；待 Claude 独立审查）
+
+- 按 `R-USSHORT-SEMANTIC-GATE-ACCEPTS-A-SOURCE-CATEGORY-HEADING-AS-A-SHARED-DRIVER` 修复：新增 `category_trend_membership` 负 basis；正例 `transmission_mechanism` 必须说明具体商业驱动、传导路径和成员不同角色；仅共同受益于同一趋势不够。
+- 同步更新 `runners/us_short_llm_theme_discovery.py`、`schemas/us_short_llm_theme_discovery.schema.json`、Web 提示词、共享 X 提示词及 Web owner 守卫；不做机器 NLP、不加关键词黑名单、不改行业门或 validator 顺序。
+- 验证：Web/X owner `154 OK`；新 basis 可解析；提示词教授全部 basis；删除新定义的反向控制会转红；v7 packet/schema owner `75 OK`；prompt SHA=`52c37d9b3d7701615748eccb3d70be2c3c73e23394bce0711180e7b99863359b`。
+- v7 packet=`docs/us_short_web_regroup_engineering_smoke_packet_20260815_v7.json`，schema=`schemas/us_short_web_regroup_engineering_smoke_packet_v7.schema.json`；v6 及更早 packet 保留历史拒绝身份。v7 未付费、未调用 provider。
+- 下一步：Claude 独立审查 v7 packet/提示词契约；通过并收到精确 v7 packet 新授权后执行一次 provider，再在 v7 raw 上零付费跑 5b。

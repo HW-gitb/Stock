@@ -235,7 +235,7 @@
       "properties": {
         "basis": {
           "enum": [
-            "shared_commercial_driver", "shared_event_bucket", "market_wide_move",
+            "shared_commercial_driver", "category_trend_membership", "shared_event_bucket", "market_wide_move",
             "issuer_specific_collection", "insufficient_evidence"
           ]
         },

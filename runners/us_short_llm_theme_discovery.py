@@ -45,6 +45,7 @@ KNIFE1_SOURCE_REF_KEYS = ("source_id", "source_type", "observed_at")
 THEME_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,63}$")
 SEMANTIC_BASIS_VALUES = {
     "shared_commercial_driver",
+    "category_trend_membership",
     "shared_event_bucket",
     "market_wide_move",
     "issuer_specific_collection",
