@@ -3832,3 +3832,11 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - 零成本补记完成：v3 summary 为 `PASS`、`deepseek-v4-pro`、`stop`、1 个主题；ledger 未变，provider call 仍为 1，recovery 为 0。
 - 验证：owner `31 OK`；packet/summary/raw 只读复核 PASS；5b replay 尚未执行，未开第四枪，第一枪/第二枪未动。
 - 下一步：Claude 独立复审 → PASS 后 Codex 执行 5b 零付费 replay → readiness / 第四枪决策。
+
+## 2026-08-19 追加：5b 已在第三枪 raw 上执行（8d8c；待 Claude 独立复审）
+
+- 首次 5b 执行在 source digest 门安全停止：raw 没变，但 runner 错把每条 source 的冻结 `fetched_at` 合成最大值；无 provider、预算、重试，也没有写 summary。
+- 已做最小修复：每条 source 用自己的冻结 `fetched_at` 调生产 normalizer，再按生产顺序切块；没有放宽 digest 或正式输出门。owner `32 OK`。
+- 修复后重跑完成：`offline_replay_completed`，`transport_verdict=PASS`、`deepseek-v4-pro`、1 条主题；5 个成员绑定接受、0 个绑定拒绝；语义结果因 `malformed_semantic_assertion` 拒绝，`readiness=null`。
+- replay summary 写入私有 v3 诊断根；provider/network/retry=`0/0/0`，正式决策槽为 false，预算账本未变；第一枪、第二枪和第三枪 transport summary/raw 未动。
+- 下一步：Claude 独立复审本次 per-source 时钟修复与 replay 结果；通过后再按 readiness 决定是否第四枪。

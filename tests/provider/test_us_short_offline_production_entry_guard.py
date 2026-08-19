@@ -10,7 +10,7 @@ import json
 import tempfile
 import uuid
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -1110,6 +1110,75 @@ class WebRegroupReplayTests(unittest.TestCase):
                 actual_rows, actual_refs, _actual_fetched_at = replay._load_target_inputs(packet)
             self.assertEqual([row["source_id"] for row in actual_rows], packet["input"]["target_source_ids"])
             self.assertEqual(actual_refs, packet["input"]["target_source_refs"])
+
+    def test_5b_source_digest_keeps_each_frozen_fetched_at(self):
+        with temporary_provider_directory(replay.ROOT) as private_root:
+            root = Path(private_root)
+            raw_dir = root / "provider_samples" / "us_short_llm_theme_discovery_fetch_web" / "raw" / "20260815"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            rows = []
+            fetched_at_by_url = {}
+            for index in range(34):
+                url = f"https://example.test/5b-clock-source-{index:02d}"
+                row = {
+                    "url": url, "title": f"Title {index}", "content": f"Content {index}",
+                    "published_date": "2026-08-10T10:00:00Z",
+                }
+                rows.append(row)
+                fetched_at_by_url[url] = datetime(
+                    2026, 8, 15, 4, 30, tzinfo=timezone.utc,
+                ) + timedelta(minutes=index)
+            normalized_refs = []
+            prompt_rows = []
+            for row in rows:
+                refs, prompts, drops = web._normalize_search_results(
+                    [row], expected_decision_date="20260815",
+                    fetched_at=fetched_at_by_url[row["url"]], raw_root=None,
+                    persist_raw=False,
+                )
+                self.assertFalse(drops)
+                normalized_refs.extend(refs)
+                prompt_rows.extend(prompts)
+            normalized_refs.sort(key=lambda ref: ref["source_id"])
+            prompt_rows.sort(key=lambda row: row["source_id"])
+            chunks = web._chunk_regroup_rows(prompt_rows)
+            ref_by_id = {}
+            for ref in normalized_refs:
+                row = next(row for row in rows if web._source_id(row["url"]) == ref["source_id"])
+                raw = {
+                    "source_id": ref["source_id"], "canonical_locator": row["url"],
+                    "title": row["title"], "content": row["content"],
+                    "published_at": row["published_date"],
+                }
+                raw_path = raw_dir / f"{ref['source_id'].split(':', 1)[1]}.json"
+                raw_path.write_text(json.dumps(raw), encoding="utf-8")
+                ref_by_id[ref["source_id"]] = {
+                    **ref,
+                    "fetched_at": fetched_at_by_url[row["url"]].isoformat(),
+                    "raw_receipt_ref": raw_path.relative_to(root).as_posix(),
+                    "raw_receipt_gitignored": True,
+                }
+            receipt_path = root / "state" / "us_short" / "us_short_llm_theme_discovery_web_20260815_receipt.json"
+            receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            receipt_path.write_text(json.dumps({
+                "decision_clock": {"expected_decision_date": "20260815"},
+                "source_refs": list(reversed([ref_by_id[ref["source_id"]] for ref in normalized_refs])),
+            }), encoding="utf-8")
+            target = chunks[1]
+            packet = {
+                "input": {
+                    "receipt_ref": receipt_path.relative_to(root).as_posix(),
+                    "accepted_source_count": 34,
+                    "target_chunk_index": 1,
+                    "target_source_ids": [row["source_id"] for row in target],
+                    "target_source_refs": [ref_by_id[row["source_id"]] for row in target],
+                },
+            }
+            with mock.patch.object(replay, "ROOT", root):
+                actual_rows, actual_refs, actual_fetched_at = replay._load_target_inputs(packet)
+            self.assertEqual([row["source_id"] for row in actual_rows], packet["input"]["target_source_ids"])
+            self.assertEqual(actual_refs, packet["input"]["target_source_refs"])
+            self.assertEqual(actual_fetched_at, max(fetched_at_by_url.values()))
 
     def test_5b_has_no_free_input_or_paid_entrypoint(self):
         source = Path(replay.__file__).read_text(encoding="utf-8")

@@ -180,7 +180,7 @@ def _load_target_inputs(packet: Mapping[str, Any]) -> tuple[list[dict[str, Any]]
         or len(receipt_refs) != packet["input"]["accepted_source_count"]
     ):
         raise WebRegroupReplayError("frozen Web receipt source set is malformed")
-    rows: list[dict[str, Any]] = []
+    rows_with_fetched_at: list[tuple[dict[str, Any], datetime]] = []
     for ref in receipt_refs:
         if type(ref) is not dict:
             raise WebRegroupReplayError("frozen Web receipt contains a malformed source ref")
@@ -199,23 +199,34 @@ def _load_target_inputs(packet: Mapping[str, Any]) -> tuple[list[dict[str, Any]]
             or not isinstance(raw.get("published_at"), str)
         ):
             raise WebRegroupReplayError("frozen Web raw source does not match its receipt ref")
-        rows.append({
-            "url": raw["canonical_locator"],
-            "title": raw["title"],
-            "content": raw["content"],
-            "published_date": raw["published_at"],
-        })
+        rows_with_fetched_at.append((
+            {
+                "url": raw["canonical_locator"],
+                "title": raw["title"],
+                "content": raw["content"],
+                "published_date": raw["published_at"],
+            },
+            web._parse_dt(ref["fetched_at"], field="source_ref.fetched_at"),
+        ))
     fetched_at = max(
-        web._parse_dt(ref["fetched_at"], field="source_ref.fetched_at")
-        for ref in receipt_refs
+        source_fetched_at for _row, source_fetched_at in rows_with_fetched_at
     )
-    normalized_refs, prompt_rows, drops = web._normalize_search_results(
-        rows,
-        expected_decision_date=EXPECTED_DECISION_DATE,
-        fetched_at=fetched_at,
-        raw_root=None,
-        persist_raw=False,
-    )
+    normalized_refs: list[dict[str, Any]] = []
+    prompt_rows: list[dict[str, str]] = []
+    drops: list[dict[str, str]] = []
+    for row, source_fetched_at in rows_with_fetched_at:
+        row_refs, row_prompt_rows, row_drops = web._normalize_search_results(
+            [row],
+            expected_decision_date=EXPECTED_DECISION_DATE,
+            fetched_at=source_fetched_at,
+            raw_root=None,
+            persist_raw=False,
+        )
+        normalized_refs.extend(row_refs)
+        prompt_rows.extend(row_prompt_rows)
+        drops.extend(row_drops)
+    normalized_refs.sort(key=lambda ref: ref["source_id"])
+    prompt_rows.sort(key=lambda row: row["source_id"])
     if drops or len(normalized_refs) != 34 or len(prompt_rows) != 34:
         raise WebRegroupReplayError("production Web normalization did not conserve the frozen sources")
     normalized_by_id = {ref["source_id"]: ref for ref in normalized_refs}
