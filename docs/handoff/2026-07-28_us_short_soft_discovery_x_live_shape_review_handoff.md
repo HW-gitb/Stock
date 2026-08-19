@@ -3792,3 +3792,10 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - Optional：删除 legacy 分支恒真的路径比较；保留运行时输出根与 packet 声明不一致即拒绝的真实门。
 - 验证：固定 Python `tests.test_us_short_llm_theme_discovery_plan_budget` = `74 OK`；未联网、未调用 provider、未同步主树、未提交/合并。
 - 下一步：Claude 独立复审；PASS 后按规则提交，再考虑同步主树和 v3 授权。
+
+## 2026-08-19 追加：第三枪摘要路径最小修复与 v4 packet（8d8c；待独立复审）
+
+- 第三枪 v3 的 raw 已落盘但 summary 写入撞到旧 v2 路径；本轮只修 `fetch_web` writer：从 packet 的 `output_boundary.summary_ref` 派生目标，并保留私有根检查，不开放自由输出路径。
+- v3 已消费，不复用；新建 `docs/us_short_web_regroup_engineering_smoke_packet_20260815_v4.json` 与对应 v4 schema。v4 使用新的诊断/raw/summary 根，仍固定 chunk 1、10 条来源、`deepseek-v4-pro`、1 次调用、零重试，正式输出全禁。
+- 验证：owner `75 OK`；v4 schema/packet `0 errors`；主树既有冻结 receipt/raw 只读交叉校验 PASS；未联网、未调用 provider、未同步主树、未提交/合并。
+- 下一步严格按顺序：Claude 独立复审 → PASS 后提交/同步主树 → 用户对 v4 精确 packet 明确授权 → 才能执行一次；当前不得执行 provider。

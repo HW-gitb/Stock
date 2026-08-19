@@ -18,21 +18,31 @@ from typing import Any, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
 LIVE_ROOT = Path(r"D:\cnhea\Stock")
-PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v3"
+PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v4"
 LEGACY_PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v2"
 LEGACY_SCHEMA_NAME = "us_short_web_regroup_engineering_smoke_packet_v2"
 LEGACY_SCHEMA_VERSION = "2.0.0"
+PREVIOUS_PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v3"
+PREVIOUS_SCHEMA_NAME = "us_short_web_regroup_engineering_smoke_packet_v3"
+PREVIOUS_SCHEMA_VERSION = "3.0.0"
 EXPECTED_MODEL = "deepseek-v4-pro"
 EXPECTED_SERVED_MODEL = "deepseek-v4-pro"
 EXPECTED_TARGET_CHUNK_INDEX = 1
-PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v3.json"
-SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet_v3.schema.json"
-PRIVATE_ROOT = ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke_v3"
+PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v4.json"
+SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet_v4.schema.json"
+PRIVATE_ROOT = ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke_v4"
 PARENT_PLAN_PATH = PRIVATE_ROOT / "us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json"
-RAW_ROOT = ROOT / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke_v3"
+RAW_ROOT = ROOT / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke_v4"
 SUMMARY_PATH = PRIVATE_ROOT / "us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json"
 EXPECTED_RENDERED_PROMPT_SHA256 = "97c7f93afc77310a193d585defc7b4afc596c87e27703c1ad9b053bcc3743a32"
 EXPECTED_OUTPUT_BOUNDARY = {
+    "diagnostic_root": "state/us_short/runs_private/soft_discovery_engineering_smoke_v4/",
+    "parent_plan_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v4/us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json",
+    "budget_ledger_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v4/us_short_llm_theme_discovery_plan_web_20260815_budget.json",
+    "raw_root": "provider_samples/us_short_llm_theme_discovery_engineering_smoke_v4/",
+    "summary_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v4/us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json",
+}
+PREVIOUS_OUTPUT_BOUNDARY = {
     "diagnostic_root": "state/us_short/runs_private/soft_discovery_engineering_smoke_v3/",
     "parent_plan_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v3/us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json",
     "budget_ledger_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v3/us_short_llm_theme_discovery_plan_web_20260815_budget.json",
@@ -45,6 +55,27 @@ LEGACY_OUTPUT_BOUNDARY = {
     "budget_ledger_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v2/us_short_llm_theme_discovery_plan_web_20260815_budget.json",
     "raw_root": "provider_samples/us_short_llm_theme_discovery_engineering_smoke_v2/",
     "summary_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v2/us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json",
+}
+
+PACKET_IDENTITIES = {
+    PACKET_ID: (
+        "us_short_web_regroup_engineering_smoke_packet_v4",
+        "4.0.0",
+        PACKET_ID,
+        EXPECTED_OUTPUT_BOUNDARY,
+    ),
+    PREVIOUS_PACKET_ID: (
+        PREVIOUS_SCHEMA_NAME,
+        PREVIOUS_SCHEMA_VERSION,
+        PREVIOUS_PACKET_ID,
+        PREVIOUS_OUTPUT_BOUNDARY,
+    ),
+    LEGACY_PACKET_ID: (
+        LEGACY_SCHEMA_NAME,
+        LEGACY_SCHEMA_VERSION,
+        LEGACY_PACKET_ID,
+        LEGACY_OUTPUT_BOUNDARY,
+    ),
 }
 
 if str(ROOT) not in sys.path:
@@ -85,19 +116,10 @@ def _assert_packet_contract(packet: Mapping[str, Any]) -> None:
         output_boundary = packet["output_boundary"]
     except (KeyError, TypeError) as exc:
         raise EngineeringSmokeError("engineering-smoke packet contract is malformed") from exc
-    is_legacy_packet = packet.get("packet_id") == LEGACY_PACKET_ID
-    if packet.get("packet_id") == PACKET_ID:
-        expected_schema_name = "us_short_web_regroup_engineering_smoke_packet_v3"
-        expected_schema_version = "3.0.0"
-        expected_packet_id = PACKET_ID
-        expected_output_boundary = EXPECTED_OUTPUT_BOUNDARY
-    elif is_legacy_packet:
-        expected_schema_name = LEGACY_SCHEMA_NAME
-        expected_schema_version = LEGACY_SCHEMA_VERSION
-        expected_packet_id = LEGACY_PACKET_ID
-        expected_output_boundary = LEGACY_OUTPUT_BOUNDARY
-    else:
+    identity = PACKET_IDENTITIES.get(packet.get("packet_id"))
+    if identity is None:
         raise EngineeringSmokeError("engineering-smoke packet identity is not runner-authorized")
+    expected_schema_name, expected_schema_version, expected_packet_id, expected_output_boundary = identity
     if (
         packet.get("schema_name") != expected_schema_name
         or packet.get("schema_version") != expected_schema_version
@@ -512,6 +534,7 @@ def _summary(
         "status": status,
         "transport_verdict": "PASS" if passed else "FAIL",
         "packet_id": packet["packet_id"],
+        "summary_ref": packet["output_boundary"]["summary_ref"],
         "source_decision_date": packet["source_decision_date"],
         "original_chunk_index": packet["input"]["target_chunk_index"],
         "provider_call_count": metrics["provider_call_count"],

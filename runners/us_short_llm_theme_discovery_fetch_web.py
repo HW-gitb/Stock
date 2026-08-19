@@ -452,11 +452,22 @@ def publish_budget_abort_diagnostic(
     return path
 
 
-def _engineering_smoke_summary_path() -> Path:
-    return (
-        STATE_DIR / "runs_private" / "soft_discovery_engineering_smoke_v2"
-        / "us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json"
-    )
+def _engineering_smoke_summary_path(summary: Mapping[str, Any]) -> Path:
+    summary_ref = summary.get("summary_ref")
+    state_prefix = "state/us_short/"
+    if (
+        not isinstance(summary_ref, str)
+        or not summary_ref.startswith(
+            state_prefix + "runs_private/soft_discovery_engineering_smoke_"
+        )
+    ):
+        raise WebThemeDiscoveryError("engineering-smoke summary path is not packet-bound")
+    path = (STATE_DIR / summary_ref[len(state_prefix):]).resolve()
+    try:
+        path.relative_to(STATE_DIR.resolve())
+    except ValueError as exc:
+        raise WebThemeDiscoveryError("engineering-smoke summary path is not private") from exc
+    return path
 
 
 def publish_engineering_smoke_diagnostic(summary: dict[str, Any]) -> Path:
@@ -465,7 +476,7 @@ def publish_engineering_smoke_diagnostic(summary: dict[str, Any]) -> Path:
         raise WebThemeDiscoveryError("engineering-smoke summary status is not diagnostic-only")
     if summary.get("formal_decision_slots_occupied") is not False:
         raise WebThemeDiscoveryError("engineering-smoke summary must forbid formal decision output")
-    path = _engineering_smoke_summary_path()
+    path = _engineering_smoke_summary_path(summary)
     if not _gitignored(path) or path.name.startswith("us_short_llm_theme_discovery_web_"):
         raise WebThemeDiscoveryError("engineering-smoke summary path is not a private ignored slot")
     try:
