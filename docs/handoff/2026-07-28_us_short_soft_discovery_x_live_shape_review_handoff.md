@@ -3777,3 +3777,11 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 ### 下一步（顺序不变）
 
 `Claude Code 独立审查 PASS → 用户通知后合并进 master → 用户对新 v2 packet 明确付费授权 → 主树第二枪一次 → transport PASS 后才跑 5b`。
+
+## 2026-08-19 追加：第三枪 v3 packet 已建（8d8c；未授权、未执行）
+
+- 第二枪 v2 已消费，不能复用；新包为 `docs/us_short_web_regroup_engineering_smoke_packet_20260815_v3.json`，schema 为 `schemas/us_short_web_regroup_engineering_smoke_packet_v3.schema.json`，精确 `packet_id=us_short_web_regroup_engineering_smoke_20260815_chunk1_v3`。
+- v3 保持同一份 0815 Web receipt、生产 chunk 1 / 10 条来源、`deepseek-v4-pro`、16384 上限、DeepSeek 1 次、零重试/零 recovery、formal outputs 全禁；诊断根和 raw 根改为 `_v3`，当前为空/不存在。
+- runner 的真实主树入口只认 v3；v2 仅保留离线测试临时假包兼容，不接受主树已消费 v2 路径。
+- 离线校验使用主树现有冻结 receipt/raw：schema、receipt/source digest、生产 chunk、prompt digest 全通过；owner 包 `72 OK`。未联网、未调用 provider、未授权、未提交/合并。
+- 下一步严格按顺序：Claude 独立审查 → 合入主树 → 用户对 v3 精确 packet 再次明确付费授权 → 主树只打一枪；transport PASS 才能跑 5b。
