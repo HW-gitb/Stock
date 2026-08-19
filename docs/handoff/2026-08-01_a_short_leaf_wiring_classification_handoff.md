@@ -9423,3 +9423,10 @@ call .tools\run_unittest_with_repo_pythonpath.cmd tests.phase6.test_egs_main_dai
 - **一个被硬门逼出来的设计约束**：`compute_full_market_breadth` 有 `usable != eligible` 即整日不可用的硬门。所以哨兵行**不能**留在 `merged` 里标成 `limit_ok=False`——那样照样触发硬门、breadth 照样归零。必须行级剔除让 `eligible` 与 `usable` 同减，该票落进「报告但不致命」的 `absent`。这解释了为什么上游预校验留行、下游引擎剔行看着不一致，其实是唯一可行解；追全 `limit_panel` 的三处引用确认没有第二个消费者，双待遇才成立。
 - **一个自己踩的小坑**：落盘脚本用「这段文字是否已存在」做幂等断言，撞上同一份 register 里上一条相同前缀的复审行，白返工一轮。幂等锚要用**本次独有**的字符串，别用会重复的套话开头。
 - **未做的一格**：真实 EGS 全流程复跑没跑，「真实那一周 regime 实际取什么值」仍未验；验到的是验证器不再毙窗 + 接线级能算出 `contraction`。这一跑归 reviewer，不阻断 PASS。
+
+## 2026-08-19 追加：真实数据收口——顺便记一次我自己把验收判据设错了
+
+- **我先前写的判据是「`market_regime.status` 不再是 `unknown` 就算修好」，这条是错的。** 真跑完才去读 `derive_v14_2_market_regime`(`egs_main.py:7839-7841`)：`contraction` 要 `prior>=5 且 current<=3`，`defense` 要 `limit_down>100` 或 `iv>90`，**两者都不满足本来就返回 `unknown`**。本周实测 `limit_down=6`，市场平静，`unknown` 是正确输出。拿它当验收标准，等于要求「市场必须处在防御或收缩态」才承认代码修好了。
+- **正确的判据是「腿有没有真的取到值」**，不是「最终 status 是什么」。按这个看，哨兵刀是明确成功的：`stk_limit_fetch_failed` 消失、`eligible=usable=5539`、涨停 81 / 跌停 6（修复前恒 `None`）、`limit_down_defense_leg` 由 `unknown` 变成 `fail(6, >100)` 的真判定。
+- **教训**：给一把刀定验收判据时，先读那个判据所在函数的**决策规则**，别只看字段名。`status != unknown` 听上去像「功能正常」，其实它是一个**取决于市场行情**的输出——把行情当成代码的验收条件，运气好会假绿，运气不好会假红。**判据要落在「输入是否被正确消费」，而不是「输出恰好是哪个枚举值」。**
+- **修好一个洞会露出下一个**：`stk_limit` 通了之后，`contender_bar_missing_in_window` 才第一次有机会出现——它此前一直被前一个故障挡在后面。逐只查下来是一只停牌复牌即涨停的老票（`603221.SH`，10 天缺 6 天），与哨兵刀无关，但**是同一个缺陷类**（一行可解释的缺失让整个指标归零）。已单开 P2。
