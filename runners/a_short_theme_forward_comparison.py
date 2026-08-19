@@ -28,7 +28,6 @@ from engine.a_short_theme_forward_comparison import (
 from engine import a_short_evidence_epoch_mode as epoch_mode
 from engine.a_short_run_revision import (
     private_revision_root,
-    require_official_revision,
     resolve_official_revision,
     validate_run_revision_id,
 )
@@ -539,9 +538,6 @@ def main(argv: list[str] | None = None, *, sidecar_result: dict | None = None) -
             run_revision_id = validate_run_revision_id(next(iter(revisions)))
     if args.official_project_root and run_revision_id is None and not tracker.empty:
         raise SystemExit("[FATAL] official theme settlement requires revision-bound tracker rows")
-    if run_revision_id is not None and args.official_project_root:
-        for as_of in sorted({str(value) for value in tracker["as_of"]}):
-            require_official_revision(args.official_project_root, as_of, run_revision_id)
     if args.start_epoch:
         if not args.epoch_start_as_of:
             raise SystemExit("[FATAL] --start-epoch requires --epoch-start-as-of")
