@@ -393,7 +393,10 @@ def _failure_reason(exc: BaseException | None) -> tuple[str | None, str | None]:
     if isinstance(exc, plan_budget.PostPaymentDispatchError):
         return "completion_ledger_error", None
     if isinstance(exc, paid_gateway.PaidProviderError):
-        return "provider_call_failed", None
+        # The cause's class name is enough to route (APITimeoutError vs AuthenticationError vs ...)
+        # and carries no message, URL or key, so a spent shot stops recording only "it failed".
+        cause = exc.__cause__
+        return "provider_call_failed", type(cause).__name__ if cause is not None else None
     message = str(exc)
     message_map = {
         "DeepSeek response is not JSON": "response_not_json",

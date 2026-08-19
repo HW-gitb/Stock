@@ -18,6 +18,9 @@ from engine.us_short_persisted_text_safety import persisted_text_violation
 TAVILY_ENDPOINT = "https://api.tavily.com/search"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-v4-pro"
+# Sized for the model above, not for the Flash tier the old 45s default was written against:
+# the 2026-08-19 paid shot hung up at 45.3s with nothing back. One source for smoke and production.
+DEEPSEEK_REQUEST_TIMEOUT_SECONDS = 300.0
 DEEPSEEK_REGROUP_MAX_TOKENS = 16_384
 DEEPSEEK_REGROUP_MAX_THEMES_PER_CHUNK = 4
 DEEPSEEK_RESPONSE_FORMAT = {"type": "json_object"}
@@ -174,7 +177,11 @@ class DeepSeekClient:
         def __init__(self, delegate: Any):
             self.completions = DeepSeekClient._Completions(delegate.completions)
 
-    def __init__(self, api_key: str, *, timeout: float = 45.0, live_transport: LiveTransport):
+    def __init__(
+        self, api_key: str, *,
+        timeout: float = DEEPSEEK_REQUEST_TIMEOUT_SECONDS,
+        live_transport: LiveTransport,
+    ):
         api_key = _require_credential(api_key, marker="sk-", label="DEEPSEEK_API_KEY")
         try:
             from openai import OpenAI

@@ -458,6 +458,31 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
                 "xai-" + "b" * 16, live_transport=_live_transport("xai"),
             )
         self.assertEqual([row["max_retries"] for row in captured], [0, 0])
+        # the 2026-08-19 shot hung up at 45.3s with nothing back; the timeout the SDK actually
+        # receives must be the module constant sized for Pro, not a literal left behind by Flash
+        self.assertEqual(captured[0]["timeout"], paid_gateway.DEEPSEEK_REQUEST_TIMEOUT_SECONDS)
+
+    def test_K5_a_timed_out_call_records_a_routable_cause_without_leaking_its_message(self):
+        leaky = "read timed out; https://api.deepseek.com/v1 key sk-" + "z" * 16
+        try:
+            try:
+                raise TimeoutError(leaky)
+            except TimeoutError as cause:
+                raise paid_gateway.PaidProviderError("DeepSeek request failed: TimeoutError") from cause
+        except paid_gateway.PaidProviderError as err:
+            client_error = err
+
+        with _k5_smoke_fixture(client_error=client_error) as fixture:
+            summary = smoke.run_one_shot(
+                fixture["packet"], confirm_user_authorization=fixture["packet"]["packet_id"],
+            )
+        self.assertEqual(summary["transport_verdict"], "FAIL")
+        self.assertEqual(summary["terminal_error_reason"], "provider_call_failed")
+        # enough to route the failure...
+        self.assertEqual(summary["terminal_error_detail"], "TimeoutError")
+        # ...and nothing more: no message, no URL, no key anywhere in the artifact
+        self.assertNotIn("sk-", json.dumps(summary))
+        self.assertNotIn("api.deepseek.com", json.dumps(summary))
 
     def _reserved(self, parent: dict, state: Path) -> plan_budget.PlanDispatchBudget:
         return plan_budget.reserve_plan_budget(
