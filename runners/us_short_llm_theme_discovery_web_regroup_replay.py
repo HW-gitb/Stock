@@ -520,14 +520,29 @@ def _semantic_results(
     parsed_themes: list[Any], discovery: Mapping[str, Any],
     validated_themes: list[dict[str, Any]], drops: list[dict[str, Any]],
     ledger: list[dict[str, Any]],
+    theme_drop_details: Mapping[str, list[str]] | None = None,
 ) -> list[dict[str, Any]]:
     accepted_ids = {theme["theme_id"] for theme in validated_themes}
     by_theme: dict[str, set[str]] = {}
+    details_by_theme: dict[str, set[str]] = {
+        theme_id: {
+            web._ledger_safe_detail(detail)
+            for detail in details
+            if isinstance(detail, str)
+        }
+        for theme_id, details in (theme_drop_details or {}).items()
+        if isinstance(theme_id, str) and isinstance(details, list)
+    }
     for drop in drops:
         theme_id = drop.get("theme_id")
         reason = drop.get("reason")
         if isinstance(theme_id, str) and isinstance(reason, str):
             by_theme.setdefault(theme_id, set()).add(reason)
+            detail = drop.get("detail")
+            if isinstance(detail, str):
+                details_by_theme.setdefault(theme_id, set()).add(
+                    web._ledger_safe_detail(detail)
+                )
     discovered_ids = {theme["theme_id"] for theme in discovery["themes"]}
     return [
         {
@@ -552,6 +567,9 @@ def _semantic_results(
                     and isinstance(row.get("parent_theme_reason"), str)
                 }
             ),
+            "drop_details": sorted(details_by_theme.get(
+                theme.get("theme_id") if isinstance(theme, dict) else "", set()
+            )),
         }
         for theme in parsed_themes
     ]
@@ -636,6 +654,7 @@ def run_replay() -> dict[str, Any]:
         },
         "semantic_results": _semantic_results(
             themes, discovery, validated_themes, validation_drops, ledger,
+            bound.get("_theme_drop_details"),
         ),
         "sic_snapshot": {
             "relative_path": SIC_SNAPSHOT_PATH.relative_to(ROOT).as_posix(),

@@ -1500,6 +1500,7 @@ def _llm_to_discovery_input(
     themes: list[dict[str, Any]] = []
     ledger: list[dict[str, Any]] = []
     theme_ledger_groups: list[tuple[dict[str, Any], list[int]]] = []
+    theme_drop_details: dict[str, list[str]] = {}
 
     def set_parent(rows: list[int], status: str, reason: str | None) -> None:
         for row_index in rows:
@@ -1668,7 +1669,10 @@ def _llm_to_discovery_input(
             set_parent(theme_rows, "accepted", None)
             theme_ledger_groups.append((theme, theme_rows))
         except _ProviderItemRejected as exc:
-            drop(exc.reason, f"chunk[{chunk_index}].theme[{theme_index}]")
+            detail = _ledger_safe_detail(exc.detail)
+            drop(exc.reason, f"chunk[{chunk_index}].theme[{theme_index}]:{detail}")
+            if isinstance(theme_id, str):
+                theme_drop_details.setdefault(theme_id, []).append(detail)
             set_parent(theme_rows, "rejected", exc.reason)
         except Exception as exc:
             drop(
@@ -1685,6 +1689,7 @@ def _llm_to_discovery_input(
         "themes": themes,
         "member_binding_ledger": ledger,
         "_theme_ledger_groups": theme_ledger_groups,
+        "_theme_drop_details": theme_drop_details,
     }
 
 

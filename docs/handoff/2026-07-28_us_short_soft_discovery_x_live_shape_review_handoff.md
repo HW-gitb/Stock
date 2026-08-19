@@ -3840,3 +3840,10 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - 修复后重跑完成：`offline_replay_completed`，`transport_verdict=PASS`、`deepseek-v4-pro`、1 条主题；5 个成员绑定接受、0 个绑定拒绝；语义结果因 `malformed_semantic_assertion` 拒绝，`readiness=null`。
 - replay summary 写入私有 v3 诊断根；provider/network/retry=`0/0/0`，正式决策槽为 false，预算账本未变；第一枪、第二枪和第三枪 transport summary/raw 未动。
 - 下一步：Claude 独立复审本次 per-source 时钟修复与 replay 结果；通过后再按 readiness 决定是否第四枪。
+
+## 2026-08-19 追加：5b 两项 Required 最小修复（8d8c；待独立复审）
+
+- 生产绑定层保留语义断言失败的字段级 detail；5b `semantic_results` 增加按主题的脱敏 `drop_details`，用于区分具体字段/原因，不带模型原文。
+- 新增承重用例：除 `transport_verdict=FAIL` 外 transport summary 字段全部合法时，5b 仍在读取目标输入前拒绝，且不写 replay summary。
+- 验证：5b 专项 `15 OK`、新增守卫 `2 OK`、Web 生产入口 `83 OK`、owner `34 OK`；未联网、未调用 provider、未花费；主树既有第三枪 summary 未改。
+- 下一步：Claude 独立复审本次两项 Required 修复。

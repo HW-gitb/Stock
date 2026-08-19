@@ -757,7 +757,7 @@ class WebRegroupReplayTests(unittest.TestCase):
     @staticmethod
     def _fixture(
         *, include_positive=True, include_negative=True, binding_dead=False,
-        duplicate_theme=False, served_model="deepseek-chat",
+        duplicate_theme=False, served_model="deepseek-chat", malformed_semantic=False,
     ):
         source_ids = ["web:" + format(index, "064x") for index in range(10)]
         refs = [{
@@ -801,6 +801,8 @@ class WebRegroupReplayTests(unittest.TestCase):
                     "common_driver": None,
                     "member_links": [],
                 }
+            if malformed_semantic and basis == "shared_commercial_driver":
+                assertion["member_links"][0]["role"] = "AI chip supplier"
             return {
                 "theme_id": theme_id, "display_name": theme_id,
                 "summary": "Frozen replay fixture", "observed_at": "2026-08-10T12:00:00+00:00",
@@ -963,6 +965,73 @@ class WebRegroupReplayTests(unittest.TestCase):
         self.assertFalse(result["boost_published"])
         self.assertFalse(result["score_effect"])
         self.assertEqual(saved, result)
+
+    def test_5b_semantic_drop_keeps_sanitized_field_detail(self):
+        result, _saved = self._run_fixture(
+            include_negative=False, malformed_semantic=True,
+        )
+        semantic = result["semantic_results"][0]
+        self.assertEqual(semantic["machine_result"], "not_reached_semantic_gate")
+        self.assertEqual(semantic["drop_reasons"], ["malformed_semantic_assertion"])
+        self.assertEqual(
+            semantic["drop_details"],
+            ["chunk[1].theme[0].semantic_assertions[0].member_links[0].role is invalid"],
+        )
+        self.assertNotIn("AI chip supplier", json.dumps(semantic))
+
+    def test_5b_failed_transport_is_rejected_before_replay_output(self):
+        packet, _rows, _refs, _response, _transport, _snapshot, _sectors = self._fixture()
+        packet = {
+            **packet,
+            "paid_boundary": {"request": {
+                "model": "deepseek-chat",
+                "expected_served_model": "deepseek-chat",
+            }},
+            "output_boundary": {
+                "budget_ledger_ref": "state/us_short/runs_private/budget.json",
+            },
+        }
+        with tempfile.TemporaryDirectory(prefix="us_short_5b_failed_transport_") as temp_root:
+            root = Path(temp_root)
+            transport_path = root / "transport_summary.json"
+            replay_path = root / "replay_summary.json"
+            transport_path.write_text(json.dumps({
+                "packet_id": packet["packet_id"],
+                "source_decision_date": "20260815",
+                "transport_verdict": "FAIL",
+                "status": "live_authorized_engineering_smoke_response_captured",
+                "original_chunk_index": packet["input"]["target_chunk_index"],
+                "requested_model": "deepseek-chat",
+                "expected_served_model": "deepseek-chat",
+                "model_identity_match": True,
+                "budget_ledger_ref": packet["output_boundary"]["budget_ledger_ref"],
+                "provider_call_count": 1,
+                "deepseek_call_count": 1,
+                "tavily_call_count": 0,
+                "xai_call_count": 0,
+                "retry_count": 0,
+                "recovery_count": 0,
+                "unknown_sibling_count": 0,
+                "raw_persisted_before_parse": True,
+                "raw_hash_reread": True,
+                "strict_parse_status": "passed",
+                "formal_decision_slots_occupied": False,
+            }), encoding="utf-8")
+            with (
+                mock.patch.object(replay, "_validate_packet", return_value=packet),
+                mock.patch.object(replay, "_transport_summary_path", return_value=transport_path),
+                mock.patch.object(replay, "_replay_summary_path", return_value=replay_path),
+                mock.patch.object(
+                    replay, "_load_target_inputs",
+                    side_effect=AssertionError("failed transport reached replay input"),
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    replay.WebRegroupReplayError,
+                    "transport summary is not a PASS",
+                ):
+                    replay.run_replay()
+            self.assertFalse(replay_path.exists())
 
     def test_5b_duplicate_theme_rejects_its_member_rows(self):
         result, _saved = self._run_fixture(duplicate_theme=True)
