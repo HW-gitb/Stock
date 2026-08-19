@@ -9462,3 +9462,33 @@ Claude Code：独立复审该 Required 的逐日既有 coverage 门、`holed` �
 - **审查这种地板，光看逻辑不够，要把敞口算出来**。地板 `0.95` 听着挺严，但换算成真实论域是「单日最多赦免 277 只」。所以我去数了北交所：**337 只、占 6.08%**——整块丢失会把覆盖率压到 93.9%，**低于地板、不会被赦免**。没有哪个板块小到能整体钻过去。有了这个数，「地板够不够严」就不再是感觉问题。**建议以后审所有阈值型放宽都补这一步：把阈值换算成最坏情况下能放过多少东西，再看那个数字能不能装下一个真实的故障模式。**
 - **也要核「为什么没用更精确的源」**：仓里明明有 `suspended_set`，看着该用它而不是覆盖率代理。查了 `get_suspend_info(trade_dates)` 才知道它只按 `trade_dates[0]`（as_of）取，是单日扁平集，解释不了窗口中段的洞。**质疑修法之前先读那个「更好的源」到底提供什么形状**，否则会提出一个做不到的 Required。
 - **验收判据这次一开始就写对了**：不是「regime 必须非 unknown」，而是「高度腿有没有从 `unknown` 变成真判定」。真实结果 `fail(prior=4;current=4)` —— 腿活了，而 regime 仍是 `unknown`，因为 4/4 本来就不满足收缩条件。这正是上一轮记下的教训在起作用。
+
+## 2026-08-19 追加：Codex 修复 margin-overheat settlement flat-path Required（509e；repaired / OPEN-NOT-VERIFIED）
+
+### 根因与最小改动
+
+- 目标：`R-ASHORT-MARGIN-OVERHEAT-SETTLEMENT-READS-A-FLAT-PATH-ITS-CAPTURE-NEVER-WRITES`。捕获 writer 带 `run_revision_id` 时写 `weeks/<date>/revisions/<id>/capture.json` 与 `source_receipt.json`；settlement 在未指定 revision 的兼容分支却把 `weeks/<date>/` 当 flat artifact 目录，因此对只有 `revisions/` 的正常周抛 `partial margin-overheat capture artifact set`。
+- 仅改 `engine/a_short_margin_overheat_cash_control.py::settle_margin_overheat_from_daily_cache()` 的 `run_revision_id is None` 分支：legacy flat 周仍进入原有读取/partial 校验；日期根存在 `revisions/` 且没有顶层 `capture.json`/`source_receipt.json` 时按「本次调用未指定 revision」跳过，不猜 mtime、目录顺序或最新 revision。日期根同时有任一 flat artifact 时仍进入原 partial 判据，所以没有把缺文件静默当成无周。
+- 未改 capture writer、`private_week_root()`、official resolver、capture/source-receipt/outcome/ledger schema、source binding、daily-cache digest、artifact-set transaction、adjudication/reminder/public summary、provider/cache/stk_limit、Phase5 或任何生产交易决策。
+
+### 调用链、消费者与边界
+
+- 生产链保持 `capture_margin_overheat_week()` → private `weeks/<date>/revisions/<id>/capture.json + source_receipt.json` → `settle_margin_overheat_from_daily_cache()` → `_settle_capture()` → outcome/ledger/adjudication/reminder；无 revision 的分支现在只消费 legacy flat layout。显式 `official_project_root + run_revision_id` 仍由 `iter_private_week_roots()` 逐日期过滤 official pointer，再对 official revision 缺任一 capture/source receipt 抛原有 partial 错误。
+- schema、字段 digest、PIT/source clock、candidate/official bundle binding、cache 只读重算边界和 private write boundary 均未变；本刀只是选择「不带 revision 不猜 revision」的目录，不新增 fallback、migration、接口或第二个 selector。
+
+### 测试、负控、自审与原始终态
+
+- 先让旧代码失败：新增三项回归旧代码 `Ran 3`，首项 `ERROR`：`20260609: partial margin-overheat capture artifact set`；另外两项负控通过。修后同一精确命令 `Ran 3 / OK`。
+- 新增三项只在既有 `tests/test_a_short_margin_overheat_cash_control.py`：真 `capture_margin_overheat_week(run_revision_id=...)` 生成 revision-only 周后无 revision settlement 不抛且不写 outcome；legacy flat 缺任一 artifact 仍抛；真实 official pointer 选中的 revision 缺 source receipt 仍抛。
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（3.13.8）。现有 margin-overheat 模块 `Ran 85 / OK`；`py_compile` 与 `git diff --check` PASS（仅 LF→CRLF warning）。行为稳定后只跑一次 A-short full lane：`discovered=3239`、`ran=3239`、`COUNT_GATE equal=True`、`PASS`、`132.048s/860s`、fingerprint=`111825160d8b30bac913afb52eb2ccde77267bafec63c72994499700115fbb51`、sidecar=`.tools\\state\\runs\\20260819T173217_a_short_parallel.jsonl`。
+- 未运行 provider/live、真实 weekly、测试胶囊或 sub-agent；未 stage、commit、push、merge；`docs/CURRENT.md` 未改。focused/full lane 只证明离线代码与产物布局闭合，不等于独立 review、commit、merge 或 ship。
+
+### 交接
+
+风险正文已同步到 `docs/system_risk_register.md`，本节为 A-short handoff 追加；`docs/SESSION_LOG.md` 顶部另记本轮 cycle。Claude Code：独立复审无 revision 分支只跳过 revision-only layout、flat/official partial 两个负控、schema/source/cache/write 边界；PASS 后按 reviewer/committer 边界提交，Codex 不提交。
+
+## 2026-08-19 追加：这条 Required 是真实跑出来的，也是被真实跑纠正的
+
+- **它不是审代码审出来的，是全系统真跑撞出来的。** 六轮离线审查、85 个模块测试都绿着，这条路径照样每周失败——因为写和读走了两条不同的目录布局，只有真实的私有根（revision 分层）才踩得到。**与北交所哨兵那刀是同一条教训的第二次印证：合成夹具只能证明「代码按我以为的输入行事」。**
+- **我第一版诊断是错的，纠正它靠的是去读官方指针。** 最初记成「上周留下两个缺 `outcome.json` 的残档把整周判 partial」，据此的处置会是「清理 state」——那会删掉正常证据、完全不碰真因。翻 `official_revision.json` 才发现被选中的官方 revision **恰恰就是完整的那个**，另两个是同日被取代的重跑，代码本来就有守卫跳过它们。**下次遇到「某某周被判残缺」，第一步应是问「官方选的是哪一版」，而不是数目录里少了什么文件。**
+- **复审放宽类改动时，要专门找「新加的条件里，哪一支没有测试」。** 这次新过滤有两个 `or` 子句是为半迁移周（同时有 `revisions/` 和扁平残件）准备的，而三个新测试恰好都没覆盖那个形态——把这两个 `or` 删掉，85 个测试仍然全绿。我用它自己的 fixture 植了这一格，行为是对的，但已记 Optional：**没有测试钉住的守卫，等于下一刀随时可以顺手删掉。**

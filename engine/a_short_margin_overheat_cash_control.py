@@ -3569,7 +3569,17 @@ def settle_margin_overheat_from_daily_cache(
                 continue
             capture_files.append((decision_date, week_dir))
     elif run_revision_id is None:
-        capture_files = [(path.name, path) for path in sorted(weeks_root.iterdir()) if path.is_dir()] if weeks_root.exists() else []
+        # An unqualified reader may consume legacy flat weeks, but it must not
+        # treat a revision-only date root as a flat capture directory.
+        capture_files = [
+            (path.name, path) for path in sorted(weeks_root.iterdir())
+            if path.is_dir()
+            and (
+                not (path / "revisions").is_dir()
+                or (path / "capture.json").exists()
+                or (path / "source_receipt.json").exists()
+            )
+        ] if weeks_root.exists() else []
     else:
         capture_files = [
             (path.name, private_week_root(stage_root, path.name, run_revision_id))

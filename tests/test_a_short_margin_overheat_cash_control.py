@@ -1104,6 +1104,64 @@ class MarginOverheatCashControlKnife3Tests(unittest.TestCase):
         for private_value in (self.candidate["ts_code"], "baseline", "payload_sha256", "private"):
             self.assertNotIn(private_value, public_text)
 
+    def test_unqualified_settlement_skips_revision_scoped_capture_without_guessing_revision(self):
+        revision = "a" * 32
+        captured = self._capture(run_revision_id=revision)
+        self.assertEqual(captured["status"], "captured")
+        revision_root = self.root / "weeks" / AS_OF / "revisions" / revision
+        self.assertTrue((revision_root / "capture.json").is_file())
+        self.assertTrue((revision_root / "source_receipt.json").is_file())
+        self.assertFalse((self.root / "weeks" / AS_OF / "capture.json").exists())
+
+        settled = track.settle_margin_overheat_from_daily_cache(
+            root=self.root, daily_cache_document=self.cache,
+        )
+        self.assertEqual(settled["status"], "settled_from_existing_cache")
+        self.assertEqual(settled["ledger"]["entries"], [])
+        self.assertFalse((revision_root / "outcome.json").exists())
+
+    def test_unqualified_settlement_still_rejects_flat_partial_capture(self):
+        self._capture()
+        (self.root / f"weeks/{AS_OF}/source_receipt.json").unlink()
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError,
+            "partial margin-overheat capture artifact set",
+        ):
+            track.settle_margin_overheat_from_daily_cache(
+                root=self.root, daily_cache_document=self.cache,
+            )
+
+    def test_official_revision_partial_capture_still_rejects_missing_artifact(self):
+        revision = "b" * 32
+        self._capture(run_revision_id=revision)
+        revision_root = self.root / "weeks" / AS_OF / "revisions" / revision
+        (revision_root / "source_receipt.json").unlink()
+        official_root = Path(self.temp.name) / "official-project"
+        pointer = official_root / "research" / "results" / "a_short" / AS_OF / "official_revision.json"
+        pointer.parent.mkdir(parents=True)
+        pointer.write_text(json.dumps({
+            "schema_name": "a_short_official_revision",
+            "schema_version": "1.0.0",
+            "decision_as_of": AS_OF,
+            "selected_revision_id": revision,
+            "selected_manifest_sha256": "0" * 64,
+            "selected_content_digest": "1" * 64,
+            "selection_status": "selected",
+            "reason": "test",
+            "supersedes_revision_id": None,
+        }, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+
+        with self.assertRaisesRegex(
+            track.MarginOverheatCashControlError,
+            "partial margin-overheat capture artifact set",
+        ):
+            track.settle_margin_overheat_from_daily_cache(
+                root=self.root,
+                daily_cache_document=self.cache,
+                run_revision_id=revision,
+                official_project_root=official_root,
+            )
+
     def test_p1_5_two_round_v2_cache_bootstrap_then_margin_capture(self):
         """Model P1-3's first capture and the next shared-cache consumer pass offline."""
         v2_root = Path(self.temp.name) / "state" / "a_short" / "factor_comparison_private" / "v2"
