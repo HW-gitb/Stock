@@ -540,6 +540,11 @@
             "universe_size": {"type": "integer", "minimum": 0},
             "target_universe_size": {"type": "integer", "minimum": 0},
             "target_complete_count": {"type": "integer", "minimum": 0},
+            "missing_target_codes": {
+              "type": "array",
+              "items": {"type": "string", "pattern": "^[0-9]{6}\\.(SH|SZ|BJ)$"},
+              "uniqueItems": true
+            },
             "coverage_complete": {"type": "boolean"},
             "status": {"enum": ["complete", "incomplete", "unavailable", "invalid"]}
           },

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import tempfile
 import unittest
@@ -283,6 +284,72 @@ class AnalysisInputContractTest(unittest.TestCase):
         payload["market_context"]["moneyflow_coverage"]["target_complete_count"] = 1
         with self.assertRaisesRegex(AnalysisInputContractError, "complete moneyflow coverage is inconsistent"):
             validate_analysis_input_contract(payload)
+
+    def test_moneyflow_missing_target_codes_are_optional_but_count_bound(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["schema_version"] = "1.4.0"
+        payload["price_data_through"] = payload["trade_date"]
+        payload["source"].update({
+            "l3_mode": "neutralize",
+            "l3_pit_strict": False,
+            "l3_snapshot_date": None,
+            "l3_provider": "neutralized",
+        })
+        payload["market_context"]["margin_coverage"] = {
+            "reference_date": payload["trade_date"],
+            "effective_ref_date": None,
+            "row_count": 0,
+            "universe_size": 0,
+            "coverage_complete": False,
+            "status": "unavailable",
+        }
+        dates = ["20260522", "20260521", "20260520", "20260519", "20260518"]
+        coverage = {
+            "reference_date": payload["trade_date"],
+            "effective_ref_date": None,
+            "lag_sessions": None,
+            "fallback_applied": False,
+            "fallback_reason": None,
+            "requested_trade_dates": dates,
+            "observed_trade_dates": [],
+            "row_count": 0,
+            "universe_size": 0,
+            "target_universe_size": 3,
+            "target_complete_count": 2,
+            "missing_target_codes": ["000003.SZ"],
+            "coverage_complete": False,
+            "status": "incomplete",
+        }
+        payload["market_context"]["moneyflow_coverage"] = coverage
+        validate_analysis_input_contract(payload)
+
+        bad_cases = (
+            ("duplicate", ["000003.SZ", "000003.SZ"]),
+            ("invalid code", ["not-an-ashare-code"]),
+            ("wrong length", []),
+        )
+        for label, missing_codes in bad_cases:
+            with self.subTest(label=label):
+                bad_payload = copy.deepcopy(payload)
+                bad_payload["market_context"]["moneyflow_coverage"]["missing_target_codes"] = missing_codes
+                with self.assertRaises(ValueError):
+                    validate_analysis_input_contract(bad_payload)
+
+        complete_payload = copy.deepcopy(payload)
+        complete_coverage = complete_payload["market_context"]["moneyflow_coverage"]
+        complete_coverage.update({
+            "effective_ref_date": complete_payload["trade_date"],
+            "lag_sessions": 0,
+            "requested_trade_dates": dates,
+            "observed_trade_dates": dates,
+            "row_count": 10,
+            "universe_size": 3,
+            "target_complete_count": 3,
+            "coverage_complete": True,
+            "status": "complete",
+        })
+        with self.assertRaisesRegex(AnalysisInputContractError, "moneyflow (missing target codes|complete moneyflow coverage)"):
+            validate_analysis_input_contract(complete_payload)
 
     def test_today_hithink_snapshot_date_must_not_be_after_trade_date(self) -> None:
         payload = current_hithink_analysis_input_payload()

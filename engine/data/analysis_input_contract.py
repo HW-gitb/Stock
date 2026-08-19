@@ -296,6 +296,22 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str, official_input
                 raise AnalysisInputContractError(
                     f"{label} moneyflow coverage counts are inconsistent"
                 )
+            if "missing_target_codes" in moneyflow:
+                missing_target_codes = moneyflow.get("missing_target_codes")
+                if (
+                    not isinstance(missing_target_codes, list)
+                    or any(
+                        not isinstance(code, str)
+                        or not re.fullmatch(r"[0-9]{6}\.(SH|SZ|BJ)", code)
+                        for code in missing_target_codes
+                    )
+                    or len(set(missing_target_codes)) != len(missing_target_codes)
+                    or len(missing_target_codes) != target_total - target_complete
+                    or (moneyflow_status == "complete" and missing_target_codes)
+                ):
+                    raise AnalysisInputContractError(
+                        f"{label} moneyflow missing target codes are inconsistent"
+                    )
             if moneyflow_status == "complete":
                 if (
                     moneyflow_reference is None

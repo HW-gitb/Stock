@@ -342,7 +342,7 @@
       "source_prefixes": [
         "market_context"
       ],
-      "source_paths_sha256": "a0e26842183a7218ad889aacce8b9e76f0ad96a4dd1b619d280e208260bed597",
+      "source_paths_sha256": "adf785f3b7ef4298abdac2d22533671be704b3b9466a9c8e54c3d4d638339556",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
@@ -1151,6 +1151,7 @@
       "terminal_surface": "data_health.errors[] -> overall_status=error -> A-EGS/egs_main.py::publish_official_egs refuses the official publish",
       "mutation_evidence": "blank it on a moved window -> the clock check errors and the publish is refused"
     },
+    "market_context.moneyflow_coverage.missing_target_codes[]": "duplicate_or_display_audit",
     "market_context.moneyflow_coverage.lag_sessions": {
       "category": "m67_main_decision",
       "consumer_ref": "A-EGS/egs_main.py::build_data_health::moneyflow_effective_clock",
@@ -2625,6 +2626,7 @@
     "market_context.moneyflow_coverage.fallback_applied",
     "market_context.moneyflow_coverage.fallback_reason",
     "market_context.moneyflow_coverage.lag_sessions",
+    "market_context.moneyflow_coverage.missing_target_codes[]",
     "market_context.moneyflow_coverage.observed_trade_dates[]",
     "market_context.moneyflow_coverage.reference_date",
     "market_context.moneyflow_coverage.requested_trade_dates[]",

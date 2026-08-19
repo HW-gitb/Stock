@@ -374,6 +374,12 @@ class EffectContractStaticTests(unittest.TestCase):
         self.assertIsNotNone(error)
         self.assertIn("coverage", error)
 
+    def test_moneyflow_missing_codes_leaf_is_registered_with_the_existing_market_context_group(self):
+        path = "market_context.moneyflow_coverage.missing_target_codes[]"
+        self.assertIn(path, self.contract["analysis_input_paths"])
+        self.assertIn(path, static_inventory()["analysis_input_paths"])
+        self.assertIsNone(static_contract_error(self.contract))
+
     def test_new_or_changed_decision_predicate_does_not_require_reseal(self):
         rel = "engine/a_short_portfolio_risk.py"
         source = (ROOT / rel).read_text(encoding="utf-8") + "\nif False:\n    pass\n"
