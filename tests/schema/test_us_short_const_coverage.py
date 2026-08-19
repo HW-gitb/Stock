@@ -42,7 +42,10 @@ EXPECTED_CONST_PATH_COUNT = {
     "us_short_action_governance": 13,
     "us_short_action_table_contract": 20,
     "us_short_cash_allocation_governance": 10,
-    "us_short_exclusion_summary_governance": 14,
+    # 14 -> 13: the per-stage rewrite retired the `covers_passes` const, which pinned exactly two
+    # passes; there are now three stages. The promise it froze is carried by the public schema
+    # (`stage_counts` required, all three keys) and by a behaviour assertion on real output.
+    "us_short_exclusion_summary_governance": 13,
     "us_short_field_registry_governance": 13,
     "us_short_hard_veto_governance": 8,
     "us_short_lifecycle_calibration_governance": 9,
