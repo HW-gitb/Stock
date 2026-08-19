@@ -3859,3 +3859,11 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - tests/provider/test_us_short_llm_theme_discovery_fetch_web.py 新增守类用例，逐值检查渲染提示词；不放宽 SEMANTIC_ROLES，不改旧 packet/raw。
 - 验证：固定 Python 聚焦提示词 2 OK、Web owner 84 OK、offline 生产入口 34 OK；py_compile、git diff --check 通过。未联网、未调用 provider、未建 packet、未付费。
 - 提示词 hash 已改变；当前不建新 packet，先交 Claude 独立复审。
+
+## 2026-08-19 追加：v5 packet 已铸造并钉入新 prompt 摘要（8d8c；待独立复审）
+
+- v4 因提示词变更作废；新 packet 为 docs/us_short_web_regroup_engineering_smoke_packet_20260815_v5.json，schema 为 schemas/us_short_web_regroup_engineering_smoke_packet_v5.schema.json，packet_id 为 us_short_web_regroup_engineering_smoke_20260815_chunk1_v5。
+- v5 保持原目标：0815 Web receipt、生产 chunk 1、10 条来源、deepseek-v4-pro、16384、DeepSeek 1 次、零重试/零 recovery、正式输出全部禁止；诊断/raw/summary 根改为 v5 私有根。
+- 使用主树冻结 receipt/raw 只读重算生产 chunk；10 个 source_id 顺序与 packet 一致。新 prompt 摘要为 daecb9e866ed1c169aab92516a7ea0f701fdba513a90d57dc6e8e35bafed7930，packet/schema/runner 三处一致。
+- 验证：schema 0 errors、预算 owner 75 OK、Web owner 84 OK、py_compile、git diff --check 通过。未联网、未调用 provider、未执行 provider、未付费。
+- 下一步：Claude 独立复审 v5 packet 和历史 packet 拒绝门；PASS 后等用户对 v5 精确 packet 明确授权，当前不得执行 provider。
