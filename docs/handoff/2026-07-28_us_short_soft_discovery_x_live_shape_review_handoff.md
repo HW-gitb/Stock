@@ -3717,3 +3717,11 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 ### 下一步（顺序不得交换）
 
 `Codex 闭合模型合同 → 我独立审查 PASS → 代码 merge 进主树 → 用户对精确 v2 packet 明确付费授权 → 主树打第二枪（一次）→ transport PASS 才准跑 5b 零付费判卷 → readiness → 刀6 4diii 接线`。
+
+## 2026-08-18 追加：Codex 修复 v2 served-model gate 与身份字段（待 Claude 独立复审；8d8c）
+
+- **技术选择**：请求继续使用生产同形 `deepseek-chat`；v2 packet 冻结 `expected_served_model=deepseek-v4-pro`。服务方返回 Flash、旧 alias、空值或别家模型时，在内容解析前拒绝。
+- **改动**：v2 schema、v2 packet、smoke runner 和现有 plan-budget owner 测试同步；摘要新增 `model_identity_complete`，`model_identity_match` 改为只表示服务方与 packet 期望一致。生产 gateway、旧 v1 产物、5b replay 代码未改。
+- **验证**：owner + 5b replay/入口防线 `182/182 OK`；US-short full lane `PASS 6043/6043`，`COUNT_GATE 6043=6043`，`428.5s/860s`；doc-governance+route-doc `56 OK`，`py_compile=2`，`diff-check=PASS`。
+- **状态**：`repaired / OPEN-NOT-VERIFIED`；未提交、未联网、未调 provider、未使用真实凭证。
+- **下一步**：Claude Code：独立复审本条模型合同；用户裁决桌面模型口径并明确付费授权前，不得开第二枪。

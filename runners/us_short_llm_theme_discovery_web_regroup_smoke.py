@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LIVE_ROOT = Path(r"D:\cnhea\Stock")
 PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v2"
 EXPECTED_MODEL = "deepseek-chat"
+EXPECTED_SERVED_MODEL = "deepseek-v4-pro"
 EXPECTED_TARGET_CHUNK_INDEX = 1
 PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v2.json"
 SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet_v2.schema.json"
@@ -93,7 +94,7 @@ def _assert_packet_contract(packet: Mapping[str, Any]) -> None:
         raise EngineeringSmokeError("engineering-smoke packet target or prompt binding is not authorized")
     if (
         request.get("model") != EXPECTED_MODEL
-        or request.get("expected_served_model") is not None
+        or request.get("expected_served_model") != EXPECTED_SERVED_MODEL
         or request.get("temperature") != 0
         or request.get("max_tokens") != paid_gateway.DEEPSEEK_REGROUP_MAX_TOKENS
         or request.get("response_format") != "json_object"
@@ -437,8 +438,12 @@ def _summary(
     served_model = provider_ref.get("served_model") if provider_ref is not None else None
     usage = provider_ref.get("usage") if provider_ref is not None else None
     finish_reason = provider_ref.get("finish_reason") if provider_ref is not None else None
-    model_match = web._model_identity_is_complete(
+    model_identity_complete = web._model_identity_is_complete(
         packet["paid_boundary"]["request"]["model"], served_model,
+    )
+    model_identity_match = (
+        model_identity_complete
+        and served_model == packet["paid_boundary"]["request"]["expected_served_model"]
     )
     parse_reason, parse_detail = _failure_reason(parse_error)
     terminal_reason, terminal_detail = _failure_reason(terminal_error)
@@ -462,7 +467,7 @@ def _summary(
         status == "live_authorized_engineering_smoke_response_captured"
         and raw_before_parse
         and raw_hash_reread
-        and model_match
+        and model_identity_match
         and isinstance(usage, dict)
         and all(type(usage.get(key)) is int and usage[key] >= 0 for key in (
             "prompt_tokens", "completion_tokens", "total_tokens",
@@ -514,7 +519,8 @@ def _summary(
         "theme_count_status": theme_status,
         "max_four_themes_status": theme_status,
         "semantic_fields_status": semantic_status,
-        "model_identity_match": model_match,
+        "model_identity_complete": model_identity_complete,
+        "model_identity_match": model_identity_match,
         "formal_decision_slots_occupied": False,
         "discovery_published": False,
         "receipt_published": False,
@@ -599,7 +605,7 @@ def run_one_shot(
         persist_response=persist_response,
         consume_response=lambda request, response: web._consume_regroup_response(
             response,
-            expected_served_model=None,
+            expected_served_model=packet["paid_boundary"]["request"]["expected_served_model"],
             chunk_index=int(request.scope.split(":", 1)[1]),
         ),
     )

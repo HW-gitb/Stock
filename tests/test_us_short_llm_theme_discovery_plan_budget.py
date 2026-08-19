@@ -63,7 +63,7 @@ def _noop_persist(_request, _value):
     return None
 
 
-def _k5_response(*, content: str = '{"themes": []}', model: str = "deepseek-v4-flash",
+def _k5_response(*, content: str = '{"themes": []}', model: str = "deepseek-v4-pro",
                  usage: dict | None = None, finish_reason: str = "stop") -> dict:
     return {
         "choices": [{"message": {"content": content}, "finish_reason": finish_reason}],
@@ -1060,9 +1060,42 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
         self.assertEqual(summary["semantic_fields_status"], "not_evaluated")
         self.assertEqual(summary["requested_model"], "deepseek-chat")
         self.assertIsNone(summary["served_model"])
+        self.assertFalse(summary["model_identity_complete"])
+        self.assertFalse(summary["model_identity_match"])
         self.assertEqual(summary["system_fingerprint"], "fp_test")
         self.assertEqual(summary["budget_ledger_ref"], fixture["packet"]["output_boundary"]["budget_ledger_ref"])
         self.assertEqual(summary["deepseek_call_count"], 1)
+
+    def test_K5_served_model_gate_rejects_aliases_before_content_parse(self):
+        for label, model in {
+            "flash": "deepseek-v4-flash",
+            "old_alias": "deepseek-chat",
+            "other_model": "deepseek-other",
+        }.items():
+            with self.subTest(model=label), _k5_smoke_fixture(response=_k5_response(model=model)) as fixture:
+                with mock.patch.object(web, "_parse_llm_json", side_effect=AssertionError("parser reached")) as parser:
+                    summary = smoke.run_one_shot(
+                        fixture["packet"], confirm_user_authorization=fixture["packet"]["packet_id"],
+                    )
+                parser.assert_not_called()
+                self.assertEqual(summary["transport_verdict"], "FAIL")
+                self.assertEqual(summary["strict_parse_error_reason"], "served_model_mismatch")
+                self.assertTrue(summary["model_identity_complete"])
+                self.assertFalse(summary["model_identity_match"])
+                self.assertEqual(len(fixture["budget"].calls), 1)
+                self.assertEqual(len(fixture["client"].requests), 1)
+
+    def test_K5_expected_served_model_mutation_stops_before_budget_or_client(self):
+        with _k5_smoke_fixture() as fixture:
+            forged = json.loads(json.dumps(fixture["packet"]))
+            forged["paid_boundary"]["request"]["expected_served_model"] = "deepseek-v4-flash"
+            with mock.patch.object(smoke, "_validate_packet", return_value=forged):
+                with self.assertRaisesRegex(smoke.EngineeringSmokeError, "paid boundary"):
+                    smoke.run_one_shot(
+                        forged, confirm_user_authorization=forged["packet_id"],
+                    )
+            fixture["reserve_mock"].assert_not_called()
+            fixture["client_constructor"].assert_not_called()
 
     def test_K5_new_summary_reads_counts_from_the_budget_ledger(self):
         with _k5_smoke_fixture() as fixture:
@@ -1264,7 +1297,10 @@ class PlanBudgetAcceptanceTests(unittest.TestCase):
             self.assertEqual(request["temperature"], 0)
             self.assertEqual(request["max_tokens"], paid_gateway.DEEPSEEK_REGROUP_MAX_TOKENS)
             self.assertEqual(request["response_format"], {"type": "json_object"})
-            self.assertEqual(summary["served_model"], "deepseek-v4-flash")
+            self.assertEqual(summary["served_model"], "deepseek-v4-pro")
+            self.assertEqual(summary["expected_served_model"], "deepseek-v4-pro")
+            self.assertTrue(summary["model_identity_complete"])
+            self.assertTrue(summary["model_identity_match"])
             self.assertEqual(summary["usage"], response["usage"])
             self.assertEqual(summary["finish_reason"], "stop")
             self.assertEqual(summary["original_chunk_index"], 1)
