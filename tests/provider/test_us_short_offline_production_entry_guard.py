@@ -211,6 +211,18 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
                 assertion["basis"] = "shared_event_bucket"
 
     @staticmethod
+    def _two_member_negative_basis(discovery):
+        for theme in discovery["themes"]:
+            theme["members"] = theme["members"][:2]
+            for assertion in theme.get("semantic_assertions", []):
+                assertion["basis"] = "shared_event_bucket"
+
+    @staticmethod
+    def _two_member_positive_basis(discovery):
+        for theme in discovery["themes"]:
+            theme["members"] = theme["members"][:2]
+
+    @staticmethod
     def _three_one_member_assertions(discovery):
         for theme in discovery["themes"]:
             assertions = theme.get("semantic_assertions", [])
@@ -575,6 +587,24 @@ class OfflineProductionEntryGuardTests(unittest.TestCase):
             row["reason"] == "semantic_basis_not_shared_commercial_driver"
             for row in artifact["drop_ledger"]
         ))
+        self.assertTrue(all(row["theme_soft_boost"] == 0.0 for row in boost_map.values()))
+
+    def test_k4_12_two_member_negative_basis_is_rejected_before_member_gate(self):
+        _merged, _manifest, artifact, boost_map = self._validation_and_boost(
+            self._packets(), discovery_mutator=self._two_member_negative_basis,
+        )
+        reasons = [row["reason"] for row in artifact["drop_ledger"]]
+        self.assertIn("semantic_basis_not_shared_commercial_driver", reasons)
+        self.assertNotIn("fewer_than_3_qualified_members", reasons)
+        self.assertTrue(all(row["theme_soft_boost"] == 0.0 for row in boost_map.values()))
+
+    def test_k4_13_two_member_positive_basis_keeps_member_gate(self):
+        _merged, _manifest, artifact, boost_map = self._validation_and_boost(
+            self._packets(), discovery_mutator=self._two_member_positive_basis,
+        )
+        reasons = [row["reason"] for row in artifact["drop_ledger"]]
+        self.assertIn("fewer_than_3_qualified_members", reasons)
+        self.assertNotIn("semantic_basis_not_shared_commercial_driver", reasons)
         self.assertTrue(all(row["theme_soft_boost"] == 0.0 for row in boost_map.values()))
 
     def test_k4_10_web_passing_and_x_semantic_failure_is_single_not_both(self):

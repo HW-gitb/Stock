@@ -3920,3 +3920,11 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - 验证：Web/X owner `154 OK`；新 basis 可解析；提示词教授全部 basis；删除新定义的反向控制会转红；v7 packet/schema owner `75 OK`；prompt SHA=`52c37d9b3d7701615748eccb3d70be2c3c73e23394bce0711180e7b99863359b`。
 - v7 packet=`docs/us_short_web_regroup_engineering_smoke_packet_20260815_v7.json`，schema=`schemas/us_short_web_regroup_engineering_smoke_packet_v7.schema.json`；v6 及更早 packet 保留历史拒绝身份。v7 未付费、未调用 provider。
 - 下一步：Claude 独立审查 v7 packet/提示词契约；通过并收到精确 v7 packet 新授权后执行一次 provider，再在 v7 raw 上零付费跑 5b。
+
+## 2026-08-19 追加：漏洞2最小修复并在8d8c重放v6 raw
+
+- 修复 `R-USSHORT-THE-ONLY-NEGATIVE-CANDIDATE-WAS-DROPPED-BY-ARITHMETIC-NOT-BY-THE-SEMANTIC-GATE`：明确非 `shared_commercial_driver` basis 先记 `semantic_basis_not_shared_commercial_driver`；正 basis 仍走原成员数、行业数和语义绑定顺序，多 assertion 不改。
+- 两成员负 basis 与两成员正 basis 的反例均已固定；负例先得到语义理由，正例仍得到 `fewer_than_3_qualified_members`；三成员负例和既有多 assertion 用例保持通过。
+- 反向控制临时恢复旧顺序后，新负例用例按预期失败；恢复修复后 validator/entry owner `62 OK`，`git diff --check` 通过。
+- 从主树只读复制已有 v6 冻结输入到本工作树私有目录，并保留旧 replay summary 副本。修复后 v6 5b=`offline_replay_completed`：`gamestop_ebay_ma_situation` 的旧理由 `fewer_than_3_qualified_members` 改为 `semantic_basis_not_shared_commercial_driver`；provider/network/retry=`0/0/0`，formal slots=`false`，summary SHA=`D71977EB2594278BB14F4CC8322DDD5ADF53E8C2D830EC95A459620604FD8589`。
+- 本轮只闭合 §九#8 的真实负例语义拒绝证据；不替代漏洞1的 v7 真实验证，也不替代 §九#9 独立人工判定。
