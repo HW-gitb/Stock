@@ -5586,3 +5586,52 @@ Codex：类D（切断同日旧 soft-boost 证据回填）→ 类E（非阻断失
 ### 下一步
 
 Codex：类E（复用 stage_outcomes，以可选横幅⑨把 bridge 前非阻断失败送达正式周报；横幅自身失败回流 weekly_bridge）。
+
+## 2026-08-18 Codex 严格按桌面 `2us_testrun0816.md:1047-1179` 修复类E（问题8）（888d，OPEN-NOT-VERIFIED）
+
+### 逐行实施
+
+- **1. bridge 前快照**：`CapstoneContext.pre_bridge_stage_outcomes` 只保存本轮调用 `weekly_bridge` 前现有 `stage_outcomes` 的只读内存快照；快照不落盘，`outcome_class`、`reason_code` 与 stage 顺序沿用 `_normalize_stage_outcome()` 的唯一结果，不建 stage 名单或第二套失败判断。
+- **2. 横幅⑨**：`run_weekly_bridge()` 在普通周报和 Serenity overlay 尝试完成后，从快照取全部 `failed_nonblocking`，按 pipeline 顺序、同 stage/终态去重，原子追加 `⑨ nonblocking_stage_failures`。横幅只写失败总数、`stage/reason_code` 和固定缺失证据提示；无失败时不追加，⑧及①—⑦保持原样。
+- **3. 交付失败回流**：Serenity active 但 `_deliver_serenity_shadow_to_official_report()` 失败时加入 `serenity_report_delivery/SERENITY_REPORT_DELIVERY_FAILED`；横幅自身临时文件 replace 失败时删除临时文件、保留普通报告，返回 `nonblocking_failure_banner_status=failed`。`serenity_report_delivery_status` / `nonblocking_failure_banner_status` 由既有 weekly-bridge normalizer 映射为 `failed_nonblocking`，普通报告仍不因观察轨失败而中止。
+- **4. 契约/设计同步**：preset/schema、renderer 与 `docs/us_short_system_design.md §11.2` 登记可选⑨；未修改五个 best-effort stage 的业务算法、Serenity active/zero-effect 判定、类C事实/横幅⑦、类D artifact 代际语义。
+
+### 一个总验收门
+
+- 固定 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`：类E直接验收 `78 tests / OK`；受影响离线超集 `346 tests / OK`，覆盖动态枚举五个 best-effort stage、Serenity invalid、input gate/output enumeration/stage run/fresh-output 四边界、多失败顺序/数量、零失败、Serenity 交付失败、横幅原子写失败，以及 staging→official publish 最终 `weekly_report.md` / one-click stage outcome。
+- 契约门覆盖 preset/schema `⑨` const、unknown banner drift 拒绝、renderer 可选⑨；受影响 Python `py_compile` exit `0`；`git diff --check` exit `0`（仅 LF→CRLF 提示）。全量 const-count 守卫另有当前 HEAD 无关的 `us_short_exclusion_summary_governance` 13/14 基线漂移，未借类E修复。
+
+### Required / Optional、边界与下一步
+
+- `R-USSHORT-CLASS-E-NONBLOCKING-FAILURE-NOT-DELIVERED-TO-OFFICIAL-WEEKLY-REPORT` 已修，Optional=无；当前 `repaired / OPEN-NOT-VERIFIED`，待 Claude Code 独立审查，PASS 后按 reviewer/committer 流程提交，merge 由用户决定。
+- 不补算、不回填、不伪造 20260810 forward-policy A/B 证据；不证明 comparison track 成熟、alpha、策略胜率、provider 生产就绪或 ship-gate。未联网、未调用 provider/live、未跑 full lane；未改主树、桌面文档或 `docs/CURRENT.md`；未提交、未 merge。
+
+### 下一步
+
+Claude Code：审查
+
+## 2026-08-19 Claude Code 独立审查：类E — FAIL（一条 Required，非本刀引入）
+
+类E 本体逐条正确（内存快照单一来源、按 outcome_class 自动覆盖 bridge 前全部非阻断 stage、
+枚举式 best_effort 测试并断言其位置在 bridge 之前、横幅原子追加失败不损坏正报且回流 weekly_bridge 两档）。
+阻断项来自类C 第二刀：删 `covers_passes` 后 `test_us_short_const_coverage.py:45` 的 golden 仍是 14，
+实际 13，**master 当前即为红**——我在 C-2 审查时超集选了
+`test_us_short_exclusion_summary_governance_schema` 却漏了钉 const 数的 `test_us_short_const_coverage`。
+
+### 下一步
+
+Codex：改 golden 14 → 13 并更新注释（`covers_passes` 已退役）；随后交 Claude Code 复审类E。
+
+## 2026-08-19 Claude Code 独立审查：类E 复修轮 — PASS（类A–E 全部关闭）
+
+const golden 14→13 已改，上轮红的同一超集现 327 全绿。类E 本体反向控制 20/20：投影只认
+`failed_nonblocking` 且去重、多 stage 失败全保留、畸形行跳过；横幅不含异常原文/绝对路径；
+植入 `Path.replace` 抛错证明原子性（返回 False、普通周报逐字节不变、临时文件清理）；
+bridge 新增的两档 `failed_nonblocking` 与优先级正确，零失败时不误报。
+
+至此桌面 `2us_testrun0816.md` 的类A（价格几何）、类B（环境轴 + sub_mode + paper fill）、
+类C（报告事实两刀）、类D（证据代际）、类E（失败可见性）五类全部关闭。
+
+### 下一步
+
+用户：下次真实周跑将一次性检验五类修复 + 此前四项数据侧修复；核对清单已在 reviewer 持久记忆中。

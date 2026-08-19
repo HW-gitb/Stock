@@ -61,8 +61,10 @@ class HonestBanner(unittest.TestCase):
     def test_optional_elements_shown_when_present_omitted_when_absent(self):
         d = _good()
         d["banner"]["macro_cluster_warning"] = "ai_complex 40%"
+        d["banner"]["nonblocking_stage_failures"] = "非阻断阶段失败总数=1\nforward_policy_shadow/STAGE_EXECUTION_EXCEPTION"
         out = wr.render_weekly_report(d)
         self.assertIn("② macro_cluster_warning: ai_complex 40%", out)
+        self.assertIn("⑨ nonblocking_stage_failures", out)
         self.assertNotIn("true_false_observe_split", out)  # absent ① not rendered
 
 

@@ -935,6 +935,52 @@ def run_soft_boost_comparison_maturity(ctx) -> dict[str, Any]:
         raise ValueError("soft-boost comparison maturity rejected") from exc
 
 
+def _nonblocking_failure_rows(outcomes: Any) -> list[dict[str, str]]:
+    """Project already-normalized pre-bridge failures for the operator banner."""
+    rows: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    if not isinstance(outcomes, (list, tuple)):
+        return rows
+    for outcome in outcomes:
+        if not isinstance(outcome, Mapping) or outcome.get("outcome_class") != "failed_nonblocking":
+            continue
+        stage = outcome.get("stage")
+        reason_code = outcome.get("reason_code")
+        if not isinstance(stage, str) or not isinstance(reason_code, str):
+            continue
+        key = (stage, reason_code)
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append({"stage": stage, "reason_code": reason_code})
+    return rows
+
+
+def _render_nonblocking_failure_banner(rows: list[dict[str, str]]) -> str:
+    lines = [f"非阻断阶段失败总数={len(rows)}"]
+    lines.extend(f"{row['stage']}/{row['reason_code']}" for row in rows)
+    lines.append("主报告已生成，但对应观察/比较证据可能缺失；不得把缺失解释为无事发生")
+    return "\n".join(lines)
+
+
+def _append_nonblocking_failure_banner(report_path: Path, banner_text: str) -> bool:
+    """Atomically append banner ⑨ while leaving the ordinary report intact on failure."""
+    temporary = report_path.with_name(report_path.name + ".nonblocking.tmp")
+    try:
+        report_text = report_path.read_text(encoding="utf-8")
+        rendered = report_text + ("" if report_text.endswith("\n") else "\n")
+        rendered += f"- ⑨ nonblocking_stage_failures: {banner_text}\n"
+        temporary.write_text(rendered, encoding="utf-8")
+        temporary.replace(report_path)
+        return True
+    except Exception:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+
+
 def run_weekly_bridge(ctx) -> dict[str, Any]:
     """Derive the closed-world eight-family provider health from stage outcomes, then bridge the source packet →
     weekly report / action table. The projection is not hand-written: each family is sourced from its owning stage,
@@ -1022,6 +1068,41 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
     )
     delivery = _deliver_serenity_shadow_to_official_report(ctx, summary)
     _record_serenity_report_delivery(ctx, delivery)
+    serenity_active = (
+        isinstance(getattr(ctx, "serenity_shadow_result", None), Mapping)
+        and getattr(ctx, "serenity_shadow_result").get("status") == "active"
+    )
+    serenity_report_delivery_status = "not_applicable"
+    if serenity_active:
+        serenity_report_delivery_status = (
+            "delivered"
+            if isinstance(delivery, Mapping) and delivery.get("report_block_delivered") is True
+            else "failed"
+        )
+
+    failure_rows = _nonblocking_failure_rows(getattr(ctx, "pre_bridge_stage_outcomes", ()))
+    if serenity_report_delivery_status == "failed":
+        failure_rows.append({
+            "stage": "serenity_report_delivery",
+            "reason_code": "SERENITY_REPORT_DELIVERY_FAILED",
+        })
+    nonblocking_failure_banner_status = "not_applicable"
+    if failure_rows:
+        batch4 = summary.get("batch4_run") if isinstance(summary, Mapping) else None
+        output_paths = batch4.get("output_paths") if isinstance(batch4, Mapping) else None
+        report_value = output_paths.get("weekly_report_path") if isinstance(output_paths, Mapping) else None
+        report_path = Path(report_value) if isinstance(report_value, str) and report_value else None
+        nonblocking_failure_banner_status = (
+            "delivered"
+            if report_path is not None
+            and _append_nonblocking_failure_banner(
+                report_path,
+                _render_nonblocking_failure_banner(failure_rows),
+            )
+            else "failed"
+        )
+    summary["serenity_report_delivery_status"] = serenity_report_delivery_status
+    summary["nonblocking_failure_banner_status"] = nonblocking_failure_banner_status
     return summary
 
 

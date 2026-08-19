@@ -42,7 +42,8 @@ EXPECTED_CONST_PATH_COUNT = {
     "us_short_action_governance": 13,
     "us_short_action_table_contract": 20,
     "us_short_cash_allocation_governance": 10,
-    "us_short_exclusion_summary_governance": 14,
+    # 14 -> 13: class-C retired the `covers_passes` const.
+    "us_short_exclusion_summary_governance": 13,
     "us_short_field_registry_governance": 13,
     "us_short_hard_veto_governance": 8,
     "us_short_lifecycle_calibration_governance": 9,
@@ -54,8 +55,8 @@ EXPECTED_CONST_PATH_COUNT = {
     "us_short_sizing_stack_governance": 9,
     "us_short_symbol_cooldown_governance": 9,
     "us_short_theme_lifecycle_governance": 11,
-    # 9 -> 12: K4C pinned the optional §4c banner (soft_discovery_banner id / tag / always_shown).
-    "us_short_weekly_report_contract": 12,
+    # 12 -> 15: K4C pinned §4c and class-E pinned optional banners ⑧/⑨.
+    "us_short_weekly_report_contract": 15,
 }
 
 
