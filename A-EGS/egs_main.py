@@ -119,6 +119,7 @@ from engine.a_short_market_breadth import (
     MarketBreadthError,
     compute_full_market_breadth,
     full_market_universe,
+    is_a_share_code,
 )
 from engine.a_short_observability import safe_exception_summary
 from engine.a_short_loss_making_admission import apply_loss_making_admission
@@ -4044,6 +4045,7 @@ def _validate_stk_limit_frame(frame, expected_dates, label):
     result["ts_code"] = result["ts_code"].astype(str).str.strip()
     if result["ts_code"].isin({"", "nan", "none", "null"}).any():
         raise RuntimeError(f"{label} payload contains blank ts_code")
+    result = result[result["ts_code"].map(is_a_share_code)].copy()
     result["trade_date"] = result["trade_date"].map(
         lambda value: _date8(value, f"{label} trade_date")
     )
@@ -8418,7 +8420,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None, iv_feed_pat
     watch_df  = _pre_admission_watch[
         _pre_admission_watch["ts_code"].astype(str).isin(_admitted_codes)
     ].copy()
-    watch_eligible_count = int(len(top50))
+    watch_eligible_count = int(len(watch_df))
     short_history_barred_count = int(_short_history_mask(df_full).sum())
     # Hard invariant, not a log line: the downgrade is only real if no short
     # -history code can reach Tier1 or the watch pool, while the scoring pool

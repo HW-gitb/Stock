@@ -214,6 +214,8 @@ class RankUniverseReconciliationTest(unittest.TestCase):
             source,
         )
         self.assertIn("df_full = df_l5_scored", source)
+        self.assertIn("watch_eligible_count = int(len(watch_df))", source)
+        self.assertNotIn("watch_eligible_count = int(len(top50))", source)
         self.assertNotIn(
             "top50 = select_profile_watch_pool(\n"
             "        watch_pool_eligible_frame(df_full), top_n=CONF[\"top_n\"]\n"
