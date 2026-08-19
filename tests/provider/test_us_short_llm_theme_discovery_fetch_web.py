@@ -19,6 +19,7 @@ from engine import us_short_llm_theme_discovery_query_plan as query_plan
 from engine import us_short_llm_theme_discovery_provider_policy as provider_policy
 from runners import us_short_llm_theme_discovery_fetch_web as fetch
 from runners import us_short_llm_theme_discovery_fetch_x as xfetch
+from runners import us_short_llm_theme_discovery as discovery
 from tests.provider.us_short_private_test_root_light import (
     temporary_provider_directory,
     temporary_us_short_state_directory,
@@ -740,6 +741,13 @@ class WebFetchTests(unittest.TestCase):
         ):
             self.assertIn(marker, prompt)
         self.assertNotIn("美股跨行业主题发现归拢器", inspect.getsource(fetch._regroup_model_identity))
+
+    def test_regroup_prompt_teaches_every_semantic_role_value(self):
+        prompt = fetch._build_deepseek_prompt("20260727", [])
+        for role in discovery.SEMANTIC_ROLES:
+            with self.subTest(role=role):
+                self.assertIn(role, prompt)
+        self.assertIn('"role":"beneficiary"', prompt)
 
     def test_live_label_cannot_be_minted_by_packet_builder_arguments(self):
         with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "response-derived runner transport"):

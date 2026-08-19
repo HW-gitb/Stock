@@ -3847,3 +3847,10 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - 新增承重用例：除 `transport_verdict=FAIL` 外 transport summary 字段全部合法时，5b 仍在读取目标输入前拒绝，且不写 replay summary。
 - 验证：5b 专项 `15 OK`、新增守卫 `2 OK`、Web 生产入口 `83 OK`、owner `34 OK`；未联网、未调用 provider、未花费；主树既有第三枪 summary 未改。
 - 下一步：Claude 独立复审本次两项 Required 修复。
+
+## 2026-08-19 追加：member-link role 提示词 Required 已最小修复（8d8c；待独立复审）
+
+- runners/us_short_llm_theme_discovery_fetch_web.py 复用生产 SEMANTIC_ROLES，把全部 8 个合法 role 值写进 regroup 提示词；JSON 示例使用合法 beneficiary。
+- tests/provider/test_us_short_llm_theme_discovery_fetch_web.py 新增守类用例，逐值检查渲染提示词；不放宽 SEMANTIC_ROLES，不改旧 packet/raw。
+- 验证：固定 Python 聚焦提示词 2 OK、Web owner 84 OK、offline 生产入口 34 OK；py_compile、git diff --check 通过。未联网、未调用 provider、未建 packet、未付费。
+- 提示词 hash 已改变；当前不建新 packet，先交 Claude 独立复审。
