@@ -9374,3 +9374,16 @@ call .tools\run_unittest_with_repo_pythonpath.cmd tests.phase6.test_egs_main_dai
 - 全量按 rule 4 归执行方，我不重跑；但也不照抄 `CACHED GREEN` 那行——用 `.tools/verification_receipt.py` 在当前树重算指纹与 ledger 的 prepare/record 逐字符比对，再核 `recorded_at` 晚于三个代码文件的 mtime、其后只动过文档。这两步加起来才等于「那次绿覆盖的就是我现在审的这份代码」。
 - 未起独立对抗 agent：两处各 1 行、都是既有函数的增量，没有新建 fail-closed 门、没有 provider 调用、没有 secret/raw 落盘，按 rule 8 起 agent 属过度审查。
 - 真实侧仍是空的：本轮没有授权，没跑 provider、没重跑 B 侧。所以两条都只能说「离线闭合」，`20260819` 那份真实周报到底能不能发出来，还得靠一次授权的同输入复跑。P1 尤其如此——跨品种坏值只是与官方契约相符的假说，权限/流控仍可能是真因。
+
+## 2026-08-19 追加：Codex 最小修复 watch-shortfall reason Optional（509e）
+
+- **范围**：只处置 `O-ASHORT-AB-WATCH-SHORTFALL-REASON-BLAMES-AN-EXHAUSTED-POOL-THAT-WASNT`；不承接其他问题，不运行 provider/live、真实 weekly 或 B 侧 A/B。
+- **最小改动**：采用 reviewer 建议的 docstring-only 分支。`build_watch_pool_reconciliation()` 现在明确 `eligible_count` 是 admission partition 后、无 backfill 的 already-selected exportable pool；`eligible_pool_exhausted` 因而只描述该池已全量导出，不声称门后 Top50 全体耗尽。无 reason/参数/分支/schema/version/output 字节变化。
+- **边界与验证**：`actual/eligible/target` 算法、`output_count_mismatch` 反向门、发布、选择、仓位及 fail-closed 均未改。固定 Python bounded 直接模块 `39 OK`、receipt `ae44fcaadc91aa17ebaa5423`；`py_compile` / `git diff --check` exit 0。docstring-only 不触发 full lane；未 stage/commit/push/merge，`docs/CURRENT.md` 未改。
+- **交接**：Optional 已 repaired / `OPEN-NOT_VERIFIED`，待 Claude Code 独立复审当前 docstring 与三份记录；PASS 后由 reviewer/committer 提交。
+
+## 2026-08-19 追加：复审 docstring-only 修复时，唯一值得跑的那一步
+
+- 这类改动最容易被两头做错：一头是「才改注释」直接放行，另一头是照旧跑全量。两头都不对。**本仓真正的风险面是源码文本断言**——`tests/phase6/test_egs_rank_universe_reconciliation.py` 会拿 `A-EGS/egs_main.py` 的源码字符串做 `assertIn`/`assertNotIn`，所以改 docstring 是有可能把测试改红的。
+- 于是复审只做两件事：① `git diff -U0` 证明 `-3/+4` 全落在 docstring、可执行字节零变化（放松类改动的反向控制，在这里等价于「根本没有行为可放松」）；② 拿旧 docstring 的三个特征串全仓 grep，确认 tests/schemas 命中 0，再跑一次覆盖该符号的超集两模块。全量按 rule 4 不触发——docstring 不是行为/契约编辑。
+- **一句方法学**：判断「注释类改动要验到什么程度」，不看它是不是注释，看**这个仓库里有没有东西把注释当数据读**。有就必须 grep + 跑一次；没有就 compile 级即可。
