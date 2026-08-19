@@ -9387,3 +9387,23 @@ call .tools\run_unittest_with_repo_pythonpath.cmd tests.phase6.test_egs_main_dai
 - 这类改动最容易被两头做错：一头是「才改注释」直接放行，另一头是照旧跑全量。两头都不对。**本仓真正的风险面是源码文本断言**——`tests/phase6/test_egs_rank_universe_reconciliation.py` 会拿 `A-EGS/egs_main.py` 的源码字符串做 `assertIn`/`assertNotIn`，所以改 docstring 是有可能把测试改红的。
 - 于是复审只做两件事：① `git diff -U0` 证明 `-3/+4` 全落在 docstring、可执行字节零变化（放松类改动的反向控制，在这里等价于「根本没有行为可放松」）；② 拿旧 docstring 的三个特征串全仓 grep，确认 tests/schemas 命中 0，再跑一次覆盖该符号的超集两模块。全量按 rule 4 不触发——docstring 不是行为/契约编辑。
 - **一句方法学**：判断「注释类改动要验到什么程度」，不看它是不是注释，看**这个仓库里有没有东西把注释当数据读**。有就必须 grep + 跑一次；没有就 compile 级即可。
+
+## 2026-08-19 追加：真实数据 A/B 复跑（三方）——P0 真的修好了，P1 的假说被自己的实验推翻
+
+### 怎么搭的（下次照抄）
+
+- **三方而不是两方**：新开 `Stock-wtb_fix` @ master `8b749208`，`ab_pre`@`f7628f77` / `ab_post`@`976f72d5` **原样不动**。留着 `ab_post` 是有回报的——它保住了「修前失败现场」，一旦 fix 侧也发不出来就能立刻分辨是没修好还是新问题。
+- **一个上次没记的坑**：EGS 的 provider 缓存目录是 `CONF["cache_dir"] = RESULT_DIR/egs_cache`，**跟着 `--output-root` 走、每棵树各一份**。所以新开的树一定是冷缓存，要真拉一遍（本次 11:01:52→11:17:26，约 15 分钟）。对 P1 反而是好事：`stk_limit` 这次是真冷取数。
+- **代价要如实记**：A 侧产物是 08-18 跑的（margin 数据停在 `20260817`），C 侧是 08-19 跑的（到 `20260818`）。所以逐只对照里混着**一天的数据漂移**——`excluded.suspended 5→7`、`l2_quality_risk 137→138`、`full_count 1151→1150` 这类差异不能全算到代码头上。要干净的逐只归因，得把 A 侧也清缓存重跑一次。
+
+### 差点报错的根因，以及救回来的那一步
+
+- 第一次探针我从产物里取 `market_breadth_source.requested_trade_dates` 当输入，得到 `RuntimeError: breadth requires exactly 11 unique settled trade dates`，差点写成「调用方少传了一天」的 off-by-one。
+- **错在哪**：那个字段记的是 `current_window`（`reversed(dates[:10])`，10 个会话），不是真正喂给 fetch 的 `dates[:11]`。我把观测口径当成了输入口径。回去读调用点（`_build_full_market_breadth_observation`，`egs_main.py:7643` 及其上方的 `len(dates) < 11` 前置门）才看清楚。
+- **教训**：拿产物里的字段回放一次调用之前，先确认那个字段记的是**输入**还是**观测**。这两者在 fail-closed 的观测结构里经常不是同一个东西——观测记的是「我本来想看哪几天」，输入是「我实际去取哪几天」。
+
+### 真根因，以及它为什么六轮离线审查都抓不到
+
+- 用正确的 11 会话窗直调，抛的是 `stk_limit payload contains non-finite or non-positive limits`。逐日扫描锁定肇事行：**北交所新股上市首日** `920107.BJ / 920138.BJ / 920165.BJ / 920038.BJ`，`up_limit=99999.99, down_limit=0.0`（首日不设涨跌停的哨兵值），11 个会话里 4 个带这种行。
+- `A_SHARE_CODE_PREFIXES["BJ"] = ("4","8","920")`，所以上一轮加的 `is_a_share_code` 过滤对它**完全无效**；`FULL_MARKET_BOARDS` 也有意包含北交所。也就是说这不是「脏数据混进来」，是**设计上要留的成员**带着一个合法但极端的哨兵值，撞上了「有限且为正」这道门。
+- **方法学**：上一轮那个修复是照「官方契约说单日结果含 A/B 股和基金」推出来的合理假说，离线也造了合成 payload 验过，但它**从未被真实 payload 检验**。这次是实验推翻了自己的假说——`OPEN-NOT_VERIFIED` 这个标签不是形式主义，它这次真的兑现了。**能用合成夹具证明的只有「代码按我以为的输入行事」，证不了「我以为的输入是真的」。**
