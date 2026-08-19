@@ -19,10 +19,12 @@ class _FakeClient:
     """最小 OpenAI-compatible stub:client.chat.completions.create(...) → resp.choices[0].message.content。"""
     def __init__(self, content="", exc=None):
         self._content, self._exc = content, exc
+        self.requests = []
         self.chat = self
         self.completions = self
 
     def create(self, **kw):
+        self.requests.append(kw)
         if self._exc is not None:
             raise self._exc
         msg = type("M", (), {"content": self._content})()
@@ -93,11 +95,13 @@ class DeepSeekAdapter(unittest.TestCase):
     # ── happy / unknown 透传 ──────────────────────────────────────────
     def test_valid_risk_judgment(self):
         good = '{"status":"risk","risk_level":"high","action":"downgrade","summary":"立案"}'
-        web, src, tr = A.judge_web_llm("600000.SH", "X", _ITEMS, client=_FakeClient(good))
+        client = _FakeClient(good)
+        web, src, tr = A.judge_web_llm("600000.SH", "X", _ITEMS, client=client)
         self.assertEqual(web, {"status": "risk", "risk_level": "high", "action": "downgrade"})
         self.assertEqual(src, _ITEMS)                                # 非 unknown 态带证据
         self.assertTrue(tr["judged"])
         self.assertEqual(tr["summary"], "立案")
+        self.assertEqual(client.requests[0]["model"], "deepseek-v4-pro")
 
     def test_valid_unknown_judgment_passthrough(self):
         web, src, tr = A.judge_web_llm("600000.SH", "X", _ITEMS,

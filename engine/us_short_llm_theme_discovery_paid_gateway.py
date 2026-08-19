@@ -17,7 +17,7 @@ from engine.us_short_persisted_text_safety import persisted_text_violation
 
 TAVILY_ENDPOINT = "https://api.tavily.com/search"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-DEEPSEEK_MODEL = "deepseek-chat"
+DEEPSEEK_MODEL = "deepseek-v4-pro"
 DEEPSEEK_REGROUP_MAX_TOKENS = 16_384
 DEEPSEEK_REGROUP_MAX_THEMES_PER_CHUNK = 4
 DEEPSEEK_RESPONSE_FORMAT = {"type": "json_object"}

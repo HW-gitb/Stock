@@ -287,10 +287,10 @@
           ],
           "properties": {
             "model": {
-              "const": "deepseek-chat"
+              "const": "deepseek-v4-pro"
             },
             "expected_served_model": {
-              "type": "null"
+              "const": "deepseek-v4-pro"
             },
             "temperature": {
               "const": 0
