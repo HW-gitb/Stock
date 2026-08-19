@@ -3799,3 +3799,28 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - v3 已消费，不复用；新建 `docs/us_short_web_regroup_engineering_smoke_packet_20260815_v4.json` 与对应 v4 schema。v4 使用新的诊断/raw/summary 根，仍固定 chunk 1、10 条来源、`deepseek-v4-pro`、1 次调用、零重试，正式输出全禁。
 - 验证：owner `75 OK`；v4 schema/packet `0 errors`；主树既有冻结 receipt/raw 只读交叉校验 PASS；未联网、未调用 provider、未同步主树、未提交/合并。
 - 下一步严格按顺序：Claude 独立复审 → PASS 后提交/同步主树 → 用户对 v4 精确 packet 明确授权 → 才能执行一次；当前不得执行 provider。
+
+## 2026-08-19 交接 Codex：让 5b 够得着第三枪的 raw（零付费判卷前的最后一道工）
+
+### 为什么不是「直接跑 5b」
+
+用户问下一步是否直接跑 5b。**不行**：`runners/us_short_llm_theme_discovery_web_regroup_replay.py` 整个还钉在第一枪上——`_v2` 5 处路径级绑定，且 `_validate_transport_summary()` 要求那份 v2 summary 的 `transport_verdict == "PASS"`，而第一枪是 `FAIL`。**这是「hardcoded v2」这个缺陷类的第三条腿**（前两条：smoke runner 常量、fetch_web 的 summary writer，后者烧掉一枪才修）。
+
+### 交给 Codex 的任务（**等用户裁决第 1 步之后才动手**）
+
+**任务**：闭合 `R-USSHORT-5B-REPLAY-RUNNER-IS-STILL-PINNED-TO-THE-FIRST-SHOT`（P1），并实现 finalize-from-raw。**三条闭合要求与整类扫查范围写在 `docs/system_risk_register.md` 顶部同名节，以那节为准。**
+
+**finalize-from-raw 的硬边界**：
+
+- **零 provider 调用、零预算预约**；只读已落盘的 v3 raw 与其预算账本。
+- **`transport_verdict` 必须从真实 raw 推导**（served model / finish_reason / JSON 可解析性 / 主题数逐项算出来），**绝不允许手工写成 PASS**——这是我复审时会重点打的地方。
+- 落盘位置仍走 packet 声明的 `summary_ref`（v3 那一份），不得另开路径。
+- 第一枪与第二枪的产物逐字节不动。
+
+**顺序**：闭合 P1 + finalize → 产出第三枪 summary → 我审查 → **再**跑 5b（零付费）→ 按 readiness 决定要不要第四枪。
+
+**不许做**：不得为了让 5b 跑通而放宽它的前置门；不得开第四枪；不得改桌面文档。
+
+### 下一步
+
+`用户裁决「补记算不算 replay」→ Codex 闭合 P1 + finalize → 我审查 → Codex 跑 5b → 按 readiness 定第四枪`。
