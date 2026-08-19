@@ -318,6 +318,81 @@ class EgsMarketBreadthWiringTest(unittest.TestCase):
                 bad_a_share, ["20260811"], "stk_limit"
             )
 
+    def test_stk_limit_validation_accepts_bse_debut_sentinel_only(self):
+        panel = pd.DataFrame([
+            {"ts_code": "600000.SH", "trade_date": "20260811",
+             "up_limit": 11.0, "down_limit": 9.0},
+            {"ts_code": "920107.BJ", "trade_date": "20260811",
+             "up_limit": 99999.99, "down_limit": 0.0},
+        ])
+
+        result = self.egs_main._validate_stk_limit_frame(
+            panel, ["20260811"], "stk_limit"
+        )
+
+        self.assertEqual(result["ts_code"].tolist(), ["600000.SH", "920107.BJ"])
+
+        bad_a_share = panel.iloc[[0]].copy()
+        bad_a_share.loc[:, "down_limit"] = 0.0
+        with self.assertRaisesRegex(RuntimeError, "non-finite or non-positive limits"):
+            self.egs_main._validate_stk_limit_frame(
+                bad_a_share, ["20260811"], "stk_limit"
+            )
+
+    def test_bse_debut_sentinel_does_not_discard_breadth_window(self):
+        current_date = self.TRADE_DATES[0]
+        stock_basic = pd.DataFrame([
+            {"ts_code": "600000.SH", "market": "主板", "list_date": "20260801",
+             "list_status": "L"},
+            {"ts_code": "920107.BJ", "market": "北交所", "list_date": current_date,
+             "list_status": "L"},
+        ])
+        daily_rows = []
+        limit_rows = []
+        for index, trade_date in enumerate(self.TRADE_DATES):
+            main_close = 11.0 if 1 <= index <= 5 else 10.0
+            daily_rows.append({
+                "ts_code": "600000.SH", "trade_date": trade_date,
+                "close": main_close, "high": main_close,
+            })
+            limit_rows.append({
+                "ts_code": "600000.SH", "trade_date": trade_date,
+                "up_limit": 11.0, "down_limit": 9.0,
+            })
+        daily_rows.append({
+            "ts_code": "920107.BJ", "trade_date": current_date,
+            "close": 10.0, "high": 10.0,
+        })
+        limit_rows.append({
+            "ts_code": "920107.BJ", "trade_date": current_date,
+            "up_limit": 99999.99, "down_limit": 0.0,
+        })
+        daily = pd.DataFrame(daily_rows)
+        limit_panel = pd.DataFrame(limit_rows)
+
+        def fake_safe_api(_endpoint, **kwargs):
+            return limit_panel[limit_panel["trade_date"] == kwargs["trade_date"]].copy()
+
+        with patch.object(self.egs_main.pro, "stk_limit", lambda **_kwargs: None), \
+                patch.object(self.egs_main, "safe_api", side_effect=fake_safe_api), \
+                patch.object(self.egs_main, "load_cache", return_value=None), \
+                patch.object(self.egs_main, "save_cache"):
+            current, previous = self.egs_main._build_full_market_breadth_observation(
+                self.TRADE_DATES,
+                all_daily=daily,
+                df_stocks=stock_basic,
+            )
+
+        self.assertEqual(current["coverage"]["status"], "partial")
+        self.assertEqual(current["coverage"]["unavailable_reason"], "universe_rows_absent")
+        self.assertEqual(current["coverage"]["absent_stock_count"], 1)
+        self.assertEqual(current["full_market_consecutive_limit_up_height"], 0)
+        self.assertEqual(previous["full_market_consecutive_limit_up_height"], 5)
+        regime = self.egs_main.derive_v14_2_market_regime(
+            current, previous, {"iv_feed_status": "not_requested"}
+        )
+        self.assertEqual(regime["status"], "contraction")
+
     def _breadth(self, *, down=None, height=None, status="complete"):
         return {
             "full_market_limit_up_count": 0,
