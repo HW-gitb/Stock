@@ -3758,6 +3758,22 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - v2 prompt SHA 重算与 packet 匹配；owner `214 OK`；US-short full-pack `6044/6044 equal=True PASS 542.0s/860s`；A-short full-pack `3232/3232 equal=True PASS 134.2s/860s`；static `diff-check=PASS`、`py_compile=8`。
 - 本轮未联网、未调 provider、未花钱、未开第二枪、未跑 5b、未合并；具体 closure 证据见 `docs/system_risk_register.md` 顶部新节。
 
+## 2026-08-19 交接 Codex：第二枪（用户已付费授权，主树，一次）
+
+### 前四道门已全部满足，剩下的只有执行
+
+审查 PASS（`2c4dc295`）已合入 master 并在合并结果上跑过双 lane 全量（`us_short 6057/6057 443.4s`、`a_short 3235/3235 142.9s`，`COUNT_GATE` 均 equal）；用户 2026-08-19 给出「授权执行下一步」。**授权正文、被授权 packet 的逐字段清单、以及不得越界的边界写在 `docs/system_risk_register.md` 顶部「2026-08-19 用户付费授权：第二枪」节，以那节为准，不以本节转述为准。**
+
+### 交给 Codex 的任务
+
+**任务**：在主树 `D:\cnhea\Stock`，按方案 `§七` 的 15 步固定顺序，用 `runners/us_short_llm_theme_discovery_web_regroup_smoke.py` 对 packet `us_short_web_regroup_engineering_smoke_20260815_chunk1_v2` 执行**恰好一次** DeepSeek 调用，`confirm_user_authorization` 传该 `packet_id`。
+
+**开枪前自己再核一遍**（任一不符即停，别「顺手修一下再打」）：packet 四项冻结值（`model` 与 `expected_served_model` 均 `deepseek-v4-pro`、`target_chunk_index=1`、`provider_execution_authorized_by_packet_creation=False`）、packet 未被消费、新私有输出根为空、正式路径不可达、`rendered_prompt_sha256` 复算一致。
+
+**绝对不做**：不重试、不 recovery、不因失败另建 packet 再打；不发布任何正式产物（discovery / receipt / validation / merge / decision-pair / boost / score）；不打印或落盘密钥；不动第一枪的历史证据。
+
+**打完之后**：只写诊断 summary 然后停。`transport_verdict=PASS` 才可以接着跑 5b（零付费）；不是 PASS 就按 `§十` 归类路由并停下等审查，**不要自己决定再打一枪**。
+
 ### 下一步（顺序不变）
 
 `Claude Code 独立审查 PASS → 用户通知后合并进 master → 用户对新 v2 packet 明确付费授权 → 主树第二枪一次 → transport PASS 后才跑 5b`。
