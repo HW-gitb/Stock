@@ -9591,3 +9591,33 @@ Claude Code：独立复审窄参数是否只到 tracker、`lane_paths`/`run_regi
 - 这一轮补的只有证据，代码一个字节没动。**证明它没动靠的不是看 diff，是指纹**：我本轮独立重算出的值与上一轮亲手算的完全一致，于是上一轮那六枪反向控制和 153 个 focused 用例自动继续有效，整轮复审只剩「lane 绿是不是记在这个指纹上」一件事。**这就是 rule 4 让 reviewer 自己重算指纹的意义——它把「要不要重验」从判断题变成事实题。**
 - **上一轮判「未完全验证」而不是 FAIL 是对的**：代码逻辑我已用探针验到底，缺的只是 lane 级证据，而按分工那一跑归执行方。硬判 FAIL 会让人以为逻辑有错；判 PASS 又会放过一个真实的证据缺口。**这类「代码对但证据不全」的情形，第三种结论是必要的。**
 - **上一轮的 Required 落到实处的是那句「选择器用错了」**：执行方原先跑的是全仓 discovery（11153 用例、fail-fast 只派发约 54%、红点在 us_short），换成 `-p 'test_a_short*.py'` 后是 134 模块 / 3247 用例全派发。**指出「全量红了」不够用，得指出「你跑的根本不是这条 lane」。**
+
+## 2026-08-19 追加：Codex 修复 `2a_testrun0819.md` 漏洞 1——theme forward 不再用当前 revision 打回历史官方 cohort（509e；repaired / OPEN-NOT-VERIFIED）
+
+### 根因与最小改动
+
+- 带账户真实周跑在 post-selector 官方结算的 theme 步骤 exit 1：`RevisionSelectionBlocked: requested revision is not the selected official revision`。`runners/a_short_theme_forward_comparison.py:505-520` 已逐行用 tracker 行自己的 `as_of` 解析并匹配自己的 official `run_revision_id`；合法 tracker 本来就会含多个日期、多个 revision。`:541-543` 随后却用本次调用的 `run_revision_id` 遍历全部日期做全局相等校验，前一段保留下来的历史 cohort 必然被后一段打回。桌面实测 268 行、8 个 `as_of`、5 个 revision；当前 pointer 正确，不是 pointer 写错。
+- 只删除该重复且口径相反的全局 `require_official_revision(..., run_revision_id)` 循环，并删除其无用导入；保留逐行 `resolve_official_revision(..., row_as_of)` 过滤、显式 revision 缺失的既有拒绝、以及 mixed-date packet 不虚构单一 `official_revision_id` 的既有语义。
+
+### 调用链、消费者与边界
+
+- 调用链：`a_short_official_settlement.py:theme()` → `runners/a_short_theme_forward_comparison.main()` → 逐行 official resolver → 既有 theme evaluator → 既有 packet/outcome writer。tracker producer、epoch、admission/outcome receipts、selector、schema、official pointer、cache、private root、writer、provider/live 均未改。
+- source-binding 仍是逐行 `as_of + run_revision_id` 配对：缺日期/缺 revision 或 resolver 无匹配的行仍不进入评估；非空 official settlement tracker 没有 revision 仍 fail-closed。删除的是第二套错误的“所有日期必须等于当前 revision”判据，不是放宽来源绑定。
+- mixed-date evaluator 结果继续只在选中 revision 集合恰为一个时写 `official_revision_id`；本轮两条不同 revision 的回归结果保持 `None`，不发明全局身份。问题 2 margin-overheat、问题 3 P5 industry weight 均未处理。
+
+### 测试、自审与原始终态
+
+- 只在既有 `tests/test_a_short_theme_forward_comparison.py` 增加 `ThemeForwardRunnerRevisionBindingTests`：临时 tracker 造两条不同日期/不同 revision，逐行 resolver 用真实 runner `main()` 接线，后续 evaluator/writer 用无副作用哨兵；断言两行都进入 evaluator 且 mixed packet 不绑定单一 revision。旧代码先跑同一回归为 `Ran 1 / ERROR`，错误在旧全局 official pointer 校验；修后为 `OK`。
+- 固定解释器：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`，`Python 3.13.8`。固定 launcher focused：`& '.tools\\run_unittest_with_repo_pythonpath.cmd' --timeout-seconds 1300 tests.test_a_short_theme_forward_comparison` → `Ran 77 tests in 48.002s / OK`，receipt=`receipt:ecf391c39723d7251bf22237`。preflight `status=pass`、依赖缺失 `[]`、timezone=`Asia/Shanghai`；变更文件 `py_compile` exit 0；`git diff --check` exit 0（仅 LF→CRLF 提示）。
+- 行为代码稳定后只运行一次官方 A-short full lane：`C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe -X utf8 .tools\\full_pack_ledger.py run a_short 'R-ASHORT-THEME-FORWARD-MIXED-OFFICIAL-COHORTS-REPAIR' 860 -- discover -s tests -p 'test_a_short*.py'`；`STATIC status=PASS`、`diff_check=PASS`、`py_compile=2`、`modules=134`、`discovered=3248`、`ran=3248`、`COUNT_GATE equal=True`、`RESULT status=PASS exit=0`、`127.7s/860s`、fingerprint=`474d3067f481e06f8fbff5073e23f642e541c2e6a60de0cfcae2bdd3fe07bcce`、sidecar=`.tools\\state\\runs\\20260819T214528_a_short_parallel.jsonl`。
+- 未运行 provider/live、真实 weekly、账户路径、测试胶囊或 sub-agent；未 stage/commit/push/merge；`docs/CURRENT.md` 未改。focused/full lane 只证明本工作树离线代码闭合，不等于独立 review、真实数据 closure、commit、merge 或 ship。
+
+### 交接
+
+Claude Code：独立复审前一段逐行 resolver 与后一段全局循环的删除、mixed-date 不虚构 revision、既有 fail-closed 条件、tracker/epoch/schema/receipt/cache/writer 边界，以及问题 2/3 未改；PASS 后按 reviewer/committer 边界提交，Codex 不提交。
+
+## 2026-08-19 追加：复审「删掉一段校验」这种刀，验的重点是幸存者
+
+- 这刀的 diff 是纯删除（3 行循环 + 1 个导入）。删除类改动的审查重心不在被删的东西，而在**幸存的那道守卫是否独立成立**——被删循环从前和逐行过滤绑在一起，谁真正在拦坏输入从未被单独证明过。我用同一夹具直调 `main()` 打了两枪：老周指针不匹配 → 行被剔；当前周无指针 → 行被剔。幸存守卫独立活着，删除才算安全。
+- **Codex 的新测试只有正向腿**（混合 revision 能通过），反向腿是我补打的探针。下一刀若把探针落成测试更好，但该守卫 `:505-520` 自身逻辑未被本刀触碰，按 rule 8 不强求。
+- **顺带记录一个测过才知道的路径边界**：被删循环对「revision 由 tracker 推导」的 Path-B 曾是唯一指针校验，但两个生产调用方都显式传 revision，该路径实际不可达。删除类改动要把「谁还走这条路」查完才敢说无害。

@@ -1414,5 +1414,60 @@ class MixedDtypeRowEquivalenceTests(unittest.TestCase):
         # suffix-stripping clock comparisons, never through raw string equality.
 
 
+class ThemeForwardRunnerRevisionBindingTests(unittest.TestCase):
+    def test_official_settlement_keeps_each_tracker_rows_own_revision(self):
+        older_revision = "a" * 32
+        current_revision = "b" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            tracker_path = root / "tracker.csv"
+            output_path = root / "result.json"
+            private_root = root / "state" / "a_short" / "theme_forward_comparison_private" / "v1"
+            tracker = pd.DataFrame([
+                {"as_of": "20260817", "run_revision_id": older_revision},
+                {"as_of": "20260820", "run_revision_id": current_revision},
+            ])
+            tracker.to_csv(tracker_path, index=False)
+
+            def resolve_by_row_date(_project_root, as_of, *, require=False):
+                del require
+                return {
+                    "selected_revision_id": (
+                        older_revision if str(as_of) == "20260817" else current_revision
+                    ),
+                }
+
+            packet = {"checkpoints": {"current_checkpoint": "test"}}
+            with mock.patch.object(
+                theme_runner, "resolve_official_revision", side_effect=resolve_by_row_date,
+            ), mock.patch.object(theme_runner, "load_epoch", return_value={}), \
+                    mock.patch.object(theme_runner, "_sync_cohort_admission_receipts", return_value={}), \
+                    mock.patch.object(theme_runner, "_sync_terminal_outcome_receipts", return_value={}), \
+                    mock.patch.object(theme_runner, "_load_formal_decision_receipt", return_value=None), \
+                    mock.patch.object(theme_runner, "_load_recorded_formal_packet", return_value=None), \
+                    mock.patch.object(
+                        theme_runner, "evaluate_theme_forward_comparison", return_value=packet,
+                    ) as evaluate, \
+                    mock.patch.object(theme_runner, "validate_comparison_packet"), \
+                    mock.patch.object(theme_runner, "_write_json_atomic"), \
+                    mock.patch.object(theme_runner, "_record_formal_decision_if_due"), \
+                    mock.patch.object(theme_runner, "_emit_sidecar_outcome"):
+                result = theme_runner.main([
+                    "--tracker", str(tracker_path),
+                    "--out", str(output_path),
+                    "--private-root", str(private_root),
+                    "--run-revision-id", current_revision,
+                    "--official-project-root", str(root / "official"),
+                ])
+
+            self.assertEqual(result, 0)
+            evaluated_tracker = evaluate.call_args.args[0]
+            self.assertEqual(
+                set(evaluated_tracker["run_revision_id"]),
+                {older_revision, current_revision},
+            )
+            self.assertIsNone(packet["official_revision_id"])
+
+
 if __name__ == "__main__":
     unittest.main()
