@@ -749,6 +749,14 @@ class WebFetchTests(unittest.TestCase):
                 self.assertIn(role, prompt)
         self.assertIn('"role":"beneficiary"', prompt)
 
+    def test_regroup_prompt_requires_explicit_negative_candidates(self):
+        prompt = fetch._build_deepseek_prompt("20260727", [])
+        self.assertIn("MUST emit an explicit negative candidate", prompt)
+        self.assertIn("do not omit the candidate", prompt)
+        self.assertIn("common_driver=null", prompt)
+        self.assertIn("member_links=[]", prompt)
+        self.assertNotIn("or omit the candidate", prompt)
+
     def test_live_label_cannot_be_minted_by_packet_builder_arguments(self):
         with self.assertRaisesRegex(fetch.WebThemeDiscoveryError, "response-derived runner transport"):
             fetch.build_web_fetch_packet(

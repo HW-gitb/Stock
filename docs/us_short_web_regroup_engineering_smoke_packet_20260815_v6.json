@@ -1,0 +1,202 @@
+{
+  "schema_name": "us_short_web_regroup_engineering_smoke_packet_v6",
+  "schema_version": "6.0.0",
+  "packet_id": "us_short_web_regroup_engineering_smoke_20260815_chunk1_v6",
+  "purpose": "deepseek_stage2_transport_engineering_smoke_only",
+  "source_decision_date": "20260815",
+  "formal_decision_date": null,
+  "formal_decision_slots_occupied": false,
+  "regrades_historical_decision": false,
+  "provider_execution_authorized_by_packet_creation": false,
+  "input": {
+    "receipt_ref": "state/us_short/us_short_llm_theme_discovery_web_20260815_receipt.json",
+    "receipt_sha256": "f9a3954cc31b7eb181bd3fdc80287a32c13334d09d8fcb7d7885dc97a6cf06a3",
+    "accepted_source_count": 34,
+    "normalizer": "runners.us_short_llm_theme_discovery_fetch_web._normalize_search_results",
+    "order_key": [
+      "canonical_locator",
+      "canonical_json",
+      "original_index"
+    ],
+    "chunker": "runners.us_short_llm_theme_discovery_fetch_web._chunk_regroup_rows",
+    "rows_per_regroup_call": 10,
+    "chunk_sizes": [
+      10,
+      10,
+      10,
+      4
+    ],
+    "target_chunk_index": 1,
+    "target_source_count": 10,
+    "target_source_ids": [
+      "web:4ad5f75777fa425dd9ea35d235c47465c03c826aa7780988951b153102647a49",
+      "web:5f31497adf8c6d1168a906f83adc35dafb7636d7119f88486ac065497c1972da",
+      "web:5f88b2689ed0f735f3177d4ad35e17f1aa53f05e507f861848ded0db855bb2e5",
+      "web:6505f3a9d02fe0c22093bc49b9edccedca2248928523dac38fccd2a6c94d5036",
+      "web:6f0883ba69ff6f3f4974fec0aa9f43124d1bc8e1a1827062778fc4a1f7c2b108",
+      "web:8107fabc0a3b9c3c2a0721e1ef602c2efa12a12ea4115b2350046e2d8fcbbf1e",
+      "web:833f39f33b285f7c8b906a7cfd74f1faccccf8f5778ea0c14e040be0d4b9ed02",
+      "web:84feb641f7176f609566cb69c9bd651a0ec035faf6ea344f8e8fcd72b86543d6",
+      "web:89d452f1c1169541719f283545d221d26d931dbf7b2176f2ef460f172c520a40",
+      "web:8cc6b1c21510d4a226d6d5509719cf94ed0aabeba0396c994deccbeef9aa7ca3"
+    ],
+    "target_source_refs": [
+      {
+        "source_id": "web:4ad5f75777fa425dd9ea35d235c47465c03c826aa7780988951b153102647a49",
+        "source_type": "web",
+        "canonical_locator": "https://www.thescenarionist.com/p/can-nuclear-build-a-credit-layer",
+        "observed_at": "2026-08-11T04:00:00+00:00",
+        "fetched_at": "2026-08-15T04:29:42.324677+00:00",
+        "content_sha256": "6b8c709fd4fc062105757a90ced12666c7c992b6f7453706f80627b6dff7bc6a",
+        "raw_receipt_ref": "provider_samples/us_short_llm_theme_discovery_fetch_web/raw/20260815/4ad5f75777fa425dd9ea35d235c47465c03c826aa7780988951b153102647a49.json",
+        "raw_receipt_gitignored": true
+      },
+      {
+        "source_id": "web:5f31497adf8c6d1168a906f83adc35dafb7636d7119f88486ac065497c1972da",
+        "source_type": "web",
+        "canonical_locator": "https://www.franklintempleton.com/articles/series/from-the-market-desk",
+        "observed_at": "2026-08-11T09:10:13+00:00",
+        "fetched_at": "2026-08-15T04:29:49.167657+00:00",
+        "content_sha256": "aefc84619a5955447aa93945cc9637a914ebaea80dab0a329b4f9ece83519cac",
+        "raw_receipt_ref": "provider_samples/us_short_llm_theme_discovery_fetch_web/raw/20260815/5f31497adf8c6d1168a906f83adc35dafb7636d7119f88486ac065497c1972da.json",
+        "raw_receipt_gitignored": true
+      },
+      {
+        "source_id": "web:5f88b2689ed0f735f3177d4ad35e17f1aa53f05e507f861848ded0db855bb2e5",
+        "source_type": "web",
+        "canonical_locator": "https://www.cnbc.com/2026/08/09/stock-market-today-live-updates.html",
+        "observed_at": "2026-08-09T22:04:01+00:00",
+        "fetched_at": "2026-08-15T04:29:57.310119+00:00",
+        "content_sha256": "54b5df6ab9d3dc8eead0bb4711e5f7a12a7f0e0b502549007c107592413e295f",
+        "raw_receipt_ref": "provider_samples/us_short_llm_theme_discovery_fetch_web/raw/20260815/5f88b2689ed0f735f3177d4ad35e17f1aa53f05e507f861848ded0db855bb2e5.json",
+        "raw_receipt_gitignored": true
+      },
+      {
+        "source_id": "web:6505f3a9d02fe0c22093bc49b9edccedca2248928523dac38fccd2a6c94d5036",
+        "source_type": "web",
+        "canonical_locator": "https://institutional.fidelity.com/advisors/insights/spotlights/equity-sector-performance-outlook/equity-sector-mid-year-update",
+        "observed_at": "2026-08-12T00:00:00+00:00",
+        "fetched_at": "2026-08-15T04:29:49.167657+00:00",
+        "content_sha256": "63e28f2209dcad4a27b499d6f66bc4af049a0959602a8cd654198d82e13b149c",
+        "raw_receipt_ref": "provider_samples/us_short_llm_theme_discovery_fetch_web/raw/20260815/6505f3a9d02fe0c22093bc49b9edccedca2248928523dac38fccd2a6c94d5036.json",
+        "raw_receipt_gitignored": true
+      },
+      {
+        "source_id": "web:6f0883ba69ff6f3f4974fec0aa9f43124d1bc8e1a1827062778fc4a1f7c2b108",
+        "source_type": "web",
+        "canonical_locator": "https://finance.yahoo.com/",
+        "observed_at": "2026-08-15T02:00:00+00:00",
+        "fetched_at": "2026-08-15T04:29:42.324677+00:00",
+        "content_sha256": "60a51d2cac22deea3efc753336f5c0c0b1d84a770d41ac30d13726b70e3bd27a",
+        "raw_receipt_ref": "provider_samples/us_short_llm_theme_discovery_fetch_web/raw/20260815/6f0883ba69ff6f3f4974fec0aa9f43124d1bc8e1a1827062778fc4a1f7c2b108.json",
+        "raw_receipt_gitignored": true
+      },
+      {
+        "source_id": "web:8107fabc0a3b9c3c2a0721e1ef602c2efa12a12ea4115b2350046e2d8fcbbf1e",
+        "source_type": "web",
+        "canonical_locator": "https://investors.intuitivemachines.com/news-releases/news-release-details/intuitive-machines-reports-second-quarter-2026-financial-results",
+        "observed_at": "2026-08-13T04:00:00+00:00",
+        "fetched_at": "2026-08-15T04:29:49.167657+00:00",
+        "content_sha256": "049123378746c22e188118ba005b2f6814ab9c36de81df822f2cf6c0cdf46165",
+        "raw_receipt_ref": "provider_samples/us_short_llm_theme_discovery_fetch_web/raw/20260815/8107fabc0a3b9c3c2a0721e1ef602c2efa12a12ea4115b2350046e2d8fcbbf1e.json",
+        "raw_receipt_gitignored": true
+      },
+      {
+        "source_id": "web:833f39f33b285f7c8b906a7cfd74f1faccccf8f5778ea0c14e040be0d4b9ed02",
+        "source_type": "web",
+        "canonical_locator": "https://www.fool.com/investing/stock-market/types-of-stocks/growth-stocks",
+        "observed_at": "2026-08-10T15:32:22+00:00",
+        "fetched_at": "2026-08-15T04:29:34.494608+00:00",
+        "content_sha256": "d2d48d0fb51b9ea863111f3c484f6c064c57640a972f396d787e4e24a2dadc09",
+        "raw_receipt_ref": "provider_samples/us_short_llm_theme_discovery_fetch_web/raw/20260815/833f39f33b285f7c8b906a7cfd74f1faccccf8f5778ea0c14e040be0d4b9ed02.json",
+        "raw_receipt_gitignored": true
+      },
+      {
+        "source_id": "web:84feb641f7176f609566cb69c9bd651a0ec035faf6ea344f8e8fcd72b86543d6",
+        "source_type": "web",
+        "canonical_locator": "https://www.wsj.com/finance/stocks/companies-have-rarely-had-such-great-expectations-c5824f70",
+        "observed_at": "2026-08-14T10:29:00+00:00",
+        "fetched_at": "2026-08-15T04:29:57.310119+00:00",
+        "content_sha256": "256239324d96e9d94f5e8410acb6d7ed846bc1f72f861ca7b303c36d2b90e1fd",
+        "raw_receipt_ref": "provider_samples/us_short_llm_theme_discovery_fetch_web/raw/20260815/84feb641f7176f609566cb69c9bd651a0ec035faf6ea344f8e8fcd72b86543d6.json",
+        "raw_receipt_gitignored": true
+      },
+      {
+        "source_id": "web:89d452f1c1169541719f283545d221d26d931dbf7b2176f2ef460f172c520a40",
+        "source_type": "web",
+        "canonical_locator": "https://www.stocktitan.net/sec-filings/GCDT/20-f-green-circle-decarbonize-technology-ltd-files-annual-report-fore-f79f22a5c4c3.html",
+        "observed_at": "2026-08-14T21:27:34+00:00",
+        "fetched_at": "2026-08-15T04:29:42.324677+00:00",
+        "content_sha256": "2d337c4735edfb8691347f241fc70f792f8e85ba09408e68ceee6fe65cd7d9b3",
+        "raw_receipt_ref": "provider_samples/us_short_llm_theme_discovery_fetch_web/raw/20260815/89d452f1c1169541719f283545d221d26d931dbf7b2176f2ef460f172c520a40.json",
+        "raw_receipt_gitignored": true
+      },
+      {
+        "source_id": "web:8cc6b1c21510d4a226d6d5509719cf94ed0aabeba0396c994deccbeef9aa7ca3",
+        "source_type": "web",
+        "canonical_locator": "https://ir.velo3d.com/news-events/press-releases/detail/215/velo3d-announces-second-quarter-2026-financial-results",
+        "observed_at": "2026-08-12T04:00:00+00:00",
+        "fetched_at": "2026-08-15T04:29:57.310119+00:00",
+        "content_sha256": "2912e4e259ac7bd70ef4f26277227fb4c88b5ed85a07fd78c1dcb6dfea13f263",
+        "raw_receipt_ref": "provider_samples/us_short_llm_theme_discovery_fetch_web/raw/20260815/8cc6b1c21510d4a226d6d5509719cf94ed0aabeba0396c994deccbeef9aa7ca3.json",
+        "raw_receipt_gitignored": true
+      }
+    ],
+    "rendered_prompt_sha256": "373b7d51c34eaa91d128083c221cf6296f4d3cf69998f34cc4749010ed0f207b"
+  },
+  "policy_binding": {
+    "policy_version": "soft_discovery_query_policy_v0.2.0",
+    "policy_content_sha256": "4b2d282155f34c70d881cda44bb5d6b267ce49cb8d46131d60831f1928c176cd",
+    "stage2_rule_sha256": "c487d559d4276c04ac48e5ad43a89d6f490c8fe10d70435f3a1064ef34ac30d9",
+    "prompt_builder": "runners.us_short_llm_theme_discovery_fetch_web._build_deepseek_prompt"
+  },
+  "paid_boundary": {
+    "provider": "web",
+    "vendor": "deepseek",
+    "stage": "stage2",
+    "call_counts": {
+      "tavily": 0,
+      "deepseek": 1,
+      "xai": 0,
+      "retry": 0,
+      "recovery": 0,
+      "unknown_sibling": 0
+    },
+    "request": {
+      "model": "deepseek-v4-pro",
+      "expected_served_model": "deepseek-v4-pro",
+      "temperature": 0,
+      "max_tokens": 16384,
+      "response_format": "json_object",
+      "max_themes_per_chunk": 4
+    }
+  },
+  "output_boundary": {
+    "diagnostic_root": "state/us_short/runs_private/soft_discovery_engineering_smoke_v6/",
+    "parent_plan_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v6/us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json",
+    "budget_ledger_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v6/us_short_llm_theme_discovery_plan_web_20260815_budget.json",
+    "raw_root": "provider_samples/us_short_llm_theme_discovery_engineering_smoke_v6/",
+    "summary_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v6/us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json",
+    "formal_outputs_forbidden": true,
+    "effects": {
+      "publish_decision_pair": false,
+      "discovery": false,
+      "receipt": false,
+      "merge": false,
+      "validation": false,
+      "boost": false,
+      "score": false
+    }
+  },
+  "authorization": {
+    "independent_review_required": true,
+    "exact_user_confirmation_required": true,
+    "exact_confirmation_value": "us_short_web_regroup_engineering_smoke_20260815_chunk1_v6",
+    "rerun_permitted": false,
+    "new_packet_required_after_failure": true
+  }
+}
+
+
+
+
