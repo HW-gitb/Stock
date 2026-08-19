@@ -295,6 +295,29 @@ class EgsMarketBreadthWiringTest(unittest.TestCase):
             self.egs_main.get_full_market_stk_limit_window(self.TRADE_DATES)
         self.assertEqual(len(calls), 11)
 
+    def test_stk_limit_validation_scopes_to_a_shares_before_limit_checks(self):
+        panel = pd.DataFrame([
+            {"ts_code": "600000.SH", "trade_date": "20260811",
+             "up_limit": 11.0, "down_limit": 9.0},
+            {"ts_code": "900901.SH", "trade_date": "20260811",
+             "up_limit": 0.0, "down_limit": 0.0},
+            {"ts_code": "510300.SH", "trade_date": "20260811",
+             "up_limit": None, "down_limit": None},
+        ])
+
+        result = self.egs_main._validate_stk_limit_frame(
+            panel, ["20260811"], "stk_limit"
+        )
+
+        self.assertEqual(result["ts_code"].tolist(), ["600000.SH"])
+
+        bad_a_share = panel.iloc[[0]].copy()
+        bad_a_share.loc[:, "up_limit"] = float("nan")
+        with self.assertRaisesRegex(RuntimeError, "non-finite or non-positive limits"):
+            self.egs_main._validate_stk_limit_frame(
+                bad_a_share, ["20260811"], "stk_limit"
+            )
+
     def _breadth(self, *, down=None, height=None, status="complete"):
         return {
             "full_market_limit_up_count": 0,

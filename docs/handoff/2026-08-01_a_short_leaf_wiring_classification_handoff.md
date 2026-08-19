@@ -9335,3 +9335,42 @@ call .tools\run_unittest_with_repo_pythonpath.cmd tests.phase6.test_egs_main_dai
 ### 交接
 
 两条 Required 的完整正文、修复方向与 closure test 见 `docs/system_risk_register.md` 顶部 2026-08-18 A/B 条目（单一来源，本处不复述）。`Codex：修复`——先复跑确认 error 身份，再改；不得为了让对账过去而引入递补（那会重开 5.1「挤掉合格票」的洞）。
+
+## 2026-08-18 追加：Codex 修复真实 A/B 暴露的发布对账与 `stk_limit` 域错位（509e；repaired / `OPEN-NOT_VERIFIED`）
+
+### 问题、根因与最小改动
+
+- 唯一入口是主树 tip `14b17b4d` 顶部两条 A-short A/B finding；误做的 US-short 测试改动已在本轮开始时全部还原，当前修复不承接任何其他问题。
+- 发布失败根因在 `run_egs()` 的接缝：`watch_df` 是门前 Top15 经 loss-making admission partition 后的可发布集合，健康账却把门后 Top50 的 `len(top50)` 当作 eligible。只改一行成 `len(watch_df)`；不回填、不重跑 selector、不改 TopN/score/tier/schema/writer。现有真正导出丢行 `actual=12/eligible=13` 负控仍 error。
+- `stk_limit` 接口按官方契约返回 A/B 股与基金；旧 `_validate_stk_limit_frame()` 在 A-share breadth 取域前校验整张跨品种表，目标域外坏 limit 值可让整窗抛 `RuntimeError`。只复用现有 inclusion-based `is_a_share_code()` 先过滤，再保留原日期、重复、有限正值校验。A 股坏值仍 fail-closed；未改 `engine/a_short_market_breadth.py`、provider 请求、缓存、regime 阈值或 fallback。
+
+### 调用链、消费者、source-binding 与写盘边界
+
+`run_egs() → score_l5()/门前 Top15 → apply_loss_making_admission() → watch_df → build_data_health()/watch_pool_reconciliation → publish_egs_run_manifest()`；本刀只对齐对账口径。`market_environment() → get_full_market_stk_limit_window() → _validate_stk_limit_frame() → compute_full_market_breadth() → derive_v14_2_market_regime()`；provider 仍为 `tushare.stk_limit`，A-share universe 仍由现有 breadth helper 定义，缺 A 股 limit、非有限/非正 limit、日期窗缺口和 contender 缺 bar 仍走既有 fail-closed。
+
+未改 schema、source id、cache key、正式 writer、Phase5、selection/sizing/action、V14.3、provider/client 或 authorization。未访问其他 worktree，未运行 provider/live、真实 weekly、A/B、账户/持仓或订单动作，未 stage/commit/push/merge；`docs/CURRENT.md` 未改。
+
+### 旧代码必红、修复态验证与自审
+
+- 两条旧代码必红：生产接线仍写 `len(top50)` 导致 source guard FAIL；含有效 A 股 + 非法 B 股/基金 limit 的 provider-shape panel 导致 `_validate_stk_limit_frame` ERROR。原始终态 `Ran 2`、`FAILED (failures=1, errors=1)`。
+- 修复后精确两条 `Ran 2`、`OK`。最终 bounded focused acceptance：`tests.phase6.test_egs_rank_universe_reconciliation`、`tests.phase6.test_egs_sw_industry_and_watch_pool_health`、`tests.test_a_short_egs_market_environment`、`tests.test_a_short_market_breadth`、`tests.test_egs_industry_heat`，`Ran 132 tests`、`OK`、receipt=`receipt:06ef07e0bde0e2da8f6026dc`。
+- 因修改生产顶层 `A-EGS/egs_main.py`，按 rule 3 唯一运行 A-short full lane：`STATIC status=PASS diff_check=PASS py_compile=3`；`discovered=3233 ran=3233 equal=True`；`Ran 3233 tests in 120.729s`；`RESULT status=PASS exit=0 tests=3233 elapsed=120.7s deadline=860s mode=parallel`；fingerprint=`a540a61f2d0b`；sidecar=`.tools\state\runs\20260818T235054_a_short_parallel.jsonl`。full lane 后未再改行为代码或测试。
+- 同类扫描：`watch_eligible_count` 的 production producer 仅该门后赋值与 backtest filler 的既有 `max`；`_validate_stk_limit_frame` 仅服务 cache/provider 同一入口；A-share code 口径复用单一 helper。反向控制覆盖 unexplained watch mismatch 和坏 A 股 limit。稳定 diff 的唯一轻量独立 self-review（只读、不跑包）返回 `PASS`。
+
+### 状态与下一门
+
+两条均为 `repaired / OPEN-NOT_VERIFIED`：离线闭合与 full lane 不能替代真实 provider/A-B。后续只有在用户显式授权后，才能在指定工作树重跑同输入 B 侧并记录原始 `data_health` issue、provider 异常和产物终态；若仍失败不得放宽 fail-closed。Claude Code 是独立 reviewer/committer，需复审当前五文件代码/测试和三份文档记录；Codex 不提交。
+
+## 2026-08-19 追加：复审这两条修复时，真正花时间的地方在哪
+
+### 差点判错的一格，以及把它掰回来的证据
+
+- 我第一遍读完 diff 的直觉是「这行把门改成了恒等式，等于删检查」——因为改完 `actual` 与 `eligible` 都取自同一个 `watch_df`，而 `len(watch_df) <= watch_n` 恒成立，所以生产里永远 `pass`。探针也确实跑出 n=0..15 全绿。
+- 把这个判断推翻的是一条**历史证据**：`grep` 到 `docs/SESSION_LOG.md:11465` 的旧轮记录，`watch_eligible=len(top50)` 当初就是**故意**选来让 `actual==min(eligible,target)` 恒成立的，那一轮的原话是「仅真导出丢行报错」。也就是说这道门从设计上就不是用来抓「池子为什么短」的，它抓的是「导出环节丢没丢行」。4.1 把 `watch_df` 从 `top50.head(watch_n)` 换成准入过滤池，恒等式断了，才有了这次误报。
+- **教训**：判定「一个改动是不是把检查删了」，不能只看改完之后它还能不能报错，要先去翻**这道门当初为什么长这样**。恒等式不等于没用——它可能正是设计。少了那一次 grep，我这轮会给出一个理直气壮但错的 Required。
+
+### 分工与没做的事
+
+- 全量按 rule 4 归执行方，我不重跑；但也不照抄 `CACHED GREEN` 那行——用 `.tools/verification_receipt.py` 在当前树重算指纹与 ledger 的 prepare/record 逐字符比对，再核 `recorded_at` 晚于三个代码文件的 mtime、其后只动过文档。这两步加起来才等于「那次绿覆盖的就是我现在审的这份代码」。
+- 未起独立对抗 agent：两处各 1 行、都是既有函数的增量，没有新建 fail-closed 门、没有 provider 调用、没有 secret/raw 落盘，按 rule 8 起 agent 属过度审查。
+- 真实侧仍是空的：本轮没有授权，没跑 provider、没重跑 B 侧。所以两条都只能说「离线闭合」，`20260819` 那份真实周报到底能不能发出来，还得靠一次授权的同输入复跑。P1 尤其如此——跨品种坏值只是与官方契约相符的假说，权限/流控仍可能是真因。
