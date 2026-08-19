@@ -3867,3 +3867,18 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - 使用主树冻结 receipt/raw 只读重算生产 chunk；10 个 source_id 顺序与 packet 一致。新 prompt 摘要为 daecb9e866ed1c169aab92516a7ea0f701fdba513a90d57dc6e8e35bafed7930，packet/schema/runner 三处一致。
 - 验证：schema 0 errors、预算 owner 75 OK、Web owner 84 OK、py_compile、git diff --check 通过。未联网、未调用 provider、未执行 provider、未付费。
 - 下一步：Claude 独立复审 v5 packet 和历史 packet 拒绝门；PASS 后等用户对 v5 精确 packet 明确授权，当前不得执行 provider。
+
+## 2026-08-19 追加：v5 已按用户付费授权完成唯一一次调用（主树）
+
+- 精确 packet_id 为 us_short_web_regroup_engineering_smoke_20260815_chunk1_v5；DeepSeek 1 次，Tavily/XAI/retry/recovery/unknown 均 0。
+- transport PASS；served_model=deepseek-v4-pro；usage=4822/4407/9229；finish_reason=stop；raw 先落盘、hash 重读一致；strict JSON、主题数上限和 semantic fields 通过；parsed_theme_count=1。
+- 正式槽未占用，discovery/receipt/merge/validation/boost/score 全未写；只写 v5 私有 raw、账本和 summary。5b 未执行。
+- 下一步：暂停；如需 5b 零付费复放，另行明确授权，不能把本次 transport PASS 直接当成 4diii readiness。
+
+## 2026-08-19 追加：v5 raw 上的 5b 零付费回放完成（主树）
+
+- v5 raw 已按当前 packet 完成一次离线 5b 回放：`offline_replay_completed`，transport=`PASS`；没有 provider、网络、预算预约或重试。
+- 结果：1 个主题、4 个 member claim，4/4 绑定接受、0 拒绝；语义 machine result=`accepted`；SIC 为 calibration-only，4 个已接受 ticker 全可评价。
+- 正式槽、discovery、receipt、merge、validation、boost、score 全部为 false；`readiness=null`，所以不能直接接 4diii，也不因此再开 provider 枪。
+- 为读取 v5，本轮只把 replay runner 的 packet/schema 身份和 owner fixture 路径从旧 v3 切到 v5；固定 Python owner `34 OK`，py_compile、git diff --check 通过。
+- 下一步：Claude 独立审查本次 v5 5b 结果；审查前保持停枪。
