@@ -120,6 +120,7 @@ from engine.a_short_market_breadth import (
     compute_full_market_breadth,
     full_market_universe,
     is_a_share_code,
+    is_bse_debut_limit_row,
 )
 from engine.a_short_observability import safe_exception_summary
 from engine.a_short_loss_making_admission import apply_loss_making_admission
@@ -4057,7 +4058,15 @@ def _validate_stk_limit_frame(frame, expected_dates, label):
         raise RuntimeError(f"{label} payload contains duplicate ts_code/trade_date")
     for column in ("up_limit", "down_limit"):
         result[column] = pd.to_numeric(result[column], errors="coerce")
-    values = result[["up_limit", "down_limit"]].to_numpy(dtype=float)
+    explained = [
+        is_bse_debut_limit_row(code, up_limit, down_limit)
+        for code, up_limit, down_limit in zip(
+            result["ts_code"], result["up_limit"], result["down_limit"]
+        )
+    ]
+    values = result.loc[
+        ~np.asarray(explained, dtype=bool), ["up_limit", "down_limit"]
+    ].to_numpy(dtype=float)
     if not np.isfinite(values).all() or (values <= 0).any():
         raise RuntimeError(f"{label} payload contains non-finite or non-positive limits")
     return result.sort_values(["trade_date", "ts_code"], kind="mergesort").reset_index(drop=True)

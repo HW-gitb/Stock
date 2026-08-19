@@ -95,6 +95,19 @@ def is_a_share_code(ts_code: object) -> bool:
     return symbol.startswith(prefixes)
 
 
+def is_bse_debut_limit_row(ts_code: object, up_limit: object, down_limit: object) -> bool:
+    """Recognize the BSE first-day no-limit sentinel returned by the provider."""
+    try:
+        return (
+            is_a_share_code(ts_code)
+            and str(ts_code).strip().upper().endswith(".BJ")
+            and float(up_limit) == 99999.99
+            and float(down_limit) == 0.0
+        )
+    except (TypeError, ValueError):
+        return False
+
+
 def full_market_universe(stock_basic: pd.DataFrame, as_of: str) -> set[str]:
     """PIT full-market A-share universe as of `as_of`.
 
@@ -136,6 +149,9 @@ def usable_rows(daily: pd.DataFrame, stk_limit: pd.DataFrame) -> pd.DataFrame:
 
     A row is usable iff it has a finite positive close and high with `high >= close`
     AND a finite positive up/down limit for the same (date, code).
+
+    The exact BSE first-day no-limit sentinel is an explained absent row and is
+    excluded before this check; the coverage result reports that exclusion.
     """
     if daily is None or getattr(daily, "empty", True):
         return pd.DataFrame(columns=["trade_date", "ts_code", "close", "high",
@@ -166,6 +182,13 @@ def usable_rows(daily: pd.DataFrame, stk_limit: pd.DataFrame) -> pd.DataFrame:
         if right.duplicated(["trade_date", "ts_code"]).any():
             raise MarketBreadthError("stk_limit has duplicate (trade_date, ts_code) rows")
         merged = left.merge(right, on=["trade_date", "ts_code"], how="left")
+    debut_sentinel = [
+        is_bse_debut_limit_row(code, up_limit, down_limit)
+        for code, up_limit, down_limit in zip(
+            merged["ts_code"], merged["up_limit"], merged["down_limit"]
+        )
+    ]
+    merged = merged.loc[~np.asarray(debut_sentinel, dtype=bool)].copy()
     price_ok = (merged["close"].gt(0) & merged["high"].gt(0)
                 & np.isfinite(merged["close"]) & np.isfinite(merged["high"])
                 & merged["high"].ge(merged["close"]))

@@ -9407,3 +9407,19 @@ call .tools\run_unittest_with_repo_pythonpath.cmd tests.phase6.test_egs_main_dai
 - 用正确的 11 会话窗直调，抛的是 `stk_limit payload contains non-finite or non-positive limits`。逐日扫描锁定肇事行：**北交所新股上市首日** `920107.BJ / 920138.BJ / 920165.BJ / 920038.BJ`，`up_limit=99999.99, down_limit=0.0`（首日不设涨跌停的哨兵值），11 个会话里 4 个带这种行。
 - `A_SHARE_CODE_PREFIXES["BJ"] = ("4","8","920")`，所以上一轮加的 `is_a_share_code` 过滤对它**完全无效**；`FULL_MARKET_BOARDS` 也有意包含北交所。也就是说这不是「脏数据混进来」，是**设计上要留的成员**带着一个合法但极端的哨兵值，撞上了「有限且为正」这道门。
 - **方法学**：上一轮那个修复是照「官方契约说单日结果含 A/B 股和基金」推出来的合理假说，离线也造了合成 payload 验过，但它**从未被真实 payload 检验**。这次是实验推翻了自己的假说——`OPEN-NOT_VERIFIED` 这个标签不是形式主义，它这次真的兑现了。**能用合成夹具证明的只有「代码按我以为的输入行事」，证不了「我以为的输入是真的」。**
+
+## 2026-08-19 追加：BSE debut sentinel Required 最小修复（509e；repaired / OPEN-NOT-VERIFIED）
+
+- **范围与选择**：不移除北交所，不改 full-market 分母设计；共享 `is_bse_debut_limit_row()` 只识别 `.BJ` A-share 的 `up_limit=99999.99/down_limit=0.0` 首日无涨跌停哨兵。上游 `_validate_stk_limit_frame()` 保留该解释行，普通值门只对非哨兵行生效；下游 `usable_rows()` 按同一谓词排除该行，既不计涨跌停，也不让单行异常击穿 11 会话窗，coverage 用 `absent_stock_count` / `universe_rows_absent` 留痕。
+- **调用链与边界**：`stk_limit → _validate_stk_limit_frame → _build_full_market_breadth_observation → compute_full_market_breadth/usable_rows → coverage/height → derive_v14_2_market_regime`。cache key/version、raw fields、schema、Phase5、provider/cache 写盘边界和 ordinary A-share fail-closed 均未改；没有静默零填充或 fallback。
+- **六道门按类复核**：空 payload、缺列、空 code、日期窗不符、重复 key 五道结构门保持整批拒绝；第六道 finite/positive value 门只增加精确 BSE debut sentinel 例外。
+- **测试与原始终态**：先用旧代码跑新增 closure 两项为 `Ran 2 / FAILED (1 failure, 1 error)`；修后为 `Ran 2 / OK`。固定 Python focused `65 OK`；full lane `PASS 3235/3235`、`discovered=ran=3235`、`150.7s/860s`、fingerprint=`88d8a9db3499f6967d676ebb5d0a4397c01572dee901e5d31e3890649f0c8365`；`py_compile=0`、`git diff --check=0`。
+- **未验证与交接**：未运行 provider/live、真实周或测试胶囊；离线测试/full lane 不等于真实数据 closure、独立 review、commit、merge 或 ship。Claude Code：用风险登记给出的 `--as-of 20260819 --price-as-of 20260818 --l3-mode today --reuse-l3-cache` 同输入复跑真实 11 会话窗，检查 `stk_limit_fetch_failed`/`unknown` 是否消失，再按 reviewer/committer 边界审查和提交。
+
+## 2026-08-19 追加：复审「放宽 fail-closed」这类改动，真正决定结论的两步
+
+- **第一步是真 provider，不是测试**。放宽类最容易出的错，是夹具刚好只覆盖作者设想的那种坏值。所以我没停在 65 个绿测试上，而是拿真实 11 会话窗直调一次：`60938 行 / 11 日期` 返回，且四条哨兵行**仍在帧里**。这一条同时证明两件事——真实故障消失了，而且修法不是偷偷删行。
+- **第二步是问「这个解释会不会外溢」**。四枪反向控制里最关键的是第四枪：把一只**主板** A 股伪装成 `99999.99/0.0`，它仍然 `RuntimeError`。说明谓词认的是「`.BJ` + 精确形状」的合取，而不是「看见这对数字就放行」。放宽类改动的验收标准就该是这句：**证明放宽的是粒度，不是标准。**
+- **一个被硬门逼出来的设计约束**：`compute_full_market_breadth` 有 `usable != eligible` 即整日不可用的硬门。所以哨兵行**不能**留在 `merged` 里标成 `limit_ok=False`——那样照样触发硬门、breadth 照样归零。必须行级剔除让 `eligible` 与 `usable` 同减，该票落进「报告但不致命」的 `absent`。这解释了为什么上游预校验留行、下游引擎剔行看着不一致，其实是唯一可行解；追全 `limit_panel` 的三处引用确认没有第二个消费者，双待遇才成立。
+- **一个自己踩的小坑**：落盘脚本用「这段文字是否已存在」做幂等断言，撞上同一份 register 里上一条相同前缀的复审行，白返工一轮。幂等锚要用**本次独有**的字符串，别用会重复的套话开头。
+- **未做的一格**：真实 EGS 全流程复跑没跑，「真实那一周 regime 实际取什么值」仍未验；验到的是验证器不再毙窗 + 接线级能算出 `contraction`。这一跑归 reviewer，不阻断 PASS。
