@@ -359,8 +359,28 @@ def validate_provisional_themes(
                 "industry_source": "sec_sic_major_group",
             })
         members.sort(key=lambda row: row["ticker"])
-        # The production structural gates remain first.  Semantic evidence cannot turn a
-        # sub-sized or single-industry theme into a production candidate.
+        semantic_assertions = raw_theme.get("semantic_assertions")
+        early_negative_assertion_indexes: set[int] = set()
+        if isinstance(semantic_assertions, list):
+            for assertion_index, assertion in enumerate(semantic_assertions):
+                if not isinstance(assertion, dict):
+                    continue
+                basis = assertion.get("basis")
+                if basis is not None and basis != "shared_commercial_driver":
+                    early_negative_assertion_indexes.add(assertion_index)
+                    drops.append({
+                        "stage": "theme", "theme_id": theme_id,
+                        "reason": "semantic_basis_not_shared_commercial_driver",
+                        "detail": f"assertion[{assertion_index}]:{basis}",
+                    })
+            if early_negative_assertion_indexes and not any(
+                isinstance(assertion, dict)
+                and assertion.get("basis") == "shared_commercial_driver"
+                for assertion in semantic_assertions
+            ):
+                continue
+        # Positive assertions keep the production structural gates first. An explicit negative
+        # basis was recorded above before those gates, without changing multi-assertion behavior.
         structural_industry_codes = sorted({row["industry_code"] for row in members})
         if len(members) < MIN_THEME_MEMBERS:
             drops.append({"stage": "theme", "theme_id": theme_id, "reason": "fewer_than_3_qualified_members"})
@@ -393,6 +413,8 @@ def validate_provisional_themes(
                     drops.append({"stage": "theme", "theme_id": theme_id, "reason": "semantic_assertion_malformed_or_unbound", "detail": detail})
                     continue
                 basis = assertion.get("basis")
+                if assertion_index in early_negative_assertion_indexes:
+                    continue
                 if basis != "shared_commercial_driver":
                     drops.append({"stage": "theme", "theme_id": theme_id, "reason": "semantic_basis_not_shared_commercial_driver", "detail": f"{detail}:{basis}"})
                     continue
