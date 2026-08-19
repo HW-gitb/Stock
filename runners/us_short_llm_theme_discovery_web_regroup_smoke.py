@@ -85,17 +85,13 @@ def _assert_packet_contract(packet: Mapping[str, Any]) -> None:
         output_boundary = packet["output_boundary"]
     except (KeyError, TypeError) as exc:
         raise EngineeringSmokeError("engineering-smoke packet contract is malformed") from exc
-    legacy_packet_path = LIVE_ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v2.json"
-    is_legacy_test_packet = (
-        packet.get("packet_id") == LEGACY_PACKET_ID
-        and PACKET_PATH.resolve() != legacy_packet_path.resolve()
-    )
+    is_legacy_packet = packet.get("packet_id") == LEGACY_PACKET_ID
     if packet.get("packet_id") == PACKET_ID:
         expected_schema_name = "us_short_web_regroup_engineering_smoke_packet_v3"
         expected_schema_version = "3.0.0"
         expected_packet_id = PACKET_ID
         expected_output_boundary = EXPECTED_OUTPUT_BOUNDARY
-    elif is_legacy_test_packet:
+    elif is_legacy_packet:
         expected_schema_name = LEGACY_SCHEMA_NAME
         expected_schema_version = LEGACY_SCHEMA_VERSION
         expected_packet_id = LEGACY_PACKET_ID
