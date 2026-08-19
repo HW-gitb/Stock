@@ -3853,3 +3853,9 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - 第三枪 v3 raw 已按合并后的 5b runner 重跑一次；`offline_replay_completed`、`transport_verdict=PASS`，没有 provider/network/retry 调用。
 - 5 个 member claim 全部绑定接受；真实语义失败原因为 `chunk[1].theme[0].semantic_assertions[0].member_links[0].role is invalid`，主题未到 semantic gate，`readiness=null`。
 - replay summary 已更新；预算账本 SHA-256 未变，正式决策槽=false；不接 4diii、不再开第四枪。
+## 2026-08-19 追加：member-link role 提示词 Required 已最小修复（8d8c；待独立复审）
+
+- runners/us_short_llm_theme_discovery_fetch_web.py 复用生产 SEMANTIC_ROLES，把全部 8 个合法 role 值写进 regroup 提示词；JSON 示例使用合法 beneficiary。
+- tests/provider/test_us_short_llm_theme_discovery_fetch_web.py 新增守类用例，逐值检查渲染提示词；不放宽 SEMANTIC_ROLES，不改旧 packet/raw。
+- 验证：固定 Python 聚焦提示词 2 OK、Web owner 84 OK、offline 生产入口 34 OK；py_compile、git diff --check 通过。未联网、未调用 provider、未建 packet、未付费。
+- 提示词 hash 已改变；当前不建新 packet，先交 Claude 独立复审。
