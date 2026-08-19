@@ -394,6 +394,14 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("forward_tracker.py backfill --windows 5,10,20", text)
         self.assertIn("cache-only backfill", text)
 
+    def test_regime_stage_binds_loss_making_tracking_to_run_revision(self):
+        text = SCRIPT.read_text(encoding="utf-8")
+        stage5_start = text.index("# --- Stage 5:")
+        stage5 = text[stage5_start:text.index("\n# P4:", stage5_start)]
+        regime_args = stage5[stage5.index("$RegimeArgs ="):stage5.index("Write-Host \"[5/5]")]
+        self.assertRegex(regime_args, r"'--loss-making-run-revision-id',\s*\$RunRevisionId")
+        self.assertNotRegex(regime_args, r"'--run-revision-id',\s*\$RunRevisionId")
+
     def test_factor_comparison_v2_cache_is_live_only_and_never_reuses_retired_v1_wiring(self):
         text = SCRIPT.read_text(encoding="utf-8")
         live_block = text[text.index("if (-not $IsHistoricalAsOf) {"):text.index("if (Test-Path $OverlayPath)")]
