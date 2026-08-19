@@ -26,6 +26,7 @@ EXPECTED_BANNER_TAGS = ["true_false_observe_split", "macro_cluster_warning", "sh
                        "price_clock", "hot_excluded_notice", "forward_policy_comparison_reminder",
                        "theme_producer_governance_reminder"]
 EXPECTED_SOFT_DISCOVERY_BANNER = {"id": "⑧", "tag": "soft_discovery_status", "always_shown": False}
+EXPECTED_NONBLOCKING_FAILURE_BANNER = {"id": "⑨", "tag": "nonblocking_stage_failures", "always_shown": False}
 
 
 def _load(p):
@@ -93,6 +94,9 @@ class UsShortWeeklyReportContract(unittest.TestCase):
 
     def test_soft_discovery_banner_is_a_separate_optional_contract(self):
         self.assertEqual(self.preset["soft_discovery_banner"], EXPECTED_SOFT_DISCOVERY_BANNER)
+
+    def test_nonblocking_failure_banner_is_a_separate_optional_contract(self):
+        self.assertEqual(self.preset["nonblocking_failure_banner"], EXPECTED_NONBLOCKING_FAILURE_BANNER)
 
     def test_lifecycle_count_consistency_invariant_pinned(self):
         # now a structured const invariant (not prose): section 1 count == section 12 count
@@ -164,6 +168,9 @@ class UsShortWeeklyReportContract(unittest.TestCase):
 
     def test_schema_rejects_soft_discovery_banner_drift(self):
         self._reject(lambda d: d["soft_discovery_banner"].__setitem__("tag", "caller_text"))
+
+    def test_schema_rejects_nonblocking_failure_banner_drift(self):
+        self._reject(lambda d: d["nonblocking_failure_banner"].__setitem__("tag", "caller_text"))
 
     def test_schema_rejects_unknown_top_level_key(self):
         self._reject(lambda d: d.__setitem__("rendered_md", "..."))

@@ -5,6 +5,7 @@ import json
 import shutil
 import sys
 import tempfile
+from contextlib import ExitStack
 from dataclasses import replace
 import unittest
 from datetime import datetime
@@ -671,6 +672,8 @@ class CapstoneStageOutcomeNormalizerTest(unittest.TestCase):
             ("market_diagnostic", {"clock_status": "running", "v1_1_status": "attribution_faulted", "report_lines": ["x"], "report_lines_delivered": True}, "failed_nonblocking", "MARKET_DIAGNOSTIC_FAULTED"),
             ("weekly_bridge", {"batch4_run": {"emitted": False, "no_emit_reason": "out_of_window"}}, "completed_work", "WEEKLY_REPORT_NOT_EMITTED_OUT_OF_WINDOW"),
             ("weekly_bridge", {"batch4_run": {"emitted": False, "no_emit_reason": "provider_health_blocked"}}, "waiting_dependency", "WEEKLY_REPORT_PROVIDER_HEALTH_BLOCKED"),
+            ("weekly_bridge", {"batch4_run": {"emitted": True}, "serenity_report_delivery_status": "failed"}, "failed_nonblocking", "SERENITY_REPORT_DELIVERY_FAILED"),
+            ("weekly_bridge", {"batch4_run": {"emitted": True}, "nonblocking_failure_banner_status": "failed"}, "failed_nonblocking", "NONBLOCKING_FAILURE_BANNER_DELIVERY_FAILED"),
         )
         for stage_name, result, expected_class, expected_reason in cases:
             with self.subTest(stage_name=stage_name, result=result):
@@ -1594,6 +1597,188 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertEqual(
             sum(summary["stage_outcome_counts"].values()), len(summary["stage_outcomes"])
         )
+
+    def _run_class_e_bridge(self, stage_names, *, serenity_result=None, delivery_failure=None,
+                            fail_banner_replace=False, boundary=None):
+        declared = {
+            stage.name: stage
+            for stage in capstone.default_pipeline(include_model_paper=False, include_soft_discovery=False)
+        }
+        stages = []
+        for name in stage_names:
+            base = declared[name]
+            if name == "serenity_quality_forward" and serenity_result is not None:
+                run = lambda _ctx, result=serenity_result: dict(result)
+            elif boundary == "fresh_output_missing" and name == "forward_policy_shadow":
+                run = lambda _ctx: {}
+            else:
+                def run(_ctx, stage_name=name):
+                    raise ValueError("controlled class-E failure in " + stage_name)
+            if boundary == "input_gate" and name == "forward_policy_shadow":
+                inputs = lambda c: [Path(c.private_root) / "controlled_missing_input.json"]
+            else:
+                inputs = lambda _c: []
+            if boundary == "output_enumeration" and name == "forward_policy_shadow":
+                def outputs(_c):
+                    raise ValueError("controlled output enumeration failure")
+            elif boundary == "fresh_output_missing" and name == "forward_policy_shadow":
+                outputs = lambda c: [Path(c.private_root) / "controlled_missing_output.json"]
+            else:
+                outputs = lambda _c: []
+            stages.append(Stage(
+                name, base.gated, inputs, outputs, run,
+                best_effort=base.best_effort,
+                contract_version=base.contract_version,
+                reuse_policy="never",
+                failure_policy=base.failure_policy,
+                output_policy=base.output_policy,
+                checkpoint_policy=base.checkpoint_policy,
+                failure_handler=base.failure_handler,
+            ))
+
+        def emit(**kwargs):
+            output_root = Path(kwargs["official_output_root"])
+            report_path = output_root / "weekly_private" / "20260709" / "weekly_report.md"
+            action_path = output_root / "weekly_private" / "20260709" / "action_table.csv"
+            machine_path = output_root / "runs_private" / "20260709" / "machine_record.json"
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            machine_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text("ordinary report\n", encoding="utf-8")
+            action_path.write_text("ordinary action\n", encoding="utf-8")
+            machine_path.write_text("ordinary machine\n", encoding="utf-8")
+            return {"batch4_run": {
+                "emitted": True,
+                "output_paths": {
+                    "weekly_report_path": str(report_path),
+                    "action_table_path": str(action_path),
+                    "machine_record_path": str(machine_path),
+                },
+            }}
+
+        stages.append(Stage(
+            "weekly_bridge", False, lambda _c: [], capstone._official_output_paths,
+            capstone_stages.run_weekly_bridge,
+        ))
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch.object(capstone_stages, "_write_provider_health"))
+            stack.enter_context(mock.patch.object(
+                capstone_stages, "_build_market_axis_regimes",
+                return_value={"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"},
+            ))
+            stack.enter_context(mock.patch.object(capstone_stages._bridge, "run_e2e", side_effect=emit))
+            if delivery_failure is not None:
+                stack.enter_context(mock.patch.object(
+                    capstone_stages, "_deliver_serenity_shadow_to_official_report",
+                    return_value=delivery_failure,
+                ))
+            if fail_banner_replace:
+                original_replace = Path.replace
+                def reject_banner_replace(path, target):
+                    if str(path).endswith(".nonblocking.tmp"):
+                        raise OSError("controlled banner atomic replace failure")
+                    return original_replace(path, target)
+                stack.enter_context(mock.patch.object(Path, "replace", new=reject_banner_replace))
+            return self._run([], stages=stages)
+
+    def test_class_e_all_declared_pre_bridge_failures_reach_final_report(self):
+        declared = capstone.default_pipeline(include_model_paper=False, include_soft_discovery=False)
+        best_effort = [stage for stage in declared if stage.best_effort]
+        bridge_index = next(i for i, stage in enumerate(declared) if stage.name == "weekly_bridge")
+        self.assertTrue(best_effort)
+        self.assertTrue(all(declared.index(stage) < bridge_index for stage in best_effort))
+
+        for stage in best_effort:
+            with self.subTest(stage=stage.name):
+                summary = self._run_class_e_bridge([stage.name])
+                report = (self.private_root / "weekly_private" / "20260709" / "weekly_report.md").read_text(encoding="utf-8")
+                self.assertIn("⑨ nonblocking_stage_failures", report)
+                self.assertIn(stage.name + "/STAGE_EXECUTION_EXCEPTION", report)
+                self.assertEqual(summary["stage_outcome_counts"]["failed_nonblocking"], 1)
+                self.assertEqual(summary["stage_outcomes"][-1]["reason_code"], "STAGE_COMPLETED")
+
+        summary = self._run_class_e_bridge(["forward_policy_shadow", "forward_policy_corporate_actions"])
+        report = (self.private_root / "weekly_private" / "20260709" / "weekly_report.md").read_text(encoding="utf-8")
+        self.assertEqual(report.count("⑨ nonblocking_stage_failures"), 1)
+        self.assertLess(
+            report.index("forward_policy_shadow/STAGE_EXECUTION_EXCEPTION"),
+            report.index("forward_policy_corporate_actions/STAGE_EXECUTION_EXCEPTION"),
+        )
+        self.assertEqual(
+            [row["stage"] for row in summary["stage_outcomes"] if row["outcome_class"] == "failed_nonblocking"],
+            ["forward_policy_shadow", "forward_policy_corporate_actions"],
+        )
+
+        summary = self._run_class_e_bridge(
+            ["serenity_quality_forward"],
+            serenity_result={"status": "invalid_evidence"},
+        )
+        report = (self.private_root / "weekly_private" / "20260709" / "weekly_report.md").read_text(encoding="utf-8")
+        self.assertIn("serenity_quality_forward/SERENITY_INVALID_EVIDENCE", report)
+        self.assertEqual(summary["stage_outcome_counts"]["failed_nonblocking"], 1)
+
+    def test_class_e_serenity_delivery_failure_reaches_report_and_weekly_bridge_outcome(self):
+        summary = self._run_class_e_bridge(
+            ["serenity_quality_forward"],
+            serenity_result={
+                "status": "eligible",
+                "shadow_consumption": {"status": "active"},
+            },
+            delivery_failure={
+                "report_block_delivered": False,
+                "report_block_problem": "controlled failure",
+                "main_task_should_abort": False,
+            },
+        )
+        report = (self.private_root / "weekly_private" / "20260709" / "weekly_report.md").read_text(encoding="utf-8")
+        self.assertIn("serenity_report_delivery/SERENITY_REPORT_DELIVERY_FAILED", report)
+        bridge_result = next(item for item in summary["stages"] if item["name"] == "weekly_bridge")["result"]
+        self.assertEqual(bridge_result["serenity_report_delivery_status"], "failed")
+        bridge = next(row for row in summary["stage_outcomes"] if row["stage"] == "weekly_bridge")
+        self.assertEqual(bridge["outcome_class"], "failed_nonblocking")
+        self.assertEqual(bridge["reason_code"], "SERENITY_REPORT_DELIVERY_FAILED")
+
+    def test_class_e_four_failure_boundaries_reach_final_report(self):
+        for boundary, reason_code in (
+            ("input_gate", "STAGE_INPUT_UNREADABLE"),
+            ("output_enumeration", "STAGE_OUTPUT_ENUMERATION_FAILED"),
+            ("stage_run", "STAGE_EXECUTION_EXCEPTION"),
+            ("fresh_output_missing", "FRESH_OUTPUT_MISSING"),
+        ):
+            with self.subTest(boundary=boundary):
+                summary = self._run_class_e_bridge(
+                    ["forward_policy_shadow"],
+                    boundary=None if boundary == "stage_run" else boundary,
+                )
+                report = (self.private_root / "weekly_private" / "20260709" / "weekly_report.md").read_text(encoding="utf-8")
+                self.assertIn("forward_policy_shadow/" + reason_code, report)
+                outcome = next(
+                    row for row in summary["stage_outcomes"] if row["stage"] == "forward_policy_shadow"
+                )
+                self.assertEqual(outcome["reason_code"], reason_code)
+
+    def test_class_e_banner_delivery_failure_preserves_report_and_surfaces_bridge_outcome(self):
+        summary = self._run_class_e_bridge(
+            ["forward_policy_shadow"],
+            fail_banner_replace=True,
+        )
+        report_path = self.private_root / "weekly_private" / "20260709" / "weekly_report.md"
+        self.assertEqual(report_path.read_text(encoding="utf-8"), "ordinary report\n")
+        self.assertFalse(report_path.with_name(report_path.name + ".nonblocking.tmp").exists())
+        bridge_result = next(item for item in summary["stages"] if item["name"] == "weekly_bridge")["result"]
+        self.assertEqual(bridge_result["nonblocking_failure_banner_status"], "failed")
+        bridge = next(row for row in summary["stage_outcomes"] if row["stage"] == "weekly_bridge")
+        self.assertEqual(bridge["outcome_class"], "failed_nonblocking")
+        self.assertEqual(bridge["reason_code"], "NONBLOCKING_FAILURE_BANNER_DELIVERY_FAILED")
+
+    def test_class_e_zero_failure_keeps_banner_absent_and_bridge_completed(self):
+        summary = self._run_class_e_bridge([])
+        report = (self.private_root / "weekly_private" / "20260709" / "weekly_report.md").read_text(encoding="utf-8")
+        self.assertNotIn("⑨ nonblocking_stage_failures", report)
+        bridge_result = next(item for item in summary["stages"] if item["name"] == "weekly_bridge")["result"]
+        self.assertEqual(bridge_result["nonblocking_failure_banner_status"], "not_applicable")
+        self.assertEqual(bridge_result["serenity_report_delivery_status"], "not_applicable")
+        bridge = next(row for row in summary["stage_outcomes"] if row["stage"] == "weekly_bridge")
+        self.assertEqual(bridge["outcome_class"], "completed_work")
 
     def test_stage_outcome_conservation_covers_executed_reused_and_refreshed_modes(self):
         for reuse_policy, expected_mode in (

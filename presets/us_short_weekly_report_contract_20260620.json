@@ -79,6 +79,11 @@
     "tag": "soft_discovery_status",
     "always_shown": false
   },
+  "nonblocking_failure_banner": {
+    "id": "⑨",
+    "tag": "nonblocking_stage_failures",
+    "always_shown": false
+  },
   "lifecycle_reminder_count_consistency": {
     "rule": "lifecycle_reminder_count_must_match_across_sections",
     "section_number_a": 1,
@@ -88,7 +93,7 @@
   "notes": {
     "scope": "declarative output-surface contract — freezes sec.11.2 weekly_report.md section set/order + mandatory honest-banner (sec.11.2 elements 1-5) + price_clock fields. Renders no report, fetches no data, no A-share crossing. Rendering = batch-3 (consumes this); pairs with us_short_action_table_contract (sec.11.3) to complete the sec.11 output surface.",
     "sections_source": "13 section titles stored byte-faithful from sec.11.2 (generated from the design, single-source-guarded by test); parenthetical/backtick annotations indicate the field(s) each section surfaces.",
-    "governed_identity_all_const": "the schema const-pins ALL governed identity (the 13 sections incl. exact Chinese content+order, the 7 banner ids+tags+always_shown, price_clock fields+always_shown, the lifecycle-count invariant rule/section_number_a=1/section_number_b=12/must_match). The schema is a self-sufficient validator (not shape-only); a test triangulates sections const == preset == design sec.11.2 so the byte-exact Chinese never silently diverges.",
+    "governed_identity_all_const": "the schema const-pins ALL governed identity (the 13 sections incl. exact Chinese content+order, the 7 banner ids+tags+always_shown, optional banners ⑧ and ⑨, price_clock fields+always_shown, the lifecycle-count invariant rule/section_number_a=1/section_number_b=12/must_match). The schema is a self-sufficient validator (not shape-only); a test triangulates sections const == preset == design sec.11.2 so the byte-exact Chinese never silently diverges.",
     "lifecycle_rule_prose": "sec.11.2 invariant — the lifecycle-reminder count in section 1 (本周运行状态) must equal the count in section 12 (字段·模块生命周期提醒); the render-time count check is the batch-3 renderer, this contract pins the rule structurally.",
     "price_clock_values": "v1 design-locked semantics — price_data_through=last Fri close / news_window_through=pre-Mon-run (incl weekend) / session_scope=RTH / decision_date=Mon."
   }

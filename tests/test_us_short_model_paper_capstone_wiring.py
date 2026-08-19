@@ -132,6 +132,9 @@ class ModelPaperCapstoneWiringTest(unittest.TestCase):
             )
             with (
                 mock.patch.object(capstone_stages, "_write_provider_health"),
+                mock.patch.object(capstone_stages, "_build_market_axis_regimes", return_value={
+                    "vix": "进攻", "market_trend": "进攻", "breadth": "进攻",
+                }),
                 mock.patch.object(capstone_stages, "comparison_banner_from_private_ledger_path", return_value=None),
                 mock.patch.object(capstone_stages, "classify_soft_boost_artifact_state", return_value={"state": "not_applicable", "reason_code": None}),
                 mock.patch.object(capstone_stages._bridge, "run_e2e", side_effect=fake_run_e2e),

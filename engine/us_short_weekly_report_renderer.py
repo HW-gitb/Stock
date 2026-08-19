@@ -19,7 +19,7 @@ never drift from the §11.2 contract. Three hard invariants are enforced fail-cl
     (字段·模块生命周期提醒) — a mismatch refuses to render (the lifecycle 数量对账, this slice's 2c-末片);
   * every one of the 13 frozen sections must carry content — a missing section refuses to render.
 
-The optional banner elements ①②③⑤ (always_shown=false) are shown only when present. The §11.2/§11.4/§11.5
+The optional banner elements ①②③⑤⑨ (always_shown=false) are shown only when present. The §11.2/§11.4/§11.5
 section + banner FORMATTERS now all exist — exclusion_summary (engine.us_short_exclusion_summary
 .render_exclusion_section), hot_excluded banner ⑤ (engine.us_short_hot_excluded.render_hot_excluded_banner),
 observe-split banner ① (engine.us_short_observe_split.render_observe_split), coverage-honesty §11.5
@@ -118,6 +118,10 @@ def render_weekly_report(report_data) -> str:
     soft_discovery = banner.get(soft_contract["tag"])
     if _nonblank_str(soft_discovery):
         lines.append("- %s %s: %s" % (soft_contract["id"], soft_contract["tag"], soft_discovery.strip()))
+    nonblocking_contract = contract["nonblocking_failure_banner"]
+    nonblocking_failures = banner.get(nonblocking_contract["tag"])
+    if _nonblank_str(nonblocking_failures):
+        lines.append("- %s %s: %s" % (nonblocking_contract["id"], nonblocking_contract["tag"], nonblocking_failures.strip()))
     lines.append("")
 
     # --- §11.2 lifecycle-reminder count reconcile: section_a count == section_b count (fail-closed) ---

@@ -301,6 +301,9 @@ class CapstoneContext:
     serenity_settlement_result: dict[str, Any] | None = None
     serenity_quality_run_result: dict[str, Any] | None = None
     serenity_shadow_result: dict[str, Any] | None = None
+    # Ephemeral bridge input: the already-normalized outcomes from this run's
+    # pre-bridge stages.  It is never persisted as a second outcome source.
+    pre_bridge_stage_outcomes: tuple[dict[str, Any], ...] = ()
     state_dir: Path = STATE_DIR
     sample_root: Path = ROOT   # repo root that the runners' provider_samples/ allowlists resolve against (tests inject a tempdir)
     research_live_capability: Any = None   # A1: minted by run_weekly_capstone ONLY for a genuine production run — never by resolve_capstone_context / a caller
@@ -800,20 +803,31 @@ def _normalize_stage_outcome(
             return {"outcome_class": "failed_nonblocking", "reason_code": "MARKET_DIAGNOSTIC_REPORT_DELIVERY_FAILED"}
         return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
 
-    if stage_name == "weekly_bridge" and _bridge_emitted(result) is False:
-        no_emit_reason = _bridge_no_emit_reason(result)
-        if no_emit_reason == "out_of_window":
-            return {"outcome_class": "completed_work", "reason_code": "WEEKLY_REPORT_NOT_EMITTED_OUT_OF_WINDOW"}
-        provider_health_reason_codes = {
-            "provider_health_restricted": "WEEKLY_REPORT_PROVIDER_HEALTH_RESTRICTED",
-            "provider_health_blocked": "WEEKLY_REPORT_PROVIDER_HEALTH_BLOCKED",
-        }
-        if no_emit_reason in provider_health_reason_codes:
-            return {
-                "outcome_class": "waiting_dependency",
-                "reason_code": provider_health_reason_codes[no_emit_reason],
+    if stage_name == "weekly_bridge":
+        if _bridge_emitted(result) is False:
+            no_emit_reason = _bridge_no_emit_reason(result)
+            if no_emit_reason == "out_of_window":
+                return {"outcome_class": "completed_work", "reason_code": "WEEKLY_REPORT_NOT_EMITTED_OUT_OF_WINDOW"}
+            provider_health_reason_codes = {
+                "provider_health_restricted": "WEEKLY_REPORT_PROVIDER_HEALTH_RESTRICTED",
+                "provider_health_blocked": "WEEKLY_REPORT_PROVIDER_HEALTH_BLOCKED",
             }
-        return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+            if no_emit_reason in provider_health_reason_codes:
+                return {
+                    "outcome_class": "waiting_dependency",
+                    "reason_code": provider_health_reason_codes[no_emit_reason],
+                }
+            return {"outcome_class": "failed_nonblocking", "reason_code": "OUTCOME_CONTRACT_UNRECOGNIZED"}
+        if result.get("nonblocking_failure_banner_status") == "failed":
+            return {
+                "outcome_class": "failed_nonblocking",
+                "reason_code": "NONBLOCKING_FAILURE_BANNER_DELIVERY_FAILED",
+            }
+        if result.get("serenity_report_delivery_status") == "failed":
+            return {
+                "outcome_class": "failed_nonblocking",
+                "reason_code": "SERENITY_REPORT_DELIVERY_FAILED",
+            }
     return {"outcome_class": "completed_work", "reason_code": "STAGE_COMPLETED"}
 
 
@@ -3021,6 +3035,13 @@ def run_weekly_capstone(
                     )
                     continue
             before = {str(path.resolve()): _output_fingerprint(path) for path in expected_outputs}
+            if stage.name == "weekly_bridge":
+                # The bridge consumes a read-only snapshot of the single
+                # normalized source; no outcome state is persisted here.
+                stage_ctx = replace(
+                    stage_ctx,
+                    pre_bridge_stage_outcomes=tuple(copy.deepcopy(row) for row in stage_outcomes),
+                )
             try:
                 result = result if soft_degraded else stage.run(stage_ctx)
             except Exception as exc:  # noqa: BLE001 — re-wrap with the stage label so a failure is never anonymous
