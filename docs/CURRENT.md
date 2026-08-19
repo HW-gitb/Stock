@@ -1,11 +1,12 @@
 # Stock 项目 - 当前状态快照
-**最后更新**：2026-08-09（US-short 26 周诊断轨 Knife5 后半段 sidecar 生产、既有 gated fetch 接线与 settle 同周绑定已落地；不可读 body 与真实空结果分离、重复股息去重、split ratio finite 门和无拆股价格对账均逐 ETF fail-closed；真实 provider/account/Ship gate 边界未改变。）
+**最后更新**：2026-08-19（US-short 5b 已对第三枪 v3 raw 完成零付费复放；真实语义失败字段已记录，未接 4diii、未开第四枪。）
 
 **文档定位**：跨会话接续的短 snapshot。完整路由见 `docs/README.md`；过程、review verdict 和 rejected alternatives 见 `docs/SESSION_LOG.md` 顶部 1-3 条；历史 phase 细节见 `docs/handoff/README.md`。
 
 ---
 
 ## 0. Latest Delta
+- 2026-08-19 **US-short 5b 第三枪 raw 零付费复放已完成**：5 个成员绑定全部接受，但 `member_links[0].role` 不符合生产语义角色枚举，主题未到 semantic gate；摘要已更新，provider/network/retry=`0/0/0`，正式决策槽=false，预算账本未变。
 - 2026-08-11 **A-short 桌面 2a 六项已合入 master**：EOL-pin / pre-freeze SHA 边界（`381a2c16`）、V5-A/B/C/D 五项 Required（`28d2aeaf`）、V1 共享缓存完整性及其 V5 交叉接线（`b8e80551`）、V2 margin 价格时钟与 theme-forward 快照时钟（`38df637d` + 2026-08-10 收口轮）、序 22b 与 Knife 12 northbound 门（`f93e2125`、`b217f09a`）、margin-overheat 离线链路三处（`38df637d` / `6b8c49d5` / `bfe49b25`）。六项均为独立复审 PASS 后合入。真实 provider / 真实 weekly 的 durable 两轮仍 `NOT_VERIFIED`。
 - 2026-08-11 **用户裁定：Knife 12 的 residual `true_dangling` 叶不接线**：9 组 88 片叶（叶层 60 片 `unclassified_pending_audit` + 28 片生产者恒 `None`）不再作为工程欠账，`unclassified_pending_audit_baseline`（222 条、只减不增）维持现状。契约仍会把这 88 片报成未举证，直到有人另行按 `intentionally_independent_or_delete` 逐叶举证——本裁定关闭的是接线工作，不是改写契约标签。
 - 2026-08-04 **US-short 26周市场表现诊断轨 Knife0 contract baseline 已落地**：完整 model-paper NAV 对 VTI/IWB/SPY/QQQ 做诊断比较，固定 26 周非重叠窗口与至少 20 个联合有效周，缺股息数据时只能降级为价格收益诊断，并在每周记录 v1.1 连续 4 个 `paper_evaluable=true` 周自动激活状态；该轨不计入 Ship gate。权威入口见 `docs/us_short_market_diagnostic_26w_design.md` 与 `docs/README.md`。

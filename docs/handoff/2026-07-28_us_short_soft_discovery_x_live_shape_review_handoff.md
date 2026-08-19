@@ -3847,3 +3847,9 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - 新增承重用例：除 `transport_verdict=FAIL` 外 transport summary 字段全部合法时，5b 仍在读取目标输入前拒绝，且不写 replay summary。
 - 验证：5b 专项 `15 OK`、新增守卫 `2 OK`、Web 生产入口 `83 OK`、owner `34 OK`；未联网、未调用 provider、未花费；主树既有第三枪 summary 未改。
 - 下一步：Claude 独立复审本次两项 Required 修复。
+
+## 2026-08-19 追加：5b 零付费复放完成（主树）
+
+- 第三枪 v3 raw 已按合并后的 5b runner 重跑一次；`offline_replay_completed`、`transport_verdict=PASS`，没有 provider/network/retry 调用。
+- 5 个 member claim 全部绑定接受；真实语义失败原因为 `chunk[1].theme[0].semantic_assertions[0].member_links[0].role is invalid`，主题未到 semantic gate，`readiness=null`。
+- replay summary 已更新；预算账本 SHA-256 未变，正式决策槽=false；不接 4diii、不再开第四枪。
