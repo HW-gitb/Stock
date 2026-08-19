@@ -18,42 +18,53 @@ from typing import Any, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
 LIVE_ROOT = Path(r"D:\cnhea\Stock")
-PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v5"
+PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v6"
 LEGACY_PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v2"
 LEGACY_SCHEMA_NAME = "us_short_web_regroup_engineering_smoke_packet_v2"
 LEGACY_SCHEMA_VERSION = "2.0.0"
-PREVIOUS_PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v4"
-PREVIOUS_SCHEMA_NAME = "us_short_web_regroup_engineering_smoke_packet_v4"
-PREVIOUS_SCHEMA_VERSION = "4.0.0"
-OLDER_PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v3"
-OLDER_SCHEMA_NAME = "us_short_web_regroup_engineering_smoke_packet_v3"
-OLDER_SCHEMA_VERSION = "3.0.0"
+PREVIOUS_PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v5"
+PREVIOUS_SCHEMA_NAME = "us_short_web_regroup_engineering_smoke_packet_v5"
+PREVIOUS_SCHEMA_VERSION = "5.0.0"
+OLDER_PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v4"
+OLDER_SCHEMA_NAME = "us_short_web_regroup_engineering_smoke_packet_v4"
+OLDER_SCHEMA_VERSION = "4.0.0"
+OLDEST_PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v3"
+OLDEST_SCHEMA_NAME = "us_short_web_regroup_engineering_smoke_packet_v3"
+OLDEST_SCHEMA_VERSION = "3.0.0"
 EXPECTED_MODEL = "deepseek-v4-pro"
 EXPECTED_SERVED_MODEL = "deepseek-v4-pro"
 EXPECTED_TARGET_CHUNK_INDEX = 1
-PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v5.json"
-SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet_v5.schema.json"
-PRIVATE_ROOT = ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke_v5"
+PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v6.json"
+SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet_v6.schema.json"
+PRIVATE_ROOT = ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke_v6"
 PARENT_PLAN_PATH = PRIVATE_ROOT / "us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json"
-RAW_ROOT = ROOT / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke_v5"
+RAW_ROOT = ROOT / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke_v6"
 SUMMARY_PATH = PRIVATE_ROOT / "us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json"
-EXPECTED_RENDERED_PROMPT_SHA256 = "daecb9e866ed1c169aab92516a7ea0f701fdba513a90d57dc6e8e35bafed7930"
+EXPECTED_RENDERED_PROMPT_SHA256 = "373b7d51c34eaa91d128083c221cf6296f4d3cf69998f34cc4749010ed0f207b"
+PREVIOUS_RENDERED_PROMPT_SHA256 = "daecb9e866ed1c169aab92516a7ea0f701fdba513a90d57dc6e8e35bafed7930"
 HISTORICAL_RENDERED_PROMPT_SHA256 = "97c7f93afc77310a193d585defc7b4afc596c87e27703c1ad9b053bcc3743a32"
 EXPECTED_OUTPUT_BOUNDARY = {
+    "diagnostic_root": "state/us_short/runs_private/soft_discovery_engineering_smoke_v6/",
+    "parent_plan_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v6/us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json",
+    "budget_ledger_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v6/us_short_llm_theme_discovery_plan_web_20260815_budget.json",
+    "raw_root": "provider_samples/us_short_llm_theme_discovery_engineering_smoke_v6/",
+    "summary_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v6/us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json",
+}
+PREVIOUS_OUTPUT_BOUNDARY = {
     "diagnostic_root": "state/us_short/runs_private/soft_discovery_engineering_smoke_v5/",
     "parent_plan_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v5/us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json",
     "budget_ledger_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v5/us_short_llm_theme_discovery_plan_web_20260815_budget.json",
     "raw_root": "provider_samples/us_short_llm_theme_discovery_engineering_smoke_v5/",
     "summary_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v5/us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json",
 }
-PREVIOUS_OUTPUT_BOUNDARY = {
+OLDER_OUTPUT_BOUNDARY = {
     "diagnostic_root": "state/us_short/runs_private/soft_discovery_engineering_smoke_v4/",
     "parent_plan_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v4/us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json",
     "budget_ledger_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v4/us_short_llm_theme_discovery_plan_web_20260815_budget.json",
     "raw_root": "provider_samples/us_short_llm_theme_discovery_engineering_smoke_v4/",
     "summary_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v4/us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json",
 }
-OLDER_OUTPUT_BOUNDARY = {
+OLDEST_OUTPUT_BOUNDARY = {
     "diagnostic_root": "state/us_short/runs_private/soft_discovery_engineering_smoke_v3/",
     "parent_plan_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v3/us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json",
     "budget_ledger_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v3/us_short_llm_theme_discovery_plan_web_20260815_budget.json",
@@ -70,8 +81,8 @@ LEGACY_OUTPUT_BOUNDARY = {
 
 PACKET_IDENTITIES = {
     PACKET_ID: (
-        "us_short_web_regroup_engineering_smoke_packet_v5",
-        "5.0.0",
+        "us_short_web_regroup_engineering_smoke_packet_v6",
+        "6.0.0",
         PACKET_ID,
         EXPECTED_OUTPUT_BOUNDARY,
         EXPECTED_RENDERED_PROMPT_SHA256,
@@ -81,13 +92,20 @@ PACKET_IDENTITIES = {
         PREVIOUS_SCHEMA_VERSION,
         PREVIOUS_PACKET_ID,
         PREVIOUS_OUTPUT_BOUNDARY,
-        HISTORICAL_RENDERED_PROMPT_SHA256,
+        PREVIOUS_RENDERED_PROMPT_SHA256,
     ),
     OLDER_PACKET_ID: (
         OLDER_SCHEMA_NAME,
         OLDER_SCHEMA_VERSION,
         OLDER_PACKET_ID,
         OLDER_OUTPUT_BOUNDARY,
+        HISTORICAL_RENDERED_PROMPT_SHA256,
+    ),
+    OLDEST_PACKET_ID: (
+        OLDEST_SCHEMA_NAME,
+        OLDEST_SCHEMA_VERSION,
+        OLDEST_PACKET_ID,
+        OLDEST_OUTPUT_BOUNDARY,
         HISTORICAL_RENDERED_PROMPT_SHA256,
     ),
     LEGACY_PACKET_ID: (

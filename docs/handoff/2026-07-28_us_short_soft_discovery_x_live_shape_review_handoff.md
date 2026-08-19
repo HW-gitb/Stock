@@ -3867,3 +3867,18 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - 使用主树冻结 receipt/raw 只读重算生产 chunk；10 个 source_id 顺序与 packet 一致。新 prompt 摘要为 daecb9e866ed1c169aab92516a7ea0f701fdba513a90d57dc6e8e35bafed7930，packet/schema/runner 三处一致。
 - 验证：schema 0 errors、预算 owner 75 OK、Web owner 84 OK、py_compile、git diff --check 通过。未联网、未调用 provider、未执行 provider、未付费。
 - 下一步：Claude 独立复审 v5 packet 和历史 packet 拒绝门；PASS 后等用户对 v5 精确 packet 明确授权，当前不得执行 provider。
+
+## 2026-08-19 追加：负面候选提示词最小修复（8d8c；待独立复审）
+
+- 按 `R-USSHORT-NO-NEGATIVE-CANDIDATE-EXISTS-FOR-THE-SEMANTIC-GATE-TO-BLOCK` 修复生产 Web regroup 提示词：对有证据但不通过正向 shared-driver 检验的候选，必须显式输出负面 basis，不得省略；负面候选保留 evidence-bound members，`common_driver=null`、`member_links=[]`。
+- 只改提示词和一个承重守卫；Web owner `85 OK`，provider/network=`0/0`，py_compile、git diff --check 通过。
+- 提示词摘要已改变，v5 packet 不能复用；本轮未铸新 packet、未联网、未付费。
+- 下一步：Claude 独立审查；PASS 后重算摘要并铸新 packet，再等新的精确付费授权。
+
+## 2026-08-19 追加：v6 packet 已铸造（8d8c；待独立复审）
+
+- 因负面候选提示词改变，v5 作废；新 packet/schema 为 `docs/us_short_web_regroup_engineering_smoke_packet_20260815_v6.json` / `schemas/us_short_web_regroup_engineering_smoke_packet_v6.schema.json`，精确 packet_id=`us_short_web_regroup_engineering_smoke_20260815_chunk1_v6`。
+- v6 沿用 0815 Web receipt、生产 chunk 1、10 条来源、`deepseek-v4-pro`、16384、单次调用、零重试/零 recovery 和正式输出禁用；使用新的 v6 诊断/raw/summary 根。
+- 新 prompt 摘要为 `373b7d51c34eaa91d128083c221cf6296f4d3cf69998f34cc4749010ed0f207b`；目标 source_id 与 v5 冻结 chunk 完全相同；v5/v4/v3/v2 历史 packet 均不再是当前执行身份。
+- 验证：packet/预算 owner `75 OK`、schema version=`6.0.0`、py_compile、git diff --check 通过；未联网、未调用 provider、未付费、未授权执行。
+- 下一步：Claude 独立复审 v6 packet；PASS 后再等用户对 v6 精确 packet 明确授权。

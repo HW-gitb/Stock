@@ -1,0 +1,412 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_web_regroup_engineering_smoke_packet_v6.schema.json",
+  "title": "US-short one-shot DeepSeek regroup engineering smoke packet v6",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "packet_id",
+    "purpose",
+    "source_decision_date",
+    "formal_decision_date",
+    "formal_decision_slots_occupied",
+    "regrades_historical_decision",
+    "provider_execution_authorized_by_packet_creation",
+    "input",
+    "policy_binding",
+    "paid_boundary",
+    "output_boundary",
+    "authorization"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_web_regroup_engineering_smoke_packet_v6"
+    },
+    "schema_version": {
+      "const": "6.0.0"
+    },
+    "packet_id": {
+      "const": "us_short_web_regroup_engineering_smoke_20260815_chunk1_v6"
+    },
+    "purpose": {
+      "const": "deepseek_stage2_transport_engineering_smoke_only"
+    },
+    "source_decision_date": {
+      "const": "20260815"
+    },
+    "formal_decision_date": {
+      "type": "null"
+    },
+    "formal_decision_slots_occupied": {
+      "const": false
+    },
+    "regrades_historical_decision": {
+      "const": false
+    },
+    "provider_execution_authorized_by_packet_creation": {
+      "const": false
+    },
+    "input": {
+      "$ref": "#/definitions/input"
+    },
+    "policy_binding": {
+      "$ref": "#/definitions/policy_binding"
+    },
+    "paid_boundary": {
+      "$ref": "#/definitions/paid_boundary"
+    },
+    "output_boundary": {
+      "$ref": "#/definitions/output_boundary"
+    },
+    "authorization": {
+      "$ref": "#/definitions/authorization"
+    }
+  },
+  "definitions": {
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receipt_ref",
+        "receipt_sha256",
+        "accepted_source_count",
+        "normalizer",
+        "order_key",
+        "chunker",
+        "rows_per_regroup_call",
+        "chunk_sizes",
+        "target_chunk_index",
+        "target_source_count",
+        "target_source_ids",
+        "target_source_refs",
+        "rendered_prompt_sha256"
+      ],
+      "properties": {
+        "receipt_ref": {
+          "const": "state/us_short/us_short_llm_theme_discovery_web_20260815_receipt.json"
+        },
+        "receipt_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "accepted_source_count": {
+          "const": 34
+        },
+        "normalizer": {
+          "const": "runners.us_short_llm_theme_discovery_fetch_web._normalize_search_results"
+        },
+        "order_key": {
+          "const": [
+            "canonical_locator",
+            "canonical_json",
+            "original_index"
+          ]
+        },
+        "chunker": {
+          "const": "runners.us_short_llm_theme_discovery_fetch_web._chunk_regroup_rows"
+        },
+        "rows_per_regroup_call": {
+          "const": 10
+        },
+        "chunk_sizes": {
+          "const": [
+            10,
+            10,
+            10,
+            4
+          ]
+        },
+        "target_chunk_index": {
+          "const": 1
+        },
+        "target_source_count": {
+          "const": 10
+        },
+        "target_source_ids": {
+          "type": "array",
+          "const": [
+            "web:4ad5f75777fa425dd9ea35d235c47465c03c826aa7780988951b153102647a49",
+            "web:5f31497adf8c6d1168a906f83adc35dafb7636d7119f88486ac065497c1972da",
+            "web:5f88b2689ed0f735f3177d4ad35e17f1aa53f05e507f861848ded0db855bb2e5",
+            "web:6505f3a9d02fe0c22093bc49b9edccedca2248928523dac38fccd2a6c94d5036",
+            "web:6f0883ba69ff6f3f4974fec0aa9f43124d1bc8e1a1827062778fc4a1f7c2b108",
+            "web:8107fabc0a3b9c3c2a0721e1ef602c2efa12a12ea4115b2350046e2d8fcbbf1e",
+            "web:833f39f33b285f7c8b906a7cfd74f1faccccf8f5778ea0c14e040be0d4b9ed02",
+            "web:84feb641f7176f609566cb69c9bd651a0ec035faf6ea344f8e8fcd72b86543d6",
+            "web:89d452f1c1169541719f283545d221d26d931dbf7b2176f2ef460f172c520a40",
+            "web:8cc6b1c21510d4a226d6d5509719cf94ed0aabeba0396c994deccbeef9aa7ca3"
+          ]
+        },
+        "target_source_refs": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "items": {
+            "$ref": "#/definitions/source_ref"
+          }
+        },
+        "rendered_prompt_sha256": {
+          "const": "373b7d51c34eaa91d128083c221cf6296f4d3cf69998f34cc4749010ed0f207b"
+        }
+      }
+    },
+    "source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "source_type",
+        "canonical_locator",
+        "observed_at",
+        "fetched_at",
+        "content_sha256",
+        "raw_receipt_ref",
+        "raw_receipt_gitignored"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "pattern": "^web:[0-9a-f]{64}$"
+        },
+        "source_type": {
+          "const": "web"
+        },
+        "canonical_locator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "fetched_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "raw_receipt_ref": {
+          "type": "string",
+          "pattern": "^provider_samples/us_short_llm_theme_discovery_fetch_web/raw/20260815/[0-9a-f]{64}\\.json$"
+        },
+        "raw_receipt_gitignored": {
+          "const": true
+        }
+      }
+    },
+    "policy_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_version",
+        "policy_content_sha256",
+        "stage2_rule_sha256",
+        "prompt_builder"
+      ],
+      "properties": {
+        "policy_version": {
+          "const": "soft_discovery_query_policy_v0.2.0"
+        },
+        "policy_content_sha256": {
+          "const": "4b2d282155f34c70d881cda44bb5d6b267ce49cb8d46131d60831f1928c176cd"
+        },
+        "stage2_rule_sha256": {
+          "const": "c487d559d4276c04ac48e5ad43a89d6f490c8fe10d70435f3a1064ef34ac30d9"
+        },
+        "prompt_builder": {
+          "const": "runners.us_short_llm_theme_discovery_fetch_web._build_deepseek_prompt"
+        }
+      }
+    },
+    "paid_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "vendor",
+        "stage",
+        "call_counts",
+        "request"
+      ],
+      "properties": {
+        "provider": {
+          "const": "web"
+        },
+        "vendor": {
+          "const": "deepseek"
+        },
+        "stage": {
+          "const": "stage2"
+        },
+        "call_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tavily",
+            "deepseek",
+            "xai",
+            "retry",
+            "recovery",
+            "unknown_sibling"
+          ],
+          "properties": {
+            "tavily": {
+              "const": 0
+            },
+            "deepseek": {
+              "const": 1
+            },
+            "xai": {
+              "const": 0
+            },
+            "retry": {
+              "const": 0
+            },
+            "recovery": {
+              "const": 0
+            },
+            "unknown_sibling": {
+              "const": 0
+            }
+          }
+        },
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "expected_served_model",
+            "temperature",
+            "max_tokens",
+            "response_format",
+            "max_themes_per_chunk"
+          ],
+          "properties": {
+            "model": {
+              "const": "deepseek-v4-pro"
+            },
+            "expected_served_model": {
+              "const": "deepseek-v4-pro"
+            },
+            "temperature": {
+              "const": 0
+            },
+            "max_tokens": {
+              "const": 16384
+            },
+            "response_format": {
+              "const": "json_object"
+            },
+            "max_themes_per_chunk": {
+              "const": 4
+            }
+          }
+        }
+      }
+    },
+    "output_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "diagnostic_root",
+        "parent_plan_ref",
+        "budget_ledger_ref",
+        "raw_root",
+        "summary_ref",
+        "formal_outputs_forbidden",
+        "effects"
+      ],
+      "properties": {
+        "diagnostic_root": {
+          "const": "state/us_short/runs_private/soft_discovery_engineering_smoke_v6/"
+        },
+        "parent_plan_ref": {
+          "const": "state/us_short/runs_private/soft_discovery_engineering_smoke_v6/us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json"
+        },
+        "budget_ledger_ref": {
+          "const": "state/us_short/runs_private/soft_discovery_engineering_smoke_v6/us_short_llm_theme_discovery_plan_web_20260815_budget.json"
+        },
+        "raw_root": {
+          "const": "provider_samples/us_short_llm_theme_discovery_engineering_smoke_v6/"
+        },
+        "summary_ref": {
+          "const": "state/us_short/runs_private/soft_discovery_engineering_smoke_v6/us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json"
+        },
+        "formal_outputs_forbidden": {
+          "const": true
+        },
+        "effects": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "publish_decision_pair",
+            "discovery",
+            "receipt",
+            "merge",
+            "validation",
+            "boost",
+            "score"
+          ],
+          "properties": {
+            "publish_decision_pair": {
+              "const": false
+            },
+            "discovery": {
+              "const": false
+            },
+            "receipt": {
+              "const": false
+            },
+            "merge": {
+              "const": false
+            },
+            "validation": {
+              "const": false
+            },
+            "boost": {
+              "const": false
+            },
+            "score": {
+              "const": false
+            }
+          }
+        }
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "independent_review_required",
+        "exact_user_confirmation_required",
+        "exact_confirmation_value",
+        "rerun_permitted",
+        "new_packet_required_after_failure"
+      ],
+      "properties": {
+        "independent_review_required": {
+          "const": true
+        },
+        "exact_user_confirmation_required": {
+          "const": true
+        },
+        "exact_confirmation_value": {
+          "const": "us_short_web_regroup_engineering_smoke_20260815_chunk1_v6"
+        },
+        "rerun_permitted": {
+          "const": false
+        },
+        "new_packet_required_after_failure": {
+          "const": true
+        }
+      }
+    }
+  }
+}
+
+
+
