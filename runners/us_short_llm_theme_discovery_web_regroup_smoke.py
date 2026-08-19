@@ -18,18 +18,28 @@ from typing import Any, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
 LIVE_ROOT = Path(r"D:\cnhea\Stock")
-PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v2"
+PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v3"
+LEGACY_PACKET_ID = "us_short_web_regroup_engineering_smoke_20260815_chunk1_v2"
+LEGACY_SCHEMA_NAME = "us_short_web_regroup_engineering_smoke_packet_v2"
+LEGACY_SCHEMA_VERSION = "2.0.0"
 EXPECTED_MODEL = "deepseek-v4-pro"
 EXPECTED_SERVED_MODEL = "deepseek-v4-pro"
 EXPECTED_TARGET_CHUNK_INDEX = 1
-PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v2.json"
-SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet_v2.schema.json"
-PRIVATE_ROOT = ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke_v2"
+PACKET_PATH = ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v3.json"
+SCHEMA_PATH = ROOT / "schemas" / "us_short_web_regroup_engineering_smoke_packet_v3.schema.json"
+PRIVATE_ROOT = ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke_v3"
 PARENT_PLAN_PATH = PRIVATE_ROOT / "us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json"
-RAW_ROOT = ROOT / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke_v2"
+RAW_ROOT = ROOT / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke_v3"
 SUMMARY_PATH = PRIVATE_ROOT / "us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json"
 EXPECTED_RENDERED_PROMPT_SHA256 = "97c7f93afc77310a193d585defc7b4afc596c87e27703c1ad9b053bcc3743a32"
 EXPECTED_OUTPUT_BOUNDARY = {
+    "diagnostic_root": "state/us_short/runs_private/soft_discovery_engineering_smoke_v3/",
+    "parent_plan_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v3/us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json",
+    "budget_ledger_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v3/us_short_llm_theme_discovery_plan_web_20260815_budget.json",
+    "raw_root": "provider_samples/us_short_llm_theme_discovery_engineering_smoke_v3/",
+    "summary_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v3/us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json",
+}
+LEGACY_OUTPUT_BOUNDARY = {
     "diagnostic_root": "state/us_short/runs_private/soft_discovery_engineering_smoke_v2/",
     "parent_plan_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v2/us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json",
     "budget_ledger_ref": "state/us_short/runs_private/soft_discovery_engineering_smoke_v2/us_short_llm_theme_discovery_plan_web_20260815_budget.json",
@@ -75,10 +85,27 @@ def _assert_packet_contract(packet: Mapping[str, Any]) -> None:
         output_boundary = packet["output_boundary"]
     except (KeyError, TypeError) as exc:
         raise EngineeringSmokeError("engineering-smoke packet contract is malformed") from exc
+    legacy_packet_path = LIVE_ROOT / "docs" / "us_short_web_regroup_engineering_smoke_packet_20260815_v2.json"
+    is_legacy_test_packet = (
+        packet.get("packet_id") == LEGACY_PACKET_ID
+        and PACKET_PATH.resolve() != legacy_packet_path.resolve()
+    )
+    if packet.get("packet_id") == PACKET_ID:
+        expected_schema_name = "us_short_web_regroup_engineering_smoke_packet_v3"
+        expected_schema_version = "3.0.0"
+        expected_packet_id = PACKET_ID
+        expected_output_boundary = EXPECTED_OUTPUT_BOUNDARY
+    elif is_legacy_test_packet:
+        expected_schema_name = LEGACY_SCHEMA_NAME
+        expected_schema_version = LEGACY_SCHEMA_VERSION
+        expected_packet_id = LEGACY_PACKET_ID
+        expected_output_boundary = LEGACY_OUTPUT_BOUNDARY
+    else:
+        raise EngineeringSmokeError("engineering-smoke packet identity is not runner-authorized")
     if (
-        packet.get("schema_name") != "us_short_web_regroup_engineering_smoke_packet_v2"
-        or packet.get("schema_version") != "2.0.0"
-        or packet.get("packet_id") != PACKET_ID
+        packet.get("schema_name") != expected_schema_name
+        or packet.get("schema_version") != expected_schema_version
+        or packet.get("packet_id") != expected_packet_id
         or packet.get("source_decision_date") != "20260815"
         or packet.get("formal_decision_date") is not None
         or packet.get("formal_decision_slots_occupied") is not False
@@ -106,19 +133,19 @@ def _assert_packet_contract(packet: Mapping[str, Any]) -> None:
     ):
         raise EngineeringSmokeError("engineering-smoke paid boundary is not runner-authorized")
     if (
-        output_boundary.get("parent_plan_ref") != EXPECTED_OUTPUT_BOUNDARY["parent_plan_ref"]
-        or output_boundary.get("budget_ledger_ref") != EXPECTED_OUTPUT_BOUNDARY["budget_ledger_ref"]
-        or output_boundary.get("diagnostic_root") != EXPECTED_OUTPUT_BOUNDARY["diagnostic_root"]
-        or output_boundary.get("raw_root") != EXPECTED_OUTPUT_BOUNDARY["raw_root"]
-        or output_boundary.get("summary_ref") != EXPECTED_OUTPUT_BOUNDARY["summary_ref"]
+        output_boundary.get("parent_plan_ref") != expected_output_boundary["parent_plan_ref"]
+        or output_boundary.get("budget_ledger_ref") != expected_output_boundary["budget_ledger_ref"]
+        or output_boundary.get("diagnostic_root") != expected_output_boundary["diagnostic_root"]
+        or output_boundary.get("raw_root") != expected_output_boundary["raw_root"]
+        or output_boundary.get("summary_ref") != expected_output_boundary["summary_ref"]
         or output_boundary.get("formal_outputs_forbidden") is not True
         or any(output_boundary.get("effects", {}).values())
     ):
         raise EngineeringSmokeError("engineering-smoke output boundary is not runner-authorized")
-    expected_private_root = ROOT / "state" / "us_short" / "runs_private" / "soft_discovery_engineering_smoke_v2"
-    expected_parent_plan = expected_private_root / "us_short_web_regroup_engineering_smoke_20260815_chunk1_parent_plan.json"
-    expected_raw_root = ROOT / "provider_samples" / "us_short_llm_theme_discovery_engineering_smoke_v2"
-    expected_summary = expected_private_root / "us_short_web_regroup_engineering_smoke_20260815_chunk1_summary.json"
+    expected_private_root = ROOT / expected_output_boundary["diagnostic_root"].rstrip("/")
+    expected_parent_plan = ROOT / expected_output_boundary["parent_plan_ref"]
+    expected_raw_root = ROOT / expected_output_boundary["raw_root"].rstrip("/")
+    expected_summary = ROOT / expected_output_boundary["summary_ref"]
     if (
         PRIVATE_ROOT.resolve() != expected_private_root.resolve()
         or PARENT_PLAN_PATH.resolve() != expected_parent_plan.resolve()
@@ -562,9 +589,9 @@ def run_one_shot(
     if packet is not None and packet != validated_packet:
         raise EngineeringSmokeError("packet argument does not match the validated tracked packet")
     packet = validated_packet
-    _assert_packet_contract(packet)
     if confirm_user_authorization != packet["packet_id"]:
         raise EngineeringSmokeError("exact packet authorization is required")
+    _assert_packet_contract(packet)
     if ROOT.resolve() != LIVE_ROOT.resolve():
         raise EngineeringSmokeError("paid smoke execution is allowed only from the fixed main tree")
     _assert_one_shot_roots_empty()
