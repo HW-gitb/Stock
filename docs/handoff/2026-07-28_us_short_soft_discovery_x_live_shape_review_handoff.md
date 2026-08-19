@@ -3725,3 +3725,27 @@ reviewer 自纠：我一度把它说成"同一个数字散落 8 处、siblings �
 - **验证**：owner + 5b replay/入口防线 `182/182 OK`；US-short full lane `PASS 6043/6043`，`COUNT_GATE 6043=6043`，`428.5s/860s`；doc-governance+route-doc `56 OK`，`py_compile=2`，`diff-check=PASS`。
 - **状态**：`repaired / OPEN-NOT-VERIFIED`；未提交、未联网、未调 provider、未使用真实凭证。
 - **下一步**：Claude Code：独立复审本条模型合同；用户裁决桌面模型口径并明确付费授权前，不得开第二枪。
+
+## 2026-08-19 交接 Codex：模型合同一刀（生产 + A 股统一改用 `deepseek-v4-pro`，同刀装门）
+
+### 为什么是这一刀
+
+免费查证 DeepSeek 官方文档得出：现役可调用模型只有 `deepseek-v4-flash`（公测 2026-07-31）与 `deepseek-v4-pro`（**GA 2026-08-13**）；`deepseek-chat` / `deepseek-reasoner` 是 2026-04-24 公告、**2026-07-24 停用**的兼容别名，存活期间**按定义指向 Flash**。我们 2026-08-18 第一枪该别名仍能应答并服务 `deepseek-v4-flash`，属**过了停用日的宽限期**。
+
+因此：① 第二枪按现配置**必然**打空（请求别名＝Flash，packet 却要 Pro，永不相等）；② 生产 `paid_gateway.py:20` 与 A 股 `a_short_deepseek_semantic_adapter.py:26` 都在调这个将断供的别名，**两条产线一直跑在 Flash 上、且断供时会同时挂**；③ 生产从不校验服务方模型，改指向也不会吭声。
+
+**用户 2026-08-19 裁决**：「生产和A股都改用 deepseek-v4-pro，让 Codex 一刀改完」。
+
+### 交给 Codex 的任务
+
+**任务**：一刀闭合 `R-USSHORT-SMOKE-V2-EXPECTS-A-SERVED-MODEL-THE-ALIAS-HAS-NEVER-BEEN-OBSERVED-TO-SERVE`、`R-USSHORT-PRODUCTION-REGROUP-NEVER-CHECKS-WHICH-MODEL-ACTUALLY-SERVED`、`R-USSHORT-PRODUCTION-CALLS-A-DEPRECATED-ALIAS-THAT-SILENTLY-ROUTES-TO-THE-CHEAP-TIER`。**八条闭合口径（改名整类扫净 / v2 packet 就地改直连名 / 生产真装门 / 成本口径核对 / 承重反向控制 / 双 lane 全量 / 不开第二枪 / 只提交不合并）逐条写在 `docs/system_risk_register.md` 顶部「用户裁决（2026-08-19）」节，以那节为准，不以本节转述为准。**
+
+**不许动**：第一枪的历史产物（`state/us_short/runs_private/soft_discovery_engineering_smoke/**` 及其 raw、以及任何记录「当时请求了 `deepseek-chat`」的证据）——既成事实，逐字节保留；桌面文档 `C:\Users\cnhea\Desktop\usshort_软通道收尾.md`（只读用户权威）；5b replay 与 4diii 相关文件。
+
+**必须先说再做的两处**：① 若认为「装门」不属本刀，先说明理由，**不得默默只改一半**；② 若发现 v2 packet 已有消费痕迹，改为新 `packet_id` 的 v3，**不得复用已花 packet 的授权**。
+
+**注意时序**：`a_short` 真实周跑正在主树进行，**本树只提交、不合并**；也别在主树跑大超集。
+
+### 下一步（顺序不得交换）
+
+`Codex 一刀改完 → 我独立审查 PASS → 用户通知后合并进 master → 用户对改后的 v2 packet 再次明确付费授权 → 主树打第二枪（一次）→ transport PASS 才准跑 5b`。
